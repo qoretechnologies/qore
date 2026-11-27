@@ -27,6 +27,8 @@ public namespace QoreModelRegistry {
 class ModelRegistryDataProviderHelper {
     static hash<auto> registerPackageRecord(ModelRegistry registry, string model_name, hash<auto> rec) {
         string package_path = requireString(rec, "package_path", "model package registration");
+        # the path is the caller's input (qore#7806)
+        check_caller_file_access("the 'package_path' field of the record");
         if (!is_dir(package_path)) {
             throw "ML-REGISTRY-ERROR",
                 sprintf("model package registration requires field 'package_path' to be an existing directory; "
@@ -42,6 +44,8 @@ class ModelRegistryDataProviderHelper {
         string artifact_path;
         if (exists rec.artifact_path) {
             artifact_path = requireString(rec, "artifact_path", "named artifact registration");
+            # the path is the caller's input (qore#7806)
+            check_caller_file_access("the 'artifact_path' field of the record");
             if (!is_file(artifact_path)) {
                 throw "ML-REGISTRY-ERROR",
                     sprintf("named artifact registration requires field 'artifact_path' to be an existing file; "

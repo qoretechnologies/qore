@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTInitParseOptionsTest
@@ -358,8 +359,9 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
         write(script, ExeSource);
         # the interpreted script: the values, and its initializer runs with the script's strict arguments (qore#6205)
         foreach string mode in (Modes) {
-            assertEq(Expected + "True\n", backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
-                libqore_dir, qore_bin, mode, script)), "interpreted, mode " + mode);
+            assertEq(Expected + "True\n", ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, qore_bin, mode, script), NOTHING, "QORE_JIT_TIMING=1").out,
+                "interpreted, mode " + mode);
         }
         if (!qcc_bin.val() || !is_file(qcc_bin)) {
             testSkip("qcc is unavailable");
@@ -370,7 +372,7 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
                 libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, script));
             assertTrue(is_file(exe), "built the executable " + opt + ": " + out);
             # the values, and the executable's initializer runs with the script's strict arguments
-            assertEq(Expected + "True\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+            assertEq(Expected + "True\n", run_executable(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
                 libqore_dir, libqore_dir, exe)), "executable " + opt);
         }
         # an executable linked from an object compiled separately (qcc -c), whose script is registered when the
@@ -387,6 +389,16 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
         string exe = tmp.path + "/consts-obj";
         out = backquote(sprintf("%s %s -O0 -o %s %s/consts.qo 2>&1", env, qcc_bin, exe, obj_dir));
         assertTrue(is_file(exe), "linked the executable from the object: " + out);
-        assertEq(Expected + "True\n", backquote(sprintf("%s %s 2>&1", env, exe)), "executable from an object");
+        assertEq(Expected + "True\n", run_executable(sprintf("%s %s", env, exe)), "executable from an object");
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }

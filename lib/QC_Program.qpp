@@ -3187,6 +3187,10 @@ auto val = pgm.getGlobalVariable("error_count", \existsv);
 
     @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
     returns \c EINVAL
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself, whatever name
+    it uses for them (since %Qore 3.0); see @ref sandbox_program_process_information
  */
 auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
@@ -3454,6 +3458,9 @@ binary bin = pgm.serialize(val);
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+    The non-public members of an object that has the provenance of a sandbox are given too (see
+    @ref sandbox_object_ownership); the data keeps no provenance, so the host treats data that it produced while
+    serving a sandbox as that sandbox's data.
 
     @param value the value to serialize
     @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
@@ -3489,6 +3496,9 @@ hash<SerializationInfo> h = pgm.serializeToData(val);
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+    The non-public members of an object that has the provenance of a sandbox are given too (see
+    @ref sandbox_object_ownership); the data keeps no provenance, so the host treats data that it produced while
+    serving a sandbox as that sandbox's data.
 
     @param value the value to serialize
     @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
@@ -4711,6 +4721,11 @@ hash<auto> h = pgm.getGlobalVars();
     @endcode
 
     @return a hash of global variables and their values
+
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself (since
+    %Qore 3.0); see @ref sandbox_program_process_information
 
     @see @ref Qore::get_global_vars()
 

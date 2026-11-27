@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -146,10 +158,10 @@ string disabled_exe_path = exe_path + "-disabled";
     source.write(sourceCode());
 }
 
-string ast_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, source_path));
-string jit_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=jit %s 2>&1",
-    libqore_dir, qore_bin, source_path));
+string ast_out = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+    libqore_dir, qore_bin, source_path), NOTHING, "QORE_JIT_TIMING=1").out;
+string jit_out = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=jit %s",
+    libqore_dir, qore_bin, source_path), NOTHING, "QORE_JIT_TIMING=1").out;
 string compile_out = backquote(sprintf(
     "QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, source_path));
@@ -162,9 +174,9 @@ if (!is_file(exe_path) || !is_file(disabled_exe_path)) {
     exit(2);
 }
 
-string native_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string native_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, exe_path));
-string disabled_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string disabled_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, disabled_exe_path));
 string expected = "42:0:0:6.0:1:10:281474976710657:7:7:0:0:5:1:13:22:6:13:21:6:19\n";
 if (ast_out != expected || jit_out != expected || native_out != expected

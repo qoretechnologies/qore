@@ -118,7 +118,11 @@ while (i.next()) {
             m_path = path;
 
             # a location:// URL is read with FileLocationHandler, a path from the local file; both in the encoding
-            # option
+            # option; FileLocationHandler checks the creator for a location, and the path is the creator's input
+            # (qore#7806)
+            if (path !~ /^[a-z]+:\/\//) {
+                check_creator_file_access("the path of an EDIFACT file iterator");
+            }
             initializeFromData(readText(path =~ /^[a-z]+:\/\// ? FileLocationHandler::getBinaryStreamFromLocation(path)
                 : new FileInputStream(path)));
         }

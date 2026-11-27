@@ -776,13 +776,15 @@ uint64_t qore_class_next_allocation_id() {
 QoreClassDataLock qore_class_data_locks[QoreClassDataLockCount];
 
 namespace {
-//! the fork handler of the class data locks, which are leaf locks never held together (see QoreForkHandlers.h)
+//! the fork handler of the class data locks, which are never held together (see QoreForkHandlers.h)
 /** Every construction of an object through a copied QoreClass handle (refClass()) takes one, so a child created with
-    fork() while another thread held one could not construct an object of the class (qore#6732)
+    fork() while another thread held one could not construct an object of the class (qore#6732).  They are taken
+    with the complex types lock held (QoreTypeDeclRefs::addMortalDecls() refers to classes under it), so they are
+    acquired after it, at their own rank (qore#7812)
 */
 class ClassDataLocksForkHandler : public QoreForkHandler {
 public:
-    ClassDataLocksForkHandler() : QoreForkHandler(QFLR_LEAF, "class_data_locks") {
+    ClassDataLocksForkHandler() : QoreForkHandler(QFLR_CLASS_DATA, "class_data_locks") {
     }
 
     void prepare() noexcept override {

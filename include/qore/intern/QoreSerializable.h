@@ -235,6 +235,17 @@ public:
     //! for the serialization: also for a trusted API, for the rule of shared objects
     DLLLOCAL bool chainSandboxed();
 
+    //! for a trusted API: sets whether the owner rule of the non-public members of objects with the provenance of a
+    //! sandbox (qore#7033) is lifted, which is decided once for the calling code (qore#7146)
+    DLLLOCAL void setOwnerRuleLifted(bool lifted) {
+        owner_rule_lifted = unrestricted && lifted;
+    }
+
+    //! returns true if the owner rule of the non-public members of objects is lifted (see setOwnerRuleLifted())
+    DLLLOCAL bool ownerRuleLifted() const {
+        return owner_rule_lifted;
+    }
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
@@ -248,6 +259,8 @@ private:
     bool unrestricted = false;
     //! true if the code that called a builtin method that serializes its receiver is trusted code
     bool receiver_caller_trusted = false;
+    //! true if the owner rule of the non-public members of objects is lifted for a trusted API
+    bool owner_rule_lifted = false;
 
 #ifdef DEBUG
     // The lazy reads of restricts() are correct only if the thread's frame is the one that this object was created in

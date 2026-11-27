@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# I18nFailClosed.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# qore-data-provider-i18n fails closed when a provider module's registration failed while it was loaded: it reports
+# the module and the original error, and exits with an error, before any catalog is compared or written; it never
+# reports the module's catalogs as orphaned or stale (qoretechnologies/qore#7788)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../QoreBuildTree.qm
+
+%exec-class I18nFailClosedTest
+
+class I18nFailClosedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("I18nFailClosed", "1.0") {
+        addTestCase("a deferred registration that fails stops the source-tree check", \deferredFailure());
+        addTestCase("a module that registers nothing stops the source-tree check", \eagerFailure());
+        addTestCase("a failed registration stops the update, the re-key and the extraction", \otherModes());
+        addTestCase("a failed registration stops the extraction of modules and apps", \moduleExtraction());
+        addTestCase("a provider source of a required module that fails stops the source-tree check",
+            \inventoryFailure());
+        addTestCase("a good module is checked as before", \goodModule());
+        set_return_value(main());
+    }
+
+    #! the source tree: the directory above examples/
+    private string sourceRoot() {
+        string path = normalize_dir(get_script_dir() + "/../../../..");
+        assertTrue(is_file(path + "/bin/qore-data-provider-i18n"), "the tool is in the source tree");
+        return path;
+    }
+
+    #! runs the tool; returns its exit status, with its standard output and error in @p output
+    private int runI18nTool(string args, reference<string> output) {
+        string root = sourceRoot();
+        *string build = QoreBuildTree::build_dir();
+        list<string> module_path = (root + DirSep + "qlib", get_script_dir());
+        if (exists build) {
+            module_path += (build + DirSep + "modules/i18n", build + DirSep + "modules/json");
+        }
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        string env = "QORE_MODULE_DIR=" + shellQuote(module_path.join(PathSep));
+        if (exists build) {
+            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? build);
+        }
+        int rc;
+        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(QoreBuildTree::qore_executable()),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), args), \rc);
+        return rc;
+    }
+
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! a source tree with a catalog of the owner module (its content is never read when the module fails)
+    private string makeTree(TmpDir dir, string owner, string app) {
+        string tree = dir.path + DirSep + "qlib";
+        string cdir = join_paths(tree, owner, "i18n", "data-provider." + make_base64_url_string(app));
+        mkdir(cdir, 0755, True);
+        File f();
+        f.open2(cdir + DirSep + "root.json", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("{\"schema_version\": 1, \"locales\": {\"root\": {\"messages\": {}}}}\n");
+        f.close();
+        return tree;
+    }
+
+    private checkFailure(string out, string what) {
+        assertRegex("FILE-OPEN2-ERROR: cannot open 'index.js'", out, what + ": the original error: " + out);
+        assertFalse(out =~ /ORPHANED:|STALE:/, what + ": no catalog is reported as orphaned or stale: " + out);
+    }
+
+    deferredFailure() {
+        TmpDir dir("i18n-fail-closed-");
+        string tree = makeTree(dir, "I18nFailingDeferredOwner", "QoreTestI18nFailingDeferred");
+        string out;
+        int rc = runI18nTool(sprintf("--check-source-tree -o %s --owner I18nFailingDeferredOwner", shellQuote(tree)),
+            \out);
+        assertEq(1, rc, "the check fails: " + out);
+        assertRegex("a provider registration failed while the provider modules were loaded: "
+            "QoreTestI18nFailingDeferred \\(", out, "the failed registration: " + out);
+        checkFailure(out, "deferred");
+    }
+
+    eagerFailure() {
+        TmpDir dir("i18n-fail-closed-");
+        string tree = makeTree(dir, "I18nFailingEagerOwner", "QoreTestI18nFailingEager");
+        string out;
+        int rc = runI18nTool(sprintf("--check-source-tree -o %s --owner I18nFailingEagerOwner", shellQuote(tree)),
+            \out);
+        assertEq(1, rc, "the check fails: " + out);
+        assertRegex("module \"I18nFailingEagerOwner\" registered no providers: QoreTestI18nFailingEager "
+            "\\(I18nFailingEagerOwner\\): ", out, "the module that registered nothing: " + out);
+        checkFailure(out, "eager");
+    }
+
+    otherModes() {
+        # the old tool wrote a partial catalog for the deferred failure with --update-source-tree and
+        # --rekey-source-tree, and exited with 0
+        foreach hash<auto> fx in ((
+                {"owner": "I18nFailingDeferredOwner", "app": "QoreTestI18nFailingDeferred",
+                    "error": "a provider registration failed while the provider modules were loaded"},
+                {"owner": "I18nFailingEagerOwner", "app": "QoreTestI18nFailingEager",
+                    "error": "module \"I18nFailingEagerOwner\" registered no providers"},
+            )) {
+            foreach string mode in (("--update-source-tree", "--rekey-source-tree")) {
+                string what = fx.owner + " " + mode;
+                TmpDir dir("i18n-fail-closed-");
+                string tree = makeTree(dir, fx.owner, fx.app);
+                string out;
+                int rc = runI18nTool(sprintf("%s -o %s --owner %s", mode, shellQuote(tree), fx.owner), \out);
+                assertEq(1, rc, what + " fails: " + out);
+                assertRegex(fx.error, out, what + ": " + out);
+                checkFailure(out, what);
+                string root = join_paths(tree, fx.owner, "i18n", "data-provider." + make_base64_url_string(fx.app),
+                    "root.json");
+                assertEq("{\"schema_version\": 1, \"locales\": {\"root\": {\"messages\": {}}}}\n",
+                    ReadOnlyFile::readTextFile(root), what + " writes nothing");
+                assertEq((root,), glob(dirname(root) + DirSep + "*"), what + " adds no file");
+            }
+        }
+        # the extraction of an owner's catalogs
+        TmpDir dir("i18n-fail-closed-");
+        string out;
+        int rc = runI18nTool(sprintf("-o %s --owner I18nFailingEagerOwner", shellQuote(dir.path)), \out);
+        assertEq(1, rc, "the extraction fails: " + out);
+        assertRegex("module \"I18nFailingEagerOwner\" registered no providers", out, "the extraction: " + out);
+        assertEq((), glob(dir.path + DirSep + "*") ?? (), "the extraction writes nothing");
+    }
+
+    moduleExtraction() {
+        # an app of a module whose deferred registration failed
+        TmpDir dir("i18n-fail-closed-");
+        string out;
+        int rc = runI18nTool(sprintf("-o %s --module I18nFailingDeferredOwner --app QoreTestI18nFailingDeferred",
+            shellQuote(dir.path)), \out);
+        assertEq(1, rc, "the extraction of the app fails: " + out);
+        assertRegex("a provider registration failed while the provider modules were loaded: "
+            "QoreTestI18nFailingDeferred \\(", out, out);
+        checkFailure(out, "--app");
+        assertEq((), glob(dir.path + DirSep + "*") ?? (), "the extraction writes nothing");
+        # a failed module beside a good one: the failed app is not left out silently
+        rc = runI18nTool(sprintf("-o %s --module I18nFailingEagerOwner --module PresentationRekeyOwner",
+            shellQuote(dir.path)), \out);
+        assertEq(1, rc, "the extraction of all apps fails: " + out);
+        assertRegex("QoreTestI18nFailingEager \\(I18nFailingEagerOwner\\): FILE-OPEN2-ERROR", out, out);
+        # the check of the extracted catalogs fails the same way
+        rc = runI18nTool(sprintf("--check -o %s --module I18nFailingDeferredOwner --app QoreTestI18nFailingDeferred",
+            shellQuote(dir.path)), \out);
+        assertEq(1, rc, "the check fails: " + out);
+        checkFailure(out, "--check");
+    }
+
+    #! as in qoretechnologies/qore#7788: the owner requires a module whose action script cannot be read while it loads;
+    #! the module keeps the error for its discovery inventory provider only, and the owner registers nothing
+    inventoryFailure() {
+        TmpDir dir("i18n-fail-closed-");
+        string tree = makeTree(dir, "I18nInventoryFailingOwner", "QoreTestI18nInventoryFailing");
+        string root = join_paths(tree, "I18nInventoryFailingOwner", "i18n",
+            "data-provider." + make_base64_url_string("QoreTestI18nInventoryFailing"), "root.json");
+        string out;
+        int rc = runI18nTool(sprintf("--check-source-tree -o %s --owner I18nInventoryFailingOwner",
+            shellQuote(tree)), \out);
+        assertEq(1, rc, "the check fails: " + out);
+        assertRegex("module \"I18nInventoryFailingOwner\" registered no providers: discovery inventory source "
+            "i18n-inventory-failing-helper \\([^)]*I18nInventoryFailingHelper\\.qm\\): FIXTURE-INVENTORY-SOURCE-ERROR: ",
+            out, "the owner and the inventory source of the module that it requires: " + out);
+        checkFailure(out, "inventory");
+        assertEq("{\"schema_version\": 1, \"locales\": {\"root\": {\"messages\": {}}}}\n",
+            ReadOnlyFile::readTextFile(root), "the check writes nothing");
+        assertEq((root,), glob(dirname(root) + DirSep + "*"), "the check adds no file");
+
+        # the update fails the same way and writes nothing
+        rc = runI18nTool(sprintf("--update-source-tree -o %s --owner I18nInventoryFailingOwner", shellQuote(tree)),
+            \out);
+        assertEq(1, rc, "the update fails: " + out);
+        checkFailure(out, "inventory update");
+        assertEq((root,), glob(dirname(root) + DirSep + "*"), "the update adds no file");
+    }
+
+    goodModule() {
+        # the fixture of Presentation.qtest's re-keying cases registers its app and actions: its extraction succeeds
+        TmpDir dir("i18n-fail-closed-");
+        string out;
+        int rc = runI18nTool(sprintf("-o %s --owner PresentationRekeyOwner", shellQuote(dir.path)), \out);
+        assertEq(0, rc, "the extraction of a good module succeeds: " + out);
+        assertFalse(out =~ /registered no providers|registration failed/, out);
+    }
+}

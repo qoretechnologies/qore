@@ -1,0 +1,410 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) connections and listeners, the keys of their asynchronous I/O
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires Logger
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerSessionTokenTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! the form of a session token
+const TokenRegex = "^st1-[0-9a-f]{64}$";
+
+#! returns every string of a value: the keys and the string values of its hashes and lists, recursively
+list<string> sub value_strings(auto v) {
+    switch (v.typeCode()) {
+        case NT_STRING: {
+            return (v,);
+        }
+        case NT_HASH: {
+            list<string> rv = ();
+            foreach hash<auto> i in (v.pairIterator()) {
+                push rv, i.key;
+                rv += value_strings(i.value);
+            }
+            return rv;
+        }
+        case NT_LIST: {
+            list<string> rv = ();
+            foreach auto i in (v) {
+                rv += value_strings(i);
+            }
+            return rv;
+        }
+    }
+    return ();
+}
+
+#! Captures the keys of objects that the server's debug messages name, such as the internal keys of its connections
+/** The asynchronous I/O controller logs the key of a connection before it reads the connection's requests, so the
+    test knows the internal key of each connection once the response to its first request is received
+*/
+class KeyCapture inherits LoggerAppenderWithLayout {
+    private {
+        Mutex m();
+        hash<string, bool> found_keys;
+    }
+
+    constructor() : LoggerAppenderWithLayout("key-capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        # the keys of objects: 40 hex digits, not in a session token (which has 64)
+        list<string> found = (params =~ x/(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])/g) ?? ();
+        AutoLock al(m);
+        map found_keys{$1} = True, found;
+    }
+
+    list<string> getKeys() {
+        AutoLock al(m);
+        return keys found_keys;
+    }
+}
+
+#! A trusted handler that reports what its request gets
+class TokenHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue seen();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        seen.push({
+            "token": cx.session_token,
+            "sock_key": cx.sock_key,
+            # every string of its request context
+            "strings": value_strings(cx),
+            # the keys of the asynchronous I/O operations while its request runs, which the host sees
+            "io_keys": AsyncIoController::getInfo().cache_keys,
+        });
+        return makeResponse({"x-token": cx.session_token}, 200, "ok");
+    }
+}
+
+#! A trusted handler with a persistent session (HTTP/1.x): keeps the listener object and reports the session's end
+class PersistHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HttpListenerInterface kept;
+        Queue closed();
+        *string socket_key;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        kept = listener;
+        if (hdr.path =~ /start$/) {
+            # the key of the socket that it gets (the server does its own I/O through an alias of the connection's
+            # socket, whose key is the connection's internal key)
+            socket_key = s.uniqueHash();
+            Queue q = closed;
+            notifyClosed(sub () {
+                q.push(True);
+            });
+            setPersistent(True);
+            return makeResponse({"x-token": cx.session_token, "x-sock-key": cx.sock_key,
+                "x-tid": string(gettid())}, 200, "started");
+        }
+        return makeResponse({"x-token": cx.session_token, "x-sock-key": cx.sock_key, "x-tid": string(gettid())},
+            200, isPersistent() ? "continued" : "not persistent");
+    }
+}
+
+#! A trusted handler that keeps the listener object of its request
+class KeepHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HttpListenerInterface kept;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        kept = listener;
+        return makeResponse(200, "kept");
+    }
+}
+
+#! An owner of a persistent session that the test registers
+class SessionOwner {
+}
+
+#! The handlers of requests get an opaque session token, never the internal key of their connection (qore#7251)
+class HttpServerSessionTokenTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerSessionToken", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1: a handler gets the session token, not the internal key", \tokenTest(), "1.1");
+        addTestCase("HTTP/2: a handler gets the session token, not the internal key", \tokenTest(), "2.0");
+        addTestCase("HTTP/3: a handler gets the session token, not the internal key", \tokenTest(), "3.0");
+        addTestCase("HTTP/1.1: a persistent session is closed by its token only", \persistentCloseTest());
+        addTestCase("the close API resolves tokens, never internal keys", \registryTest());
+        addTestCase("the controller's token index follows its registrations", \controllerTest());
+        set_return_value(main());
+    }
+
+    #! returns a server with a TLS listener for every HTTP version, its port and its captured keys
+    private hash<auto> startServer(hash<string, AbstractHttpRequestHandler> handlers) {
+        KeyCapture capture();
+        Logger logger("session-token-test", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        foreach hash<auto> i in (handlers.pairIterator()) {
+            server.setHandler(i.key, "^" + i.key, NOTHING, i.value);
+        }
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+        return {"server": server, "port": port, "capture": capture};
+    }
+
+    private HTTPClient getClient(int port, string http_version) {
+        HTTPClient hc({
+            "url": "https://127.0.0.1:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        hc.connect();
+        return hc;
+    }
+
+    #! checks the token of what a request of a connection got; returns the token
+    private string checkToken(hash<auto> seen, string label) {
+        assertRegex(TokenRegex, seen.token, label + ": the session token");
+        assertEq(seen.token, seen.sock_key, label + ": cx.sock_key is the session token");
+        return seen.token;
+    }
+
+    #! checks that no string of the request contexts that the handler got has an internal key
+    private checkNoInternalKey(list<hash<auto>> seen_list, list<string> internal) {
+        foreach hash<auto> seen in (seen_list) {
+            foreach string k in (internal) {
+                foreach string part in (k.split(":")) {
+                    # the parts that are keys of objects (the names of the operations and the counters are not)
+                    if (part.size() < 8) {
+                        continue;
+                    }
+                    foreach string str in (seen.strings) {
+                        if (str.find(part) >= 0) {
+                            fail(sprintf("%s: the request context of the handler has %y, which has the internal key "
+                                "%y (of %y)", seen.label, str, part, k));
+                        }
+                    }
+                }
+            }
+            foreach string str in (seen.strings) {
+                if (str =~ /:quic:/) {
+                    fail(sprintf("%s: the request context of the handler has the QUIC session key %y", seen.label,
+                        str));
+                }
+            }
+        }
+    }
+
+    tokenTest(string http_version) {
+        TokenHandler h();
+        hash<auto> env = startServer({"t": h});
+        on_exit delete env.server;
+        HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = env.server.getHttpAsyncIo();
+        list<hash<auto>> seen_list = ();
+        code next_seen = hash<auto> sub (string label) {
+            hash<auto> seen = h.seen.get(HangGuard) + {"label": label};
+            push seen_list, seen;
+            return seen;
+        };
+
+        HTTPClient c1 = getClient(env.port, http_version);
+        on_exit c1.disconnect();
+        hash<auto> r1 = c1.send(NOTHING, "GET", "/t/first");
+        string t1 = checkToken(next_seen("connection 1, request 1"), "connection 1, request 1");
+        assertEq(t1, r1."x-token");
+        c1.send(NOTHING, "GET", "/t/second");
+        assertEq(t1, checkToken(next_seen("connection 1, request 2"), "connection 1, request 2"),
+            "the token is the same for the requests of a connection");
+
+        HTTPClient c2 = getClient(env.port, http_version);
+        on_exit c2.disconnect();
+        c2.send(NOTHING, "GET", "/t/other");
+        string t2 = checkToken(next_seen("connection 2"), "connection 2");
+        assertNeq(t1, t2, "each connection has a token of its own");
+
+        # the internal keys: the keys of the connections and listeners that the server's debug messages name, and
+        # the keys of the asynchronous I/O operations of the server while the requests ran, which are or begin with
+        # the keys of its listeners (for HTTP/3, the key of a QUIC session begins with its listener's)
+        list<string> internal = env.capture.getKeys();
+        assertGt(1, internal.size(), "the server logged the keys of its connections");
+        foreach hash<auto> seen in (seen_list) {
+            internal += seen.io_keys;
+        }
+        # and the keys of the HTTP/2 connections and of the HTTP/3 listener's QUIC operation, which the server records
+        # when it closes them
+        env.server.stop();
+        list<string> closed = map $1.connection, ctrl.getRecentConnectionCloses();
+        if (http_version == "2.0") {
+            assertEq(2, closed.size(), "the server closed the test's connections");
+        } else if (http_version == "3.0") {
+            assertEq(1, closed.size(), "the server closed its QUIC listener's operation");
+            assertRegex(":quic$", closed[0]);
+        }
+        internal += closed;
+        checkNoInternalKey(seen_list, internal);
+    }
+
+    persistentCloseTest() {
+        PersistHandler owner();
+        TokenHandler other();
+        hash<auto> env = startServer({"p": owner, "o": other});
+        on_exit delete env.server;
+
+        # the owner's persistent session
+        HTTPClient oc = getClient(env.port, "1.1");
+        on_exit oc.disconnect();
+        hash<auto> start = oc.send(NOTHING, "GET", "/p/start");
+        string token = start."x-token";
+        string tid = start."x-tid";
+        assertRegex(TokenRegex, token);
+        assertEq(token, start."x-sock-key", "cx.sock_key is the session token");
+
+        # a request of the session, which its thread runs, gets the same token
+        hash<auto> next = oc.send(NOTHING, "GET", "/p/continue");
+        assertEq("continued", next.body);
+        assertEq(tid, next."x-tid", "the session's thread");
+        assertEq(token, next."x-token", "a request of the session gets the session's token");
+        assertEq(token, next."x-sock-key", "and cx.sock_key is the token");
+
+        # another connection's token
+        HTTPClient c2 = getClient(env.port, "1.1");
+        on_exit c2.disconnect();
+        string other_token = c2.send(NOTHING, "GET", "/o/x")."x-token";
+        assertNeq(token, other_token);
+
+        # the internal keys that the server's debug messages name, among them the key of the session's connection
+        list<string> internal = env.capture.getKeys();
+        assertGt(1, internal.size(), "the server logged the keys of its connections");
+        foreach string k in (internal) {
+            assertEq(-1, token.find(k), "the token does not contain an internal key");
+        }
+
+        # what does not close the session: another connection's token, a forged token, the internal keys, the key of
+        # the socket that the handler got, values of another form; each call returns at once, as no session has the
+        # value
+        foreach string uh in ((other_token, "st1-" + strmul("0", 64), owner.socket_key, "", token + "x")
+                + internal) {
+            owner.kept.signalPersistentSessionClose(uh, owner);
+            owner.kept.signalPersistentSessionClose(uh);
+            assertEq(0, owner.closed.size(), sprintf("%y does not close the session", uh));
+        }
+        next = oc.send(NOTHING, "GET", "/p/continue");
+        assertEq("continued", next.body, "the session is still open");
+        assertEq(tid, next."x-tid", "the session's thread");
+
+        # the session's token closes it; the call returns after the session's cleanup
+        owner.kept.signalPersistentSessionClose(token, owner);
+        assertEq(1, owner.closed.size(), "the session's token closes it");
+    }
+
+    #! a persistent queue that the test registers under a key that it knows, as the server does for a session
+    registryTest() {
+        KeepHandler h();
+        hash<auto> env = startServer({"k": h});
+        on_exit delete env.server;
+        HTTPClient c = getClient(env.port, "1.1");
+        on_exit c.disconnect();
+        assertEq("kept", c.get("/k"));
+
+        HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = env.server.getHttpAsyncIo();
+        string key = "internal-key-" + get_random_string(16);
+        Queue q();
+        ctrl.registerPersistentQueue(key, q);
+        on_exit ctrl.deregisterPersistentQueue(key);
+
+        # the internal key closes nothing
+        h.kept.signalPersistentSessionClose(key);
+        assertEq(0, q.size(), "the internal key closes nothing");
+
+        # the session's token closes it: the close waits for the session's acknowledgement, which the test gives
+        string token = ctrl.getSessionToken(key);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            h.kept.signalPersistentSessionClose(token);
+        }();
+        hash<auto> entry = q.get(HangGuard);
+        assertEq("close", entry.type);
+        entry.close_ack.push(True);
+        assertEq(0, done.waitForZero(HangGuard), "the close returned after the acknowledgement");
+
+        # once the queue is deregistered, its token closes nothing
+        ctrl.deregisterPersistentQueue(key);
+        h.kept.signalPersistentSessionClose(token);
+        assertEq(0, q.size(), "the token of a deregistered session closes nothing");
+    }
+
+    #! the controller's methods directly
+    controllerTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = server.getHttpAsyncIo();
+
+        string key = "k-" + get_random_string(16);
+        string token = ctrl.getSessionToken(key);
+        assertRegex(TokenRegex, token);
+        assertEq(token, ctrl.getSessionToken(key), "the token is stable");
+        assertNeq(token, ctrl.getSessionToken(key + "x"));
+        # each server's controller has a secret of its own
+        HttpServer server2(<HttpServerOptionInfo>{});
+        on_exit delete server2;
+        assertNeq(token, server2.getHttpAsyncIo().getSessionToken(key), "another server's token of the key");
+        # code without the controller cannot compute a token: the method is not static
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", "cannot resolve call.*getSessionToken", sub () {
+            p.parse("%requires HttpServerAsyncIo\nstring sub get() { return "
+                "HttpServerAsyncIo::HttpAsyncSocketIoController::getSessionToken(\"k\"); }", "no-controller");
+        });
+        assertEq(-1, token.find(key), "the token does not contain the key");
+
+        assertFalse(ctrl.signalPersistentQueuesForSessionToken(token), "no session is registered");
+
+        SessionOwner a();
+        SessionOwner b();
+        Queue q1();
+        ctrl.registerPersistentQueue(key, q1, NOTHING, a);
+        on_exit ctrl.deregisterPersistentQueue(key);
+        assertFalse(ctrl.signalPersistentQueuesForSessionToken(key), "the key is not a token");
+        assertFalse(ctrl.signalPersistentQueuesForSessionToken(token, NOTHING, b), "another owner's session");
+        assertEq(0, q1.size());
+        assertTrue(ctrl.signalPersistentQueuesForSessionToken(token, NOTHING, a), "its owner's session");
+        assertEq("close", q1.get(HangGuard).type);
+
+        # a replacement session on the same key: the delayed cleanup of the earlier one does not remove it
+        Queue q2();
+        ctrl.registerPersistentQueue(key, q2, NOTHING, a);
+        ctrl.deregisterPersistentQueue(key, q1);
+        assertTrue(ctrl.signalPersistentQueuesForSessionToken(token), "the replacement session keeps its token");
+        assertEq("close", q2.get(HangGuard).type);
+        assertEq(0, q1.size());
+
+        ctrl.deregisterPersistentQueue(key);
+        assertFalse(ctrl.signalPersistentQueuesForSessionToken(token), "the deregistered session's token");
+        # the connection's own close by its internal key is unchanged
+        ctrl.registerPersistentQueue(key, q1);
+        assertTrue(ctrl.signalPersistentQueuesForConnection(key));
+        assertEq("close", q1.get(HangGuard).type);
+    }
+}

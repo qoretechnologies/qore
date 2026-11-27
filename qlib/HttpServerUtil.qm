@@ -122,6 +122,8 @@ module HttpServerUtil {
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|the response encoding chosen from any \c "Accept-Charset" in the request (see @ref Qore::get_http_accept_charset() "get_http_accept_charset()")
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
+    |\c session_token|string|the opaque session token of the request's connection (for HTTP/3, of its QUIC session): the same for every request of the connection and different for every connection; it names the persistent session of an HTTP/1.x connection to @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose() "HttpListenerInterface::signalPersistentSessionClose()", and it is not the internal key of the connection, which the request context does not have; not given to a stream request or REST class of restricted code that a trusted handler dispatches the request to
+    |\c sock_key|string|deprecated: the same value as \c session_token, which replaces it
     |\c socket|string|the bind address used to bind the listener (\c "socket-info" provides more detailed information)
     |\c socket-info|hash|information about the listening socket as returned by @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()"
     |\c trailers|*hash|the trailer fields that the client sent after the request body (chunked HTTP/1.1, HTTP/2, and HTTP/3), with lower-case names; set for handlers that receive the whole body once it has been read; stream handlers receive them in the \c hdr key of the last call of \c recv()
@@ -182,8 +184,8 @@ module HttpServerUtil {
     (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()")
     and without the objects of the server (the logger, the listener, the future of the peer information and the
     peer's certificate); the rest of the context is the handler's: its request, its stream (\c header-info), the
-    listener's address (\c socket, \c socket-info), its session (\c sock_key) and its user thread context
-    (\c uctx).  The trusted authenticator of such a handler authenticates the raw
+    listener's address (\c socket, \c socket-info), its session (\c session_token, \c sock_key) and its user
+    thread context (\c uctx).  The trusted authenticator of such a handler authenticates the raw
     request first (@ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "authenticateRestrictedRequest()"),
     and the handler's code gets the platform context keys that it sets, but not the other keys that it adds, such as
     a session token; an authenticator of restricted code gets the request without its credentials.
@@ -2433,8 +2435,8 @@ public class HttpListenerInterface inherits AbstractLogger {
         controller override this and delegate to the controller's
         per-connection close signal and completion acknowledgement.
 
-        @param uh the connection unique hash (e.g. @c cx.id) identifying
-            the persistent session to close
+        @param uh the session token of the persistent session to close (\c cx.session_token in the request context
+            of its requests); any other value, such as the internal key of a connection, closes nothing
     */
     signalPersistentSessionClose(softstring uh) {
         # no implementation in the base class — listeners that support
@@ -2448,7 +2450,7 @@ public class HttpListenerInterface inherits AbstractLogger {
 
         This implementation calls signalPersistentSessionClose(softstring)
 
-        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param uh the session token of the persistent session (\c cx.session_token in the request context)
         @param handler the handler whose persistent session it is
 
         @since HttpServerUtil 1.6
@@ -3583,16 +3585,17 @@ public class AbstractStreamRequest {
         #! gives, also not as the keys of the platform's authorization context
         /** (see @ref HttpServer::HttpRequestFilterOptions::platform_context_keys "HttpRequestFilterOptions.platform_context_keys")
 
-            The user thread context (\c uctx) and the session key (\c sock_key) are the state of the handler that
-            serves the request (see HttpListenerInterface::addUserThreadContext()), which a handler of restricted code
-            keeps for its own code (see AbstractHttpRequestHandler::withholdCredentialsForDispatch()); the code that a
-            trusted handler dispatches a request to (a stream request or a REST class of restricted code) does not get
-            the trusted handler's state.
+            The user thread context (\c uctx) and the session token (\c session_token, \c sock_key) are the state
+            of the handler that serves the request (see HttpListenerInterface::addUserThreadContext()), which a
+            handler of restricted code keeps for its own code (see
+            AbstractHttpRequestHandler::withholdCredentialsForDispatch()); the code that a trusted handler dispatches
+            a request to (a stream request or a REST class of restricted code) does not get the trusted handler's
+            state.
 
             @since HttpServerUtil 1.6
         */
-        const ServerContextKeys = ("auth", "client-cert", "listener", "logger", "peer-info-future", "sock_key",
-            "socket", "socket-info", "uctx");
+        const ServerContextKeys = ("auth", "client-cert", "listener", "logger", "peer-info-future",
+            "session_token", "sock_key", "socket", "socket-info", "uctx");
 
         #! The keys of the \c "peer-info" hash of the request context that the code serving the request gets
         /** The address of the client, for logging and rate limits; an allowlist
@@ -6470,9 +6473,9 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         (\c cx.logger), the listener (\c cx.listener), the future of the peer information (\c cx."peer-info-future")
         and the peer's certificate (\c cx."client-cert").  The rest of the context is the handler's, as before: the
         stream of its request (\c cx."header-info"), the address of the listener (\c cx.socket, \c cx."socket-info"),
-        its session (\c cx.sock_key) and its user thread context (\c cx.uctx), which the server keeps apart for each
-        handler; the code that the handler dispatches the request to gets it filtered further by the code of this class
-        (see withholdRequestCredentials()).
+        its session (\c cx.session_token, \c cx.sock_key) and its user thread context (\c cx.uctx), which the
+        server keeps apart for each handler; the code that the handler dispatches the request to gets it filtered
+        further by the code of this class (see withholdRequestCredentials()).
 
         It returns only a copy of the request that it is given, so it is not restricted.
 

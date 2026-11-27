@@ -1,0 +1,48 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a module that a tenant whose filesystem policy allows its directory loads from a path (qore#7146): trusted code
+#! that loads it by name later must not take it for its own code
+module SandboxSerializationTrustedLib3 {
+    version = "1.0";
+    desc = "trusted serialization forms test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+#! a class of the module with non-public state
+public class StLib3Data inherits Serializable {
+    private {
+        string secret = "LIB3-STATE";
+    }
+
+    string getSecret() {
+        return secret;
+    }
+}
+
+#! the code of a class of the module: acts for itself
+public class StLib3Cache {
+    #! serializes and deserializes a value of its own with the trusted forms
+    static string roundTrip() {
+        try {
+            StLib3Data o = Serializable::deserializeTrusted(Serializable::serializeTrusted(new StLib3Data()));
+            return o.getSecret();
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+}
+
+#! module code outside a class: acts for its caller
+public string sub st_lib3_round_trip() {
+    try {
+        StLib3Data o = Serializable::deserializeTrusted(Serializable::serializeTrusted(new StLib3Data()));
+        return o.getSecret();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}

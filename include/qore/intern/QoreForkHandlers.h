@@ -123,6 +123,11 @@ enum QoreForkLockRank : int {
     //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
     //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,
+    //! the class data locks (qore_class_data_locks): taken with the complex types lock (a leaf lock) held, when a
+    //! class is referenced under it (QoreTypeDeclRefs::addMortalDecls() -> qore_class_private::refClass()); their
+    //! holders take no other registered lock (qore#7812: at the leaf rank, a fork() took them before the complex
+    //! types lock while a thread that held that lock waited for one of them)
+    QFLR_CLASS_DATA = 1010,
     //! the registry of the generic caches by the types their keys name: taken with the complex types lock held, its
     //! holders take only the locks of the caches themselves (not registered)
     QFLR_GENERIC_CACHE_REGISTRY = 1020,

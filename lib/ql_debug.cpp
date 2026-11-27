@@ -2776,6 +2776,31 @@ static void ut_rsection_waiters_woken_on_release(UnitTestCounters& c) {
 }
 
 namespace {
+//! a lock that is taken while another registered lock is held has a higher rank than it (qore#7812)
+/** The fork handlers acquire the locks in increasing rank order, and handlers of one rank in an unspecified order;
+    a thread that holds one lock and takes another therefore deadlocks with a concurrent fork() unless the lock it
+    takes has the higher rank.  The class data locks are taken with the complex types lock held
+    (QoreTypeDeclRefs::addMortalDecls() refers to classes under it); at the same rank, a fork() took them first and
+    then waited for the complex types lock, held by a thread that waited for one of them.
+*/
+static void ut_fork_nested_lock_ranks(UnitTestCounters& c) {
+    static const char* nested[][3] = {
+        // outer lock, the lock taken while it is held, where
+        {"complex_types", "class_data_locks", "QoreTypeDeclRefs::addMortalDecls() -> qore_class_private::refClass()"},
+        {"complex_types", "generic_cache_registry", "the registry of the generic caches by the types their keys name"},
+        {nullptr, nullptr, nullptr},
+    };
+    for (size_t i = 0; nested[i][0]; ++i) {
+        QoreForkHandler* outer = qore_fork_find_handler(nested[i][0]);
+        QoreForkHandler* inner = qore_fork_find_handler(nested[i][1]);
+        UT_ASSERT(c, outer && inner, "both locks are registered with fork handlers");
+        if (outer && inner) {
+            UT_ASSERT(c, inner->getRank() > outer->getRank(),
+                "a lock taken while another is held has the higher rank, so fork() acquires it after the other");
+        }
+    }
+}
+
 //! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
 struct ForkHoldTest {
     std::mutex m;
@@ -17460,6 +17485,126 @@ static void ut_restricted_contexts_count_for_scopes(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "contexts: the Program is destroyed");
 }
 
+//! The class frames entered in an open update scope of a shared object are recorded and removed with the helpers
+//! that enter them, also when an exception unwinds them and in nested scopes, and the frame of a class of restricted
+//! code entered since a scope opened counts for it while it is on the stack (qore#7795)
+static void ut_scope_class_frames(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* host = parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS))
+        : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS));
+    // released as a namespace releases its classes
+    auto release_class = [] (QoreClass* cls) {
+        qore_class_private::get(*cls)->deref(true, true, true);
+    };
+    std::unique_ptr<QoreClass, decltype(release_class)> a_cls(new QoreClass("UtScopeFrameA", "::UtScopeFrameA"),
+        release_class);
+    std::unique_ptr<QoreClass, decltype(release_class)> b_cls(new QoreClass("UtScopeFrameB", "::UtScopeFrameB"),
+        release_class);
+    const qore_class_private* a = qore_class_private::get(*a_cls);
+    qore_class_private* b = qore_class_private::get(*b_cls);
+    UT_ASSERT(c, !a->sys && !b->sys, "class frames: the classes are not builtin classes");
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "class frames: the host is entered");
+        // no scope is open: nothing is recorded
+        {
+            ClassOnlySubstitutionHelper ah(a);
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: none without an open scope");
+        }
+        // a helper that the scope opens and ends in
+        std::unique_ptr<ClassOnlySubstitutionHelper> before(new ClassOnlySubstitutionHelper(b));
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        qore_thread_shared_update_scope_begin();
+        {
+            ClassOnlySubstitutionHelper ah(a);
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: a frame entered in the scope");
+            {
+                // the same class again is recorded as well
+                ClassOnlySubstitutionHelper ah2(a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2, "class frames: the same class again");
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: the same class again ended");
+            // a builtin class is not recorded
+            {
+                OptionalClassObjSubstitutionHelper ph(qore_class_private::get(*QC_PROGRAM));
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: a builtin class");
+            }
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "class frames: a trusted class does not count");
+            {
+                ClassOnlySubstitutionHelper bh(b);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2, "class frames: a nested frame");
+                b->sandbox_ctx = true;
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                    "class frames: a class of restricted code entered since the scope opened counts");
+                {
+                    // lower on the stack
+                    ClassOnlySubstitutionHelper ah3(a);
+                    UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: a trusted frame below");
+                    UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                        "class frames: a class of restricted code lower on the stack counts");
+                    // a scope opened below the class: its frames are those of the code that opened it
+                    QoreThreadProgramMarker inner = qore_thread_program_marker();
+                    qore_thread_shared_update_scope_begin();
+                    {
+                        OptionalClassOnlySubstitutionHelper bh2(b);
+                        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 4, "class frames: the inner scope");
+                        UT_ASSERT(c, qore_thread_sandboxed_entered_since(inner),
+                            "class frames: a class of restricted code entered in the inner scope counts");
+                    }
+                    UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                        "class frames: a class of restricted code below the inner scope does not count for it");
+                    qore_thread_shared_update_scope_end(inner);
+                    UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: the inner scope ended");
+                }
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: the nested frames ended");
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "class frames: a class of restricted code that returned does not count");
+            // an exception unwinds the helpers
+            try {
+                ClassOnlySubstitutionHelper bh(b);
+                ObjectSubstitutionHelper oh(nullptr, a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: before the exception");
+                throw std::runtime_error("unwind");
+            } catch (std::runtime_error&) {
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: after the exception");
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "class frames: a class of restricted code that an exception unwound does not count");
+        }
+        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: the frames of the scope ended");
+        qore_thread_shared_update_scope_end(marker);
+        // the helper that the scope opened in ends after it
+        before.reset();
+        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: none after the scope");
+        // a scope opened in the frame of a class of restricted code: the frame does not count for it, but the same
+        // class entered again in the scope does, also below a trusted frame
+        {
+            ClassOnlySubstitutionHelper bh(b);
+            QoreThreadProgramMarker outer = qore_thread_program_marker();
+            qore_thread_shared_update_scope_begin();
+            // the innermost frame is the builtin frame of the unit tests, whose caller's class is not the class of
+            // the helper
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(outer),
+                "class frames: the frame that the scope opened in does not count for it");
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: the opener's frame");
+            {
+                ClassOnlySubstitutionHelper bh2(b);
+                ClassOnlySubstitutionHelper ah(a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2,
+                    "class frames: the same class entered again in the scope");
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(outer),
+                    "class frames: the class of restricted code entered again in the scope counts");
+            }
+            qore_thread_shared_update_scope_end(outer);
+        }
+        b->sandbox_ctx = false;
+    }
+    UT_ASSERT(c, !xsink, "class frames: no exception");
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "class frames: the Program is destroyed");
+}
+
 //! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
 //! for the update scopes of shared objects (also while it runs the code that it called and after the scope opened),
 //! the per-Program cache, the check of a builtin's caller and the Program of the calling code (qore#7202)
@@ -31987,6 +32132,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
     ut_immediate_caller_foreign_code(c, rc.getProgram());
     ut_restricted_contexts_count_for_scopes(c, rc.getProgram());
+    ut_scope_class_frames(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -32113,6 +32259,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);
     ut_fork_waits_for_lock_holders(c);
+    ut_fork_nested_lock_ranks(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);

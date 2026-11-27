@@ -1,8 +1,20 @@
 #!/usr/bin/env qore
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 # The optimized interpreter boxes large integers and tag-colliding doubles.
 # Dominating scalar definitions must not be reused after statement cleanup.
@@ -19,7 +31,8 @@ on_exit { backquote(sprintf("rm -rf %s", root)); }
 string path = root + "/regression.qr";
 File output(); output.open2(path, O_WRONLY | O_CREAT | O_EXCL); output.write(program); output.close();
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
-    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1", libqore_dir, qore_bin, mode, path));
+    string actual = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
+        qore_bin, mode, path), NOTHING, "QORE_JIT_TIMING=1").out;
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual); exit(2);
     }
@@ -28,6 +41,6 @@ foreach int level in ((0, 3)) {
     string exe = root + "/aot-" + level;
     string compiled = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, level, exe, path));
     if (!is_file(exe)) { printf("AOT compilation failed:\n%s", compiled); exit(2); }
-    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+    string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
     if (actual != expected) { printf("mismatch in AOT O%d\n%s", level, actual); exit(2); }
 }

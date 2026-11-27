@@ -27,7 +27,8 @@ int native_calls_before = 0;
 int fast_calls_before = 0;
 
 sub run_case(string name, code c) {
-    if (report) {
+    # the report reads the counts of a debug build of the library
+    if (report && Option::HAVE_LIBRARY_DEBUGGING) {
         native_calls_before = call_function("dbg_function_reference_native_calls");
         fast_calls_before = call_function("dbg_function_reference_fast_calls");
     }
@@ -37,7 +38,8 @@ sub run_case(string name, code c) {
     } catch (hash<ExceptionInfo> ex) {
         result = sprintf("unexpected %s: %s", ex.err, ex.desc);
     }
-    if (report) {
+    # the report reads the counts of a debug build of the library
+    if (report && Option::HAVE_LIBRARY_DEBUGGING) {
         int native = call_function("dbg_function_reference_native_calls") - native_calls_before;
         int fast = call_function("dbg_function_reference_fast_calls") - fast_calls_before;
         printf("%s: %s\n", name, native ? "native" : (fast ? "fast" : "generic"));

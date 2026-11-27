@@ -136,6 +136,8 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
         @throw FIXED-LENGTH-UTIL-INVALID-SPEC invalid record specification; invalid type or missing field length
     */
     constructor(string path, hash<auto> spec, *hash<auto> opts) {
+        # the path is the creator's input (qore#7806)
+        check_creator_file_access("the path of a fixed-length read data provider");
         i = new FixedLengthFileIterator(path, spec, opts);
     }
 

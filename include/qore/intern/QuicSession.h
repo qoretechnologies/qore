@@ -145,6 +145,16 @@ struct QuicStreamInfo {
     //! RFC 9220: True if this stream is a CONNECT tunnel that must stay in streams_
     //! after being dispatched (so h3RecvDataCallback can route tunnel data)
     bool connect_tunnel_active = false;
+    //! server: true once the dispatch of a CONNECT tunnel has returned (QuicSession::cleanupStream()): the tunnel is
+    //! still served while its stream is open, and the record is released when the stream closes (qore#7786)
+    bool tunnel_released = false;
+    //! server: true once the stream of a CONNECT tunnel has closed (QuicSession::streamCloseCallback()); its record is
+    //! released when its dispatch returns (qore#7786)
+    bool tunnel_closed = false;
+    //! server: true once the server has asked the client to stop sending on the stream (STOP_SENDING with
+    //! H3_NO_ERROR, QuicSession::stopReadingStreamLocked()): the client's RESET_STREAM with H3_NO_ERROR that answers
+    //! it ends the client's half as asked, and is not reported as an abandonment of the stream (qore#7786)
+    bool stop_sending_sent = false;
 
     //! True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool dispatched = false;
@@ -880,6 +890,15 @@ public:
         @param stream_id the HTTP/3 stream ID
     */
     DLLLOCAL void stopReadingStreamLocked(int64_t stream_id);
+
+    //! the map of the session's stream records
+    using StreamMap = std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>>;
+
+    //! Erases the record of a server CONNECT tunnel whose stream has closed and whose dispatch has returned
+    /** Called with the session's mutex held; also releases the tunnel's buffered data that no consumer took, the
+        stream's count of dispatched streams, and its record of a reset by the peer (releaseStream()) (qore#7786)
+    */
+    DLLLOCAL void eraseClosedServerTunnelLocked(StreamMap::iterator it);
 
     //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
     /** Sends STOP_SENDING to the peer and removes the stream from the session map.
@@ -2201,7 +2220,7 @@ private:
 
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)
     // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
-    std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>> streams_;
+    StreamMap streams_;
 
     //! The client-initiated bidirectional (request) streams that ngtcp2 has opened and not closed yet
     /** With @ref max_bidi_stream_id_, tells whether ngtcp2 has closed a request stream (see isClosedStreamLocked())
@@ -2343,6 +2362,12 @@ private:
     DLLLOCAL void addBoundBody(int64_t stream_id, uint64_t buffered_size);
     //! Removes a body from the bounds (qore#7653)
     DLLLOCAL void eraseBoundBody(int64_t stream_id);
+
+    //! Records the end of the connection's wait for its client if no body or send waits any more (qorus#1335)
+    /** The send rate of the connection is told that the wait has ended, so that the time until the next wait is not
+        charged; called with the session's mutex held
+    */
+    DLLLOCAL void endSendRateWaitIfIdleUnlocked();
     //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under mtx_
     DLLLOCAL void updateActiveInputStreams();
     //! Returns the bytes of a bounded body that its client has acknowledged
