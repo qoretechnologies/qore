@@ -15,7 +15,6 @@
 #include <cmath>
 #include <numeric>
 #include <set>
-#include <unordered_map>
 
 extern const TypedHashDecl* hashdeclRandomForestClassificationResult;
 extern const TypedHashDecl* hashdeclRandomForestRegressionResult;
@@ -119,8 +118,9 @@ void QoreRandomForest::fit(const MatrixXd& X, const VectorXd& y,
 QoreHashNode* QoreRandomForest::predictInternal(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     if (task == "classification") {
-        // Aggregate votes
-        std::unordered_map<int, int> votes;
+        // Aggregate votes: the class label that each tree predicts
+        std::vector<int> votes;
+        votes.reserve(trees.size());
         std::vector<double> prob_accum(n_classes, 0.0);
 
         for (const auto& tree : trees) {
@@ -128,18 +128,24 @@ QoreHashNode* QoreRandomForest::predictInternal(const RowVectorXd& point,
             for (int c = 0; c < n_classes && c < (int)probs.size(); ++c) {
                 prob_accum[c] += probs[c];
             }
-            int predicted = (int)tree.predict(point);
-            votes[predicted]++;
+            votes.push_back((int)tree.predict(point));
         }
 
-        // Find majority class
+        // Find majority class: the longest run of the sorted votes; the first of the longest runs wins, so a tie
+        // goes to the smallest class label, whatever the order of the trees
+        std::sort(votes.begin(), votes.end());
         int best_class = 0;
-        int best_votes = 0;
-        for (const auto& v : votes) {
-            if (v.second > best_votes) {
-                best_votes = v.second;
-                best_class = v.first;
+        size_t best_votes = 0;
+        for (size_t i = 0; i < votes.size();) {
+            size_t j = i + 1;
+            while (j < votes.size() && votes[j] == votes[i]) {
+                ++j;
             }
+            if (j - i > best_votes) {
+                best_votes = j - i;
+                best_class = votes[i];
+            }
+            i = j;
         }
 
         // Normalize probabilities

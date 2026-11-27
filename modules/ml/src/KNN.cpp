@@ -29,8 +29,10 @@
 #include "ml_serialization.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <map>
 #include <numeric>
-#include <unordered_map>
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclKNNClassificationResult;
@@ -101,6 +103,18 @@ QoreHashNode* QoreKNN::predictInternal(const RowVectorXd& point, ExceptionSink* 
     for (int i = 0; i < n; ++i) {
         distances[i] = computeDistance(point, ref_data.row(i));
     }
+    int n_nan = 0;
+    for (int i = 0; i < n; ++i) {
+        n_nan += (distances[i] != distances[i]);
+    }
+    if (n_nan) {
+        // a NaN distance (from a NaN or infinite feature) is infinite, the farthest, so that the distances are ordered
+        for (double& d : distances) {
+            if (std::isnan(d)) {
+                d = std::numeric_limits<double>::infinity();
+            }
+        }
+    }
 
     // Find k nearest neighbors using partial sort on indices
     std::vector<int> indices(n);
@@ -108,6 +122,42 @@ QoreHashNode* QoreKNN::predictInternal(const RowVectorXd& point, ExceptionSink* 
     int actual_k = std::min(k, n);
     std::partial_sort(indices.begin(), indices.begin() + actual_k, indices.end(),
         [&distances](int a, int b) { return distances[a] < distances[b]; });
+    // std::partial_sort is not stable: neighbors at the same distance are taken and ordered in the order of the
+    // training data
+    if (actual_k > 0) {
+        double dk = distances[indices[actual_k - 1]];
+        // the neighbors at the distance of the k-th neighbor are the last of the k, as they are sorted by distance
+        int first_dk = actual_k;
+        while (first_dk > 0 && distances[indices[first_dk - 1]] == dk) {
+            --first_dk;
+        }
+        if (std::count(distances.begin(), distances.end(), dk) > actual_k - first_dk) {
+            // not every point at that distance is among the k: take the first of them
+            int slot = first_dk;
+            for (int i = 0; i < n && slot < actual_k; ++i) {
+                if (distances[i] == dk) {
+                    indices[slot++] = i;
+                }
+            }
+        }
+        // order the neighbors at the same distance by their index: an insertion sort of the k sorted distances,
+        // which moves neighbors only within a run of equal distances, or a sort for a large k
+        if (actual_k <= 64) {
+            for (int i = 1; i < actual_k; ++i) {
+                int idx = indices[i];
+                int j = i;
+                while (j > 0 && distances[indices[j - 1]] == distances[idx] && indices[j - 1] > idx) {
+                    indices[j] = indices[j - 1];
+                    --j;
+                }
+                indices[j] = idx;
+            }
+        } else {
+            std::sort(indices.begin(), indices.begin() + actual_k, [&distances](int a, int b) {
+                return distances[a] < distances[b] || (distances[a] == distances[b] && a < b);
+            });
+        }
+    }
 
     // Build neighbors list
     ReferenceHolder<QoreListNode> neighbors(new QoreListNode(autoTypeInfo), xsink);
@@ -121,8 +171,9 @@ QoreHashNode* QoreKNN::predictInternal(const RowVectorXd& point, ExceptionSink* 
     }
 
     if (task == "classification") {
-        // Weighted vote for classification
-        std::unordered_map<int64, double> votes;
+        // Weighted vote for classification; an ordered map: a tie goes to the smallest class label, whatever the order
+        // of the neighbors
+        std::map<int64, double> votes;
         for (int i = 0; i < actual_k; ++i) {
             int idx = indices[i];
             int64 label = static_cast<int64>(std::round(ref_labels(idx)));
