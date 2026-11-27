@@ -1782,7 +1782,7 @@
     @par Debug Support of AOT-Compiled Code Is Compiled with qcc -g
     AOT-compiled code gets the debug support that costs performance (call events for a debugger attached at any time,
     stepping of every function) only with @ref aot_debugging "qcc -g", which standard modules get only with
-    \c QORE_QMOD_DEBUGGING; a debugger attached while code compiled without it is loaded gets a warning once
+    \c QORE_QMOD_DEBUGGING; a debugger attached to a Program with code compiled without it gets a warning once
     (<a href="https://github.com/qoretechnologies/qore/issues/7676">issue 7676</a>).
 
     @par New Required Libraries and Async Networking Stack

@@ -3441,14 +3441,23 @@ struct QoreAOTLazyFunctionIR {
     mutable QoreAOTTypeResolver type_resolver;
 };
 
+void qore_aot_note_code_without_debugging(QoreProgram* pgm, const char* label) {
+    if (pgm) {
+        qore_program_private::get(*pgm)->noteAotCodeWithoutDebugging(label);
+    }
+}
+
+//! records the code of a binary registered into a Program for the warning of a debugger if the binary was compiled
+//! without debugging (qore#7676)
+static void qore_aot_note_registered_code(QoreProgram* pgm, const QoreAOTBinaryReader& reader) {
+    if (!(reader.getHeader().flags & QORE_AOT_FLAG_DEBUGGING)) {
+        qore_aot_note_code_without_debugging(pgm, reader.getLabel());
+    }
+}
+
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len,
         AOTMetadataStorage storage = AOTMetadataStorage::Copy, bool keep_decoded = false) {
-    // every binary that is registered to run comes here once: one compiled without debugging is recorded for the
-    // warning of a debugger (qore#7676)
-    if (!(reader.getHeader().flags & QORE_AOT_FLAG_DEBUGGING)) {
-        qore_aot_note_code_without_debugging(reader.getLabel());
-    }
     if ((reader.getHeader().version < QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
                 && (reader.getHeader().feature_flags
                     & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0)
@@ -12369,6 +12378,7 @@ static int qore_aot_run_program(
             // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
                 metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions), true);
+            qore_aot_note_registered_code(*qpgm, deserializer.getReader());
 
             // Register _toplevel before other functions so setLVarsFromAOTContext()
             // populates the program LVList for closure deserialization in methods
@@ -13673,6 +13683,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         std::vector<std::string> registration_errors;
         auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
             metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
+        qore_aot_note_registered_code(local_pgm, deserializer.getReader());
         registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
             local_pgm, func_map, registered, nullptr, deserializer.getTypeResolver(),
             &registration_errors, debug_metadata, false, nullptr, nullptr, &deserializer);
@@ -15807,6 +15818,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     if (num_functions > 0 && functions) {
         debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
             metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
+        qore_aot_note_registered_code(local_pgm, deserializer.getReader());
         std::unordered_map<std::string, const QoreAOTFunc*> func_map;
         func_map.reserve(static_cast<size_t>(num_functions));
         for (int i = 0; i < num_functions; ++i) {
@@ -16195,6 +16207,7 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
     // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
     auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len,
         getAOTMetadataStorage(metadata, metadata_len, functions), true);
+    qore_aot_note_registered_code(tpgm, reader);
     registerAOTFunctionsFromSlotMaps(reader, root_ns, tpgm, func_map, registered,
         &init_func_contexts, nullptr, &registration_errors, debug_metadata,
         allow_unlinked_native_inputs, &ignored_unlinked);
@@ -16442,6 +16455,7 @@ static int qore_aot_script_register_intern(QoreProgram* tpgm,
             // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
                 metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions), true);
+            qore_aot_note_registered_code(tpgm, deserializer.getReader());
             registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts, nullptr,
                 &registration_errors, debug_metadata, false, nullptr, nullptr, &deserializer);
@@ -16963,6 +16977,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
                 auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
                     d.metadata, d.metadata_len, getAOTMetadataStorage(d.metadata, d.metadata_len, d.functions), true);
+                qore_aot_note_registered_code(tpgm, session.getReader());
                 registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
                     tpgm, func_map, registered, &init_func_contexts,
                     session.getTypeResolver(), &registration_errors, debug_metadata,

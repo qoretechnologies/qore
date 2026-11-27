@@ -649,7 +649,9 @@ Why:
   compiled without debugging (no `qcc -g`, qore#7676), a function whose native code's IR was rewritten or has call
   forms that the debug IR cannot express has no debug IR and runs its native code, and the native code makes its direct
   calls without checking for a debugger (`AOTDebuggerChecks::None`); the binary has no `QORE_AOT_FLAG_DEBUGGING`, and a
-  debugger attached while it is loaded gets one warning (`qore_aot_note_code_without_debugging()`).
+  debugger attached to a Program into which such code is registered gets one warning for the Program
+  (`qore_aot_note_code_without_debugging()`; module code runs in the module's own Program, so the modules of a
+  debugger itself give none).
 
 A request at a step event of code without paths:
 | Code | Return | Break or continue |

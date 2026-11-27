@@ -101,8 +101,13 @@ class AotDebuggingOptionTest inherits QUnit::Test {
         assertFalse(entries =~ /\bconcatPair:/, "without -g: the rewritten function runs natively: " + entries);
     }
 
-    #! a module compiled without -g gives one warning in every execution mode, whether it is loaded first or the
-    #! debugger attaches first; one compiled with it, or no debugger, gives none
+    #! a module gives no warning, compiled with or without -g, in every execution mode, whether it is loaded first or
+    #! the debugger attaches first
+    /** The code of a module runs in the module's own Program, of which a debugger attached to a Program that uses the
+        module gets no events; the warning is only for the AOT code registered into the debugged Program (as by an
+        executable, see executableWarningTest()), so the modules that a debugger such as qdbg loads itself, compiled
+        without -g as the modules of the build are, give none either
+    */
     moduleWarningTest() {
         TmpDir tmp("qore-aot-debugging-module-");
         foreach string g in (("", "-g")) {
@@ -118,12 +123,7 @@ class AotDebuggingOptionTest inherits QUnit::Test {
                         + " -b --enable-debug --exec-mode=" + mode + " " + quote(dir + "/attach-load.qr") + " "
                         + order);
                     assertRegex("(?m)^" + order + ": 5$", output, label + ": result");
-                    assertEq(g ? 0 : 1, countWarnings(output), label + ": warnings");
-                    if (!g) {
-                        assertRegex("warning: a debugger is attached while code compiled without debugging "
-                            "\\(qcc -g\\) is loaded \\(.*DbgOptMod.*\\): calls in it may give no entry/exit events",
-                            output, label + ": the warning names the module");
-                    }
+                    assertEq(0, countWarnings(output), label + ": no warning for the code of a module");
                 }
             }
             # no debugger: no warning
