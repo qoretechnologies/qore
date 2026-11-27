@@ -270,8 +270,11 @@ public class RcGateState {
 
     static start() {
         background RcGateState::load();
-        # the load waits for the compilation of RcConc, which this initialization is part of
+        # the load waits for the compilation of RcConc, which this initialization is part of; the hook exists only
+        # in a debug build, and the case that uses this module skips in a release build
+%ifdef QoreDebug
         RcGateState::waited = dbg_module_load_waiters(\"RcConc\", 1, 60000);
+%endif
     }
 
     static load() {
