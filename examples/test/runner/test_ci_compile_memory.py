@@ -276,6 +276,8 @@ class CheckTest(unittest.TestCase):
                "CI_PROJECT_DIR": SRC}
         mem_report = self.dir / "memory.txt"
         with mock.patch.dict(os.environ, env, clear=False), mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            # only the token that the test gives: a CI job has QORE_CI_READ_API_TOKEN set (patch.dict restores it)
+            os.environ.pop("QORE_CI_READ_API_TOKEN", None)
             rc = cbw.main(["--fetch", "--download-dir", str(self.dir / "logs"), "--report", str(self.dir / "w.txt"),
                            "--memory-report", str(mem_report)])
         self.assertEqual(cbw.WARNINGS_FOUND, rc)
