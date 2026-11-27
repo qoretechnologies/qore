@@ -4,7 +4,7 @@
 
 # a function whose return value fails its declared return type, called by compiled code through the runtime's fast
 # call of a function: the exception is raised with the function on the call stack, as the AST interpreter raises it
-# in the call's frame; prints the exception and the call stack of the user functions
+# in the call's frame; prints the exception, its location and the call stack of the user functions
 
 %modern
 %requires ./FastCallReturnCheckModule.qm
@@ -105,6 +105,9 @@ foreach string name in (("module", "local", "given", "given value", "given value
         }
         printf("%s: no exception\n", name);
     } catch (hash<ExceptionInfo> ex) {
-        printf("%s: %s: %s; stack: %s; exceptions: %s\n", name, ex.err, ex.desc, stack_of(ex), errs(ex));
+        # the location of the exception is that of the return statement in the callee, as in the AST interpreter
+        # (qore#7762)
+        printf("%s: %s: %s; at: %s:%d; stack: %s; exceptions: %s\n", name, ex.err, ex.desc, basename(ex.file),
+            ex.line, stack_of(ex), errs(ex));
     }
 }
