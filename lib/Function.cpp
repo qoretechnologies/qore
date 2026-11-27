@@ -8231,6 +8231,36 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, cons
     current_tier.store(TIER_JIT, std::memory_order_release);
 }
 
+const QoreAOTCallRefEntry* UserVariantBase::lookupAOTCallRefEntry() const {
+    // read only after hasCachedFunction() (the acquire load of the tier, which the registration of the function
+    // published it with)
+    AotFunctionPtr fn = cached_aot_fn;
+    if (!fn) {
+        return nullptr;
+    }
+    // a lookup that found nothing is made again only once more entries have been registered
+    if (aot_callref_miss_generation.load(std::memory_order_acquire) == qore_aot_callref_registration_generation()) {
+        return nullptr;
+    }
+    uint32_t generation = 0;
+    const QoreAOTCallRefEntry* entry = qore_aot_find_callref_entry(fn, generation);
+    // an entry whose number of parameters is not the variant's is not taken (it cannot be the function's)
+    if (entry && entry->nparams != signature.numParams()) {
+        entry = nullptr;
+    }
+    if (!entry) {
+        aot_callref_miss_generation.store(generation, std::memory_order_release);
+        return nullptr;
+    }
+    // published once: a thread that lost the race returns the entry that the winner published, which is the same
+    const QoreAOTCallRefEntry* published = nullptr;
+    if (!aot_callref_entry.compare_exchange_strong(published, entry, std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
+        return published;
+    }
+    return entry;
+}
+
 bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) const {
     if (cached_aot_ctx.load(std::memory_order_acquire)) {
         return true;

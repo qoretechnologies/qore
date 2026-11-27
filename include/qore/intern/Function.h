@@ -52,6 +52,7 @@
 class qore_class_private;
 class QoreIRFunction;
 struct QoreAOTContext;
+struct QoreAOTCallRefEntry;
 struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
@@ -1920,6 +1921,15 @@ protected:
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
     //! Initialized before cached_aot_ctx is published. cached_aot_fn remains the native symbol for lookup.
     mutable AotFunctionPtr aot_body_entry = nullptr;
+    //! The call-reference entry of the AOT function (qore#5578; see getAOTCallRefEntry()): published once, with a
+    //! release store, and never changed after
+    mutable std::atomic<const QoreAOTCallRefEntry*> aot_callref_entry{nullptr};
+    //! The generation of the registrations of call-reference entries (qore_aot_callref_registration_generation()) for
+    //! which the last lookup found no entry, or 0 if none was made
+    mutable std::atomic<uint32_t> aot_callref_miss_generation{0};
+
+    //! looks up the call-reference entry in the registry; see getAOTCallRefEntry()
+    DLLLOCAL const QoreAOTCallRefEntry* lookupAOTCallRefEntry() const;
 
     template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -2291,6 +2301,19 @@ public:
     //! native fast entry in the registry of a module's fast entries (qore_aot_find_cross_module_fast_entry())
     DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
         return cached_aot_fn;
+    }
+
+    //! Returns the call-reference entry of the AOT-compiled function, or nullptr if its image registered none
+    /** The entry that its image registered for the standard native entry of the function (getCachedAOTFunction();
+        qore_aot_register_callref_entries_v1()), with which a call through a reference to the function calls its native
+        code with native arguments (qore#5578).  It serves every reference to the function, also the ones that AST or IR
+        code or another image made.  It is published on the variant by the first lookup that finds it, with a release
+        store, and read with an acquire load; a lookup that finds none is made again only once more entries have been
+        registered (a module's image loaded later, for example).
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreAOTCallRefEntry* getAOTCallRefEntry() const {
+        const QoreAOTCallRefEntry* entry = aot_callref_entry.load(std::memory_order_acquire);
+        return entry ? entry : lookupAOTCallRefEntry();
     }
 
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown

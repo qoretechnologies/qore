@@ -52,6 +52,7 @@ class FunctionEntry;
 //! qore#7678); does nothing for any other value
 DLLLOCAL void qore_call_reference_set_lent_program(QoreValue v);
 class RuntimeConfig;
+class ThreadData;
 class AbstractQoreFunctionVariant;
 class UserVariantBase;
 
@@ -148,6 +149,9 @@ public:
         only be taken then.
     */
     DLLLOCAL bool creatorContextIsCurrent(const QoreProgram* pgm) const;
+
+    //! creatorContextIsCurrent() with the current thread's data (qore_get_thread_data())
+    DLLLOCAL bool creatorContextIsCurrent(ThreadData* td, const QoreProgram* pgm) const;
 
     //! refuses the call of a reference that code that may not control threads created, if the expression of the
     //! background operator makes it itself, as the call of a function reference does (qore#7087)

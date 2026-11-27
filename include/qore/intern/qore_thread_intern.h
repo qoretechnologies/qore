@@ -402,6 +402,14 @@ DLLLOCAL const QoreProgram* runtime_get_module_call_program();
     nothing (qore#5578)
 */
 DLLLOCAL bool runtime_call_context_is_plain(const QoreProgram* pgm);
+//! runtime_call_context_is_plain() with the current thread's data (qore_get_thread_data())
+DLLLOCAL bool runtime_call_context_is_plain(const ThreadData* td, const QoreProgram* pgm);
+
+//! returns the Program running on the thread (getProgram()), with the current thread's data (qore_get_thread_data())
+DLLLOCAL QoreProgram* runtime_get_program(const ThreadData* td);
+
+//! runtime_get_module_call_program() with the current thread's data (qore_get_thread_data())
+DLLLOCAL const QoreProgram* runtime_get_module_call_program(const ThreadData* td);
 
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
@@ -1001,6 +1009,9 @@ DLLLOCAL int qore_check_thread_callable(const ResolvedCallReferenceNode* code, i
 */
 DLLLOCAL int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed,
         ExceptionSink* xsink);
+//! qore_check_background_direct_entry() with the current thread's data (qore_get_thread_data())
+DLLLOCAL int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm,
+        bool callee_frame_pushed, ExceptionSink* xsink);
 
 //! Refuses a callable or object authored by code that may not control threads, called by the background expression
 /** As qore_check_background_direct_entry(), for a call reference or a method call on an object before its call: a

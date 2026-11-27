@@ -918,6 +918,73 @@ extern "C" void qore_aot_register_module_fast_entries_v1(const char* mod_name, c
 extern "C" void qore_aot_unregister_module_fast_entries_v1(const char* mod_name, const QoreAOTFastEntry* entries,
     int32_t num_entries);
 
+//! The highest number of parameters of a function with a call-reference entry (QoreAOTCallRefEntry)
+constexpr unsigned QORE_AOT_CALLREF_MAX_PARAMS = 15;
+
+//! The native entry of an AOT function that a call through a reference to it can take (qore#5578)
+/** The entry takes the arguments in an array of raw slots, one for each parameter, in the kind of the parameter
+    (BatchCalleeParamKind): the bits of an int, a float or a bool (0 or 1) or a borrowed NaN-boxed value, and returns its
+    value in the same raw form, in the kind of its return (BatchCalleeReturnKind).  qcc generates it as an adapter that
+    calls the function's native fast entry, which reads nothing of its own AOT context (a context-independent fast
+    entry), with the AOT context of the callee's Program; see QoreIRToLLVM::emitAOTCallRefEntries().
+*/
+using QoreAOTCallRefFn = uint64_t (*)(const uint64_t* raw_args, QoreAOTContext* callee_ctx, ExceptionSink* xsink);
+
+//! Encodes the signature of a call-reference entry: the return kind in the low two bits, then two bits for each
+//! parameter kind, the first parameter's first (the code of qore#5578: ret | arg << 2)
+constexpr uint32_t qore_aot_callref_sig_code(uint8_t ret_kind, const uint8_t* kinds, unsigned nparams) {
+    uint32_t code = ret_kind & 3;
+    for (unsigned i = 0; i < nparams; ++i) {
+        code |= static_cast<uint32_t>(kinds[i] & 3) << (2 + 2 * i);
+    }
+    return code;
+}
+
+//! A call-reference entry of an AOT function in the table that its image registers (qore#5578)
+/** The layout is the one that qcc generates (QoreIRToLLVM::emitAOTCallRefEntries()).
+*/
+struct QoreAOTCallRefEntry {
+    //! the function's standard native entry, which its variant holds (UserVariantBase::getCachedAOTFunction())
+    AotFunctionPtr fn;
+    //! the call-reference entry
+    QoreAOTCallRefFn cref_fn;
+    //! the signature: qore_aot_callref_sig_code() of the return kind and the parameter kinds
+    uint32_t sig_code;
+    //! the number of parameters, at most QORE_AOT_CALLREF_MAX_PARAMS
+    uint8_t nparams;
+    //! the kind of each parameter (BatchCalleeParamKind)
+    uint8_t kinds[QORE_AOT_CALLREF_MAX_PARAMS];
+
+    //! returns the kind of the value that the entry returns (BatchCalleeReturnKind)
+    DLLLOCAL uint8_t retKind() const {
+        return sig_code & 3;
+    }
+};
+
+//! Registers the call-reference entries of an AOT image; called by a constructor function of the image when it is
+//! loaded (qore#5578)
+/** The entries are found by the standard native entry of their function (qore_aot_find_callref_entry()), which
+    publishes the entry on the function's variant (UserVariantBase::getAOTCallRefEntry()).  The array is the image's own
+    data: it stays valid until a destructor function of the image unregisters it with
+    qore_aot_unregister_callref_entries_v1() when the image is unloaded.  Malformed entries are ignored.
+*/
+extern "C" DLLEXPORT void qore_aot_register_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+    int32_t num_entries);
+
+//! Removes the registration of qore_aot_register_callref_entries_v1(); called by a destructor function of the image
+//! when it is unloaded
+extern "C" DLLEXPORT void qore_aot_unregister_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+    int32_t num_entries);
+
+//! Returns the call-reference entry of the function whose standard native entry is \a fn, or nullptr (qore#5578)
+/** @param generation set to the generation of the registrations that the lookup saw, which a variant compares with
+    qore_aot_callref_registration_generation() to know whether a lookup that found nothing must be made again
+*/
+DLLLOCAL const QoreAOTCallRefEntry* qore_aot_find_callref_entry(AotFunctionPtr fn, uint32_t& generation);
+
+//! Returns the generation of the registrations of call-reference entries, which every registration increments
+DLLLOCAL uint32_t qore_aot_callref_registration_generation();
+
 //! Returns the native fast entry of the function whose standard native entry is \a fn, or nullptr
 /** @param fn the standard native entry of the function
     @param fast_symbol the symbol of the fast entry that the caller was compiled for; a fast entry with another symbol

@@ -7,7 +7,8 @@
 # call path otherwise; the result, exceptions and call stacks of every case must be those of the AST interpreter.
 #
 # Prints a line for each case.  With the argument "report" (debug builds), it prints after each case whether its calls
-# took the fast path (dbg_function_reference_fast_calls()) instead.
+# took the fast path (dbg_function_reference_fast_calls()) instead, or the call-reference entry of an AOT function
+# ("native", dbg_function_reference_native_calls()).
 
 %modern
 %no-child-restrictions
@@ -225,17 +226,21 @@ int sub try_loop(code f, int n) {
 }
 
 int fast_calls_before = 0;
+int native_calls_before = 0;
 
 sub case_start() {
     if (report) {
         fast_calls_before = call_function("dbg_function_reference_fast_calls");
+        native_calls_before = call_function("dbg_function_reference_native_calls");
     }
 }
 
 sub case_end(string name, string result) {
     if (report) {
         int calls = call_function("dbg_function_reference_fast_calls") - fast_calls_before;
-        printf("%s: %s\n", name, calls ? "fast" : "generic");
+        # a call through the call-reference entry of an AOT function (qore#5578) takes the fast path of AOT code
+        int native = call_function("dbg_function_reference_native_calls") - native_calls_before;
+        printf("%s: %s\n", name, native ? "native" : (calls ? "fast" : "generic"));
     } else {
         printf("%s: %s\n", name, result);
     }
