@@ -210,7 +210,8 @@ module HttpServerUtil {
       (\c user) is given, and of the \c peer-info hash only the address of the client
       (@ref HttpServer::AbstractStreamRequest::PeerInfoKeys "PeerInfoKeys"); the original \c Authorization value
       (\c auth), the listener's sockets (\c socket, \c socket-info), the user thread context (\c uctx), the logger
-      and the other objects of the server are withheld
+      and the other objects of the server are withheld, and so is any value that is an object or code (a closure or
+      call reference) or holds one
     - the header fields of @ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders" (the
       \c Proxy-Authorization field and the cookies, always; \c Authorization, see below) and those that the
       platform's authentication consumed
@@ -3110,7 +3111,8 @@ public hashdecl HttpRequestFilterOptions {
         (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()").
         The keys of @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys", the keys that the
         filter handles itself (\c hdr, \c header-info, \c peer-info, \c trailers, \c url and the paths) and
-        values that are objects or hold one at any depth are not kept in any case.  The keys must hold plain data
+        values that are objects or code (closures and call references), or hold one at any depth, are not kept in any
+        case.  The keys must hold plain data
         and no credentials (such as an authentication token): the code that a restricted sandbox governs gets them
     */
     *softlist<string> platform_context_keys;
@@ -3340,7 +3342,8 @@ public class AbstractStreamRequest {
         applies it with the options of its own authentication.
 
         - the request context: only the keys in @ref ContextKeys; of its \c "header-info" hash only the keys in
-          @ref HeaderInfoKeys, and of its \c "peer-info" hash only the keys in @ref PeerInfoKeys
+          @ref HeaderInfoKeys, and of its \c "peer-info" hash only the keys in @ref PeerInfoKeys; a value that is an
+          object or code (a closure or call reference), or holds one at any depth, is not given
         - the header fields of @ref CredentialHeaders and of \a opts.platform_headers are removed from the request
           header fields, their \c "headers" hash, the \c "hdr" key of the request context and the \c "headers-raw"
           hash of its \c "header-info"; \c Authorization is given only if the platform did not authenticate the
@@ -3381,24 +3384,27 @@ public class AbstractStreamRequest {
 
         hash<string, bool> withheld = {};
 
-        # the request context
+        # the request context: plain data only, never an object or code (qore#7303); the header information and the
+        # peer information are checked for the keys that are given of them
         hash<auto> rv = {};
         foreach string key in (ContextKeys) {
-            if (cx.hasKey(key)) {
+            if (cx.hasKey(key) && (((key == "header-info" || key == "peer-info") && cx{key}.typeCode() == NT_HASH)
+                    || !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key}))) {
                 rv{key} = cx{key};
             }
         }
         # the platform's authorization context: data only, never the server's objects or what is filtered here
         foreach string key in (opts.platform_context_keys) {
             if (cx.hasKey(key) && !rv.hasKey(key) && !inlist(key, ServerContextKeys)
-                    && !AbstractStreamRequest::holdsObject(cx{key})) {
+                    && !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key})) {
                 rv{key} = cx{key};
             }
         }
         if (cx."header-info".typeCode() == NT_HASH) {
             hash<auto> info = {};
             foreach string key in (HeaderInfoKeys) {
-                if (cx."header-info".hasKey(key)) {
+                if (cx."header-info".hasKey(key)
+                        && !AbstractHttpRequestHandler::holdsObjectOrCode(cx."header-info"{key})) {
                     info{key} = cx."header-info"{key};
                 }
             }
@@ -3415,7 +3421,7 @@ public class AbstractStreamRequest {
         if (rv."peer-info".typeCode() == NT_HASH) {
             hash<auto> peer = {};
             foreach string key in (PeerInfoKeys) {
-                if (rv."peer-info".hasKey(key)) {
+                if (rv."peer-info".hasKey(key) && !AbstractHttpRequestHandler::holdsObjectOrCode(rv."peer-info"{key})) {
                     peer{key} = rv."peer-info"{key};
                 }
             }
@@ -3652,15 +3658,18 @@ public class AbstractStreamRequest {
     */
     static hash<auto> filterContext(hash<auto> cx) {
         hash<auto> rv;
+        # plain data only, never an object or code (qore#7303); the header information is checked for its keys
         foreach string key in (ContextKeys) {
-            if (cx.hasKey(key)) {
+            if (cx.hasKey(key) && ((key == "header-info" && cx{key}.typeCode() == NT_HASH)
+                    || !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key}))) {
                 rv{key} = cx{key};
             }
         }
         if (cx."header-info".typeCode() == NT_HASH) {
             hash<auto> info;
             foreach string key in (HeaderInfoKeys) {
-                if (cx."header-info".hasKey(key)) {
+                if (cx."header-info".hasKey(key)
+                        && !AbstractHttpRequestHandler::holdsObjectOrCode(cx."header-info"{key})) {
                     info{key} = cx."header-info"{key};
                 }
             }
