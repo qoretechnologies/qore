@@ -139,6 +139,8 @@ class HoldTarget inherits HttpAsyncTarget {
         Queue cancel_counts();
         #! receives "cancel-returned" when a held cancel of a request's preparation returns
         Queue cancel_returns();
+        #! the server's socket of the last request whose preparation was canceled
+        *Socket cancel_sock;
         #! if set, a failing saveDispatchContext() waits until it is zero before it raises (see drainingAbortTest())
         *Counter save_gate;
         #! receives "save-entered" when a failing saveDispatchContext() waits for save_gate
@@ -179,6 +181,7 @@ class HoldTarget inherits HttpAsyncTarget {
     cancelPreparedHttpRequest(hash<HttpConnectionInfo> info) {
         *Counter dc = info.listener.dispatch_counter;
         cancel_counts.push(dc ? dc.getCount() : -1);
+        cancel_sock = info.sock;
         prepared_cancels.push(info.hdr.path);
         *Counter gate = cancel_gate;
         if (gate) {
@@ -1458,10 +1461,15 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
         Counter stop_done = stopListener(srv, s.li.id, ev);
         # the stop has closed the listener's connections and waits for its dispatches
         assertEq("connections-closed", ev.waitFor(("connections-closed", "stop-returned")),
-            "the stop waits for the request");
+            "the stop closes the listener's connections");
+        # the request still counts while its cancel is held: the stop has not returned
+        assertFalse(ev.seen.contains("stop-returned"), sprintf("the stop waits for the request: %y", ev.seen));
+        assertEq(1, stop_done.getCount(), "the stop of the listener has not returned");
         gate.dec();
         assertEq("cancel-returned", srv.hold.cancel_returns.get(HangTimeout), "the held cancel returns");
         assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        # the dispatch ended after the connection was closed, and the stop returned after the dispatch ended
+        assertFalse(srv.hold.cancel_sock.isOpen(), "the server closed the connection before the stop returned");
         assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the request is closed");
         assertEq(0, srv.hold.prepared_cancels.size(), "the preparation of the request is canceled once");
     }

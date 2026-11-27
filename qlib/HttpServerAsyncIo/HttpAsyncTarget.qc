@@ -229,8 +229,9 @@ public class HttpAsyncTarget {
         - when @ref saveDispatchContext() raises an exception on the handler-pool thread that is to run an HTTP/1.1
           request: on that thread, outside any saved dispatch context (that of the failed save is not restored)
 
-        The request's connection is closed after this callback has returned, without a response; the request still
-        counts for a stop of its listener until then.
+        The request's connection (an HTTP/1.1 connection; not that of a request on an HTTP/3 connection) is closed
+        after this callback has returned, without a response; the request still counts for a stop of its listener
+        until then.
 
         @param info connection and request information passed to @ref prepareHttpRequest()
     */
@@ -255,8 +256,8 @@ public class HttpAsyncTarget {
 
         If this method raises an exception for an HTTP/1.1 request, the request is not handled:
         \c onHttpRequest() is not called, nor is @ref restoreDispatchContext(); the error is logged,
-        @ref cancelPreparedHttpRequest() is called on the same thread, and the connection is closed without a response
-        (qore#7769).  The exception is then raised as the error of the handler-pool task.
+        @ref cancelPreparedHttpRequest() is called on the same thread, and the request's HTTP/1.1 connection (not an
+        HTTP/3 connection) is closed without a response (qore#7769).  The exception is then raised as the error of the handler-pool task.
 
         @return opaque save data to be passed to @ref restoreDispatchContext() at dispatch end
     */

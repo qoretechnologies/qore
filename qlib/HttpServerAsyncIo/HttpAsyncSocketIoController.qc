@@ -1605,6 +1605,9 @@ public class HttpAsyncSocketIoController {
 
         *HttpAsyncTarget target = task.target;
         *code<nothing()> body = task.body;
+        # cannot happen: the handoff is created with both, and only this runner takes them; without its body the
+        # dispatch cannot be ended here either, as only the body has its Counter (which a controller's stop ends, see
+        # endStaleDispatches())
         if (!exists target || !exists body) {
             log(LoggerLevel::ERROR, "HTTP/1.1 dispatch task without its %s: the request is not handled",
                 exists target ? "body" : (exists body ? "target" : "target and body"));
@@ -5452,8 +5455,9 @@ public class HttpAsyncSocketIoController {
         # where an inline handler, or a preparation of the request, that stops or releases the server waits for a
         # drain, which ends this dispatch (see waitDrain())
         Priv::running_dispatch = dispatch_counter;
-        # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
-        # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
+        # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, last on
+        # an error, after the connection was closed (see endFailedDispatch() and endUnsubmittedDispatch()), or by the
+        # handler-pool task (an on_exit block here costs every request, qore#5899)
 
         # Try lightweight inline path first (no body, handler opts in via canHandleInline).
         # This runs directly on the call_dispatcher worker — no handler_pool thread hop.
@@ -5760,8 +5764,9 @@ public class HttpAsyncSocketIoController {
         # where an inline handler, or a preparation of the request, that stops or releases the server waits for a
         # drain, which ends this dispatch (see waitDrain())
         Priv::running_dispatch = dispatch_counter;
-        # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
-        # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
+        # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, last on
+        # an error, after the connection was closed (see endFailedDispatch() and endUnsubmittedDispatch()), or by the
+        # handler-pool task (an on_exit block here costs every request, qore#5899)
 
         # Give the target the same pre-dispatch admission point as a bodyless request.
         bool handled3;
@@ -7619,10 +7624,12 @@ thread_local *Counter handler_task_count;
 #! The pool whose worker runs the task, including the destruction of the submitted callable.
 thread_local *ThreadPool running_handler_pool;
 
-#! The counter of the HTTP/1.1 dispatch that the current thread runs in the handler pool
-/** Set by the dispatch's task and cleared when it ends the dispatch; a drain that the dispatch's thread waits for
-    (the stop of a server that a request stops or releases) ends the dispatch's count first, as the dispatch ends only
-    when the drain has returned (see HttpAsyncSocketIoController::waitDrain(), qore#6508)
+#! The counter of the HTTP/1.1 dispatch that the current thread runs
+/** Set by the dispatch's task in the handler pool, and on the callback dispatcher worker while the dispatch runs there
+    (its inline request, the preparation of the request, and the end of a dispatch whose submission to the handler
+    pool failed), and cleared when the dispatch ends; a drain that the dispatch's thread waits for (the stop of a
+    server that a request stops or releases) ends the dispatch's count first, as the dispatch ends only when the drain
+    has returned (see HttpAsyncSocketIoController::waitDrain(), qore#6508)
 */
 thread_local *Counter running_dispatch;
 
