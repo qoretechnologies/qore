@@ -1,0 +1,336 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileDataProvider
+
+%exec-class FilesystemConnectionReadOnlyTest
+
+#! The data providers of a filesystem connection are read-only for a read-only connection and confined to its
+#! directory, whatever constructor options the caller gives (qore#7806)
+class FilesystemConnectionReadOnlyTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the restricted Program
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the write actions of the file data provider
+        const WriteActions = ("create", "delete", "move", "copy", "mkdir");
+
+        #! the code of the restricted Program: runs a file action through a lent connection's data provider
+        const Code = "%modern
+string sub run(object conn, string action, hash<auto> req, *hash<auto> opts) {
+    try {
+        auto rv = conn.getDataProvider(opts).getChildProviderEx(action).doRequest(req);
+        if (action == \"get\") {
+            return \"OK: \" + rv.data;
+        }
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("FilesystemConnectionReadOnly", "1.0") {
+        addTestCase("read-only connection: the data provider refuses writes and allows reads",
+            \readOnlyProviderTest());
+        addTestCase("read-only connection: readonly False from the caller is ignored", \callerReadOnlyFalseTest());
+        addTestCase("the connection's directory is the provider's root", \callerRootTest());
+        addTestCase("the provider is locked to the connection's directory", \callerLockTest());
+        addTestCase("paths that leave the connection's directory are refused", \dotDotTest());
+        addTestCase("writable connection: the data provider writes", \writableProviderTest());
+        addTestCase("writable connection: the caller may make the provider read-only", \callerReadOnlyTrueTest());
+        addTestCase("read-only connection: the file poller subtype", \filePollerSubtypeTest());
+        foreach string mode in (keys Modes) {
+            addTestCase("lent read-only connection, " + mode, \lentReadOnlyTest(), mode);
+            addTestCase("lent writable connection, " + mode, \lentWritableTest(), mode);
+        }
+        set_return_value(main());
+    }
+
+    #! creates the fixture files in the given directory: a file "a.txt" and a directory "sub"
+    private static setup(string dir) {
+        File f();
+        f.open2(dir + DirSep + "a.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("alpha");
+        f.close();
+        mkdir(dir + DirSep + "sub");
+    }
+
+    #! returns the error code of the given request, or "OK"
+    private static string tryAction(AbstractDataProvider dp, string action, hash<auto> req) {
+        try {
+            dp.getChildProviderEx(action).doRequest(req);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the requests of the write actions against a directory with the fixture files
+    private static hash<string, hash<auto>> getWriteRequests() {
+        return {
+            "create": {"path": "new.txt", "data": "new"},
+            "delete": {"path": "a.txt"},
+            "move": {"source": "a.txt", "target": "moved.txt"},
+            "copy": {"source": "a.txt", "target": "copied.txt"},
+            "mkdir": {"path": "newdir"},
+        };
+    }
+
+    #! checks that every write action is refused and that the directory is unchanged
+    private checkWritesRefused(AbstractDataProvider dp, string dir, string label) {
+        hash<string, hash<auto>> reqs = getWriteRequests();
+        foreach string action in (WriteActions) {
+            assertEq("READONLY-ERROR", tryAction(dp, action, reqs{action}), label + ": " + action);
+        }
+        assertEq("alpha", ReadOnlyFile::readTextFile(dir + DirSep + "a.txt"), label + ": a.txt is unchanged");
+        foreach string name in ("new.txt", "moved.txt", "copied.txt", "newdir") {
+            assertFalse(is_file(dir + DirSep + name) || is_dir(dir + DirSep + name), label + ": no " + name);
+        }
+    }
+
+    #! checks that the read actions work
+    private checkReads(AbstractDataProvider dp, string dir, string label) {
+        assertEq("alpha", dp.getChildProviderEx("get").doRequest({"path": "a.txt", "text": True}).data,
+            label + ": get");
+        # the list action lists the regular files of the directory
+        list<string> names = map $1.name, dp.getChildProviderEx("list").doRequest({"path": "."});
+        assertEq(("a.txt",), names, label + ": list");
+        assertEq("REGULAR", dp.getChildProviderEx("stat").doRequest({"path": "a.txt"}).type, label + ": stat");
+        assertEq(dir + DirSep + "a.txt", dp.getChildProviderEx("stat").doRequest({"path": "a.txt"}).filepath,
+            label + ": stat path");
+    }
+
+    private FilesystemConnection getConnection(string dir, bool readonly) {
+        return new FilesystemConnection("fs", "fs", "file://" + dir, {"monitor": False}, {"readonly": readonly});
+    }
+
+    readOnlyProviderTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        FilesystemConnection conn = getConnection(tmp.path, True);
+        AbstractDataProvider dp = conn.getDataProvider();
+        checkWritesRefused(dp, tmp.path, "read-only");
+        checkReads(dp, tmp.path, "read-only");
+        # every child provider that the provider returns is read-only too
+        foreach string name in (dp.getChildProviderNames()) {
+            AbstractDataProvider child = dp.getChildProviderEx(name);
+            assertTrue(child instanceof FileDataProviderBase, name);
+        }
+        # a file in another directory cannot be the target of a copy from the read-only connection
+        TmpDir other();
+        assertEq("SANDBOX-ERROR", tryAction(dp, "copy", {"source": "a.txt", "target": other.path + DirSep + "a.txt"}),
+            "copy out of the connection's directory");
+        assertFalse(is_file(other.path + DirSep + "a.txt"));
+    }
+
+    callerReadOnlyFalseTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        FilesystemConnection conn = getConnection(tmp.path, True);
+        checkWritesRefused(conn.getDataProvider({"readonly": False}), tmp.path, "readonly False");
+        checkWritesRefused(conn.getDataProvider({"readonly": False, "lock": False}), tmp.path,
+            "readonly False, lock False");
+        checkReads(conn.getDataProvider({"readonly": False}), tmp.path, "readonly False");
+    }
+
+    callerRootTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        TmpDir other();
+        File f();
+        f.open2(other.path + DirSep + "b.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("beta");
+        f.close();
+
+        # a read-only connection: another root does not make the other directory writable
+        FilesystemConnection conn = getConnection(tmp.path, True);
+        AbstractDataProvider dp = conn.getDataProvider({"root": other.path, "readonly": False});
+        # relative paths are the connection's
+        assertEq("alpha", dp.getChildProviderEx("get").doRequest({"path": "a.txt", "text": True}).data);
+        assertEq(("a.txt",), map $1.name, dp.getChildProviderEx("list").doRequest({"path": "."}));
+        # the other directory is not reachable
+        assertEq("SANDBOX-ERROR", tryAction(dp, "get", {"path": other.path + DirSep + "b.txt"}));
+        assertEq("SANDBOX-ERROR", tryAction(dp, "delete", {"path": other.path + DirSep + "b.txt"}));
+        assertEq("SANDBOX-ERROR", tryAction(dp, "create", {"path": other.path + DirSep + "c.txt", "data": "x"}));
+        assertEq("READONLY-ERROR", tryAction(dp, "create", {"path": "c.txt", "data": "x"}));
+        assertEq("beta", ReadOnlyFile::readTextFile(other.path + DirSep + "b.txt"));
+        assertFalse(is_file(other.path + DirSep + "c.txt"));
+        assertFalse(is_file(tmp.path + DirSep + "c.txt"));
+
+        # a writable connection: writes go to the connection's directory, not to the caller's root
+        conn = getConnection(tmp.path, False);
+        dp = conn.getDataProvider({"root": other.path});
+        assertEq("OK", tryAction(dp, "create", {"path": "c.txt", "data": "gamma"}));
+        assertEq("gamma", ReadOnlyFile::readTextFile(tmp.path + DirSep + "c.txt"));
+        assertFalse(is_file(other.path + DirSep + "c.txt"));
+        assertEq("SANDBOX-ERROR", tryAction(dp, "delete", {"path": other.path + DirSep + "b.txt"}));
+        assertTrue(is_file(other.path + DirSep + "b.txt"));
+    }
+
+    callerLockTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        TmpDir other();
+        File f();
+        f.open2(other.path + DirSep + "b.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("beta");
+        f.close();
+
+        foreach bool readonly in (True, False) {
+            string label = sprintf("readonly %y", readonly);
+            FilesystemConnection conn = getConnection(tmp.path, readonly);
+            AbstractDataProvider dp = conn.getDataProvider({"lock": False});
+            # paths outside the connection's directory are refused
+            assertEq("SANDBOX-ERROR", tryAction(dp, "get", {"path": other.path + DirSep + "b.txt"}), label);
+            assertEq("SANDBOX-ERROR", tryAction(dp, "stat", {"path": other.path + DirSep + "b.txt"}), label);
+            assertEq("SANDBOX-ERROR", tryAction(dp, "list", {"path": other.path}), label);
+            assertEq("SANDBOX-ERROR", tryAction(dp, "delete", {"path": other.path + DirSep + "b.txt"}), label);
+            assertEq("SANDBOX-ERROR", tryAction(dp, "mkdir", {"path": other.path + DirSep + "d"}), label);
+            # relative paths are the connection's
+            assertEq("alpha", dp.getChildProviderEx("get").doRequest({"path": "a.txt", "text": True}).data, label);
+        }
+        assertEq("beta", ReadOnlyFile::readTextFile(other.path + DirSep + "b.txt"));
+        assertFalse(is_dir(other.path + DirSep + "d"));
+    }
+
+    dotDotTest() {
+        TmpDir parent();
+        string dir = parent.path + DirSep + "conn";
+        mkdir(dir);
+        setup(dir);
+        File f();
+        f.open2(parent.path + DirSep + "outside.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("outside");
+        f.close();
+        # a sibling directory whose name starts with the connection's directory name
+        mkdir(dir + "x");
+
+        foreach bool readonly in (True, False) {
+            string label = sprintf("readonly %y", readonly);
+            FilesystemConnection conn = getConnection(dir, readonly);
+            foreach *hash<auto> opts in ((NOTHING, {"lock": False, "readonly": False})) {
+                string l = label + sprintf(" opts %y", opts);
+                AbstractDataProvider dp = conn.getDataProvider(opts);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "get", {"path": "../outside.txt"}), l);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "get", {"path": "sub/../../outside.txt"}), l);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "list", {"path": ".."}), l);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "delete", {"path": "../outside.txt"}), l);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "move", {"source": "a.txt", "target": "../a.txt"}), l);
+                assertEq("SANDBOX-ERROR", tryAction(dp, "create", {"path": "../conn" + "x/new.txt", "data": "x"}),
+                    l);
+                # a path that goes up and comes back stays inside
+                assertEq("OK", tryAction(dp, "get", {"path": "sub/../a.txt"}), l);
+            }
+        }
+        assertEq("outside", ReadOnlyFile::readTextFile(parent.path + DirSep + "outside.txt"));
+        assertFalse(is_file(parent.path + DirSep + "a.txt"));
+        assertFalse(is_file(dir + "x" + DirSep + "new.txt"));
+    }
+
+    writableProviderTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        FilesystemConnection conn = getConnection(tmp.path, False);
+        foreach *hash<auto> opts in ((NOTHING, {"readonly": False})) {
+            AbstractDataProvider dp = conn.getDataProvider(opts);
+            string label = sprintf("opts %y", opts);
+            assertEq("OK", tryAction(dp, "create", {"path": "new.txt", "data": "new"}), label);
+            assertEq("new", ReadOnlyFile::readTextFile(tmp.path + DirSep + "new.txt"), label);
+            assertEq("OK", tryAction(dp, "copy", {"source": "new.txt", "target": "copied.txt"}), label);
+            assertEq("new", ReadOnlyFile::readTextFile(tmp.path + DirSep + "copied.txt"), label);
+            assertEq("OK", tryAction(dp, "move", {"source": "copied.txt", "target": "moved.txt"}), label);
+            assertFalse(is_file(tmp.path + DirSep + "copied.txt"), label);
+            assertTrue(is_file(tmp.path + DirSep + "moved.txt"), label);
+            assertEq("OK", tryAction(dp, "mkdir", {"path": "newdir"}), label);
+            assertTrue(is_dir(tmp.path + DirSep + "newdir"), label);
+            foreach string name in ("new.txt", "moved.txt", "newdir") {
+                assertEq("OK", tryAction(dp, "delete", {"path": name}), label + ": delete " + name);
+                assertFalse(is_file(tmp.path + DirSep + name) || is_dir(tmp.path + DirSep + name), label);
+            }
+            checkReads(dp, tmp.path, label);
+        }
+    }
+
+    callerReadOnlyTrueTest() {
+        TmpDir tmp();
+        setup(tmp.path);
+        FilesystemConnection conn = getConnection(tmp.path, False);
+        AbstractDataProvider dp = conn.getDataProvider({"readonly": True});
+        checkWritesRefused(dp, tmp.path, "caller readonly True");
+        checkReads(dp, tmp.path, "caller readonly True");
+    }
+
+    filePollerSubtypeTest() {
+        TmpDir tmp();
+        FilesystemConnection conn = getConnection(tmp.path, True);
+        # the file poller only reads: it has no option that makes it write, so the caller's readonly option is not
+        # given to it, and it offers no API that writes
+        AbstractDataProvider dp = conn.getDataProvider("filepoller", {"readonly": False});
+        on_exit delete dp;
+        assertEq("FileDelayedPollerDataProvider", dp.className());
+        hash<auto> info = dp.getInfo();
+        foreach string key in ("supports_create", "supports_update", "supports_upsert", "supports_delete",
+            "supports_request", "supports_children") {
+            assertFalse(boolean(info{key}), key);
+        }
+        assertEq(NOTHING, dp.getChildProviderNames());
+        # a subtype that writes is not offered for a read-only connection
+        assertThrows("DATA-PROVIDER-ERROR", \conn.getDataProvider(), ("filewriter", {}));
+    }
+
+    #! a read-only connection lent to code restricted from the filesystem gives that code a read-only provider
+    lentReadOnlyTest(string mode) {
+        TmpDir tmp();
+        setup(tmp.path);
+        Program p = getProgram(mode);
+        FilesystemConnection conn = getConnection(tmp.path, True);
+        hash<string, hash<auto>> reqs = getWriteRequests();
+        foreach string action in (WriteActions) {
+            assertRegex("^READONLY-ERROR", p.callFunction("run", conn, action, reqs{action}), action);
+        }
+        assertEq("alpha", ReadOnlyFile::readTextFile(tmp.path + DirSep + "a.txt"));
+        foreach string name in ("new.txt", "moved.txt", "copied.txt", "newdir") {
+            assertFalse(is_file(tmp.path + DirSep + name) || is_dir(tmp.path + DirSep + name), name);
+        }
+        assertEq("OK: alpha", p.callFunction("run", conn, "get", {"path": "a.txt", "text": True}));
+        assertEq("OK", p.callFunction("run", conn, "list", {"path": "."}));
+        assertEq("OK", p.callFunction("run", conn, "stat", {"path": "a.txt"}));
+        # the restricted code cannot give options that change the provider
+        assertRegex("^PERMISSION-DENIED", p.callFunction("run", conn, "create", reqs.create, {"readonly": False}));
+        assertFalse(is_file(tmp.path + DirSep + "new.txt"));
+    }
+
+    #! a writable connection lent to restricted code gives that code a writable provider, confined to its directory
+    lentWritableTest(string mode) {
+        TmpDir parent();
+        string dir = parent.path + DirSep + "conn";
+        mkdir(dir);
+        setup(dir);
+        Program p = getProgram(mode);
+        FilesystemConnection conn = getConnection(dir, False);
+        assertEq("OK", p.callFunction("run", conn, "create", {"path": "new.txt", "data": "new"}));
+        assertEq("new", ReadOnlyFile::readTextFile(dir + DirSep + "new.txt"));
+        assertEq("OK", p.callFunction("run", conn, "delete", {"path": "new.txt"}));
+        assertFalse(is_file(dir + DirSep + "new.txt"));
+        assertRegex("^SANDBOX-ERROR", p.callFunction("run", conn, "create", {"path": "../new.txt", "data": "x"}));
+        assertFalse(is_file(parent.path + DirSep + "new.txt"));
+    }
+
+    private Program getProgram(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "restricted-fs-" + mode);
+        return p;
+    }
+}

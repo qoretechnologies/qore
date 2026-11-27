@@ -12,16 +12,16 @@
           "message": "檔案系統連接"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "如果檔案系統位置為唯讀，不會將連接標記為失效；例如用於連接指向唯讀基目錄的情況；介面目錄通常應可寫入"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "若檔案系統位置為唯讀，不將連線標記為中斷，並使連線傳回的資料提供者成為唯讀：它們無法在該位置建立、刪除、移動、複製到該位置或建立目錄；例如連線應指向唯讀基礎目錄時使用；介面目錄通常應可寫入"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "唯讀"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "在連接上設定唯讀旗標"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "使連線及其資料提供者成為唯讀"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

@@ -1209,6 +1209,12 @@ authenticate();
     as a runtime or data provider option, raises \c PERMISSION-DENIED
     (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
 
+    The data provider of a @ref ConnectionProvider::FilesystemConnection "FilesystemConnection" has the connection's
+    directory as its root and is locked to it, and it is read-only if the connection is read-only, for any caller and
+    whatever constructor options the caller gives: a host can lend a read-only file connection to code that may only
+    read the files in its directory
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @since %Qore 3.0
 
     @subsection sandbox_ambient_host_data The Host's Environment and Ambient Credentials
