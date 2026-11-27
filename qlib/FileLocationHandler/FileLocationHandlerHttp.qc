@@ -229,7 +229,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         # a client that restricted code bound is not a capability of the host; the certificate and key files are
         # local files that the handler reads for the caller (qore#6959)
         return ((isBoundImpl() && !bound_by_restricted) ? 0 : DOM_NETWORK)
-            | ((opts.ssl_cert_path.val() || opts.ssl_key_path.val()) ? DOM_FILESYSTEM : 0);
+            | AbstractFileLocationHandler::getOptionCallerDomains(opts);
     }
 
     #! Retrieves a text file from the given location

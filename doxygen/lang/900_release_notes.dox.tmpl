@@ -3376,8 +3376,8 @@
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
     - qlib data provider actions refuse a local path or file location in a request from a caller restricted from the
-      file system, also with a lent provider, and providers created with a path refuse such a creator; see
-      @ref Util::check_caller_file_access() "check_caller_file_access()"
+      file system, also with a lent provider, as do providers created with a path and the file options of locations;
+      see @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "checkCallerLocation()"
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
