@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class BgCompileIdleDetachedTest
 
@@ -53,10 +54,9 @@ class BgCompileIdleDetachedTest inherits QUnit::Test {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the background compile holds require a debug build");
         }
-        int rc;
-        string out = backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
-            "%s --exec-mode=%s %s %s 2>&1", env, qore_bin, mode, script, mode), \rc);
-        assertEq(0, rc, out);
-        assertEq(Expected, out, mode);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("env -u QORE_JIT_SYNC_COMPILE %s "
+            "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s %s", env, qore_bin, mode, script, mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        assertEq(Expected, r.stdout, mode);
     }
 }
