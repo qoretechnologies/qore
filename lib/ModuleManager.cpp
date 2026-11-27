@@ -2311,11 +2311,63 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
         } else {
             QMM.getUserModuleRegistrationLocked(name, saved_reg);
         }
+        // a module that is compiled has its name reserved while it is parsed, as one that is loaded (#7808); last, as
+        // the destructor, which releases it, does not run if the constructor throws
+        if (rlock == QMRL_LOCK) {
+            name_reserved = QMM.reserveCompiledModuleName(name, xs);
+        }
     } catch (...) {
         // the destructor does not run: restore the module context here
         set_module_context_name(old_name);
         set_module_context_path(old_path);
         throw;
+    }
+}
+
+bool QoreModuleManager::reserveCompiledModuleName(const char* name, ExceptionSink& xsink) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    if (i != module_load_map.end()) {
+        ModuleLoadEntry& e = i->second;
+        if (e.state == MLS_INITIALIZING) {
+            if (e.owner_tid == q_gettid()) {
+                // this thread is loading the module: its load reserves the name
+                return false;
+            }
+            xsink.raiseException("LOAD-MODULE-ERROR", "cannot compile module '%s': a module of the same name is "
+                "being loaded in another thread", name);
+            return false;
+        }
+        // a terminal entry kept for the threads waiting on it: reopened in place, as ModuleLoadMapHelper does, so
+        // that their count is kept
+        e.owner_tid = q_gettid();
+        e.state = MLS_INITIALIZING;
+        e.err.clear();
+        e.desc.clear();
+        e.err_sandboxed = false;
+        e.err_pgm_id = 0;
+        return true;
+    }
+    module_load_map.insert(module_load_map_t::value_type(name, ModuleLoadEntry(q_gettid())));
+    return true;
+}
+
+void QoreModuleManager::releaseCompiledModuleName(const char* name) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    assert(i != module_load_map.end());
+    if (i == module_load_map.end()) {
+        return;
+    }
+    assert(i->second.owner_tid == q_gettid() && i->second.state == MLS_INITIALIZING);
+    // the module was compiled, not loaded: a thread waiting for it finds no module registered and loads it, as after
+    // a load that registered nothing
+    i->second.state = MLS_LOADED;
+    if (module_load_waiting) {
+        module_load_cond.broadcast();
+    }
+    if (!i->second.waiters) {
+        module_load_map.erase(i);
     }
 }
 
