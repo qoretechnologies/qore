@@ -571,6 +571,21 @@ the frame's exits) is gone.
     as one that a loop takes; and such a ScopeExit at the normal end of a block in the body of a handler lowered inline
     has the paths of the block (`setHandOverScopeExitFlowTargets()`), so that a loop of the function takes the request
     of its handlers.
+  - a ScopeExit past the inline cap at the normal end of a block in the body of a handler compiled as a function of
+    its own has the paths of the block too (`setHandOverScopeExitFlowTargets()`, qore#7753): a request of its handlers
+    is that of the block, which a loop of the handler's body takes or which ends the handler; the entries of such a
+    ScopeExit start with the release of the value handed over, which `leavesFunction()` looks through; in a handler
+    function that release does nothing (its handlers forward their values to the function that the handler runs for):
+    what they handed over is released by the run's abandon, as `takes_request` decides;
+  - in the cleanups of a return statement past the inline cap (returning mode only: a hand-over during an unwind
+    keeps nothing), while a debugger is attached, the first hand-over of a run keeps the value of an earlier handler
+    that it replaces, if its release cannot be observed (data), in the IR interpreter's run (`IRHandlerRunInfo::kept`,
+    a non-owning pointer to a `std::optional<IRHandlerKeptValue>` of `executeHandlerBody()`, emplaced only for a run
+    with the debug context of a debugger and released after the run's context is popped; the outermost run of a chain
+    of forwarding runs that started at the same count, whose return the AST's handlers share): a request that abandons
+    the run's return restores it, as the AST restores the pending return before the request (`PendingReturnSnapshot`);
+    an object is released when it is replaced, as in the AST (qore#7022), and the abandon then hands no value over, as
+    the AST's snapshot has none; the end of the run releases a kept value otherwise (qore#7753).
   Native code has no paths: the instruction does not occur there.
 - **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases.  Native
   code has no paths (see "Which code has paths"): its step hooks (`qore_rt_dbg_step()`,

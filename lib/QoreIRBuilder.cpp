@@ -2270,11 +2270,19 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
 
 // documented in QoreIR.h
 const QoreIRBasicBlock* QoreIRDebugFlowTargets::qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry) {
-    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets())
-    if (entry->instructions.size() != 1 || entry->instructions.front()->opcode != QoreIROpcode::Br) {
+    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets()); the entry of a ScopeExit
+    // whose handlers can hand a value over starts with the release of the value handed over, which every request
+    // makes (QoreIRLowering::setHandOverScopeExitFlowTargets(), qore#7753)
+    const size_t n = entry->instructions.size();
+    if (!n || entry->instructions.back()->opcode != QoreIROpcode::Br) {
         return entry;
     }
-    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.front().get())->target;
+    for (size_t i = 0; i + 1 < n; ++i) {
+        if (entry->instructions[i]->opcode != QoreIROpcode::ReleaseHandedOverReturn) {
+            return entry;
+        }
+    }
+    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.back().get())->target;
 }
 
 // documented in QoreIR.h

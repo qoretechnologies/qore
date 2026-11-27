@@ -6097,7 +6097,10 @@ bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, siz
 
 bool QoreIRLowering::setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
         const QoreProgramLocation* loc, std::string& error) {
-    assert(se->result.isValid() && se->hand_over_return);
+    // a ScopeExit outside the cleanups of a return statement in the code of a function, or in the body of a handler
+    // compiled as a function of its own, whose handlers' values go to the function that the handler runs for
+    // (qore#7753)
+    assert(se->result.isValid() && (se->hand_over_return || handler_body));
     if (!setScopeExitFlowTargets(se, scope_entry, error)) {
         return false;
     }
@@ -7422,6 +7425,14 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                 // ends the code of the handler as well
                 if (!is_error && handler_body && !return_walk) {
                     se_inst->result = builder.getFunction()->createValue();
+                    // a request in the handlers is that of the block, as with the AST interpreter, which the paths of
+                    // the block take: a loop or a switch statement of the handler's body, or the end of the handler
+                    // (qore#7753); not where a value handed over to a return is held, which the release at the paths'
+                    // entries would take (as for the code of a function, below)
+                    if (!pending_return_handed_over && !try_replaced_handed_over && barrier_depth != SIZE_MAX
+                            && !setHandOverScopeExitFlowTargets(se_inst, barrier_depth - 1, scope_loc, error)) {
+                        return false;
+                    }
                     QoreIRBasicBlock* return_block = createBlock("handler.return.past.cap");
                     QoreIRBasicBlock* cont_block = createBlock("handler.return.past.cap.cont");
                     builder.createBranchIf(se_inst->result, return_block, cont_block, scope_loc);
@@ -7430,6 +7441,18 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                         return false;
                     }
                     builder.setBlock(cont_block);
+                } else if (!is_error && handler_body && return_walk) {
+                    // in the cleanups of a return statement of a handler compiled as a function of its own, whose value
+                    // went to the function that the handler runs for (QoreIROpcode::HandlerReturn): a request in the
+                    // handlers is that of the block, which can abandon the return, as for those lowered inline
+                    // (setReplacingScopeExitFlowTargets(), qore#7753); not where a value handed over to the return of a
+                    // try statement is held (as below)
+                    if (pending_return_active && try_depth == pending_return_try_depth && !try_replaced_handed_over
+                            && barrier_depth != SIZE_MAX
+                            && !setReplacingScopeExitFlowTargets(se_inst, barrier_depth - 1, nullptr, scope_loc,
+                                error)) {
+                        return false;
+                    }
                 } else if (!is_error && !handler_body) {
                     bool replaces = pending_return_active && try_depth == pending_return_try_depth;
                     if (return_walk && !replaces) {
