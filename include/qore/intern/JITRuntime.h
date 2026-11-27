@@ -2429,6 +2429,14 @@ int qore_rt_call_ref_value_bool_v1(uint64_t ref_bits, int64_t a0, uint64_t* resu
 //! qore_rt_call_ref_<r>_<a>_v1() for NaN-boxed arguments and result
 int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs, uint64_t* result,
     ExceptionSink* xsink);
+//! qore_rt_call_ref_boxed_v1() for a call that gives the cleanup slots of the temporaries among its arguments
+/** The entry borrows them; they are released in the frame of the call once it returns, unless an exception is pending
+    (the caller releases them then, after the value); a refused call releases them; if nothing was done (0 or
+    QORE_RT_CALL_REF_NOT_FUNCREF), they are untouched, for the generic call path
+    (qore_rt_call_closure_fast_consume_args())
+*/
+int qore_rt_call_ref_boxed_given_v1(uint64_t ref_bits, const uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    uint64_t* result, ExceptionSink* xsink);
 
 //! Enters the Program of the callee of a native call of another module's function (qore#6035)
 /** Builds the call's state in \a state_buf (QORE_RT_CROSS_MODULE_CALL_STATE_SIZE bytes): the Program that runs the

@@ -10245,15 +10245,12 @@ llvm::AllocaInst* QoreIRToLLVM::getCallRefEntryCoerceCleanupSlot(llvm::Function*
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
-        llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func) {
-    if (arg_cleanups) {
-        // the slots of reads through references, which the call gives only when one holds its value: then the
-        // generic call path takes them, and otherwise the call gives nothing (emitGivenOrPlainCall())
-        assert(nullable_arg_cleanups.count(arg_cleanups));
+        llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func, bool cleanups_given) {
+    if (arg_cleanups && !cleanups_given && nullable_arg_cleanups.count(arg_cleanups)) {
+        // the slots of reads through references, which the call gives only when one holds its value: the call gives
+        // them then, and otherwise gives nothing (emitGivenOrPlainCall())
         return emitGivenOrPlainCall(arg_cleanups, [&]() -> llvm::Value* {
-            return builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast_consume_args",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false)),
-                {ref_boxed, args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            return emitBoxedCallRefEntryCall(ref_boxed, args_array, nargs, arg_cleanups, module, llvm_func, true);
         }, [&]() -> llvm::Value* {
             return emitBoxedCallRefEntryCall(ref_boxed, args_array, nargs, nullptr, module, llvm_func);
         });
@@ -10264,9 +10261,15 @@ llvm::Value* QoreIRToLLVM::emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llv
     llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
     llvm::AllocaInst* not_funcref = emitCallRefSiteSkip(ref_boxed, llvm_func, generic_bb);
-    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_v1",
-            llvm::FunctionType::get(i32_type, {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
-        {ref_boxed, args_array, nargs_val, slot, xsink_arg}, "callref_entry_called");
+    // a call that gives the cleanup slots of temporaries gives them to the helper, which releases them in the frame
+    // of the call it makes, and leaves them to the generic call path, which takes them over, otherwise
+    llvm::Value* called = arg_cleanups
+        ? builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_given_v1",
+                llvm::FunctionType::get(i32_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
+            {ref_boxed, args_array, arg_cleanups, nargs_val, slot, xsink_arg}, "callref_entry_called")
+        : builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_v1",
+                llvm::FunctionType::get(i32_type, {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
+            {ref_boxed, args_array, nargs_val, slot, xsink_arg}, "callref_entry_called");
     llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 2,
         llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1}));
     sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), entry_bb);
@@ -10278,9 +10281,13 @@ llvm::Value* QoreIRToLLVM::emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llv
     builder->CreateBr(merge_bb);
 
     builder->SetInsertPoint(generic_bb);
-    llvm::Value* generic_result = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
-        {ref_boxed, args_array, nargs_val, xsink_arg}, "callref_generic_value");
+    llvm::Value* generic_result = arg_cleanups
+        ? builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast_consume_args",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false)),
+            {ref_boxed, args_array, arg_cleanups, nargs_val, xsink_arg}, "callref_generic_value")
+        : builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
+            {ref_boxed, args_array, nargs_val, xsink_arg}, "callref_generic_value");
     builder->CreateBr(merge_bb);
 
     builder->SetInsertPoint(merge_bb);
@@ -26867,9 +26874,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm_func, closure_nargs, has_closure_arg_cleanups);
                     // AOT code calls the call-reference entry of the reference's function, if it has one and the
                     // call allows it, and the generic call path otherwise (qore#5578)
-                    const bool callref_entry = (!has_closure_arg_cleanups
-                            || nullable_arg_cleanups.count(closure_arg_cleanups))
-                        && callRefEntryCallEligible(inst);
+                    const bool callref_entry = callRefEntryCallEligible(inst);
                     if (callref_entry && !has_closure_arg_cleanups
                             && !emitScalarCallRefEntryCall(inst, ref_boxed, module, llvm_func, result, error,
                                 true)) {
@@ -36370,7 +36375,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             module, llvm_func, inst);
                     }
                 }
-            } else if (callref_entry && (!has_arg_cleanups || nullable_arg_cleanups.count(arg_cleanups))) {
+            } else if (callref_entry) {
                 result = emitBoxedCallRefEntryCall(ref_boxed, args_array, nargs, has_arg_cleanups ? arg_cleanups
                     : nullptr, module, llvm_func);
             } else if (has_arg_cleanups) {

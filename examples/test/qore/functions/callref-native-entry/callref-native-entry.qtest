@@ -40,9 +40,9 @@
     threads at once while a thread loads the module, whose image registers its entries; every thread must get every
     result.
 
-    The debugger fixture of function-reference-fast-path.qtest, compiled with qcc, attaches a debugger while a loop calls
-    a function through a reference: every call made after it attached must give the debugger the function's entry, and
-    none may take an entry.
+    The debugger fixture of function-reference-fast-path.qtest, compiled with qcc -g (code that a debugger attaches to
+    is compiled with debugging, qore#7676), attaches a debugger while a loop calls a function through a reference:
+    every call made after it attached must give the debugger the function's entry, and none may take an entry.
 */
 class CallRefNativeEntryTest inherits QUnit::Test {
     private {
@@ -108,10 +108,10 @@ class CallRefNativeEntryTest inherits QUnit::Test {
     }
 
     #! compiles a script with qcc and returns the path of the program
-    private string compile(string tmp, string script, int opt, *string env) {
+    private string compile(string tmp, string script, int opt, *string env, *string opts) {
         string program = tmp + "/" + basename(script) + ".O" + opt;
-        string output = backquote(sprintf("cd %s && %s%s -O%d -o %s %s 2>&1", shellQuote(dir), env ? env + " " : "",
-            shellQuote(qcc()), opt, shellQuote(program), shellQuote(script)));
+        string output = backquote(sprintf("cd %s && %s%s -O%d %s-o %s %s 2>&1", shellQuote(dir), env ? env + " " : "",
+            shellQuote(qcc()), opt, opts ? opts + " " : "", shellQuote(program), shellQuote(script)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         return program;
     }
@@ -228,7 +228,8 @@ class CallRefNativeEntryTest inherits QUnit::Test {
     private checkDebugger() {
         string tmp = make_tmp_dir();
         on_exit remove_tree(tmp);
-        string program = compile(tmp, debugger_fixture, 3);
+        # compiled with debugging (qcc -g), as code that a debugger attaches to must be (qore#7676)
+        string program = compile(tmp, debugger_fixture, 3, NOTHING, "-g");
         assertEq(DebuggerExpected, runProgram(program));
         if (can_report) {
             # the warm-up takes the entry, so the test of the calls after the attach is not vacuous
