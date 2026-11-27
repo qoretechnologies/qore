@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-boxed-return-param-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -213,7 +223,7 @@ int sub main() {
 ";
 }
 
-string root = "/tmp/qore-aot-boxed-return-param-" + string(getpid());
+string root = tmp.path + "/boxed-return-param";
 string provider_dir = root + "/provider";
 string composition_disabled_dir = root + "/composition-disabled";
 string enabled_dir = root + "/enabled";
@@ -251,7 +261,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -261,7 +271,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
@@ -272,7 +282,7 @@ foreach string function in (("identityHash", "identityList", "identityString")) 
             function))) {
         printf("missing boxed return-parameter metadata for %s:\n%s",
             function, provider_index);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("selectHash", "selectHashOptional")) {
@@ -283,7 +293,7 @@ foreach string function in (("selectHash", "selectHashOptional")) {
     }
     printf("missing multi-parameter boxed return metadata:\n%s",
         provider_index);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("wrapperHash", "localWrapperHash")) {
     if (!provider_index.regex(sprintf(
@@ -291,7 +301,7 @@ foreach string function in (("wrapperHash", "localWrapperHash")) {
             function))) {
         printf("missing composed boxed return metadata for %s:\n%s",
             function, provider_index);
-        exit(2);
+        test_exit(2);
     }
 }
 if (!provider_index.regex(
@@ -299,13 +309,13 @@ if (!provider_index.regex(
         || provider_index
             =~ /\"qore_path\": \"mutatingWrapperHash\([^\n]*\"boxed_return_param\": 0/) {
     printf("invalid composed boxed return metadata:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
         || provider_index
             =~ /\"qore_path\": \"(optionalIdentity|mutatingIdentity)\([^\n]*\"boxed_return_param\": 0/) {
     printf("invalid boxed return-parameter metadata:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 string composition_disabled_compile = backquote(sprintf(
@@ -317,7 +327,7 @@ string composition_disabled_qo =
 if (!is_file(composition_disabled_qo)) {
     printf("composition-disabled provider compile failed:\n%s",
         composition_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 string composition_disabled_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
@@ -326,7 +336,7 @@ if (composition_disabled_index
         =~ /\"qore_path\": \"(wrapperHash|localWrapperHash|phiWrapperHash)\([^\n]*\"boxed_return_param\": [01]/) {
     printf("boxed return composition was not disabled:\n%s",
         composition_disabled_index);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -347,7 +357,7 @@ foreach string function in (("localCalls", "temporaryCall", "chainedCall",
             function))) {
         printf("missing boxed return-parameter fold for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -355,7 +365,7 @@ if (enabled_compile
         || disabled_compile =~ /boxed-return-calls=[1-9]/) {
     printf("unsafe or disabled boxed return-parameter fold:\n%s",
         enabled_compile + disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_qo = enabled_dir + "/consumer.qo";
@@ -363,7 +373,7 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 string enabled_exe = root + "/enabled-aot";
 string disabled_exe = root + "/disabled-aot";
@@ -376,7 +386,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 foreach string path in ((enabled_exe, disabled_exe)) {
     string actual = backquote(sprintf(
@@ -384,6 +394,6 @@ foreach string path in ((enabled_exe, disabled_exe)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

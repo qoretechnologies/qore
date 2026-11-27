@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-complex-hash-type-path-cache-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -16,7 +26,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-complex-hash-type-path-cache-" + string(getpid());
+string root = tmp.path + "/complex-hash-type-path-cache";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -113,7 +123,7 @@ string enabled_compile = backquote(sprintf(
     env, qcc_bin, enabled_exe, source_path));
 if (!is_file(enabled_exe)) {
     printf("enabled compile failed:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string checked_exe = root + "/checked";
@@ -122,7 +132,7 @@ string checked_compile = backquote(sprintf(
     env, qcc_bin, checked_exe, source_path));
 if (!is_file(checked_exe)) {
     printf("checked compile failed:\n%s", checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
@@ -137,7 +147,7 @@ if (!enabled_symbols.regex(
             "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")) {
     printf("unexpected helper symbols:\nenabled:\n%schecked:\n%s",
         enabled_symbols, checked_symbols);
-    exit(2);
+    test_exit(2);
 }
 
 outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
@@ -152,6 +162,6 @@ foreach string mode in (keys outputs) {
     if (output != expected) {
         printf("%s execution mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, output);
-        exit(2);
+        test_exit(2);
     }
 }

@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-aggregate-return-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -1468,8 +1478,8 @@ printf(\"%d:%d:%y:%y:%y:%y:%d:%d:%y:%y\\n\",
     variableExistsProjection(False), variableExistsProjection(True));
 ";
 
-string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid());
+string src = tmp.path + "/aggregate-return-projection.qr";
+string exe = tmp.path + "/aggregate-return-projection";
 string disabled = exe + "-disabled";
 string shape_disabled = exe + "-shape-disabled";
 string expression_disabled = exe + "-expression-disabled";
@@ -1486,7 +1496,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -1515,14 +1525,14 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
             function))) {
         printf("missing aggregate-return projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: emptyZeroArgProjections[^:]*:.*aggregate-projections=7/) {
     printf("missing empty or zero-argument aggregate projections:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("emptyFirstProjection", "emptyLastProjection",
         "positiveOutOfRangeProjection", "negativeOutOfRangeProjection",
@@ -1532,13 +1542,13 @@ foreach string function in (("emptyFirstProjection", "emptyLastProjection",
             function))) {
         printf("missing empty or out-of-range list projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection[^:]*:.*aggregate-projections=2/) {
     printf("missing cross-block aggregate-return projections:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("phiProjection", "phiSideEffectProjection")) {
     if (!enabled_compile.regex(sprintf(
@@ -1546,20 +1556,20 @@ foreach string function in (("phiProjection", "phiSideEffectProjection")) {
             function))) {
         printf("missing aggregate phi projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: nativeFloatPhiProjection[^:]*:.*aggregate-projections=1/) {
     printf("missing native-float aggregate phi projection:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: conditionalShapeProjection[^:]*:.*aggregate-projections=1/) {
     printf("missing conditional aggregate shape projection:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("conditionalElementProjection",
         "conditionalFloatElementProjection",
@@ -1569,7 +1579,7 @@ foreach string function in (("conditionalElementProjection",
             function))) {
         printf("missing conditional aggregate element projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach hash<string, auto> test in ((
@@ -1592,7 +1602,7 @@ foreach hash<string, auto> test in ((
             test.function, test.count))) {
         printf("missing conditional computed aggregate projection for %s:\n%s",
             test.function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("nonNestedComputedProjection",
@@ -1604,14 +1614,14 @@ foreach string function in (("nonNestedComputedProjection",
             function))) {
         printf("missing computed aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: boundedExpressionProjection[^:]*:.*aggregate-projections=11/) {
     printf("missing bounded aggregate expression projections:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("guardedListIndex",
         "guardedComputedListIndex", "guardedFloatListIndex",
@@ -1638,7 +1648,7 @@ foreach string function in (("guardedListIndex",
             function))) {
         printf("missing guarded aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("boxedPhiProjection",
@@ -1648,7 +1658,7 @@ foreach string function in (("boxedPhiProjection",
             function))) {
         printf("missing boxed aggregate phi projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (
@@ -1658,7 +1668,7 @@ foreach string function in (
             function))) {
         printf("missing multi-use boxed aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("boxedIntMultiLocalProjection",
@@ -1669,7 +1679,7 @@ foreach string function in (("boxedIntMultiLocalProjection",
             function))) {
         printf("missing multi-use scalar aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("wrapperProjection",
@@ -1682,7 +1692,7 @@ foreach string function in (("wrapperProjection",
             function))) {
         printf("missing composed aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("nestedNativeProjection",
@@ -1694,7 +1704,7 @@ foreach string function in (("nestedNativeProjection",
             function))) {
         printf("missing nested aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("listFirstProjection", "listLastProjection",
@@ -1710,7 +1720,7 @@ foreach string function in (("listFirstProjection", "listLastProjection",
             function))) {
         printf("missing aggregate consumer projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("hashSizeProjection", "hashEmptyProjection",
@@ -1720,33 +1730,33 @@ foreach string function in (("hashSizeProjection", "hashEmptyProjection",
             function))) {
         printf("missing hash pseudo consumer projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: aggregateConsumerSideEffects[^:]*:.*aggregate-projections=1/) {
     printf("missing side-effecting aggregate consumer projection:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
             =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (shape_disabled_compile
         =~ /IR-OPT-AOT-EFFECTS: (variableShapeProjection|variableEmptyProjection|variableValProjection|variableElementsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
     printf("disabled conditional aggregate shape projection:\n%s",
         shape_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (expression_disabled_compile
         =~ /IR-OPT-AOT-EFFECTS: (conditionalDifferentComputedProjection|conditionalDifferentZeroProjection|conditionalDifferentIntExpressionsProjection|conditionalDifferentFloatExpressionProjection|conditionalDifferentBoolExpressionsProjection)[^:]*:.*aggregate-projections=[1-9]/) {
     printf("disabled conditional aggregate expression projection:\n%s",
         expression_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (shape_disabled_compile
         !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentComputedProjection[^:]*:.*aggregate-projections=1/
@@ -1754,7 +1764,7 @@ if (shape_disabled_compile
             !~ /IR-OPT-AOT-EFFECTS: conditionalDifferentZeroProjection[^:]*:.*aggregate-projections=1/) {
     printf("shape-only kill switch disabled conditional expression projection:\n%s",
         shape_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("sharedEscapes", "sharedListSizeConsumer",
         "sharedBoxedHashConsumer")) {
@@ -1763,14 +1773,14 @@ foreach string function in (("sharedEscapes", "sharedListSizeConsumer",
             function))) {
         printf("missing composed aggregate consumer projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
         =~ /IR-OPT-AOT-EFFECTS: (sharedMutatingConsumer|requiredUnsetConsumer)[^:]*:.*aggregate-projections=[1-9]/) {
     printf("unsafe aggregate consumer projection:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string qo_compile = backquote(sprintf(
@@ -1779,7 +1789,7 @@ string qo_compile = backquote(sprintf(
 string qo = qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
 if (!is_file(qo)) {
     printf(".qo compile failed:\n%s", qo_compile);
-    exit(2);
+    test_exit(2);
 }
 string dump = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
@@ -1859,7 +1869,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || constant_row_line.find("\"aggregate_return_value_ints\": [11, 13]") == -1
         || constant_row_line.find("\"aggregate_return_keys\": [\"left\", \"right\"]") == -1) {
     printf("missing aggregate-return symbol metadata:\n%s", dump);
-    exit(2);
+    test_exit(2);
 }
 if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
         || conditional_values_line.find(
@@ -1868,7 +1878,7 @@ if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
             "\"aggregate_return_value_ints\": [256, 512, 0]") == -1) {
     printf("missing serialized conditional aggregate shape metadata:\n%s",
         conditional_values_line);
-    exit(2);
+    test_exit(2);
 }
 if (variable_shape_line.find("\"aggregate_return_kind\": 1") == -1
         || variable_shape_line.find(
@@ -1881,7 +1891,7 @@ if (variable_shape_line.find("\"aggregate_return_kind\": 1") == -1
             "\"aggregate_return_shape_false_size\": 2") == -1) {
     printf("missing serialized conditional aggregate cardinality metadata:\n%s",
         variable_shape_line);
-    exit(2);
+    test_exit(2);
 }
 if (conditional_different_computed_line.find(
             "\"aggregate_return_value_params\": [-1]") == -1
@@ -1893,7 +1903,7 @@ if (conditional_different_computed_line.find(
             "\"false_kind\": 5, \"false_param\": 1, \"false_int\": 2") == -1) {
     printf("missing serialized conditional aggregate expression metadata:\n%s",
         conditional_different_computed_line);
-    exit(2);
+    test_exit(2);
 }
 if (conditional_computed_values_line.find(
             "\"aggregate_return_value_kinds\": [7, 7, 5, 11, 10, 1]") == -1
@@ -1910,7 +1920,7 @@ if (conditional_computed_values_line.find(
     printf("missing serialized conditional computed metadata:\n%s\n%s\n%s",
         conditional_computed_values_line, conditional_computed_floats_line,
         conditional_compared_values_line);
-    exit(2);
+    test_exit(2);
 }
 if (computed_row_line.find(
             "\"aggregate_return_value_params\": [0, 1, 2]") == -1
@@ -1950,7 +1960,7 @@ if (computed_row_line.find(
         computed_row_line, computed_values_line, computed_floats_line,
         bounded_values_line, compared_values_line, forward_auto_line,
         forward_optional_line);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\nTrue:True:True:True:True\n11:2.5:True\nTrue:True:True:True\n";
@@ -1973,7 +1983,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled, shape_disabled,
@@ -1983,7 +1993,7 @@ foreach string path in ((exe, disabled, shape_disabled,
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

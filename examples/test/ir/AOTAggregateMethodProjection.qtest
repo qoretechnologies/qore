@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-aggregate-method-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -241,7 +251,7 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s
     overridden.consumerProjection(), deleted_consumer_error);
 ";
 
-string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
+string root = tmp.path + "/aggregate-method-projection";
 string src = root + ".qr";
 string enabled = root + "-enabled";
 string disabled = root + "-disabled";
@@ -260,7 +270,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -286,7 +296,7 @@ foreach string function in (("staticProjection", "instanceProjection",
             function))) {
         printf("missing method aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -294,20 +304,20 @@ if (enabled_compile
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled method aggregate projection:\n%s",
         enabled_compile + disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string path in ((enabled, disabled)) {
     if (!is_file(path)) {
         printf("AOT compile failed for %s:\n%s%s",
             path, enabled_compile, disabled_compile);
-        exit(2);
+        test_exit(2);
     }
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
