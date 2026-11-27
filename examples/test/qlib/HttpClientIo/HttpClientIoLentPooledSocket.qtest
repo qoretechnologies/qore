@@ -131,6 +131,40 @@ string sub reflect(string cls) {
         return ex.err;
     }
 }
+#! calls the builtin getSocket() of the poll operation's class through reflection on a poll operation that the host
+#! gives the borrower, which the borrower does not own; returns \"taken\", \"owned\" or the error
+string sub reflectHost(string cls, HttpClientPollOperation op) {
+    remove sock;
+    if (SandboxManager::isObjectOwnedByCaller(op)) {
+        return \"owned\";
+    }
+    try {
+        sock = Class::forName(cls).getMethod(\"getSocket\").call(op);
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! calls the builtin getSocket() of the poll operation's class through reflection on a poll operation that the
+#! borrower creates and so owns; returns \"taken\", \"not owned\" or the error
+string sub reflectOwn(string cls) {
+    remove sock;
+    Http1ClientPollOperation op({\"protocol\": \"http\", \"host\": \"127.0.0.1\", \"port\": 1}, 1s, NOTHING, NOTHING,
+        False, NOTHING, new KeepingConn());
+    if (!SandboxManager::isObjectOwnedByCaller(op)) {
+        return \"not owned\";
+    }
+    try {
+        sock = Class::forName(cls).getMethod(\"getSocket\").call(op);
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! returns True if the borrower holds a socket
+bool sub hasSocket() {
+    return exists sock;
+}
 #! cuts the connection off from its poll operation, or sets another one
 string sub cut(string how) {
     try {
@@ -288,7 +322,8 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         addTestCase("HTTP/1.1: a taken connection cannot be put back into the pool", \repoolTest());
         addTestCase("HTTP/1.1: an upgrade request answered without a switch leaves its taken connection out of the pool",
             \upgradeNoSwitchTest());
-        addTestCase("the builtin socket accessor of a poll operation is refused through reflection", \reflectionTest());
+        addTestCase("the builtin socket accessor of a poll operation is refused through reflection, also to its owner",
+            \reflectionTest());
         addTestCase("the connection of a poll operation is not cut off or replaced by other code", \cutTest());
         addTestCase("the module's token is not given to a poll operation of a borrower's class", \tokenTest());
         addTestCase("a borrower cannot pin a connection in a lent manager", \pinTest());
@@ -475,6 +510,20 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         # the borrower cannot get the connection, so it has no poll operation to call the accessor on (qore#7570)
         assertEq("PERMISSION-DENIED", p.callFunction("reflect", "Http1ClientPollOperationBase"),
             "the connection is refused to the borrower");
+        # the host gives the borrower the poll operation of the pooled connection of the borrower's request, which
+        # the borrower does not own: the owner rule refuses a non-public method of it before the reflection's access
+        # check (qore#6842), and no socket is obtained
+        HttpClientPollOperation host_op = p.callFunction("getKeptStream").getConnection().getPollOperation();
+        assertEq("SANDBOX-OBJECT-ACCESS-ERROR", p.callFunction("reflectHost", "Http1ClientPollOperationBase", host_op),
+            "the builtin accessor of the poll operation's base class on the host's poll operation");
+        assertFalse(p.callFunction("hasSocket"), "no socket from the host's poll operation");
+        # a poll operation that the borrower owns passes the owner rule: the reflection's access check refuses the
+        # builtin private accessor
+        assertEq("REFLECTION-ACCESS-ERROR", p.callFunction("reflectOwn", "Http1ClientPollOperationBase"),
+            "the builtin accessor of the poll operation's base class on the borrower's own poll operation");
+        assertFalse(p.callFunction("hasSocket"), "no socket from the borrower's own poll operation");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request");
     }
 
     cutTest() {
