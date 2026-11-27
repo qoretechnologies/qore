@@ -183,7 +183,8 @@ class DirTest inherits QUnit::Test {
         bool b = d.chdir(tmpdirPath);
         assertEq(False, b);
         int rc = d.create();
-        on_exit system("rm -rf " + tmpdirPath + "/*");
+        # the directory and everything in it
+        on_exit system("rm -rf " + tmpdirPath);
 
         # create random file
         string fileA = get_random_string() + "A";
@@ -221,7 +222,8 @@ class DirTest inherits QUnit::Test {
         bool b = d.chdir(tmpdirPath);
         assertEq(False, b);
         d.create();
-        on_exit system("rm -rf " + tmpdirPath + "/*");
+        # the directory and everything in it
+        on_exit system("rm -rf " + tmpdirPath);
         on_exit rmdir(tmpdirPath);
 
         string fileA = get_random_string() + "A";
