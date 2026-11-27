@@ -1,0 +1,49 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a user module loaded by path (not from a trusted module directory) by ../capability-helper-module-sandbox.qtest
+
+%modern
+
+module CapReadMod {
+    version = "1.0";
+    desc = "reads a file and starts threads for capability-helper-module-sandbox.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CapReadMod {
+    #! a class of the module
+    public class ModObj {
+    }
+
+    #! returns an object of the module's class
+    public object sub make() {
+        return new ModObj();
+    }
+
+    #! returns the contents of the file or the error code of the exception raised
+    public string sub read(string path) {
+        try {
+            return trim(ReadOnlyFile::readTextFile(path));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! starts two threads that wait until both were started: "ok", or the error code of the second start
+    public string sub threads() {
+        Queue q();
+        try {
+            background q.get();
+            background q.get();
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(1);
+            return ex.err;
+        }
+        q.push(1);
+        q.push(1);
+        return "ok";
+    }
+}

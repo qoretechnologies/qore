@@ -1139,6 +1139,18 @@
           "source": "Optional headers to send with the attachment",
           "message": "傳送附件時可選的標頭"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "純文字替代內容"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "HTML 內文的純文字表示"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "當內文為非空的 text/html 字串時，會先在 multipart/alternative 郵件中傳送此非空的純文字。省略此項則只傳送內文本身。"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "本文編碼"
@@ -1862,6 +1874,18 @@
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.field.aGRy.desc": {
           "source": "Optional headers to send with the attachment",
           "message": "傳送附件時可選的標頭"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "純文字替代內容"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "HTML 內文的純文字表示"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "當內文為非空的 text/html 字串時，會先在 multipart/alternative 郵件中傳送此非空的純文字。省略此項則只傳送內文本身。"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",

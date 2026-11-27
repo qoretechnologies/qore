@@ -2463,7 +2463,13 @@ if (x || y)
     @subsection assignment_operator Assignment Operator (=)
 
     @par Synopsis
-    Assigns a value to an lvalue and returns the value assigned.
+    Assigns a value to an lvalue and returns the value stored in the lvalue.
+
+    @anchor assignment_value The value of an assignment is the value stored in the \a lvalue, in every
+    @ref execution_modes "execution mode": the value converted to the declared type of the \a lvalue, or to the value
+    type of the hash or list holding it (ex: with <tt>hash&lt;string, softint&gt; h</tt>, <tt>(h.x = "5")</tt> is the int
+    5, and an untyped list or hash element stores a container without its complex type), as for the
+    @ref compound_assignment_conversion "compound assignment operators".
 
     @anchor lvalue_evaluation_order The keys and indices of an lvalue path are evaluated from the root out, and the index of its last step after them, in every @ref execution_modes "execution mode", as when the path is read as a value: <tt>h.(k1()).(k2())[i()] = v()</tt> evaluates \c v(), \c k1(), \c k2() and \c i() in this order.  The same order applies to every operator that changes an lvalue (compound assignments, \c ++ and \c --, @ref remove "remove", @ref delete "delete", @ref splice "splice", @ref extract "extract", @ref push "push", @ref unshift "unshift", @ref pop "pop") and to a @ref lvalue_references "reference" to it; a key or an index of the path that raises an exception stops the evaluation, and the lvalue is not changed.
 
@@ -2559,9 +2565,10 @@ if (x || y)
     @ref pop "pop", @ref shift "shift", @ref splice "splice", @ref extract "extract", @ref delete "delete",
     @ref remove "remove", @ref trim "trim" and @ref chomp "chomp") change the container that a weak reference held by
     the lvalue designates, and the lvalue keeps the weak reference; a container that was freed raises \c LIST-ERROR
-    or \c HASH-ERROR.  The change is made in place, so that every owner of the container sees it, also a copy that
-    shares it (as after <tt>b = a</tt>, where \a a is the source of the weak reference), and an element of a list whose
-    element type does not take @ref nothing "NOTHING" is not removed (the shared list is not retyped).\n<br>
+    or \c HASH-ERROR.  The change is made in place, so that every holder that shares the container sees it (a
+    variable that is given it while a weak reference designates it takes a copy of its own, see below: after
+    <tt>b = a</tt>, where \a a is the source of the weak reference, \a b does not see it), and an element of a list
+    whose element type does not take @ref nothing "NOTHING" is not removed (the list is not retyped).\n<br>
     Likewise, the @ref plus_equals_operator "+=" operator with a hash or an object, and the
     @ref minus_equals_operator "-=" operator with a key or a list of keys, change the object that a weak reference
     held by the lvalue designates, as through the object itself, and the lvalue keeps the weak reference; their value
@@ -2569,6 +2576,15 @@ if (x || y)
     with such an operand, and give @ref nothing "NOTHING" with any other operand.  The other compound assignment
     operators replace the weak reference with their result, as a plain assignment does (as they replace a list, a
     hash or an object that the lvalue holds).\n<br>
+    @anchor weak_assignment_conversion A weak assignment of a hash or a list to an lvalue whose type converts it to a
+    copy of its own is an error: the weak reference would designate the copy, a temporary, instead of the value
+    assigned.  Such an lvalue is one of a type that strips the complex type of the value (ex: an untyped list element
+    or hash key, \c any, \c hash, \c *hash, \c list, \c softlist, <tt>hash&lt;auto!&gt;</tt> or \c auto! for a
+    <tt>hash&lt;string, int&gt;</tt>, a <tt>list&lt;int&gt;</tt> or a @ref hashdecl "hashdecl" value) or that converts
+    its elements (ex: <tt>list&lt;softstring&gt;</tt> for a <tt>list&lt;int&gt;</tt>); the assignment is refused with
+    \c PARSE-TYPE-ERROR when the types of a stripping lvalue and of a typed value are known at parse time, and with
+    \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value.  An lvalue of a type that keeps the value (\c auto,
+    <tt>hash&lt;auto&gt;</tt>, <tt>list&lt;auto&gt;</tt> or the value's own type) takes the weak reference to it.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
@@ -2583,25 +2599,64 @@ if (x || y)
     variable's own value and shows the changes later made through the variable; this is the same in every
     @ref exec_mode_overview "execution mode".  The same holds for an lvalue path from a variable, the object or a class
     static variable: an object member (<tt>w := c.l</tt>), a member of the object (<tt>w := l</tt> in a method), a hash
-    key (<tt>w := h.k</tt>) or a list element (<tt>w := l[0]</tt>), each of whose steps is of a value declared with a
-    type when the code is parsed: a key of a hash, an element of a list (of a value whose type cannot be a string, a
-    binary or a buffer), or a public member declared in the class of the object, which has no
-    @ref memberGate_methods "memberGate()" method: the member, the key or the element first gets a copy of its own.
-    Such a path is evaluated once; one that leads to no value (a missing key, an index beyond the end or before the
-    start of a list) gives @ref nothing, as when it is read, and a member of an object that has been deleted, or a step
-    through a hash or a list that a weak reference designates and that no longer exists, raises an exception
-    (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR, \c LIST-ERROR), as an assignment to it does.  A slice and any other
-    path (ex: a step of a value of no type, as in <tt>w := a.k</tt> with <tt>auto a</tt>) are read as before.\n<br>
-    The weak reference designates the hash or list assigned itself: a type of the lvalue that only strips the type of
-    the container (ex: a <tt>hash<string, int></tt> assigned to a \c hash variable, or a <tt>list<int></tt> assigned to
-    an element of an untyped list or to an \c any, \c softlist or <tt>list<auto!></tt> lvalue) keeps the container
-    with its own type, so that a change made to it is read through the weak reference, and a type that would convert
-    it to another container (ex: a <tt>list<string></tt> assigned to a <tt>list<softint></tt> lvalue, or a hash
-    assigned to a \c softlist lvalue, which makes a list of it)
-    raises a \c RUNTIME-TYPE-ERROR exception, as the weak reference would designate a copy that nothing else holds;
-    this is the same in every @ref exec_mode_overview "execution mode".\n<br>
+    key (<tt>w := h.k</tt>) or a list element (<tt>w := l[0]</tt>), also when its steps have no type when the code is
+    parsed (ex: <tt>w := a.k</tt> with <tt>auto a</tt>), whose values are then checked when the assignment runs: the
+    member, the key or the element first gets a copy of its own.  Such a path is evaluated once; one that leads to no
+    value (a missing key, an index beyond the end or before the start of a list) gives @ref nothing, as when it is
+    read, and a member of an object that has been deleted, or a step through a hash or a list that a weak reference
+    designates and that no longer exists, raises an exception (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR,
+    \c LIST-ERROR), as an assignment to it does.  A step that is not an lvalue (a slice, a member that the object gives
+    through its @ref memberGate_methods "memberGate()" method, as one that it does not hold or that is not accessible,
+    or through accessors, an index of a string, a binary or a buffer) and the steps after it are read as the operators
+    read them, with their keys and indexes evaluated once.\n<br>
+    Any other rvalue, such as the value of a call, of another expression or of a path read as above, is a value of its
+    own: a hash or a list that no weak reference designates yet is copied, and the weak reference designates the copy,
+    which is a temporary value (see below), so that a change made through the weak reference never changes another
+    holder of the value (ex: <tt>w := obj.getHash()</tt> does not designate the member that the method returns), and a
+    change through it after the statement raises \c HASH-ERROR or \c LIST-ERROR.  A hash or a list that a weak
+    reference designates needs a scan by the garbage collector whatever it holds, so that a change made through a weak
+    reference keeps the object counts of the containers and objects that hold it, and a recursive reference made
+    through it is collected.\n<br>
+    A hash or a list that a weak reference designates is a value like any other, so that a change made through the
+    weak reference reaches only the holder that the weak reference was made from (ex: after <tt>w := src; b = src;</tt>,
+    <tt>w[0] = 9</tt> changes \c src but not \c b):
+    <ul><li>a local variable that is assigned it (also the variable of a @ref foreach "foreach" loop, and a variable
+      declared without a type that has no value or @ref null and that @ref plus_equals_operator "+=" adds it to) takes
+      a copy of its own while another holder holds it; one that nothing else holds (the value of
+      @ref remove "remove", @ref shift "shift" or @ref pop "pop", or of a call that gives a container that nothing
+      else holds) is moved into the variable, and the weak reference designates it there</li>
+    <li>a parameter, a list element (also an element of the list that @ref extract "extract" returns), a hash key, an
+      object member, a global or thread-local variable, a class static variable, and a local variable that a closure
+      captures or that a @ref lvalue_references "reference" is made to anywhere in its scope, that are given it always
+      take a copy of their own, also of one that nothing else holds (the weak reference then designates the temporary,
+      which the statement releases). An argument captures the current value before the next argument is evaluated.
+      If a parameter takes a copy of a call result, the original lives until the end of the caller's statement</li>
+    <li>a weak assignment from it designates it</li></ul>
+    A container that only holds such a hash or list is shared as any other
+    value, and so is the hash or list in it: after <tt>w := src[0]; b = src;</tt>, <tt>w[0] = 9</tt> changes
+    <tt>b[0]</tt> too.  A module written in C++ that keeps a reference of its own to such a value, instead of a copy,
+    shares it.  A new list or hash that an operator or a function builds from another currently holds either the same
+    weakly designated hash or list as its source or a copy of it, depending on the operation: after <tt>w := l[0]</tt>,
+    <tt>w.a = 9</tt> reaches the element of <tt>l + ()</tt>, <tt>sort(l)</tt>, <tt>reverse(l)</tt> and
+    <tt>h + {...}</tt>, but not that of <tt>() + l</tt>, <tt>l[0..]</tt>, <tt>sort_stable(l)</tt>,
+    @ref map "map", <tt>{...} + h</tt>, a hash slice (<tt>h{"x",}</tt>) or <tt>h.values()</tt>; code should not rely on
+    either.\n<br>
+    The operator does not keep the hash or the list of a variable or a path that is its source (also the operand that
+    a ?: or ?? operator chooses) alive while it resolves its lvalue: it holds it through a weak reference until it
+    assigns it.  An lvalue whose path passes through the source (ex:
+    <tt>h.w := h</tt>, <tt>h.a.b.w := h</tt>) is therefore changed in place: the weak reference designates the
+    container that the variable holds, and the weak references to the containers below it on the path (ex:
+    <tt>h.a.x := h.a.b</tt>) keep designating them.  If another thread releases the source meanwhile (ex: while a key
+    or an index of the lvalue is evaluated), the weak reference designates a freed hash or list, as described above, in
+    every @ref exec_mode_overview "execution mode".\n<br>
+    The weak reference designates the hash or list assigned itself: a type of the lvalue that would convert it to a
+    copy, also one that only strips the type of the container (ex: a <tt>hash<string, int></tt> assigned to a \c hash
+    variable, or a <tt>list<string></tt> assigned to a <tt>list<softint></tt> lvalue), is an error (see
+    @ref weak_assignment_conversion), as the weak reference would designate a copy that nothing else holds; this is
+    the same in every @ref exec_mode_overview "execution mode".\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
-    variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
+    call that is given it uses the value, and a variable or a container that is given a hash or a list from it takes a
+    copy of its own, as from any value that a weak reference designates (see above).  A temporary value assigned, as in
     <tt>w := new C()</tt>, lives until the end of the statement, as any temporary value does, so that the weak
     reference and the value of the operator designate it until then, in every
     @ref exec_mode_overview "execution mode".\n<br>
@@ -2633,7 +2688,9 @@ if (x || y)
     This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
     <tt>:=</tt> gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
     ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
-    still in use; a mistake with \c \@= leaks one.
+    still in use; a mistake with \c \@= leaks one.\n<br>
+    As for the weak assignment operator, an opaque assignment of a hash or a list to an lvalue whose type converts it
+    to a copy of its own is an error (see @ref weak_assignment_conversion).
 
     @par Warning
     <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value

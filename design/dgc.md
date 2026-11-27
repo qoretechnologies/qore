@@ -850,6 +850,12 @@ Two rules keep the writing pass from being starved:
   holds before waiting on its notifier) and never takes an `RSet` write lock, so it cannot be waiting for
   anything the waiting scan holds. A conflict with a writer or with another exclusive holder still rolls back
   and waits on the notifier, because those can hold locks that the scan would have to wait for.
+  The release that frees the r-section (the last shared holder leaving, or an exclusive holder) wakes **every**
+  waiter (`qore_rsection_priv::wakeRSectionWaitersIntern()`), not one: a woken waiter can find the write lock or
+  the r-section taken by another thread before it checks again, and then rolls back and returns, so a single
+  wakeup would end with it and leave the other waiters asleep on a free r-section, with `rsection_waiting` keeping
+  every later scan out (qore#7717). Each woken waiter checks its condition again and waits again if it still
+  cannot proceed; the wakeup is made only when `rsection_waiting` is set, so an uncontended release is unchanged.
 - While any thread waits for the r-section (`rsection_waiting`), `tryRSectionLockSharedNotifyWaitRead()` admits
   no new scan. Without this, a stream of read-only scans could keep both a writing scan and
   `qore_object_private::customDeref()` out of the r-section indefinitely, and collection would stop.
@@ -1084,6 +1090,47 @@ rejects a deleting dereference that completes while another deleting dereference
 while the collector is held after it has marked the object (`dbg_hold_deref_marked()`), after its dereference has
 completed (`dbg_hold_deref_delete()`), and before it marks the object, holding the release before it takes the
 object's lock (`dbg_hold_deref_collect()` and `dbg_hold_deref_last()`).
+
+### A value of the set referenced after the decision keeps the set
+
+Between the decision to collect a set (`RSet::canDelete()`) and the collection (the marking of the object whose
+dereference decided, or the taking of a closure-bound variable's value), another thread can take a reference to any
+value of the set through a weak reference, which a scan does not count. The dereference that decided checks its own
+count before it collects (`qore_object_private::takeCollectDeleteReference()`, `RObject::abandonCollectionIfReferenced()`:
+the count plus the releases of the locking path since the decision, `RObject::locked_releases`, is above the decided
+count exactly when a reference has been taken since; `collect_pending` keeps the releases in that path). A reference
+to another member, or to a list, hash, closure or reference of the set, kept nothing: the collection went ahead, and
+an object of the set read that way found the others deleted (`OBJECT-ALREADY-DELETED`), a closure read that way read
+`NOTHING` for the variable it captured (qore#7556).
+
+`canDelete()` therefore records the other members and the nodes when it decides, under the set's write lock and
+while the set is valid (`RSetDerefHelper::recordDecision()`): each member's count with its `locked_releases`, read
+under its `rlck`, with its `collect_pending` raised (every member's `rset` is the set then, so no release since the
+count was read can have taken the lock-free path), and a weak reference that keeps it allocated; each node's count,
+which is the number of its references from the set, with a weak reference. The members retained for the collection
+(when the set has nodes) are retained after that, and the retention is added to their recorded counts. A count that
+has changed since the decision read it makes `canDelete()` ask for a rescan. Before the collection, the dereference
+checks the record with its own lock held (`RSetDerefHelper::referencedSinceDecision()`): a member whose count plus
+its releases since is above the recorded count, or a node whose count is above the recorded one, has been referenced
+since; the collection is then abandoned and the dereference decides again. A reference still held makes that
+decision fail, and its release decides later. When the set has nodes, the other members are still retained by the
+abandoning dereference when it decides again, so that decision fails at them; their releases at the end of the
+dereference (`~RSetDerefHelper()`) decide then, and the one that finds a node held from outside the set watches it,
+so that the node's release decides. The cost is proportional to the size of the set, on the collection path only.
+
+Lock order: the deciding dereference's rsection, then the set's `rwl`, then each member's `rlck` in turn (the order
+of the retention); at the check, the initiator's `rml`, then each member's `rlck` in turn, then the initiator's
+`rlck`. `rlck` is a leaf: nothing takes another lock while holding it.
+
+The check is the point at which the collection is made: a reference to any value of the set other than the
+initiator taken after it (the initiator refuses one once it is marked) finds the set collected, as a value read after
+the collection does. A reference to a node taken while a reference to it from the set is released (both through weak
+references, with no reference to a member taken) leaves the node's count unchanged, and is not seen.
+
+`examples/test/qore/operators/weak-read-collected-set-member.qtest` holds the deciding dereference
+(`dbg_hold_deref_collect()`, `dbg_hold_closure_var_collect()`) and reads another object of the set, or a closure of
+it, through a weak reference meanwhile; `weak-call-destroyed-object.qtest` reads a closure once the variable's value
+has been taken (`dbg_hold_closure_var_collected()`).
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 
@@ -1499,7 +1546,12 @@ locally and adds them with relaxed atomic operations when it ends, so accounting
 per node. The columns: scans that ran; scans deferred because the root had real references; scans skipped because
 another thread had just scanned the root; passes abandoned on a lock conflict (`restarts`); passes restarted to
 take the r-sections exclusively; graph nodes entered (objects, closure-bound variables and containers); total time,
-time blocked waiting for another thread, and the longest single scan. The table is written to `<path>.<pid>` at
+time blocked waiting for another thread, and the longest single scan; and the nodes of each committed graph that
+are not in a sealed component (`unsealed`: the root's component and every component that cannot be recorded in a
+closed region, counted by `assignRegions()`). The nodes entered depend on which closed regions were current, and so
+on the order of the scans made by other threads, and include abandoned and restarted passes; the unsealed nodes are
+fixed by the graph, so a test that checks how a scan's work grows with a part of the graph compares them
+(`examples/test/qlib/HttpServer/scan-size/HttpServerScanSize.qtest`). The table is written to `<path>.<pid>` at
 exit — every process of a cluster inherits the variable, and each writes its own file — and read at any time with
 `get_scan_stats()`. Root names are copied when a row is claimed and never freed, because a class name is freed with
 its Program while the table lives as long as the process.

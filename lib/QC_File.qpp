@@ -231,6 +231,15 @@ const SEEK_END = SEEK_END;
     (see @ref file_blocking_io "ReadOnlyFile"); this includes @ref Qore::stdout "stdout" and
     @ref Qore::stderr "stderr" when another holder of the process's standard streams has made them nonblocking.
 
+    The process-wide standard I/O objects (@ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and
+    @ref Qore::stderr "stderr") are shared by every @ref Qore::Program "Program" of the process, so they behave like an
+    object that trusted code marked with @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()": code
+    that a sandbox governs, or that acts for sandboxed code, can read and write through them as its
+    @ref no-terminal-io "terminal I/O" permission allows, but cannot change their state (the methods that open or close
+    them, redirect them, or change their encoding, position, locks, terminal attributes, owner or event queue raise
+    \c SHARED-OBJECT-ERROR for it); code that no sandbox governs can still change them (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7670">issue #7670</a>)
+
     The events raised by this object are listed in the following table:
 
     @anchor file_events
@@ -340,6 +349,9 @@ int File::open(string path, softint flags = O_RDONLY, softint mode = 0666, *stri
    if (check_terminal_io(self, "File::open", xsink))
       return QoreValue();
 
+   if (check_system_object_change(self, "File::open", xsink))
+      return QoreValue();
+
    // a path with a NUL character names no file; the open fails with EINVAL before the sandbox check
    if (q_check_path(*path)) {
       return -1;
@@ -385,6 +397,9 @@ catch (hash ex) {
  */
 nothing File::open2(string path, softint flags = O_RDONLY, softint mode = 0666, *string encoding) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::open2", xsink))
+      return QoreValue();
+
+   if (check_system_object_change(self, "File::open2", xsink))
       return QoreValue();
 
    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
@@ -843,6 +858,9 @@ nothing File::setCharset(*string encoding) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::setCharset", xsink))
       return QoreValue();
 
+   if (check_system_object_change(self, "File::setCharset", xsink))
+      return QoreValue();
+
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
    f->setEncoding(qe);
 }
@@ -893,6 +911,9 @@ int File::lock(softint[doc] lock_type = F_RDLCK, softint[doc] start = 0, softint
    if (check_terminal_io(self, "lock", xsink))
       return QoreValue();
 
+   if (check_system_object_change(self, "lock", xsink))
+      return QoreValue();
+
    struct flock fl;
    if (lock_intern(fl, args, xsink))
       return QoreValue();
@@ -936,6 +957,9 @@ nothing File::lockBlocking(softint[doc] lock_type = F_RDLCK, softint[doc] start 
       softint[doc] whence = SEEK_SET) [flags=NAMED_ARGS] {
 #ifdef HAVE_STRUCT_FLOCK
    if (check_terminal_io(self, "File::lockBlocking", xsink))
+      return QoreValue();
+
+   if (check_system_object_change(self, "File::lockBlocking", xsink))
       return QoreValue();
 
    struct flock fl;
@@ -1014,6 +1038,9 @@ f.chown(0, 0);
 nothing File::chown(softint owner, softint group = -1) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
    if (check_terminal_io(self, "File::chown", xsink))
+      return QoreValue();
+
+   if (check_system_object_change(self, "File::chown", xsink))
       return QoreValue();
 
    f->chown((uid_t)owner, (gid_t)group, xsink);
@@ -1130,6 +1157,9 @@ nothing File::setTerminalAttributes(softint action = TCSANOW, TermIOS[QoreTermIO
    if (check_terminal_io(self, "File::setTerminalAttributes", xsink))
       return QoreValue();
 
+   if (check_system_object_change(self, "File::setTerminalAttributes", xsink))
+      return QoreValue();
+
    qore_file_ops(f).setTerminalAttributes(action, *termios, xsink);
    return QoreValue();
 #else
@@ -1164,6 +1194,9 @@ stderr.redirect(my_file);
 */
 nothing File::redirect(Qore::File[File] target_file) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "File::redirect", xsink) || check_terminal_io(obj_target_file, "File::redirect", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "File::redirect", xsink))
         return QoreValue();
 
     f->redirect(**target_file, xsink);

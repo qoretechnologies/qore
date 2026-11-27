@@ -50,8 +50,10 @@
 #include <atomic>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <list>
+#include <memory>
 
 //! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
 /** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
@@ -65,6 +67,7 @@ class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
 class QoreModuleContext;
+class BuiltinFunctionVariantBase;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -148,7 +151,7 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 //! Adds a builtin constant whose value depends on the state of the running library
 /** Code referencing the constant reads it from the process it runs in, including AOT-compiled code; see
     ConstantEntry::setRuntimeDependent().  qpp generates calls to this for constants declared with a
-    <tt>qore_runtime(<value>, <value in compiled code>)</tt> value.
+    <tt>qore_runtime(<value>, <value in compiled code>)</tt> or <tt>qore_domain(<value>, <domain>)</tt> value.
 
     @param ns the namespace to add the constant to
     @param ns_path the namespace's fully-qualified path without a leading "::" (ex: "Qore::Option")
@@ -156,9 +159,10 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
     @param value the constant's value in this process; ownership is taken
     @param compiled_define the value of the constant's parse define in code compiled ahead of time, where the
     compiler cannot know the state of the library the code will run with; ownership is taken
+    @param domain the functional domain required to read the constant
 */
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
-        QoreValue value, QoreValue compiled_define);
+        QoreValue value, QoreValue compiled_define, int64 domain = 0);
 
 //! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
 DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);
@@ -174,6 +178,17 @@ public:
     uint64_t decl_seq = qore_next_decl_seq();
 
     QoreNamespace* ns = nullptr;
+
+    //! The mortal declarations of the parent Program that the copy of its namespaces for a child Program did not copy,
+    //! referenced (qore#7607); set only in the root namespace of a child Program
+    /** The code, constants, typedefs and global variables that the child inherits can name declarations that it does
+        not inherit (PO_NO_INHERIT_USER_CLASSES, PO_NO_INHERIT_SYSTEM_CLASSES for the declarations that a binary module
+        added to the parent at run time, ...; a public function naming a class that is not public), which are freed
+        with the parent, which the child can outlive; also those that the parent kept so, which a child of the child
+        inherits as well; released when the namespace is destroyed, after its content (declared before it; see
+        qore_root_ns_private::refLeftOutDecls())
+    */
+    std::unique_ptr<QoreTypeDeclRefs> left_out_decl_refs;
 
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
@@ -697,6 +712,23 @@ public:
 
     DLLLOCAL void addModuleNamespace(qore_ns_private* nns, QoreModuleContext& qmc);
     DLLLOCAL void addCommitNamespaceIntern(qore_ns_private* nns);
+
+    //! Returns true if a declaration added to this namespace is owned by a Program: it is attached to a Program's
+    //! root namespace, and it is not the namespace of a module (qore#7540)
+    DLLLOCAL bool ownedByProgram() const;
+
+    //! Marks the original builtin declarations of the namespace tree \a tree as Program-local, if this namespace, to
+    //! which it is added, is owned by a Program (ownedByProgram(); qore#7540)
+    /** Called before the tree is published, under the runtime namespace write lock: a class whose own namespace is in
+        the tree, a hashdecl that is not a copy and an enum that is the original are marked; copies of declarations of a
+        module or of the static system namespace, which share their private data, are not.
+    */
+    DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
+
+    //! Throws a QoreStandardException (\c RUNTIME-DECLARATION-ERROR) if the signature of a builtin variant that is
+    //! added to a namespace that no Program owns names a mortal declaration
+    //! (qore#7680)
+    DLLLOCAL void checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1496,11 +1528,54 @@ struct deferred_new_check_t {
     }
 };
 
+#ifdef DEBUG
+//! Makes the next completion of a marking event of a namespace that a Program owns fail after its upgrade, as an
+//! allocation failure would (qore#7540)
+DLLLOCAL void qore_dbg_fail_next_runtime_refresh();
+
+//! Returns the number of variants whose references the marking events refreshed (qore#7608)
+DLLLOCAL int64 qore_dbg_runtime_variant_refreshes();
+#endif
+
 class qore_root_ns_private : public qore_ns_private {
     friend class qore_ns_private;
     friend class QoreNamespace;
 
 protected:
+    //! The builtin variants of the namespace functions that the Program owns (not added to a namespace that no Program
+    //! owns), referenced (qore#7540)
+    /** Their references to the mortal declarations that they name are refreshed whenever a declaration of the Program
+        becomes mortal (refRuntimeVariantDecls()), so that a variant added before a declaration that it names is marked
+        references it too.  Written under the runtime namespace write lock; not copied into a child Program, which
+        does not own them
+    */
+    std::vector<AbstractQoreFunctionVariant*> runtime_variants;
+    //! the variants of runtime_variants, for the test of membership
+    std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+    //! The variants of runtime_variants that name a declaration that is not mortal yet, by the own type of the
+    //! declaration (QoreTypeDeclRefs::getUnmarkedDeclTypes(); qore#7608)
+    /** A marking event refreshes only these variants of the declarations that it marks, whose types it reports, and
+        the variants that it adds, instead of every variant of the Program; the entries of the declarations marked are
+        removed.  An entry can remain for a declaration that is never marked or that is freed: a variant that is
+        refreshed for nothing references nothing more
+    */
+    std::unordered_map<const QoreTypeInfo*, std::vector<AbstractQoreFunctionVariant*>> unmarked_decl_variants;
+    //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
+    //! every marking event then refreshes every variant
+    bool unmarked_index_incomplete = false;
+    //! the number of declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be
+    //! taken (QoreTypeOwner::type_owner_refs_pending), which the completion of a marking event takes (qore#7680)
+    /** A count, not a list, so that recording a failure allocates nothing: the completion finds them in the namespace
+        tree and in the caches of its generic hashdecls (retryPendingRuntimeRefs()); one that is freed before (with a
+        namespace whose attach failed) is not found.  Atomic, as an instance of a generic hashdecl is recorded without
+        the runtime namespace lock (addPendingRuntimeRefs())
+    */
+    std::atomic<size_t> pending_runtime_refs{0};
+    //! true from the start of a marking event until its upgrade of the derived types and its refresh of
+    //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
+    //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
+    bool runtime_refresh_pending = false;
+
     //! Protects committed namespace containers during cold runtime module merges
     mutable QoreRWLock runtime_namespace_lock;
     mutable std::atomic<int> runtime_namespace_writer_tid{-1};
@@ -1658,6 +1733,37 @@ protected:
 
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
+
+    //! a call whose method is bound once the abstract methods of the classes are resolved (qore#7411)
+    struct deferred_method_bind_t {
+        //! takes a reference to the call, which it keeps while the bind is pending
+        DLLLOCAL deferred_method_bind_t(AbstractQoreNode* node, std::function<int()>&& bind)
+                : node(node), bind(std::move(bind)) {
+            node->ref();
+        }
+
+        DLLLOCAL deferred_method_bind_t(deferred_method_bind_t&& old) noexcept
+                : node(old.node), bind(std::move(old.bind)) {
+            old.node = nullptr;
+        }
+
+        DLLLOCAL ~deferred_method_bind_t() {
+            if (node) {
+                node->deref(nullptr);
+            }
+        }
+
+        deferred_method_bind_t(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(deferred_method_bind_t&&) = delete;
+
+        //! the call, referenced while the bind is pending
+        AbstractQoreNode* node;
+        //! binds the method of the call; returns -1 if a parse exception was raised
+        std::function<int()> bind;
+    };
+    //! the calls whose methods are bound once the abstract methods of the classes are resolved (qore#7411)
+    std::vector<deferred_method_bind_t> deferred_method_bind_vec;
 
     DLLLOCAL int addPendingVariantIntern(qore_ns_private& ns, const char* name, AbstractQoreFunctionVariant* v) {
         // try to add function variant to given namespace
@@ -2669,6 +2775,9 @@ public:
         // Program, as when it imports the modules (qore#5664)
         markCopiedModuleVarImportsFrom(old);
 
+        // the declarations of the parent that the copy left out are kept with it (qore#7607)
+        refLeftOutDecls(old);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
@@ -2676,7 +2785,77 @@ public:
     //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
     DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
+    //! References the mortal declarations of \a src, the root namespace of the parent Program from which this one was
+    //! copied, that the copy did not copy (left_out_decl_refs; qore#7607)
+    DLLLOCAL void refLeftOutDecls(const qore_root_ns_private& src);
+
     DLLLOCAL ~qore_root_ns_private() {
+        releaseRuntimeVariants();
+    }
+
+    //! Adds a builtin variant of a namespace function that the Program owns to runtime_variants, with a reference
+    //! (qore#7540)
+    DLLLOCAL void addRuntimeVariant(AbstractQoreFunctionVariant* v);
+
+    //! Makes each variant of runtime_variants reference the mortal declarations that it names
+    //! (BuiltinFunctionVariantBase::refMortalDecls()), from the variant with the index \a start; called whenever a
+    //! declaration of the Program becomes mortal
+    DLLLOCAL void refRuntimeVariantDecls(size_t start = 0);
+
+    //! Releases the references of runtime_variants
+    DLLLOCAL void releaseRuntimeVariants();
+
+    //! Starts a marking event (qore#7540); returns true if an earlier one did not complete, in which case the event
+    //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
+    //! write lock
+    DLLLOCAL bool beginRuntimeMarking() {
+        // before a declaration is marked (qore_runtime_mortal_decls_exist(), qore#7680)
+        qore_set_runtime_mortal_decls_exist();
+        bool incomplete = runtime_refresh_pending;
+        runtime_refresh_pending = true;
+        return incomplete;
+    }
+
+    //! Completes a marking event: upgrades the derived types of the declarations marked (all of them if \a full) and
+    //! refreshes the references of the variants of runtime_variants from \a start, and of the variants before it that
+    //! name a declaration marked (unmarked_decl_variants; all of them if \a full; qore#7608)
+    DLLLOCAL void completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full);
+
+    //! Completes a marking event that did not complete, if any (as the next event would)
+    DLLLOCAL void completePendingRuntimeMarking() {
+        if (runtime_refresh_pending) {
+            completeRuntimeMarking(type_vec_t(), 0, true);
+        }
+    }
+
+    //! Gives declarations of the Program that became mortal the references of qore_type_owner_take_runtime_refs(), or,
+    //! if an allocation fails, records them for the next marking event (retryPendingRuntimeRefs(); qore#7680); does
+    //! not throw; called under the runtime namespace write lock
+    DLLLOCAL void takeRuntimeRefs(const std::vector<QoreTypeOwner*>& owners);
+
+    //! Takes the references that takeRuntimeRefs() could not take; throws std::bad_alloc if an allocation fails, in
+    //! which case they stay pending; called under the runtime namespace write lock
+    DLLLOCAL void retryPendingRuntimeRefs();
+
+    //! Records declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be taken,
+    //! for retryPendingRuntimeRefs(); does not allocate or throw, and needs no lock (qore#7680)
+    DLLLOCAL void addPendingRuntimeRefs(const std::vector<QoreTypeOwner*>& owners) {
+        pending_runtime_refs.fetch_add(qore_type_owner_set_refs_pending(owners), std::memory_order_release);
+    }
+
+    //! Returns the number of declarations whose references are pending (pending_runtime_refs; qore#7680)
+    DLLLOCAL size_t pendingRuntimeRefs() const {
+        return pending_runtime_refs.load(std::memory_order_acquire);
+    }
+
+    //! Returns true if a marking event did not complete (runtime_refresh_pending)
+    DLLLOCAL bool runtimeRefreshPending() const {
+        return runtime_refresh_pending;
+    }
+
+    //! Returns the number of the variants of runtime_variants
+    DLLLOCAL size_t runtimeVariantCount() const {
+        return runtime_variants.size();
     }
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
@@ -2721,6 +2900,38 @@ public:
 
     DLLLOCAL void deferParseCheckAbstractNew(const qore_class_private* qc, const QoreProgramLocation* loc) {
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
+    }
+
+    //! binds the method of the call \a node with \a bind once the abstract methods of the classes are resolved
+    /** For a call of a method of a class whose abstract methods, once resolved, can give it a method of the name
+        (qore_class_private::parseAbstractMethodPending()); \a bind is called by parseRunDeferredMethodBinds(), in the
+        parse context of the call (see QoreDeferredMethodBindContext) (qore#7411)
+    */
+    DLLLOCAL void parseDeferMethodBind(AbstractQoreNode* node, std::function<int()>&& bind) {
+        deferred_method_bind_vec.emplace_back(node, std::move(bind));
+    }
+
+    //! binds the methods of the calls deferred by parseDeferMethodBind(), after the abstract methods of the classes
+    //! are resolved, and clears them; returns -1 if a parse exception was raised
+    /** the calls are released when the binds are done, or when an exception leaves this function
+    */
+    DLLLOCAL int parseRunDeferredMethodBinds() {
+        int err = 0;
+        // a bind can defer no other: the abstract methods are resolved
+        std::vector<deferred_method_bind_t> binds;
+        binds.swap(deferred_method_bind_vec);
+        for (deferred_method_bind_t& i : binds) {
+            if (i.bind() && !err) {
+                err = -1;
+            }
+        }
+        assert(deferred_method_bind_vec.empty());
+        return err;
+    }
+
+    //! releases the calls deferred by parseDeferMethodBind() without binding them (a parse that is rolled back)
+    DLLLOCAL void parseClearDeferredMethodBinds() {
+        deferred_method_bind_vec.clear();
     }
 
     //! Runs the deferred checks for the instantiation of classes with abstract methods and clears them
@@ -2804,7 +3015,14 @@ public:
 
         for (unsigned j = 0; j < qmc.mcfl.size(); ++j) {
             ModuleContextFunctionCommit& mc = qmc.mcfl[j];
-            mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            // a variant that is refused (one that names a declaration that a namespace committed above marked) is
+            // freed and its exception raised in the module's sink; the others are committed, and the indexes rebuilt
+            // (qore#7680)
+            try {
+                mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            } catch (AbstractException& e) {
+                e.convert(&qmc.getXSink());
+            }
         }
 
         // issue #3461: must rebuild all indexes here or symbols will appear missing
@@ -2824,6 +3042,9 @@ public:
 
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
+
+        // release the calls whose methods were to be bound after the abstract methods are resolved (qore#7411)
+        parseClearDeferredMethodBinds();
 
         // With atomic_rollback (PO_ALLOW_REPARSE), preserve committed items and only remove pending items.
         // Without it, do a full destructive reset for backward compatibility.

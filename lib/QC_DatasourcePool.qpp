@@ -1086,7 +1086,7 @@ string DatasourcePool::getDriverName() [flags=CONSTANT] {
 
 //! Returns a description of the datasource for messages, with the user name, password and database name masked
 /** The description has the form
-    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    <tt><em>driver</em>:****</tt><tt>/</tt><tt>****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
     the user name, the password and the database name are always replaced with \c "****", whether they are set or
     not, so that the description shows none of them, and not whether they are set; the host and port are shown if
     set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use
@@ -1360,7 +1360,7 @@ ds.setWarningCallback(5s, cb);
     @endcode
 
     @param warning_ms the period of time with a resolution of milliseconds after which the callback will be called if a connection cannot be allocated in the given time period
-    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a argument]) which will be passed a description of the pool for messages, which shows its driver name, host and port, with the user name, password and database name masked as \c "****" (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>; since %Qore 3.0; use @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" for the configuration), an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a argument value passed to this method
+    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a argument]) which will be passed a description of the pool for messages, which shows its driver name, host and port, with the user name, password and database name masked as \c "****" (ex: <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>; since %Qore 3.0; use @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" for the configuration), an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a argument value passed to this method
     @param argument an optional argument that will be passed to the warning callback
 
     @note that the warning timeout has a resolution of milliseconds, but the actual wait time is reported in microseconds (1 ms = 1000 us)

@@ -38,6 +38,7 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/QoreSandboxManager.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -400,11 +401,16 @@ int QoreExternalStaticMember::setValue(const QoreValue val, const QoreProgram* w
 }
 
 int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink) const {
-    LValueHelper lvh(xsink);
-    if (const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this))->getLValue(lvh)) {
-        return -1;
-    }
-    lvh.assign(val.refSelf(), "<set static class member value>");
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    QoreVarInfo* vi = const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this));
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
+        [vi](LValueHelper& lvh) -> int {
+            return vi->getLValue(lvh);
+        },
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assign(v, "<set static class member value>");
+        });
     return *xsink ? -1 : 0;
 }
 
@@ -434,6 +440,10 @@ bool QoreExternalConstant::isBuiltin() const {
 
 const QoreTypeInfo* QoreExternalConstant::getTypeInfo() const {
     return reinterpret_cast<const ConstantEntry*>(this)->getParseTypeInfo();
+}
+
+int64 QoreExternalConstant::getDomain() const {
+    return reinterpret_cast<const ConstantEntry*>(this)->getDomain();
 }
 
 QoreValue QoreExternalConstant::getReferencedValue() const {
@@ -736,12 +746,16 @@ int QoreExternalGlobalVar::setValue(const QoreValue val, const QoreProgram* writ
 }
 
 int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) const {
-    LValueHelper lvh(xsink);
-    if (const_cast<Var*>(reinterpret_cast<const Var*>(this))->getLValue(lvh, false)) {
-        return -1;
-    }
-
-    lvh.assign(val.refSelf(), "<value arugment to GlobalVar::setValue()>");
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    Var* var = const_cast<Var*>(reinterpret_cast<const Var*>(this));
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
+        [var](LValueHelper& lvh) -> int {
+            return var->getLValue(lvh, false);
+        },
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assign(v, "<value arugment to GlobalVar::setValue()>");
+        });
     return *xsink ? -1 : 0;
 }
 
@@ -883,9 +897,28 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
         // A user module Program has no manager of its own: sandbox resolution walks out of it to the code that
         // calls it, so code that runs there for this caller is governed by the caller's manager, as it is when the
         // caller calls the module directly.  Any other Program must have the governing manager as its own.
-        privileged = target_sm ? target_sm == sm : tpo.hasAny(QoreParseOptions(PO_IN_MODULE));
         if (target_sm) {
+            privileged = target_sm == sm;
             target_sm->deref(nullptr);
+        } else if (tpo.hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            // a module Program that keeps the sandbox of the code that loaded it instead of a manager of its own (a
+            // module loaded into a Program that trusted code created in a system-policy capability, qore#6311) gives
+            // privileges only to code governed by that same sandbox: another tenant's code is refused, as by a
+            // module Program whose own manager is the loading code's
+            QoreSandboxManager* creator;
+            QoreSandboxManager* creator_policy;
+            qore_program_private::get(*const_cast<QoreProgram*>(target))->getCreatorSandboxRefs(creator,
+                creator_policy);
+            // compared by its members: a composite is a new object at each resolution of the same sandboxes
+            privileged = !creator || QoreSandboxComposition::same(creator, sm);
+            if (creator) {
+                creator->deref(nullptr);
+            }
+            if (creator_policy) {
+                creator_policy->deref(nullptr);
+            }
+        } else {
+            privileged = false;
         }
     }
     if (privileged) {

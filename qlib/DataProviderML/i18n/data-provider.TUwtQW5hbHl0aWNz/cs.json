@@ -3831,6 +3831,18 @@
           "source": "Extract overall sentiment, score, per-aspect breakdown",
           "message": "Extrahovat celkový sentiment, skóre, rozpad podle aspektů"
         },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.display_name": {
+          "source": "Custom Schema",
+          "message": "Vlastní schéma"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.short_desc": {
+          "source": "Custom extraction schema as a hash",
+          "message": "Vlastní schéma extrakce jako hash"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.desc": {
+          "source": "Omit `schema_template` and set `name`, `description`, and a nonempty list of `fields`. Each field has a unique `name`, a `description`, and a JSON type (`string`, `number`, `integer`, `boolean`, `array`, or `object`). `required` defaults to true. Array fields can specify `items`, object fields can specify `properties`, and `enum_values` lists the permitted values.",
+          "message": "Vynechejte `schema_template` a nastavte `name`, `description` a neprázdný seznam `fields`. Každé pole má jedinečné `name`, `description` a typ JSON (`string`, `number`, `integer`, `boolean`, `array` nebo `object`). `required` má výchozí hodnotu true. Pole typu array mohou určit `items`, pole typu object mohou určit `properties` a `enum_values` uvádí povolené hodnoty."
+        },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.bGxtX3VybA.display_name": {
           "source": "LLM URL",
           "message": "URL pro LLM"

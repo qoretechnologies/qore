@@ -335,12 +335,14 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             hash<auto> gv;
             bool skip_row = False;
             foreach string field in (group_by_fields) {
-                if (!columns.hasKey(field)) {
+                # a column block field is a plain path, which is its own output name
+                auto val = columns.hasKey(field) ? getColumnBlockValue(columns{field}, i) : NOTHING;
+                if (!exists val) {
+                    # as accumulateRecord(): a row without a value of a group-by field belongs to no group
                     skip_row = True;
                     break;
                 }
-                # a column block field is a plain path, which is its own output name
-                gv{field} = getColumnBlockValue(columns{field}, i);
+                gv{field} = val;
             }
             if (skip_row) {
                 continue;
@@ -370,14 +372,17 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 string agg_key = spec.output_name;
                 hash<auto!> acc = agg{agg_key};
                 auto value = getColumnBlockValue(columns{spec.field}, i);
+                # as accumulateRecord(): first and last are the first and the last value the group's rows have
                 if (spec.op == "first") {
-                    if (!acc.set) {
+                    if (!acc.set && exists value) {
                         acc.value = value;
                         acc.set = True;
                     }
                 } else if (spec.op == "last") {
-                    acc.value = value;
-                    acc.set = True;
+                    if (exists value) {
+                        acc.value = value;
+                        acc.set = True;
+                    }
                 } else {
                     *float fval = coerceNumeric(value);
                     if (!exists fval) {

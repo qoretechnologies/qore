@@ -1,0 +1,135 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_LazySharedMap.cpp
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_LazySharedValue.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/qore_thread_intern.h"
+
+//! Values that trusted code shares with every caller, by key, each built the first time that a caller needs it, as trusted code
+/** The values of a LazySharedMap are built as the value of a @ref Qore::Thread::LazySharedValue "LazySharedValue" is,
+    one for each key, by a builder that is given the key: for registries that trusted code fills on demand, such as
+    schemas loaded by name.
+
+    Callers can give any key, so a key whose build fails leaves no entry in the map, and the builder raises an
+    exception for a key that it does not know: it must look the key up only in trusted metadata, and never use it as
+    code, a module name or a path that it does not check.  The threads that waited for the key build it again, or
+    fail, on their own.  The creator can also limit the number of entries.
+
+    @note see @ref Qore::Thread::LazySharedValue "LazySharedValue" for the two modes of the object (process-shared and
+    private), the rules of the builder, the value and the lock order of the wait
+
+    @since %Qore 3.0
+*/
+qclass LazySharedMap [arg=QoreLazySharedMap* m; ns=Qore::Thread];
+
+//! Creates the object with the builder of its values
+/** @param builder the code that builds the value of a key; it takes the key as a string argument and raises an
+    exception for a key that it does not know; a plain callback (not a bound callback or a capability) of code that no
+    sandbox governs
+    @param max_size the most entries (values built or being built); 0 (the default) or less for no limit; a key that would
+    exceed it is refused
+
+    @param require_shared if @ref True, the object must be process-shared: the constructor raises an exception
+    instead of creating a private object (see @ref Qore::Thread::LazySharedValue "LazySharedValue")
+
+    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()"), or
+    @p require_shared is @ref True and the object would be private
+    @throw LAZYSHAREDMAP-ERROR @p max_size is negative
+*/
+LazySharedMap::constructor(code builder, int max_size = 0, bool require_shared = False) [flags=NAMED_ARGS] {
+    if (max_size < 0) {
+        xsink->raiseException("LAZYSHAREDMAP-ERROR", "the maximum size of a LazySharedMap cannot be negative (%lld "
+            "given)", max_size);
+        return;
+    }
+    ReferenceHolder<QoreLazySharedMap> m(new QoreLazySharedMap(builder, max_size, require_shared, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    bool shared = m->isProcessShared();
+    self->setPrivate(CID_LAZYSHAREDMAP, m.release());
+    // a process-shared object is shared state of trusted code: sandboxed code cannot delete it (see
+    // SandboxManager::shareObject())
+    if (shared && qore_caller_creates_shared_objects()) {
+        qore_object_private::get(*self)->setShared();
+    }
+}
+
+//! Copying is not supported
+/** @throw LAZYSHAREDMAP-COPY-ERROR objects of this class cannot be copied
+*/
+LazySharedMap::copy() {
+    xsink->raiseException("LAZYSHAREDMAP-COPY-ERROR", "objects of class LazySharedMap cannot be copied");
+}
+
+//! Returns the value of a key, building it the first time
+/** @param key the key
+    @param timeout_ms the most to wait for another thread that builds the value; 0 (the default) or less for no limit
+
+    @return the value
+
+    @throw SHARED-INIT-ERROR the value is needed by its own builder, the wait would close a cycle of waits of builders,
+    the builder returned an object or callable value that sandboxed or restricted code created, or the key would
+    exceed the maximum number of entries
+    @throw SHARED-INIT-TIMEOUT the timeout ran out while another thread built the value
+*/
+auto LazySharedMap::get(string key, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+    return m->get(key, timeout_ms, xsink);
+}
+
+//! Returns @ref True if the value of the key has been built
+/** @param key the key
+
+    @return @ref True if the value of the key has been built
+*/
+bool LazySharedMap::isBuilt(string key) [flags=RET_VALUE_ONLY] {
+    return m->isBuilt(key, xsink);
+}
+
+//! Returns @ref True if the values are built as trusted code for every caller, @ref False for a private map
+/** @return @ref True if the object is process-shared (see @ref Qore::Thread::LazySharedValue "LazySharedValue"),
+    @ref False if it is private
+
+    @since %Qore 3.0
+*/
+bool LazySharedMap::isProcessShared() [flags=RET_VALUE_ONLY] {
+    return m->isProcessShared();
+}
+
+//! Returns the number of entries: the values built and being built
+/** @return the number of entries
+*/
+int LazySharedMap::size() [flags=RET_VALUE_ONLY] {
+    return m->size();
+}

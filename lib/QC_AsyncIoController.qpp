@@ -512,16 +512,25 @@ AsyncIoController::copy() {
     the initialization of library code (also in a callback); an operation submitted by a callback of an operation
     belongs to that operation's application, unless the callback is the sandboxed code of an application Program,
     whose operations belong to its own application; the trusted code of another Program that runs in such a callback
-    runs for the operation's application as well.  The code of a trusted Program that runs for sandboxed code in
-    another way (a method of an object of the trusted Program that sandboxed code calls, or a thread or a task that
-    trusted code in a callback starts) runs for the trusted Program's application, as when the trusted Program calls
-    it itself: trusted code that serves sandboxed code checks the keys and owners that it is given (see
-    <a href="https://github.com/qoretechnologies/qore/issues/7148">issue #7148</a>).  Code that is sandboxed, or acts
+    runs for the operation's application as well.  The trusted code of the host that runs for sandboxed code in
+    another way (a function, call reference or method of the host that sandboxed code calls, or a thread or a
+    @ref Qore::Thread::ThreadPool "ThreadPool" task that such code or the code of such a callback starts) runs for the
+    sandboxed code's application, restricted to it (sandboxed code that it calls in a callback acts for its own), and
+    in a thread that module code starts for no application, unless it elevates explicitly with a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or with
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" and then acts for its
+    own %Program's application (see @ref sandbox_host_code_application).  Code that is sandboxed, or acts
     for sandboxed code, does not replace the operation of another application with \a replace_existing, nor, if it
     runs for no known application, any operation other than its own operation object: on the I/O thread of the key, the submission raises
     \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a canceled result whose
     \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
     (\c ASYNC-IO-ERROR).  The operation with the key is not affected
+
+    A key is unique in the controller, not only on an I/O thread: operations are routed to an I/O thread by their
+    socket, and a submission whose key is in use by an operation on the I/O thread of another socket is refused, or
+    replaces that operation, exactly as a submission whose key is in use on its own thread is (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7624">issue #7624</a>).  The replaced operation is
+    canceled on its thread, so its canceled result can follow the return of the replacing call
 
     @since %Qore 3.0
 */
@@ -916,15 +925,17 @@ static hash<auto> AsyncIoController::getInfo() {
     @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
     logger, which is process-wide (see @ref sandbox_process_wide_registries)
 
-    @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
-    unless the logger has been replaced since; a server that sandboxed code creates does not
+    @note an \c HttpServer created with a logger sets it here while it runs and gives back the logger it replaced
+    when it stops, unless the logger has been replaced since; a server created without a logger or by sandboxed code
+    does not
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
     callback, for example) is logged by this logger at the error level, or else by the async I/O logger
-    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
-    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
-    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, or when the logger cannot take the
+    message because its Program is being destroyed, it is reported as an unhandled exception on the standard error
+    output, so that the failure of a callback is never silent.  An exception raised by a task (@ref submitTask()) is
+    always reported as an unhandled exception on the standard error output
 
     @see getLogger()
 

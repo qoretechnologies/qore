@@ -486,6 +486,11 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
         @throw PROVIDER-INDEX-CANCELLED a worker build was stopped by cancelWorkers()
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information
+            (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"): the index that the host published can be replaced
+            only by code that may read external information (see
+            @ref providerindexutil_published_index)
         @note The index is built in index build mode (see
             @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()"), so the
             index being replaced is never read; when the build finishes, the next index lookup reads the new index.
@@ -510,6 +515,9 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
             *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
             [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # the index replaces the index that the host published, before anything is loaded or built (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::createDataProviderIndex", "replace");
+
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -521,7 +529,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         # check that the environment variable is set and that the index directory can be written to before
         # starting the (potentially very long) index build; any existing index is left untouched until the new
         # index has been written completely (index files are written atomically)
-        getWritableIndexDir();
+        checkWritableIndexDir();
 
         if (opts.workers > 0) {
             if (ProviderIndexUtil::hasMessagePack()) {
@@ -1348,12 +1356,12 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             }
         }
         if (info.expressions) {
+            # The type descriptions in one expression catalog share a key space. getInfo() supplies
+            # process-local keys, so give each distinct key a stable name in traversal order.
+            ProviderIndexUniqueKeys signature_keys();
             rv.expressions = map {
-                $1.key: $1.value + {
-                    "args": (map $1 + {
-                        "type": $1.type.getBaseTypeName(),
-                    }, $1.value.args),
-                    "return_type": $1.value.return_type.getBaseTypeName(),
+                $1.key: $1.value + getSerializableExpressionType("return_type", $1.value.return_type, signature_keys) + {
+                    "args": (map $1 + getSerializableExpressionType("type", $1.type, signature_keys), $1.value.args),
                 }
             }, info.expressions.pairIterator();
         }
@@ -1364,6 +1372,18 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     "type": $1.value.type.getBaseTypeName(),
                 }}, info{key}.pairIterator();
             }
+        }
+        return rv;
+    }
+
+    #! Keep the compact base name for older readers and describe types that the name cannot restore.
+    private:internal static hash<auto> getSerializableExpressionType(string key, AbstractDataProviderType type,
+            ProviderIndexUniqueKeys signature_keys) {
+        string base = type.getBaseTypeName();
+        hash<auto> rv;
+        rv{key} = base;
+        if (type !== AbstractDataProviderTypeMap{base}) {
+            rv{key + "_info"} = signature_keys.replace(type.getInfo());
         }
         return rv;
     }
@@ -1388,6 +1408,10 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @param batch_path the path to the batch file, given to the worker command as its last argument
 
         @throw PROVIDER-INDEX-WORKER-ERROR the batch file cannot be read
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: a worker enters index
+        build mode, in which the process does not read the index that the host published (see
+        @ref providerindexutil_published_index)
 
         @par Example:
         A worker command for an application whose own modules load provider modules:
@@ -1403,6 +1427,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         @since %ProviderIndex 1.2
     */
     static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # a worker enters build mode (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::prepareIndexWorker", "enter the build mode of");
         getWorkerBatch(batch_path);
     }
 
@@ -1421,6 +1447,11 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         actions could not be initialized, which the build records, 1 if its discovery failed otherwise, in which case
         the build reports the failures, or 2 if the worker failed
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: a worker enters index
+        build mode, in which the process does not read the index that the host published (see
+        @ref providerindexutil_published_index)
+
         @par Example:
         A worker command:
         @code{.py}
@@ -1435,6 +1466,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @since %ProviderIndex 1.2
     */
     static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # a worker enters build mode (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::runIndexWorker", "enter the build mode of");
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {

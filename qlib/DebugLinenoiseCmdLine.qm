@@ -312,6 +312,9 @@ public namespace DebugLinenoiseCmdLine {
             @return the init file, which is the file of \c -i or <tt>.qdbginit</tt> in the home folder if it exists, unless
             \c no_init is set, and the files of \c execute
 
+            The home folder of the environment is not used for code restricted from external information (see
+            @ref sandbox_ambient_host_data)
+
             @since DebugLinenoiseCmdLine 0.2
         */
         static list<string> getStartupCommandFiles(hash<auto> opt) {
@@ -319,7 +322,8 @@ public namespace DebugLinenoiseCmdLine {
             if (!opt.no_init) {
                 if (opt.init_file) {
                     push rv, opt.init_file;
-                } else {
+                } else if (SandboxManager::callerMayReadExternalInfo()) {
+                    # the home directory of the environment only for a caller that could read it itself (qore#7586)
                     foreach string k in (('HOME', 'USERPROFILE')) {
                         if (exists ENV{k}) {
                             string fn = ENV{k} + DirSep + defaultInitFileName;
@@ -366,8 +370,9 @@ public namespace DebugLinenoiseCmdLine {
             # update prompt with current color setting
             ln_prompt = tc.enabled ? "\033[1;36mqdbg>\033[0m " : "qdbg> ";
             if (!exists opt.history) {
-                # use file name in home dir
-                foreach string k in (('HOME', 'USERPROFILE')) {
+                # use file name in home dir; the home directory of the environment only for a caller that could read
+                # it itself (qore#7586)
+                foreach string k in (SandboxManager::callerMayReadExternalInfo() ? ('HOME', 'USERPROFILE') : ()) {
                     if (exists ENV{k}) {
                         historyFileName = ENV{k} + DirSep + defaultHistoryFileName;
                         break;

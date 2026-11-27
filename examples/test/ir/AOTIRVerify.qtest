@@ -47,7 +47,7 @@ class AOTIRVerifyTest inherits QUnit::Test {
         int rc;
         string output = backquote(prefix + shellQuote(native) + " " + shellQuote(reseal) + " 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 104 AOT IR verification checks\n", output);
+        assertEq("PASS: 107 AOT IR verification checks\n", output);
     }
 
     private static string shellQuote(string value) {

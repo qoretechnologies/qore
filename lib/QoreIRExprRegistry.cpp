@@ -118,6 +118,7 @@
 #include <qore/intern/QoreTrimOperatorNode.h>
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
+#include <qore/intern/QoreReadReferenceOperatorNode.h>
 #include <qore/intern/QoreUnshiftOperatorNode.h>
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
@@ -244,6 +245,7 @@ CLAIM_NODE_FN(LogicalGreaterThanOrEquals, QoreLogicalGreaterThanOrEqualsOperator
 CLAIM_NODE_FN(LogicalComparison, QoreLogicalComparisonOperatorNode)
 CLAIM_NODE_FN(UnaryPlus, QoreUnaryPlusOperatorNode)
 CLAIM_NODE_FN(UnaryMinus, QoreUnaryMinusOperatorNode)
+CLAIM_NODE_FN(ReadReference, QoreReadReferenceOperatorNode)
 CLAIM_NODE_FN(BinaryNot, QoreBinaryNotOperatorNode)
 CLAIM_NODE_FN(Multiplication, QoreMultiplicationOperatorNode)
 CLAIM_NODE_FN(Division, QoreDivisionOperatorNode)
@@ -330,7 +332,7 @@ const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[] = {
     QORE_IR_EXPR_ENTRY(lowerPreIncrement, claimPreIncrement, "Pre-increment (++var)"),
     QORE_IR_EXPR_ENTRY(lowerPostIncrement, claimPostIncrement, "Post-increment (var++)"),
 
-    // Binary operators (17)
+    // Binary operators (18)
     QORE_IR_EXPR_ENTRY(lowerPlus, claimPlus, "Addition (+)"),
     QORE_IR_EXPR_ENTRY(lowerMinus, claimMinus, "Subtraction (-)"),
     QORE_IR_EXPR_ENTRY(lowerLogicalLessThan, claimLogicalLessThan, "Less than (<)"),
@@ -345,6 +347,7 @@ const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[] = {
     QORE_IR_EXPR_ENTRY(lowerLogicalComparison, claimLogicalComparison, "Comparison (=~)"),
     QORE_IR_EXPR_ENTRY(lowerUnaryPlus, claimUnaryPlus, "Unary plus (+x)"),
     QORE_IR_EXPR_ENTRY(lowerUnaryMinus, claimUnaryMinus, "Unary minus (-x)"),
+    QORE_IR_EXPR_ENTRY(lowerReadReference, claimReadReference, "Read through a reference element (qore#6662)"),
     QORE_IR_EXPR_ENTRY(lowerBinaryNot, claimBinaryNot, "Binary not (~x)"),
     QORE_IR_EXPR_ENTRY(lowerMultiplication, claimMultiplication, "Multiplication (*)"),
     QORE_IR_EXPR_ENTRY(lowerDivision, claimDivision, "Division (/)"),

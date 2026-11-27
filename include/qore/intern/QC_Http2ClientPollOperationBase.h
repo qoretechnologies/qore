@@ -41,6 +41,7 @@
 #include "qore/intern/QoreConsumeHook.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <unordered_map>
@@ -243,7 +244,7 @@ public:
     //! Installs an SSE parser on an active ChannelAction stream
     DLLLOCAL void installSseState(int32_t stream_id, Queue* queue,
         QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool aws_event_stream = false);
 
     // --- Accessors ---
 
@@ -463,11 +464,15 @@ public:
         QoreEventNotifier* notifier, QoreObject* notifier_obj);
 
     //! Returns and clears the list of stream IDs that had data drained
-    /** Called by the controller after continuePoll() returns. For each
+    /** Called by the controller after continuePoll() returns, and after an abort() that it calls. For each
         stream ID, the controller dispatches onStreamData() to the worker pool.
+
+        Takes sq_lock: the list is also changed by notifyPendingStreams() on the thread that calls abort(), which can
+        be any thread (issue #7699).
     */
     DLLLOCAL std::vector<int32_t> getAndClearDataReadyStreams() {
         std::vector<int32_t> result;
+        AutoLocker al(sq_lock);
         result.swap(data_ready_streams);
         return result;
     }
@@ -627,9 +632,9 @@ private:
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
-    //! Lock protecting only pending_stream_registrations (app→I/O command queue)
+    //! Lock protecting pending_stream_registrations (app→I/O command queue), notify_streams and data_ready_streams
     /** Separate from stream_lock to avoid lock-ordering inversion with the
-        H2 session mutex.  Never held during I/O operations.
+        H2 session mutex.  Never held during I/O operations.  Taken after stream_queues_lock, never before it.
     */
     QoreThreadLock sq_lock;
 
@@ -639,6 +644,19 @@ private:
         connection state is owned by the event loop thread.
     */
     std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
+
+    //! The streams whose listeners are notified when the connection fails (under sq_lock; issue #7695)
+    /** A stream is added when its queue is registered (registerStreamQueue()), as every listener of a stream
+        (WebSocket over HTTP/2) registers its queue, and removed when its registration ends with the end of the
+        stream (drainStreamQueuesLocked()) or when the failure of the connection notifies it
+        (notifyPendingStreams()).  It is kept when clearStreamQueues() takes the registrations away, as a close of
+        the connection does before it fails the connection's streams.  Only these streams are given to the
+        controller for an onStreamData() notification when the connection fails: a stream without a listener (an SSE
+        or other streaming response that its reader reads from the stream's channel) has none to notify, and the
+        operation of a connection whose streams have no listeners (an HTTPClient connection) has no onStreamData()
+        method.
+    */
+    std::vector<int32_t> notify_streams;
 
     //! Guards stream_queues
     /** The I/O thread changes stream_queues, but other threads read it: the collector's scanner (scanMembers())
@@ -670,10 +688,22 @@ private:
     */
     DLLLOCAL int pushStreamQueueData(int32_t stream_id, StreamQueueInfo& info, BinaryNode* data);
 
-    // --- I/O-thread-only data (no lock needed) ---
-
-    //! Stream IDs that had data drained — I/O-thread-only
+    //! Stream IDs whose listeners the controller notifies with onStreamData() (under sq_lock; issue #7699)
+    /** Added to by the I/O thread when it reads data for a stream with a listener (handleReading(),
+        drainStreamQueuesLocked()), and by notifyPendingStreams() for the streams that the failure of the connection
+        ended, which runs on the thread that calls abort(): any thread, as the Qore-level abort() can be called while
+        the I/O thread runs the operation.  Taken by the controller with getAndClearDataReadyStreams().
+    */
     std::vector<int32_t> data_ready_streams;
+
+    //! Adds a stream to data_ready_streams unless it is listed already; the caller holds sq_lock
+    DLLLOCAL void addDataReadyStreamLocked(int32_t stream_id) {
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id) == data_ready_streams.end()) {
+            data_ready_streams.push_back(stream_id);
+        }
+    }
+
+    // --- I/O-thread-only data (no lock needed) ---
 
     //! Proactive idle timeout (microseconds); -1 = no proactive timeout
     /** Set by setIdleTimeout() after construction from the connection manager.
@@ -818,6 +848,11 @@ private:
 
     //! Records the error, retaining the underlying exception argument when present
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink, QoreValue arg = QoreValue());
+    //! Fails the pending streams and marks the streams with listeners for an onStreamData() notification
+    /** Runs on the thread that calls abort() or setError(): any thread for an abort().  The streams fail with the
+        error recorded in error_info, which the first failure of the connection set, else with \a err and \a desc
+        (issue #7699)
+    */
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
 

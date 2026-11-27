@@ -45,6 +45,14 @@ public class RestSchemaConvertedUnionDataType inherits QoreUnionDataType {
         self.conversion = RestSchemaConvertedUnionDataType::nameCodecs(conversion);
     }
 
+    #! Marks the wire type and the types that the type holds as shared; see AbstractDataProviderType::freeze()
+    /** @since RestSchemaActions 1.0
+    */
+    private freezeImpl() {
+        wire_type.freeze();
+        QoreUnionDataType::freezeImpl();
+    }
+
     #! Validates the action-facing value and its wire representation
     /** @param value the supplied action value
         @return the validated action value

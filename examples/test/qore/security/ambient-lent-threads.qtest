@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires AwsRestClient
 %requires GcpAuth
 %requires ./ambient-host/AmbientCallers.qm

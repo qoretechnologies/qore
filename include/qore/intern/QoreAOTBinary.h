@@ -248,6 +248,15 @@ bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
     bool defer_if_pending, bool wrap_top_level_if_ready = false, bool* resolved = nullptr);
 
+//! Resolves the time zone of a date literal for the loading Program
+/** A zoneinfo file path (other than the name of the local zone) is refused with \c ILLEGAL-FILESYSTEM-ACCESS if
+    \a pgm is restricted, before anything else, also if the zone is loaded already; otherwise a zone that is loaded
+    already is found by its exact name (QoreTimeZoneManager::findLoadedZone()) without access to a file, a path is
+    loaded from its file, and a region subject to the restrictions of \a pgm.  A null Program permits only region
+    names and UTC offsets.
+*/
+DLLLOCAL const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
 
@@ -673,6 +682,49 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        (qore#6898)
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
+//! v53 (the second AOT-identity batch; the reader refuses v52 and older images, also those that a qcc executable
+//! embeds):
+//!      - the catch tables of each serialized IR function (QORE_AOT_CATCH_TABLES_VERSION) end with a third table of the
+//!        same form, the exit restorations: the instructions whose implicit context the frame's exit on an exception
+//!        restores (QoreIRInstruction::restore_on_exception_exit) with its QoreIRExceptionExitRestore value (1 before
+//!        the frame's handlers: the implicit arguments, element and iterator of an operator; 2 after them: the
+//!        element of a foreach statement), so that the IR interpreter that runs a module's debug IR restores them as
+//!        the IR that it was made from (qore#7379)
+//!      - PopImplicitElement (opcode 278, Base group) can have a second operand, the element that a foreach statement
+//!        saved before its loop, with which it sets the index of the loop's next element (its first operand) and
+//!        leaves the push open (qore#7379)
+//!      - ReleaseOwnedTemp (opcode 411) can be in the TypedBase group, with the type object and one operand: in debug
+//!        IR, the release of a pending return that a return replaces, which releases the value only if that can run
+//!        an object destructor (an object, or a value that owns one), and keeps any other value for a debugger request
+//!        that resumes the replaced return (qore#7022)
+//!      - no format change, but the class signature hashes of the CLASSES records that a v52 compiler wrote differ (an
+//!        image must be rebuilt): the signature of a user class starts with the path of its namespace
+//!        (qore_class_private::initializeIntern(), qore#7397), so that classes with the same name and declarations in
+//!        different namespaces are different types; the hashes of an earlier image do not have it, and its classes of
+//!        the same name and declarations in different namespaces would be one type
+//!      - type paths retain the variance of concrete wildcard bounds, including class bounds in local variable
+//!        declarations, as they do for bounds containing a type parameter (qore#7152)
+//!      - the signature of a user class includes the resolved declared types of its members and static variables and
+//!        the return types of its methods, with namespace paths (qore#7457): the hashes of an earlier image have
+//!        \c any for the member types that were not resolved yet, and its classes that differ only in such a type
+//!        would be one type
+//!      - the methods of a user class are in its signature in the order of their names (qore#7458), not in the
+//!        iteration order of its method map: the hashes of an earlier image of a class with several method names
+//!        depend on the hash map of the compiler's build
+//!      - statement-location table entries and the source locations of debug-step instructions carry the start
+//!        and exclusive end column (two u16 values, 0xffff for unknown), for source-level stepping (qore#7490)
+//!      - native date literals use the checked zone constructor; recompile earlier native code (qore#7496)
+//!      - IR can encode CopyCallArg (opcode 444, Base group), which takes an argument's own reference and copies a list
+//!        or hash that a weak reference designates, and ReleaseCallArgSource (opcode 445, Base group), which releases
+//!        the owned source of CopyCallArg (qore#7426)
+//!      - IR can encode ReadReferenceThrough (opcode 446, Base group, one operand, a result), which reads the value
+//!        of the lvalue that a reference element names for a typed assignment (qore#6662); the maximum opcode in the
+//!        AOT header is 446
+//!      - an expression that reads through a reference element (QoreReadReferenceOperatorNode) is written natively
+//!        (AOTExprKind::READ_REFERENCE, 134: the operand; its node form EN_READ_REFERENCE, 56) (qore#6662); a reader
+//!        of an earlier format refuses the kind
+//! The shared format version for the changes of the second AOT-identity batch (see v53 above).
+constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -700,12 +752,21 @@ static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VER
     && QORE_AOT_METHOD_DECL_INDEX_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION
     && QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
     "the format changes of the AOT-identity batch share one format version (v52)");
-//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! Serialized IR functions record the implicit contexts that the frame's exit on an exception restores (see v53 above,
+//! qore#7379)
+constexpr uint16_t QORE_AOT_EXIT_RESTORE_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+//! First format version whose debug IR can have the typed ReleaseOwnedTemp of a replaced pending return (see v53
+//! above, qore#7022)
+constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+//! Old compiled artifacts must be rebuilt (see v53 above): the reader refuses older images, the program image of a qcc
 //! executable included (qore_aot_run_v4() reads it before anything else), before it reads any record; the reader of a
-//! v52 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
+//! v53 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
-//! METHODS record (qore#7169) and the callee of each background helper (qore#7087)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+//! METHODS record (qore#7169), the callee of each background helper (qore#7087), the exit restorations of its IR
+//! functions (qore#7379), the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022) and class signature
+//! hashes with the namespace path of their class (qore#7397), the declared types of their members, static variables
+//! and method return types (qore#7457) and their methods in the order of their names (qore#7458)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -854,7 +915,12 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+static_assert(QORE_AOT_EXIT_RESTORE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
+    "the format changes of the second AOT-identity batch share one format version (v53), which the reader requires");
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -979,7 +1045,9 @@ constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records includ
 constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 constexpr uint64_t QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS = 1ULL << 31; //!< closure records split effective varargs from signature ellipsis
 constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/MakeHash records carry parse-time container typeInfo
-constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33; //!< CLASSES records carry parser-produced class signature hashes
+//! CLASSES records carry parser-produced class signature hashes (with the namespace path of the class from v53, see
+//! QORE_AOT_BATCH_AOT_IDENTITY2_VERSION)
+constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33;
 constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
 constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
@@ -1435,6 +1503,9 @@ inline bool qore_aot_string_needs_value(const QoreValue& v) {
     return qore_aot_string_needs_value(str.c_str(), str.size(), str.getEncoding());
 }
 
+//! Returns true for values that a CONST_VALUE slot can serialize without a runtime reference.
+DLLLOCAL bool qoreAOTContainerHoldsPlainData(const QoreValue& v);
+
 //! Returns true if a hash or list value has a type that a literal of it does not give (#5895); false for a container
 //! that needs evaluation, which is an expression, and for one that holds anything but plain data (such as an object)
 /** a hash of a hashdecl or of a complex type, or a list of a complex type, such as the hash<ExceptionInfo> of a
@@ -1822,6 +1893,9 @@ public:
         @return true on success, false if value type is unsupported
     */
     bool writeValue(const QoreValue& v);
+
+    //! Write a literal computed by a deferred initializer without referring back to its pending constant.
+    bool writeDeferredLiteral(const QoreValue& v, const std::string& path);
 
     //! Get current write position in buffer
     uint32_t position() const { return static_cast<uint32_t>(buffer.size()); }
@@ -2328,7 +2402,8 @@ public:
     }
 
     //! Read a serialized QoreValue from a data pointer
-    /** @param ptr data pointer (advanced past the value)
+    /** @param loading_pgm Program whose restrictions apply to a date literal that names a zone file
+        @param ptr data pointer (advanced past the value)
         @param end pointer past the end of valid data
         @param error receives error message on failure
         @return the deserialized value, or NOTHING on failure
@@ -2336,7 +2411,8 @@ public:
         @note After an error, the read pointer is past the value, or at \a end if the value is malformed: a reader
         that reads on after the error must check it against \a end (qore#5848)
     */
-    QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+    QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error,
+            QoreProgram* loading_pgm = nullptr) const;
 
     //! Skip a serialized QoreValue without reading it; returns false if it is malformed
     bool skipValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
@@ -2349,7 +2425,8 @@ public:
 
 private:
     //! Reads a value for readValue(), which places the read pointer after an error
-    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error,
+            QoreProgram* loading_pgm) const;
 };
 
 //! Serializes a source line number in the current wire format.
@@ -2416,7 +2493,7 @@ static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const ui
 }
 
 //! Serializes a source location: start and end line, offset, file and source label
-/** As the entries of the statement-location table; a missing location is written with lines 0 (see
+/** A missing location is written with lines 0 (see
     qore_aot_read_source_location())
 */
 DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const QoreProgramLocation* loc);
@@ -3146,6 +3223,8 @@ enum class AOTExprKind : uint8_t {
     //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
     LIST_ASSIGN        = 132,
     BACKQUOTE          = 133, //!< Backquote (shell command) expression: command(stringref) (qore#6302)
+    //! read through a reference element (QoreReadReferenceOperatorNode): operand(AOTExprKind) (qore#6662)
+    READ_REFERENCE     = 134,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -3207,6 +3286,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_LOG_NOT       = 53,  //!< no metadata
     EN_BIT_NOT       = 54,  //!< no metadata
     EN_SHIFT         = 55,  //!< no metadata (shift list)
+    EN_READ_REFERENCE = 56, //!< no metadata (read through a reference element, qore#6662)
 
     // Binary operators (2 children = [left, right])
     EN_PUSH          = 60,  //!< no metadata
@@ -3547,6 +3627,8 @@ struct AOTCompiledFuncWithSlots {
     std::string source_file;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
+        int16_t start_column = -1;
+        int16_t end_column = -1;
         int32_t start_line = 0;
         int32_t end_line = 0;
         int64_t offset = 0;
@@ -4146,6 +4228,24 @@ class QoreAOTBinaryDeserializer {
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
 
+    //! The expression default value of a hashdecl member, which is read after the member is added (qore#7493)
+    /** The expression can reference functions, global variables, static class members and methods, which are
+        registered after the members of the hashdecl (resolveTypes()); it is read by
+        resolveHashdeclMemberExprDefaults() in resolveMembers(), when they are all registered
+    */
+    struct PendingHashdeclMemberExpr {
+        //! the hashdecl
+        TypedHashDecl* hd;
+        //! the name of the member
+        std::string name;
+        //! a VT_EXPR_TREE default value
+        std::vector<uint8_t> expr_tree_blob;
+        //! a VT_EXPR_NATIVE default value
+        std::vector<uint8_t> expr_native_blob;
+    };
+    //! the hashdecl member expression default values that are read in resolveMembers() (qore#7493)
+    std::vector<PendingHashdeclMemberExpr> pending_hashdecl_member_exprs;
+
     // Pending typedef info for two-pass resolution
     struct PendingTypedef {
         QoreAOTStringRef name;
@@ -4297,6 +4397,8 @@ private:
     bool resolveNamespaceConstants(std::string& error);
     bool resolveClassConstants(std::string& error);
     bool resolveHashdeclMembers(std::string& error);
+    //! reads the expression default values of hashdecl members (qore#7493); see PendingHashdeclMemberExpr
+    bool resolveHashdeclMemberExprDefaults(std::string& error);
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
     bool resolveBCAExpressions(std::string& error);
@@ -4462,10 +4564,12 @@ public:
         the first successful call. */
     bool resolveStaticsAndConstants(std::string& error);
 
-    //! Phase-split 2a-3 — resolve this session's OWN instance members.
+    //! Phase-split 2a-3 — resolve this session's OWN instance members and the expression defaults of its hashdecl
+    //! members.
     /** Must run after resolveConstants() and resolveStaticMembersPhase() so
         expression-tree member defaults can resolve constants and static vars,
-        and after deserializeFunctionsAndMethods() so defaults can call class
+        after resolveStaticsAndConstants() so they can reference global variables (qore#7493),
+        and after deserializeFunctionsAndMethods() so defaults can call functions and class
         static methods. */
     bool resolveMembers(std::string& error);
 
@@ -4505,6 +4609,29 @@ public:
     //! finished resolveMembers() so base classes' member maps are
     //! populated. */
     bool importInheritedMembersPhase(std::string& error);
+
+    //! a class of a batch of images: (the index of its image's session, its index in the session's class_list)
+    typedef std::pair<uint32_t, uint32_t> batch_class_ref_t;
+
+    //! Returns the classes of all the images of a batch in one topological order (bases before derived, qore#7591)
+    /** The phases that process the classes of a batch bases first (rebuildBaseClassSmlOf(), importInheritedMembersOf(),
+        commitClassPrepareOf(), commitClassDoCommitOf(), commitClassImportAbstractOf() and
+        commitClassResolveAbstractOf()) process them in this order: a class of an image can inherit a class of a later
+        image, and processed image by image, the class was processed before its base classes, and the import of its
+        inherited members and its commit recursed through the hierarchy of its base classes, once per level.  The
+        classes of an image whose base classes are in the same image or in an earlier one keep the topological order
+        of their image.  Must run after the base classes of every image have been resolved.
+
+        @return false if a cycle of base classes across the images was found or if the thread was cancelled, with
+        \a error set
+    */
+    static bool getBatchClassOrder(const std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions,
+        std::vector<batch_class_ref_t>& order, std::string& error);
+
+    //! rebuildBaseClassSmlPhase() for one class; @p i is its index in class_list
+    void rebuildBaseClassSmlOf(uint32_t i);
+    //! importInheritedMembersPhase() for one class; @p i is its index in class_list
+    bool importInheritedMembersOf(uint32_t i, std::string& error);
 
     //! Phase-split 2a-2c — deserialize functions and methods.
     /** Adds method variants to every class's pending method map
@@ -4551,6 +4678,14 @@ public:
     bool commitClassesDoCommit(std::string& error);
     bool commitClassesImportAbstract(std::string& error);
     bool commitClassesResolveAbstract(std::string& error);
+    //! the phases above for one class; @p i is its index in class_list
+    void commitClassPrepareOf(uint32_t i);
+    void commitClassDoCommitOf(uint32_t i);
+    void commitClassImportAbstractOf(uint32_t i);
+    void commitClassResolveAbstractOf(uint32_t i);
+    //! releases the abstract variants that the classes have implemented, once they have resolved their abstract
+    //! methods (the end of commitClassesResolveAbstract())
+    void releaseResolvedAbstractVariants();
     bool commitClassesValidate(std::string& error);
     bool resolveBCAExpressionsPhase(std::string& error) {
         return resolveBCAExpressions(error);
@@ -4697,6 +4832,11 @@ class QoreAOTBinaryMultiDeserializer {
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
 
+    //! the classes of all the sessions, bases before derived, when there is more than one session (qore#7591)
+    /** Set by setBatchClassOrder() once the base classes of every session have been resolved
+    */
+    std::vector<QoreAOTBinaryDeserializer::batch_class_ref_t> batch_class_order;
+
     //! Propagated to every session added after it is set; see
     //! QoreAOTBinaryDeserializer::preload_parse_constant_values.
     bool preload_parse_constant_values = false;
@@ -4742,6 +4882,63 @@ class QoreAOTBinaryMultiDeserializer {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    }
+
+    //! Sets batch_class_order once the base classes of every session have been resolved (qore#7591)
+    bool setBatchClassOrder(std::string& error) {
+        batch_class_order.clear();
+        if (sessions.size() < 2) {
+            return true;
+        }
+        return QoreAOTBinaryDeserializer::getBatchClassOrder(sessions, batch_class_order, error);
+    }
+
+    //! Releases the abstract variants that the classes of a batch ordered across its sessions have implemented
+    /** Once every class of the batch has resolved its abstract methods; a session that resolves its own classes
+        (commitClassesResolveAbstract()) releases them itself
+    */
+    void releaseResolvedAbstractVariants() {
+        if (batch_class_order.empty()) {
+            return;
+        }
+        for (auto& sess : sessions) {
+            sess->releaseResolvedAbstractVariants();
+        }
+    }
+
+    //! Runs a phase that processes the classes bases first on every class of the batch (qore#7591)
+    /** The classes of a batch of more than one session are processed in batch_class_order with @p class_fn, so that
+        a class whose base classes are in a later session is not processed before them; otherwise each session
+        processes its classes in its own order with @p session_fn.
+    */
+    template <typename SessionFn, typename ClassFn>
+    bool runClassPhase(const char* context, std::string& error, SessionFn&& session_fn, ClassFn&& class_fn) {
+        if (batch_class_order.empty()) {
+            size_t i = 0;
+            for (auto& sess : sessions) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                    error = std::string("operation cancelled during ") + context;
+                    return false;
+                }
+                if (!session_fn(*sess)) {
+                    return false;
+                }
+                ++i;
+            }
+            return true;
+        }
+        size_t i = 0;
+        for (const auto& ref : batch_class_order) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                error = std::string("operation cancelled during ") + context;
+                return false;
+            }
+            if (!class_fn(*sessions[ref.first], ref.second)) {
+                return false;
+            }
+            ++i;
+        }
+        return true;
     }
 
 public:
@@ -4977,19 +5174,29 @@ public:
                     })) return false;
         });
         // 2a-sml: re-propagate super-class map lists now that
-        // every session has attached its direct bases.
+        // every session has attached its direct bases.  From here on, the
+        // phases that process the classes bases first process the classes
+        // of all the sessions in one order (qore#7591).
         AOT_PHASE_TIME(2, {
-            if (!runSessionPhase("AOT base class map rebuild",
+            if (!setBatchClassOrder(error)) return false;
+            if (!runClassPhase("AOT base class map rebuild", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.rebuildBaseClassSmlPhase(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.rebuildBaseClassSmlOf(i);
+                        return true;
                     })) return false;
         });
         // 2a-import: copy base-class members into derived classes
         // only AFTER every session has finished resolveTypesAndMembers.
         AOT_PHASE_TIME(3, {
-            if (!runSessionPhase("AOT inherited member import",
+            if (!runClassPhase("AOT inherited member import", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.importInheritedMembersPhase(error);
+                    },
+                    [&error](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        return sess.importInheritedMembersOf(i, error);
                     })) return false;
         });
         // 2a-post: top-level globals.  Already performed before
@@ -5007,28 +5214,45 @@ public:
         // sessions so a session's parseCommit walk can find
         // sibling sessions' classes prepared.
         AOT_PHASE_TIME(6, {
-            if (!runSessionPhase("AOT class commit prepare",
+            if (!runClassPhase("AOT class commit prepare", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesPrepare(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassPrepareOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(7, {
-            if (!runSessionPhase("AOT class commit",
+            if (!runClassPhase("AOT class commit", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesDoCommit(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassDoCommitOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(8, {
-            if (!runSessionPhase("AOT abstract import",
+            if (!runClassPhase("AOT abstract import", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesImportAbstract(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassImportAbstractOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(9, {
-            if (!runSessionPhase("AOT abstract resolution",
+            if (!runClassPhase("AOT abstract resolution", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesResolveAbstract(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassResolveAbstractOf(i);
+                        return true;
                     })) return false;
+            releaseResolvedAbstractVariants();
         });
         AOT_PHASE_TIME(10, {
             if (!runSessionPhase("AOT class validation",
@@ -5163,21 +5387,37 @@ public:
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT base class map rebuild",
+        // the phases that process the classes bases first process the classes of all the sessions in one order
+        // (qore#7591)
+        if (!setBatchClassOrder(error)) {
+            return false;
+        }
+        if (!runClassPhase("AOT base class map rebuild", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.rebuildBaseClassSmlPhase(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.rebuildBaseClassSmlOf(i);
+                    return true;
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT inherited member import",
+        if (!runClassPhase("AOT inherited member import", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.importInheritedMembersPhase(error);
+                },
+                [&error](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    return sess.importInheritedMembersOf(i, error);
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT class commit prepare",
+        if (!runClassPhase("AOT class commit prepare", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesPrepare(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassPrepareOf(i);
+                    return true;
                 })) {
             return false;
         }
@@ -5234,18 +5474,27 @@ public:
             }
         } batch_class_lookup_scope{sessions};
 
-        if (!runSessionPhase("AOT abstract import",
+        if (!runClassPhase("AOT abstract import", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesImportAbstract(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassImportAbstractOf(i);
+                    return true;
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT abstract resolution",
+        if (!runClassPhase("AOT abstract resolution", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesResolveAbstract(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassResolveAbstractOf(i);
+                    return true;
                 })) {
             return false;
         }
+        releaseResolvedAbstractVariants();
         if (!runSessionPhase("AOT class validation",
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesValidate(error);
@@ -5409,8 +5658,8 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
 
-//! Writes the catch-exit depths and the catch-cleanup results of an IR function, after its blocks (see
-//! QORE_AOT_CATCH_TABLES_VERSION, qore#6733)
+//! Writes the catch-exit depths, the catch-cleanup results and the exit restorations of an IR function, after its
+//! blocks (see QORE_AOT_CATCH_TABLES_VERSION, qore#6733, and QORE_AOT_EXIT_RESTORE_VERSION, qore#7379)
 /** Each table is a u32 count and (u16 block index, u16 instruction index, u32 value) entries sorted by position; the
     index of an instruction is that of the written IR, in which a PushTempMarkPair is two instructions.
 
@@ -5423,7 +5672,8 @@ bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFun
     @param end the end of the data
     @param func the function read, whose blocks and instructions are complete
     @param error receives the error message if an entry is malformed: an index beyond the blocks or the instructions
-    of a block, or an instruction given twice
+    of a block, an instruction given twice, or an exit restoration of an instruction that sets no implicit context or
+    with an invalid kind
 
     @return true on success, false otherwise
 */

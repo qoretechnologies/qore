@@ -67,6 +67,7 @@
 #include <map>
 #include <memory>
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
@@ -394,21 +395,136 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
 //! Adds a namespace with a builtin function, a constant, a class and a hashdecl to the root namespace of the calling
 //! Program at run time, through the public C++ API that a binary module calls (qore#7530)
 /** With a name \c "outer::inner", the declarations are in the subnamespace \c inner of the namespace \c outer that is
-    added.  With \c variant 1, the function also has a variant with a string parameter, and the namespace has a function
-    \c dbg_rt_new() with a parameter of the type of its class.  Adding a namespace with the same name again merges it
-    with the one that the Program has: a declaration that the Program already has is not added again (it is kept with
-    the namespace, as the declarations that are added can use its type), and nothing reaches the parse-error path, as
-    there is no parse
+    added. With \c variant 1, the function also has a variant with a string parameter, and the namespace has a
+    function \c dbg_rt_new() with a parameter of the type of its class, \c dbg_rt_ref() and \c dbg_rt_code() that name
+    it through a reference type and a typed code type, and a generic hashdecl \c DbgRtGen<T>. Adding a namespace with
+    the same name again merges it with the one that the Program has: a declaration that the Program already has is not
+    added again (it is kept with the namespace, as the declarations that are added can use its type), and nothing
+    reaches the parse-error path, as there is no parse
 */
+//! the static variant of Qore::dbg_shared_target(): returns 1 (qore#7588)
+static QoreValue f_dbg_shared_target_int(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(1);
+}
+
+//! the variant of Qore::dbg_shared_target() that dbg_add_shared_variant() adds at run time: returns 2 (qore#7588)
+static QoreValue f_dbg_shared_target_str(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(2);
+}
+
+//! the variant of Qore::dbg_shared_target() that dbg_add_shared_variant(1) adds at run time: returns 3 (qore#7588)
+static QoreValue f_dbg_shared_target_list(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(3);
+}
+
+//! Debug-only: adds a variant to the function dbg_shared_target() of the current Program's namespace Qore at run
+//! time, as a binary module can (qore#7588)
+/** The function is shared with the static system namespace (and with the Program's child Programs): the variant is
+    the Program's only.  Kind 0: a variant with a string parameter, which returns 2; kind 1: a variant with a list
+    parameter, which returns 3
+*/
+static QoreValue f_dbg_add_shared_variant(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 kind = get_param_value(params, 0).getAsBigInt();
+    QoreNamespace* qns = getProgram()->findNamespace(QoreString("::Qore"));
+    if (!qns) {
+        return xsink->raiseException("DBG-ADD-SHARED-VARIANT-ERROR", "the Program has no namespace Qore");
+    }
+    if (kind == 1) {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_list, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "l");
+    } else {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_str, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    }
+    return QoreValue();
+}
+
+//! a static generic builtin class (Qore::DbgRtBox<T>), made when the debug functions are added (qore#7540)
+static QoreClass* dbg_rt_box = nullptr;
+//! the type DbgRtBox<DbgRtClass> that the last dbg_add_runtime_namespace() with variant 3 made, before the namespace
+//! was added to the Program; read only while that Program lives
+static std::atomic<const QoreTypeInfo*> dbg_rt_box_type{nullptr};
+
+//! Returns True if the type DbgRtBox<DbgRtClass> made by the last dbg_add_runtime_namespace() with variant 3 is an
+//! unsafe receiver (qore#7540); valid while the Program that added the namespace lives
+static QoreValue f_dbg_rt_box_unsafe(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreTypeInfo* ti = dbg_rt_box_type.load(std::memory_order_acquire);
+    if (!ti) {
+        return xsink->raiseException("DBG-RT-BOX-ERROR", "no type made yet");
+    }
+    return QoreTypeInfo::isUnsafeReceiver(ti);
+}
+
+//! Returns True if a marking event of the current Program's root namespace did not complete (qore#7540)
+static QoreValue f_dbg_runtime_refresh_pending(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    RootQoreNamespace* root = getProgram()->getRootNS();
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(*qore_root_ns_private::get(*root));
+    return qore_root_ns_private::get(*root)->runtimeRefreshPending();
+}
+
+//! Returns the number of variants whose references the marking events of run-time namespaces refreshed (qore#7608)
+static QoreValue f_dbg_runtime_variant_refreshes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_runtime_variant_refreshes();
+}
+
+//! Returns the number of scans of the parameterized class types for declarations that became mortal (qore#7540)
+static QoreValue f_dbg_program_local_derived_type_scans(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_program_local_derived_type_scans();
+}
+
+//! Returns the Program of the optional argument \a i, or the calling Program (qore#7680)
+static QoreProgram* dbg_target_program(const QoreListNode* params, size_t i, ReferenceHolder<QoreProgram>& holder,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, i).get<const QoreObject>();
+    if (!obj) {
+        return getProgram();
+    }
+    holder = static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM, xsink));
+    return *holder;
+}
+
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     // a short string value is inline: read through the helper
     QoreStringValueHelper name(get_hard_value_param(params, 0));
     int64 variant = HARD_QORE_VALUE_INT(params, 1);
+    // the Program to add the namespace to: the calling Program by default (qore#7680)
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* target = dbg_target_program(params, 2, target_holder, xsink);
+    if (!target) {
+        return QoreValue();
+    }
     // "outer::inner": the declarations are in a subnamespace of the namespace that is added
     std::string full = name->c_str();
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 5: a namespace is attached empty, then a class is added to it one at a time (addSystemClass()), then a
+    // function whose parameter names the class (qore#7649)
+    if (variant == 5) {
+        if (sep != std::string::npos) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
+        }
+        RootQoreNamespace* root = target->getRootNS();
+        root->addNamespace(new QoreNamespace(inner.c_str()));
+        QoreNamespace* ans = target->findNamespace(QoreString(inner.c_str()));
+        if (!ans) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
+        }
+        QoreClass* one = new QoreClass("DbgRtOne", (path + "::DbgRtOne").c_str());
+        ans->addSystemClass(one);
+        ans->addBuiltinVariant("dbg_rt_one", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            one->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        return QoreValue();
+    }
+    // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
+    bool fail_refresh = variant == 4;
+    if (fail_refresh) {
+        variant = 2;
+    }
+    if (variant == 2 && sep != std::string::npos) {
+        return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 2 takes a name without '::'");
+    }
     std::unique_ptr<QoreNamespace> ns(new QoreNamespace(inner.c_str()));
     ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     if (variant == 1) {
@@ -417,23 +533,470 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     }
     ns->addConstant("DbgRtConst", static_cast<int64>(variant));
     QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
+    if (variant == 1) {
+        // a static method that names the class, which the import copy of the class shares (qore#7680)
+        qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+    }
     ns->addSystemClass(qc);
+    if (variant == 3) {
+        // a type of a static generic class with the class as its type argument, made before the namespace is added, and
+        // a function that names it: the type is upgraded to an unsafe receiver when the class becomes mortal
+        type_vec_t args = {qc->getTypeInfo()};
+        const QoreTypeInfo* bt = qore_get_parameterized_class_type(dbg_rt_box, args, false);
+        dbg_rt_box_type.store(bt, std::memory_order_release);
+        ns->addBuiltinVariant("dbg_rt_box", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_parameterized_class_type(dbg_rt_box, args, true), QORE_PARAM_NO_ARG, "box");
+    }
     if (variant == 1) {
         // a function that uses the type of the class of this namespace, which is not added when the Program has it
         ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
             qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // functions that name the class through a reference type and a typed code type (qore#7540)
+        ns->addBuiltinVariant("dbg_rt_ref", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_reference_or_nothing_type(qc->getOrNothingTypeInfo()), QORE_PARAM_NO_ARG, "ref");
+        type_vec_t code_params = {qc->getOrNothingTypeInfo()};
+        ns->addBuiltinVariant("dbg_rt_code", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_code_or_nothing_type(qc->getOrNothingTypeInfo(), code_params), QORE_PARAM_NO_ARG,
+            "code");
+        // a generic hashdecl, whose instances are made by the code that names them
+        TypedHashDecl* gen = new TypedHashDecl("DbgRtGen", (path + "::DbgRtGen").c_str());
+        gen->addTypeParameter("T");
+        gen->addMember("a", bigIntTypeInfo, QoreValue());
+        ns->addSystemHashDecl(gen);
+        // an instance of the generic hashdecl made before the namespace is added, in a signature
+        ns->addBuiltinVariant("dbg_rt_gen", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            gen->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
+        // an enum and a function with a parameter of its type
+        QoreEnumDecl* en = new QoreEnumDecl("DbgRtEnum", (path + "::DbgRtEnum").c_str(), bigIntTypeInfo);
+        en->addMember("A", static_cast<int64>(1));
+        en->addMember("B", static_cast<int64>(2));
+        ns->addSystemEnum(en);
+        ns->addBuiltinVariant("dbg_rt_enum", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            en->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
     }
     // the namespace takes the hashdecl and the class (their destructors are not public)
     TypedHashDecl* hd = new TypedHashDecl("DbgRtHash", (path + "::DbgRtHash").c_str());
     hd->addMember("a", bigIntTypeInfo, QoreValue(static_cast<int64>(variant)));
     ns->addSystemHashDecl(hd);
+    if (variant == 1) {
+        // a function with a parameter of the type of the hashdecl
+        ns->addBuiltinVariant("dbg_rt_hash", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            hd->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+    }
+    // variant 2: functions added before the classes that they name are added (qore#7540): DbgRtLate is added to the
+    // namespace after it was added to the Program, and DbgRtLateB is in the namespace <name>C, which is added after
+    // the namespace <name>F with the function that names it
+    QoreClass* late = nullptr;
+    std::unique_ptr<QoreNamespace> late_fns;
+    std::unique_ptr<QoreNamespace> late_cns;
+    if (variant == 2) {
+        late = new QoreClass("DbgRtLate", (path + "::DbgRtLate").c_str());
+        ns->addBuiltinVariant("dbg_rt_late", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        late_fns.reset(new QoreNamespace((inner + "F").c_str()));
+        late_cns.reset(new QoreNamespace((inner + "C").c_str()));
+        QoreClass* lateb = new QoreClass("DbgRtLateB", (std::string("::") + inner + "C::DbgRtLateB").c_str());
+        late_cns->addSystemClass(lateb);
+        late_fns->addBuiltinVariant("dbg_rt_lateb", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateb->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // a hashdecl, an enum and an instance of a generic hashdecl of <name>C that functions of <name>F name: the
+        // attach of <name>C refreshes them through the declarations that it marks (qore#7608)
+        std::string cpath = std::string("::") + inner + "C::";
+        TypedHashDecl* lateh = new TypedHashDecl("DbgRtLateH", (cpath + "DbgRtLateH").c_str());
+        lateh->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateh);
+        late_fns->addBuiltinVariant("dbg_rt_lateh", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateh->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+        QoreEnumDecl* latee = new QoreEnumDecl("DbgRtLateE", (cpath + "DbgRtLateE").c_str(), bigIntTypeInfo);
+        latee->addMember("A", static_cast<int64>(1));
+        late_cns->addSystemEnum(latee);
+        late_fns->addBuiltinVariant("dbg_rt_latee", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            latee->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
+        TypedHashDecl* lateg = new TypedHashDecl("DbgRtLateG", (cpath + "DbgRtLateG").c_str());
+        lateg->addTypeParameter("T");
+        lateg->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateg);
+        late_fns->addBuiltinVariant("dbg_rt_lateg", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateg->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
+    }
     if (sep != std::string::npos) {
         std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
         outer->addNamespace(ns.release());
         ns.reset(outer.release());
     }
-    getProgram()->getRootNS()->addNamespace(ns.release());
+    RootQoreNamespace* root = target->getRootNS();
+    root->addNamespace(ns.release());
+    if (variant == 2) {
+        // the class is added to the namespace that the Program has now
+        QoreNamespace* added = root->findLocalNamespace(inner.c_str());
+        assert(added);
+        added->addSystemClass(late);
+        // a variant added twice to the namespace that the Program has: the function keeps the first one only
+        for (int i = 0; i < 2; ++i) {
+            added->addBuiltinVariant("dbg_rt_late2", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+                late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        }
+        if (fail_refresh) {
+            // the attach of a namespace with a class fails after the class is marked: the namespace is not attached
+            // (and is freed here), and its marking event is completed by the next one, the attach of an empty
+            // namespace
+            std::unique_ptr<QoreNamespace> fns(new QoreNamespace((inner + "X").c_str()));
+            fns->addSystemClass(new QoreClass("DbgRtFailClass",
+                (std::string("::") + inner + "X::DbgRtFailClass").c_str()));
+            qore_dbg_fail_next_runtime_refresh();
+            try {
+                root->addNamespace(fns.get());
+                fns.release();
+            } catch (std::bad_alloc&) {
+            }
+            if (!fns) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attach did not fail");
+            }
+            if (!qore_root_ns_private::get(*root)->runtimeRefreshPending()) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the failed event is not pending");
+            }
+            root->addNamespace(new QoreNamespace((inner + "Y").c_str()));
+        } else {
+            root->addNamespace(late_fns.release());
+            root->addNamespace(late_cns.release());
+        }
+    }
     return QoreValue();
+}
+
+//! the number of classes that dbg_add_runtime_naming() added to the static system namespace (qore#7680)
+static std::atomic<int> dbg_rt_static_count{0};
+
+//! Returns the class, hashdecl and enum of the namespace DbgRtNs that dbg_add_runtime_namespace() added to \a pgm
+static int dbg_rt_find_decls(QoreProgram* pgm, const QoreClass*& qc, const TypedHashDecl*& hd,
+        const QoreEnumDecl*& ed, ExceptionSink* xsink) {
+    qc = pgm->findClass("DbgRtNs::DbgRtClass", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    const QoreNamespace* pns = nullptr;
+    hd = pgm->findHashDecl("DbgRtNs::DbgRtHash", pns);
+    ed = pgm->findEnum("DbgRtNs::DbgRtEnum", pns);
+    if (!qc || !hd || !ed) {
+        xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "the source Program has no DbgRtNs declarations of "
+            "variant 1");
+        return -1;
+    }
+    return 0;
+}
+
+//! Returns the type owner of a class or hashdecl of the calling Program, or nullptr
+static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, ExceptionSink* xsink) {
+    ExceptionSink xs;
+    if (const QoreClass* qc = pgm->findClass(path, &xs)) {
+        return &qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner;
+    }
+    xs.clear();
+    const QoreNamespace* pns = nullptr;
+    if (const TypedHashDecl* hd = pgm->findHashDecl(path, pns)) {
+        return &typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd))->type_owner;
+    }
+    xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "no class or hashdecl '%s'", path);
+    return nullptr;
+}
+
+//! Adds builtin declarations that name the declarations that dbg_add_runtime_namespace() (variant 1) added to the
+//! Program \a src at run time, through the paths by which another Program can come to name them (qore#7680)
+/** Run in the calling Program Q:
+    - kind 1: attaches the namespace DbgRtQ to Q with the class DbgRtQClass (a static method take() with a parameter
+      of the type *DbgRtNs::DbgRtClass, a member m and a static variable sv of that type) and the hashdecl DbgRtQHash
+      (members c, h and e of the types *DbgRtClass, *hash<DbgRtHash> and *DbgRtEnum)
+    - kind 2: adds the class DbgRtQOne and the hashdecl DbgRtQOneHash one at a time to DbgRtQ (kind 1 first), naming
+      DbgRtClass as kind 1 does
+    - kind 3: adds the variant dbg_rt_shared(*DbgRtClass) to Q's copy of the function Qore::dbg_rt_shared(), which the
+      static system namespace shares with every Program: Q gets its own copy of the function (copy on write,
+      qore#7588), and the variant is Q's
+    - kind 8: as kind 3, adding the variant to the static system namespace itself: refused (\c
+      RUNTIME-DECLARATION-ERROR)
+    - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
+    - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
+      each other's types (\a src needs no namespace of its own)
+    - kind 9: in a module context, as a binary module's namespace initialization runs, adds the variant of kind 8 to
+      the static system namespace as the new function dbg_rt_mod_shared() (refused when it is added) and the function dbg_rt_mod_ok() to Q
+    - kind 10: as kind 9, with the variant naming the class DbgRtMod::DbgRtModClass of a namespace added to Q in the
+      same module context, which is marked when it is committed: the variant is refused when it is committed, after
+      the namespace, and dbg_rt_mod_ok() is still added (\a src is not used)
+    - kind 7: as kind 5, with both namespaces (DbgRtSA, DbgRtSB) attached to Q, one after the other
+    - kind 6: attaches the namespace DbgRtF to Q and adds the class DbgRtFOne to it with the next two takes of the
+      references failing: returns a hash with the number of pending declarations and whether the class's references
+      are taken after the failure (\c pending1, \c taken1) and after the attach of an empty namespace (\c pending2,
+      \c taken2), then adds a generic hashdecl with an instance made before, with the next take failing: the
+      number pending and whether the instance's references are taken after that (\c pending3, \c taken3)
+*/
+static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> src(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!src) {
+        return QoreValue();
+    }
+    int64 kind = HARD_QORE_VALUE_INT(params, 1);
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 2, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    RootQoreNamespace* root = pgm->getRootNS();
+    if (kind == 5) {
+        QoreClass* a = new QoreClass("DbgRtMP", "::DbgRtMP::DbgRtMP");
+        QoreClass* b = new QoreClass("DbgRtMQ", "::DbgRtMQ::DbgRtMQ");
+        a->addMember("b", Public, b->getOrNothingTypeInfo());
+        b->addMember("a", Public, a->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> np(new QoreNamespace("DbgRtMP"));
+        std::unique_ptr<QoreNamespace> nq(new QoreNamespace("DbgRtMQ"));
+        np->addSystemClass(a);
+        nq->addSystemClass(b);
+        src->getRootNS()->addNamespace(np.release());
+        root->addNamespace(nq.release());
+        return QoreValue();
+    }
+    if (kind == 9 || kind == 10) {
+        // the route of a binary module's namespace initialization (module_ns_init()): a module context is set, and
+        // the additions are committed together when it is done (qore#7680)
+        std::unique_ptr<QoreNamespace> mns;
+        const QoreTypeInfo* ti;
+        if (kind == 9) {
+            // a variant that names a class of the source Program, refused when it is added
+            const QoreClass* sqc;
+            const TypedHashDecl* shd;
+            const QoreEnumDecl* sed;
+            if (dbg_rt_find_decls(*src, sqc, shd, sed, xsink)) {
+                return QoreValue();
+            }
+            ti = sqc->getOrNothingTypeInfo();
+        } else {
+            // a variant that names a class of a namespace added in the same module context, which is marked when the
+            // namespace is committed, before the variant is committed: refused at the commit
+            mns.reset(new QoreNamespace("DbgRtMod"));
+            QoreClass* mc = new QoreClass("DbgRtModClass", "::DbgRtMod::DbgRtModClass");
+            mns->addSystemClass(mc);
+            ti = mc->getOrNothingTypeInfo();
+        }
+        QoreModuleContextHelper qmc("dbgrtmod", pgm, *xsink);
+        if (mns) {
+            root->addNamespace(mns.release());
+        }
+        try {
+            // a function that the static system namespace does not have yet: a module adds functions, not variants
+            staticSystemNamespace->addBuiltinVariant("dbg_rt_mod_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT,
+                bigIntTypeInfo, 1, ti, QORE_PARAM_NO_ARG, "obj");
+        } catch (AbstractException& e) {
+            e.convert(xsink);
+        }
+        // a function of the target Program added after it, which the commit adds, with its indexes
+        root->addBuiltinVariant("dbg_rt_mod_ok", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+        // committed under the write lock of the target's root namespace, as a module's additions are
+        {
+            RuntimeNamespaceWriteLocker rnwl(*root);
+            qmc.commit();
+        }
+        return QoreValue();
+    }
+    if (kind == 7) {
+        // as kind 5, with both namespaces attached to the target, one after the other: the first class references the
+        // second as a module's class, which the second attach marks in the same Program
+        QoreClass* a = new QoreClass("DbgRtSA", "::DbgRtSA::DbgRtSA");
+        QoreClass* b = new QoreClass("DbgRtSB", "::DbgRtSB::DbgRtSB");
+        a->addMember("b", Public, b->getOrNothingTypeInfo());
+        b->addMember("a", Public, a->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> na(new QoreNamespace("DbgRtSA"));
+        std::unique_ptr<QoreNamespace> nb(new QoreNamespace("DbgRtSB"));
+        na->addSystemClass(a);
+        nb->addSystemClass(b);
+        root->addNamespace(na.release());
+        root->addNamespace(nb.release());
+        return QoreValue();
+    }
+    if (kind == 6) {
+        root->addNamespace(new QoreNamespace("DbgRtF"));
+        QoreNamespace* fns = root->findLocalNamespace("DbgRtF");
+        assert(fns);
+        QoreClass* qc = new QoreClass("DbgRtFOne", "::DbgRtF::DbgRtFOne");
+        // the class names the module declaration of the next class, so that it has references to take
+        QoreClass* mc = new QoreClass("DbgRtFMod", "::DbgRtF::DbgRtFMod");
+        qc->addMember("m", Public, mc->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> mns(new QoreNamespace("DbgRtFM"));
+        mns->addSystemClass(mc);
+        qore_dbg_fail_next_runtime_refs(2);
+        try {
+            fns->addSystemClass(qc);
+        } catch (std::bad_alloc&) {
+        }
+        qore_dbg_fail_next_runtime_refs(0);
+        QoreTypeOwner* o = &qore_class_private::get(*qc)->type_owner;
+        qore_root_ns_private* rns = qore_root_ns_private::get(*root);
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("pending1", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken1", o->type_owner_module_refs_taken, xsink);
+        root->addNamespace(new QoreNamespace("DbgRtFE"));
+        rv->setKeyValue("pending2", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken2", o->type_owner_module_refs_taken, xsink);
+        // a generic hashdecl with an instance made before it is added: the take fails once, and the completion of the
+        // event finds the instance in the cache of the generic hashdecl
+        TypedHashDecl* g = new TypedHashDecl("DbgRtFGen", "::DbgRtF::DbgRtFGen");
+        g->addTypeParameter("T");
+        g->addMember("m", mc->getOrNothingTypeInfo(), QoreValue());
+        const TypedHashDecl* inst = typed_hash_decl_private::get(*g)->getParameterizedHashDecl(
+            type_vec_t{bigIntTypeInfo});
+        assert(inst);
+        qore_dbg_fail_next_runtime_refs(1);
+        fns->addSystemHashDecl(g);
+        qore_dbg_fail_next_runtime_refs(0);
+        rv->setKeyValue("pending3", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken3", typed_hash_decl_private::get(*inst)->type_owner.type_owner_module_refs_taken,
+            xsink);
+        // the module class is kept by the class
+        mns.reset();
+        return rv.release();
+    }
+    const QoreClass* sqc;
+    const TypedHashDecl* shd;
+    const QoreEnumDecl* sed;
+    if (dbg_rt_find_decls(*src, sqc, shd, sed, xsink)) {
+        return QoreValue();
+    }
+    const QoreTypeInfo* cti = sqc->getOrNothingTypeInfo();
+    switch (kind) {
+        case 1: {
+            std::unique_ptr<QoreNamespace> ns(new QoreNamespace("DbgRtQ"));
+            QoreClass* qc = new QoreClass("DbgRtQClass", "::DbgRtQ::DbgRtQClass");
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            qc->addMember("m", Public, cti);
+            qc->addBuiltinStaticVar("sv", QoreValue(), Public, cti);
+            ns->addSystemClass(qc);
+            TypedHashDecl* hd = new TypedHashDecl("DbgRtQHash", "::DbgRtQ::DbgRtQHash");
+            hd->addMember("c", cti, QoreValue());
+            hd->addMember("h", shd->getTypeInfo(true), QoreValue());
+            hd->addMember("e", sed->getTypeInfo(true), QoreValue());
+            ns->addSystemHashDecl(hd);
+            root->addNamespace(ns.release());
+            break;
+        }
+        case 2: {
+            QoreNamespace* ns = root->findLocalNamespace("DbgRtQ");
+            if (!ns) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "kind 2 needs kind 1 first");
+            }
+            QoreClass* qc = new QoreClass("DbgRtQOne", "::DbgRtQ::DbgRtQOne");
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            ns->addSystemClass(qc);
+            TypedHashDecl* hd = new TypedHashDecl("DbgRtQOneHash", "::DbgRtQ::DbgRtQOneHash");
+            hd->addMember("c", cti, QoreValue());
+            ns->addSystemHashDecl(hd);
+            break;
+        }
+        case 3:
+        case 8: {
+            // refused with a C++ exception, which a module converts (qore#7680)
+            QoreNamespace* qns = kind == 3 ? root->findLocalNamespace("Qore") : staticSystemNamespace;
+            assert(qns);
+            try {
+                qns->addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+                    cti, QORE_PARAM_NO_ARG, "obj");
+            } catch (AbstractException& e) {
+                e.convert(xsink);
+            }
+            break;
+        }
+        case 4: {
+            std::string name = "DbgRtStatic" + std::to_string(dbg_rt_static_count.fetch_add(1));
+            QoreClass* qc = new QoreClass(name.c_str(), ("::Qore::" + name).c_str());
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            staticSystemNamespace->addSystemClass(qc);
+            break;
+        }
+        default:
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "unknown kind %lld", kind);
+    }
+    return QoreValue();
+}
+
+//! Returns True if the class or hashdecl of the Program \a target (or the calling Program) with the given path has taken its references to the
+//! declarations that it names (qore_type_owner_take_runtime_refs(), qore#7680)
+static QoreValue f_dbg_runtime_refs_taken(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringValueHelper path(get_hard_value_param(params, 0));
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 1, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreTypeOwner* o = dbg_rt_find_owner(pgm, path->c_str(), xsink);
+    return o ? QoreValue(o->type_owner_module_refs_taken) : QoreValue();
+}
+
+//! Returns the number of declarations of the Program \a target (or the calling Program) whose references are pending
+//! (qore#7680)
+static QoreValue f_dbg_runtime_refs_pending(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 0, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    RootQoreNamespace* root = pgm->getRootNS();
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(*qore_root_ns_private::get(*root));
+    return static_cast<int64>(qore_root_ns_private::get(*root)->pendingRuntimeRefs());
+}
+
+//! Makes the next \a count takes of the references of declarations that become mortal fail (qore#7680)
+static QoreValue f_dbg_fail_next_runtime_refs(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_fail_next_runtime_refs(static_cast<int>(HARD_QORE_VALUE_INT(params, 0)));
+    return QoreValue();
+}
+
+//! Returns the number of survivors in cycles that hold references to declarations of other Programs (qore#7680)
+static QoreValue f_dbg_cross_program_cycles(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_dbg_cross_program_cycle_count());
+}
+
+//! Returns the number of builtin variants refused because they were added to a namespace that no Program owns and
+//! named a mortal declaration (qore#7680)
+static QoreValue f_dbg_refused_shared_variants(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_refused_shared_variants();
+}
+
+//! Returns the number of declarations added at run time to a namespace that no Program owns that name a mortal
+//! declaration (qore#7680)
+static QoreValue f_dbg_unowned_program_local_names(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_unowned_program_local_names();
+}
+
+//! Makes an instance of the generic hashdecl DbgRtNs::DbgRtGen of the calling Program with the type argument of the
+//! name given (\c "string" or \c "float"); returns True if it took its references at once, or NOTHING if it could not
+//! be made because an allocation failed (\a fail: the take of its references fails) (qore#7680)
+static QoreValue f_dbg_rt_gen_instance(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringValueHelper arg(get_hard_value_param(params, 0));
+    bool fail = HARD_QORE_VALUE_BOOL(params, 1);
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* gen = getProgram()->findHashDecl("DbgRtNs::DbgRtGen", pns);
+    if (!gen) {
+        return xsink->raiseException("DBG-RT-GEN-INSTANCE-ERROR", "no DbgRtNs::DbgRtGen");
+    }
+    const QoreTypeInfo* ti = !strcmp(arg->c_str(), "float") ? floatTypeInfo : stringTypeInfo;
+    if (fail) {
+        qore_dbg_fail_next_runtime_refs(1);
+    }
+    const TypedHashDecl* inst;
+    try {
+        inst = typed_hash_decl_private::get(*gen)->getParameterizedHashDecl(type_vec_t{ti});
+    } catch (std::bad_alloc&) {
+        qore_dbg_fail_next_runtime_refs(0);
+        return QoreValue();
+    }
+    qore_dbg_fail_next_runtime_refs(0);
+    if (!inst) {
+        return xsink->raiseException("DBG-RT-GEN-INSTANCE-ERROR", "no instance");
+    }
+    return typed_hash_decl_private::get(*inst)->type_owner.type_owner_module_refs_taken;
 }
 
 // returns a hash of all namespace information
@@ -691,6 +1254,27 @@ static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConf
 #endif
 }
 
+//! Returns qore_trusted_build_hides_nothing() for the calling code (qore#7684)
+static QoreValue f_dbg_trusted_build_hides_nothing(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef DEBUG
+    return qore_trusted_build_hides_nothing();
+#else
+    return false;
+#endif
+}
+
+//! Waits until a thread waits for a lazy shared value that another thread builds; returns false on timeout (qore#7684)
+static QoreValue f_dbg_lazy_shared_wait_waiting(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 1);
+    return qore_lazy_shared_dbg_wait_waiting(tid, timeout_ms);
+#else
+    return false;
+#endif
+}
+
 //! Returns the number of builtin waits that a thread has entered, or -1 if there is no such thread (issue #6419)
 /** With dbg_type_wait_entered(), a test makes sure that a thread waits in a given wait: the thread takes its count
     before the wait, and another thread waits for one more
@@ -726,6 +1310,34 @@ static QoreValue f_dbg_type_retirement_blockers(const QoreListNode* params, Runt
         l->push(h.release(), xsink);
     }
     return l.release();
+}
+
+//! the value that dbg_keep_until_cleanup() keeps, in a list, released by qore_cleanup()
+static std::atomic<QoreListNode*> dbg_cleanup_holder{nullptr};
+
+void qore_dbg_release_cleanup_holder() {
+    QoreListNode* l = dbg_cleanup_holder.exchange(nullptr, std::memory_order_acq_rel);
+    if (l) {
+        ExceptionSink xsink;
+        l->deref(&xsink);
+        // nothing can report an exception at library cleanup
+        xsink.clear();
+    }
+}
+
+//! Debug-only: keeps a value until library cleanup, after the binary modules are deleted (qore#7540)
+/** The value replaces the one kept before, which is released; qore_cleanup() releases it where it clears the Programs
+    that their owners keep beyond that point, so that a test can check what a value that something keeps to the end
+    of the process does then
+*/
+static QoreValue f_dbg_keep_until_cleanup(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+    l->push(get_param_value(params, 0).refSelf(), xsink);
+    QoreListNode* old = dbg_cleanup_holder.exchange(l.release(), std::memory_order_acq_rel);
+    if (old) {
+        old->deref(xsink);
+    }
+    return QoreValue();
 }
 
 //! Returns the number of class, hashdecl and enum declarations of Programs that are not freed, or -1 if the library
@@ -1650,6 +2262,18 @@ public:
         notifyIntern();
         unlock_signal();
     }
+
+    //! returns the number of threads waiting for the rsection
+    DLLLOCAL int rsectionWaiting() {
+        AutoLocker al(l);
+        return rsection_waiting;
+    }
+
+    //! wakes every thread waiting for the rsection; only to let a failed test end
+    DLLLOCAL void wakeRSectionWaitersForTest() {
+        AutoLocker al(l);
+        rsection_cond.broadcast();
+    }
 };
 
 class TestRSectionLock : public QoreVarRWLock {
@@ -1667,6 +2291,10 @@ public:
 
     DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn) {
         return static_cast<TestRSectionPriv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
+    }
+
+    DLLLOCAL TestRSectionPriv* getPriv() {
+        return static_cast<TestRSectionPriv*>(priv);
     }
 };
 
@@ -1904,6 +2532,223 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
 
 #ifdef DEBUG
 namespace {
+//! State of ut_rsection_waiters_woken_on_release(); protected by sync_lck
+struct RSectionWakeTest {
+    //! the rsection whose waiters the hook holds
+    TestRSectionPriv* rs = nullptr;
+    QoreThreadLock sync_lck;
+    QoreCondition sync_cond;
+    //! the number of waiters that have started to wait for the rsection
+    int waiting = 0;
+    //! the number of waiters that have been woken
+    int woken = 0;
+    //! set once the test holds the write lock; until then, a woken waiter is held before it checks the rsection
+    bool writer_set = false;
+    //! the number of waiters whose acquisition has returned
+    int done = 0;
+};
+
+//! A thread waiting for the rsection in ut_rsection_waiters_woken_on_release()
+struct RSectionWakeWaiter {
+    RSectionWakeTest* t = nullptr;
+    RNotifier rn;
+    //! the result of the acquisition
+    int rc = 0;
+    //! true if the acquisition registered a notification
+    bool notified = false;
+};
+
+std::atomic<RSectionWakeTest*> rsection_wake_test{nullptr};
+
+//! qore_rsection_wait_hook for ut_rsection_waiters_woken_on_release()
+void rsection_wake_hook(qore_rsection_priv* rs, QoreThreadLock& m, bool woken) {
+    RSectionWakeTest* t = rsection_wake_test.load();
+    if (!t || rs != t->rs) {
+        return;
+    }
+    if (!woken) {
+        // the rsection's mutex is released only in the wait, so once the test can take it, the waiter is waiting
+        AutoLocker al(t->sync_lck);
+        ++t->waiting;
+        t->sync_cond.broadcast();
+        return;
+    }
+    // hold the woken waiter, without the rsection's mutex, until the test has taken the write lock
+    m.unlock();
+    {
+        AutoLocker al(t->sync_lck);
+        ++t->woken;
+        t->sync_cond.broadcast();
+        while (!t->writer_set) {
+            t->sync_cond.wait(&t->sync_lck);
+        }
+    }
+    m.lock();
+}
+
+void rsection_wake_waiter(ExceptionSink* xsink, void* arg) {
+    RSectionWakeWaiter* w = static_cast<RSectionWakeWaiter*>(arg);
+    RSectionWakeTest* t = w->t;
+    int rc = t->rs->tryRSectionLockNotifyWaitRead(&w->rn);
+    // the notification is read before the write lock is released, which clears it
+    bool notified;
+    {
+        AutoLocker al(w->rn.m);
+        notified = w->rn.setp;
+    }
+    if (!rc) {
+        // only a waiter that the test wakes to end after a failure gets here: the rsection is free then
+        t->rs->rSectionUnlock();
+    }
+    AutoLocker al(t->sync_lck);
+    w->rc = rc;
+    w->notified = notified;
+    ++t->done;
+    t->sync_cond.broadcast();
+}
+}
+
+//! Every thread waiting for an rsection is woken when it becomes free, even if another thread then takes the lock
+/** A thread taking the rsection exclusively waits while scans hold it in shared mode.  The last scan to leave woke
+    only one waiter; when another thread took the write lock before that waiter checked the rsection again, the
+    waiter registered a notification and returned, and the other waiters slept on although the rsection was free,
+    keeping every scan of the object out as well (qore#7717).  The hook holds the woken waiter between its wakeup and
+    its check until the write lock is taken; every waiter must then return and register a notification.
+*/
+static void ut_rsection_waiters_woken_on_release(UnitTestCounters& c) {
+    const int num_waiters = 2;
+    TestRSectionLock lock;
+    RSectionWakeTest t;
+    t.rs = lock.getPriv();
+
+    // installs the hook for the lifetime of the test; every waiter has finished when the test returns
+    struct HookHelper {
+        HookHelper(RSectionWakeTest* t) {
+            rsection_wake_test = t;
+            qore_rsection_wait_hook = rsection_wake_hook;
+        }
+        ~HookHelper() {
+            qore_rsection_wait_hook = nullptr;
+            rsection_wake_test = nullptr;
+        }
+    } hook_helper(&t);
+
+    // a scan holds the rsection in shared mode
+    RNotifier shared_rn;
+    bool shared = false;
+    int rc = t.rs->tryRSectionLockSharedNotifyWaitRead(&shared_rn, shared);
+    UT_ASSERT(c, !rc && shared, "a scan takes the free rsection in shared mode");
+    if (rc || !shared) {
+        return;
+    }
+
+    RSectionWakeWaiter waiters[num_waiters];
+    int started = 0;
+    for (RSectionWakeWaiter& w : waiters) {
+        w.t = &t;
+        ExceptionSink xsink;
+        if (q_start_thread(&xsink, rsection_wake_waiter, &w) < 0) {
+            xsink.clear();
+            break;
+        }
+        ++started;
+    }
+    UT_ASSERT_EQ(c, num_waiters, started, "the waiter threads start");
+
+    SafeLocker sl(t.sync_lck);
+    if (started < num_waiters) {
+        // let the waiters that started take the rsection one after the other and end
+        t.writer_set = true;
+        t.sync_cond.broadcast();
+        sl.unlock();
+        t.rs->rSectionUnlockShared();
+        sl.lock();
+        while (t.done < started) {
+            t.sync_cond.wait(&t.sync_lck);
+        }
+        return;
+    }
+
+    // each waiter reports that it waits while it still holds the rsection's mutex, which the release below takes
+    while (t.waiting < num_waiters) {
+        t.sync_cond.wait(&t.sync_lck);
+    }
+    sl.unlock();
+    UT_ASSERT_EQ(c, num_waiters, t.rs->rsectionWaiting(), "the threads wait for the rsection held in shared mode");
+
+    // the last scan leaves: the rsection is free, and a waiter is woken
+    t.rs->rSectionUnlockShared();
+
+    sl.lock();
+    while (!t.woken) {
+        t.sync_cond.wait(&t.sync_lck);
+    }
+    sl.unlock();
+
+    // another thread takes the write lock before the woken waiter checks the rsection
+    lock.setFakeWriter(q_gettid());
+
+    sl.lock();
+    t.writer_set = true;
+    t.sync_cond.broadcast();
+    // every waiter returns at once now, as the write lock is a conflict; a waiter that was not woken never does, so
+    // the wait has a limit only to report the failure
+    int64 deadline_us = q_get_monotonic_us() + 10000000;
+    while (t.done < num_waiters) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            break;
+        }
+        t.sync_cond.wait2(&t.sync_lck, (remaining_us + 999) / 1000);
+    }
+    int done = t.done;
+    sl.unlock();
+    UT_ASSERT_EQ(c, num_waiters, done, "every thread waiting for the rsection is woken when it becomes free");
+    if (done == num_waiters) {
+        UT_ASSERT_EQ(c, 0, t.rs->rsectionWaiting(), "no thread waits for the free rsection");
+    }
+    for (RSectionWakeWaiter& w : waiters) {
+        SafeLocker wl(t.sync_lck);
+        // a waiter that has not returned is reported by the check above
+        if (w.rc == 0 && !w.notified) {
+            continue;
+        }
+        int w_rc = w.rc;
+        bool w_notified = w.notified;
+        wl.unlock();
+        UT_ASSERT_EQ(c, -1, w_rc, "a woken waiter that finds the write lock taken reports a conflict");
+        UT_ASSERT(c, w_notified,
+            "a woken waiter that finds the write lock taken registers a notification for its release");
+    }
+
+    // releasing the write lock clears the notifications
+    lock.clearFakeWriterAndNotify();
+
+    if (done < num_waiters) {
+        // wake the waiters left asleep so that the test can end; they take the free rsection and release it
+        t.rs->wakeRSectionWaitersForTest();
+        sl.lock();
+        while (t.done < num_waiters) {
+            t.sync_cond.wait(&t.sync_lck);
+        }
+        sl.unlock();
+    }
+    for (RSectionWakeWaiter& w : waiters) {
+        AutoLocker al(w.rn.m);
+        UT_ASSERT(c, !w.rn.setp, "no notification is left registered");
+    }
+
+    // with no waiter left, a scan can take the rsection again
+    RNotifier probe_rn;
+    shared = false;
+    rc = t.rs->tryRSectionLockSharedNotifyWaitRead(&probe_rn, shared);
+    UT_ASSERT(c, !rc && shared, "a scan takes the rsection in shared mode once no thread waits for it");
+    if (!rc && shared) {
+        t.rs->rSectionUnlockShared();
+    }
+}
+
+namespace {
 //! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
 struct ForkHoldTest {
     std::mutex m;
@@ -1955,7 +2800,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
         "dbg_finish_hold", "type_wait_entry", "type_epoch_holds", "type_tombstones", "generic_cache_registry",
-        "type_owner_registry", "type_info_registry",
+        "type_owner_registry", "type_info_registry", "cache_stripes", "function_call_names", "ir_inline_sites",
+        "native_call_names", "class_member_add",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -5394,6 +6240,11 @@ public:
         return 0;
     }
 
+    //! Returns the index of the I/O thread that the operations on the pollable object are routed to
+    static int routeThread(AsyncIoControllerPriv& ctrl, const AbstractPollableIoObjectBase* sock) {
+        return ctrl.getThreadIndex(AsyncIoControllerPriv::getRouteKey(sock));
+    }
+
     static void resize(UnitTestCounters& c) {
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
@@ -8388,6 +9239,11 @@ public:
         UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
     }
 
+    //! Describes a failed call of a silent target for an assertion message: the call and its errno (qore#7732)
+    static std::string silentTargetError(const char* call, int err) {
+        return std::string("; ") + call + "() failed with errno " + std::to_string(err) + " (" + strerror(err) + ")";
+    }
+
     //! Makes a target that gets no answer for the connection tests; returns false if it cannot be made
     /** On Linux a listener whose accept queue is full, which drops the connection requests that it cannot queue;
         elsewhere a port that is bound and does not listen, which macOS does not answer.  The descriptors made are
@@ -8396,7 +9252,9 @@ public:
     static bool makeSilentTarget(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
             const std::string& when) {
         int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -8405,16 +9263,26 @@ public:
         sa.sin_family = AF_INET;
         sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         socklen_t salen = sizeof(sa);
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
-            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen);
-        UT_ASSERT(c, ok, ("connect close target is bound" + when).c_str());
-        if (!ok) {
+        const char* failed = nullptr;
+        if (::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)) {
+            failed = "bind";
+        } else if (::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen)) {
+            failed = "getsockname";
+        }
+        err = errno;
+        UT_ASSERT(c, !failed, ("connect close target is bound" + when
+            + (failed ? silentTargetError(failed, err) : std::string())).c_str());
+        if (failed) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds);
-        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
@@ -9082,34 +9950,187 @@ public:
     }
 
 #ifdef __linux__
+    //! The number of interrupted calls (EINTR) of the silent target helpers that were restarted (qore#7732)
+    static inline std::atomic<int> silent_target_restarts{0};
+
+    //! The number of signals that the handler of runSilentTargetInterrupted() received
+    static inline std::atomic<int> silent_target_signals{0};
+
+    static void silentTargetSignalHandler(int) {
+        silent_target_signals.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! The silent targets are made correctly when signals interrupt the calls of their helpers (qore#7732)
+    /** The tests run with signal handling on, so every interruptible call of a helper must be correct under EINTR: a
+        poll() is restarted with the time that is left, and the connect() of a connection that a signal interrupted goes
+        on in the background (it is not repeated): the socket is polled for writability and its SO_ERROR is read.  A
+        second thread sends a signal to the test thread without pause, whose handler is installed without SA_RESTART,
+        until the helpers have restarted a number of interrupted calls; every target made must still be silent.
+    */
+    static void runSilentTargetInterrupted(UnitTestCounters& c) {
+        const std::string when = " (interrupted by signals)";
+        struct sigaction act = {};
+        act.sa_handler = silentTargetSignalHandler;
+        sigemptyset(&act.sa_mask);
+        act.sa_flags = 0;
+        struct sigaction old_act = {};
+        bool installed = !::sigaction(SIGUSR2, &act, &old_act);
+        UT_ASSERT(c, installed, ("the handler of the signal is installed" + when).c_str());
+        if (!installed) {
+            return;
+        }
+        // the test thread takes the signal
+        sigset_t set, old_set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR2);
+        pthread_sigmask(SIG_UNBLOCK, &set, &old_set);
+        const int before = silent_target_restarts.load();
+        const int signals_before = silent_target_signals.load();
+        pthread_t target = pthread_self();
+        std::atomic<bool> stop{false};
+        std::thread storm([&stop, target]() {
+            while (!stop.load(std::memory_order_relaxed)) {
+                pthread_kill(target, SIGUSR2);
+                std::this_thread::yield();
+            }
+        });
+        int made = 0;
+        bool all_made = true;
+        auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (silent_target_restarts.load() - before < 10 && std::chrono::steady_clock::now() < limit) {
+            std::vector<int> fds;
+            struct sockaddr_in sa = {};
+            bool ok = makeSilentTarget(c, fds, sa, when) && makeSilentTarget6(c, fds, sa.sin_port, when);
+            for (int fd : fds) {
+                ::close(fd);
+            }
+            if (!ok) {
+                all_made = false;
+                break;
+            }
+            ++made;
+        }
+        stop.store(true);
+        storm.join();
+        pthread_sigmask(SIG_SETMASK, &old_set, nullptr);
+        ::sigaction(SIGUSR2, &old_act, nullptr);
+        UT_ASSERT(c, all_made, ("every silent target is made while signals interrupt the calls of its helpers" + when
+            + " (" + std::to_string(made) + " made)").c_str());
+        UT_ASSERT(c, silent_target_signals.load() > signals_before, ("the signals were delivered to the test thread"
+            + when).c_str());
+        UT_ASSERT(c, silent_target_restarts.load() - before >= 10, ("signals interrupted calls of the helpers, which "
+            "restarted them" + when + " (" + std::to_string(silent_target_restarts.load() - before) + " restarts)")
+            .c_str());
+    }
+
+    //! Waits for an event of a descriptor; a signal that interrupts the wait does not end it or lengthen it (qore#7732)
+    /** The wait is restarted with the time that is left of the limit given at the start, so that the limit does not grow
+        with the interruptions
+
+        @return the result of poll(): 1 if the event came, 0 if the limit passed, -1 with errno set on an error
+    */
+    static int silentTargetPoll(int fd, short events, int limit_ms) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(limit_ms);
+        struct pollfd pfd = {fd, events, 0};
+        int left_ms = limit_ms;
+        while (true) {
+            int rc = ::poll(&pfd, 1, left_ms);
+            if (rc >= 0 || errno != EINTR) {
+                return rc;
+            }
+            silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+            auto left = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now());
+            if (left.count() <= 0) {
+                return 0;
+            }
+            left_ms = static_cast<int>(left.count());
+        }
+    }
+
+    //! Connects a blocking socket, also when a signal interrupts the connect() (qore#7732)
+    /** The handshake of a connect() that a signal interrupts goes on in the background, and the call must not be made
+        again (it would fail with EALREADY, or with EISCONN once the handshake is done): the socket is polled for
+        writability, and the result of the connect is its SO_ERROR
+
+        @return 0 if the socket is connected, -1 with errno set otherwise
+    */
+    static int silentTargetConnect(int fd, const struct sockaddr* sa, socklen_t salen) {
+        if (!::connect(fd, sa, salen)) {
+            return 0;
+        }
+        if (errno != EINTR) {
+            return -1;
+        }
+        silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+        int rc = silentTargetPoll(fd, POLLOUT, 10000);
+        if (rc <= 0) {
+            if (!rc) {
+                errno = ETIMEDOUT;
+            }
+            return -1;
+        }
+        int so_err = 0;
+        socklen_t len = sizeof(so_err);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_err, &len)) {
+            return -1;
+        }
+        if (so_err) {
+            errno = so_err;
+            return -1;
+        }
+        return 0;
+    }
+
     //! Fills the accept queue of a listener whose backlog is 0, so that it drops the connection requests that follow
     /** A connection is made with a blocking connect(), which returns once the handshake is done; the listener is
         readable once the connection is in its accept queue, and the queue is full when its length (tcpi_unacked
         of a listener) exceeds its backlog (tcpi_sacked), where Linux drops a connection request (no timing is
         involved; the poll's limit only guards against a hang)
     */
-    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds) {
+    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds,
+            std::string* why = nullptr) {
+        auto fail = [why](const char* call) {
+            if (why) {
+                *why = silentTargetError(call, errno);
+            }
+            return false;
+        };
+        unsigned unacked = 0;
+        unsigned sacked = 0;
         for (int i = 0; i < 4; ++i) {
             struct tcp_info ti = {};
             socklen_t len = sizeof(ti);
             if (getsockopt(lfd, IPPROTO_TCP, TCP_INFO, &ti, &len)) {
-                return false;
+                return fail("getsockopt(TCP_INFO)");
             }
             if (ti.tcpi_unacked > ti.tcpi_sacked) {
                 return true;
             }
+            unacked = ti.tcpi_unacked;
+            sacked = ti.tcpi_sacked;
             int cfd = ::socket(sa->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0);
             if (cfd < 0) {
-                return false;
+                return fail("socket");
             }
             fds.push_back(cfd);
-            if (::connect(cfd, sa, salen)) {
+            if (silentTargetConnect(cfd, sa, salen)) {
+                return fail("connect");
+            }
+            int prc = silentTargetPoll(lfd, POLLIN, 10000);
+            if (prc != 1) {
+                if (prc < 0) {
+                    return fail("poll");
+                }
+                if (why) {
+                    *why = "; poll() timed out: the listener did not become readable within 10 s (attempt "
+                        + std::to_string(i + 1) + ")";
+                }
                 return false;
             }
-            struct pollfd pfd = {lfd, POLLIN, 0};
-            if (::poll(&pfd, 1, 10000) != 1) {
-                return false;
-            }
+        }
+        if (why) {
+            *why = "; the accept queue did not fill in 4 attempts (tcpi_unacked " + std::to_string(unacked)
+                + ", tcpi_sacked " + std::to_string(sacked) + ")";
         }
         return false;
     }
@@ -9118,7 +10139,9 @@ public:
     //! Makes a target on ::1 with the given port that gets no answer, as makeSilentTarget() does on 127.0.0.1
     static bool makeSilentTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when) {
         int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -9130,14 +10153,20 @@ public:
         sa6.sin6_addr = in6addr_loopback;
         sa6.sin6_port = port;
         bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
-        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when).c_str());
+        err = errno;
+        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when
+            + (ok ? std::string() : silentTargetError("bind", err))).c_str());
         if (!ok) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("the IPv6 connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds);
-        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("the IPv6 connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
@@ -24481,6 +25510,30 @@ static QoreValue f_dbg_socket_stream_records(const QoreListNode* params, Runtime
     return qore_socket_object_private(sock).dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
+//! holds or releases the writes of the HTTP/2 session of a socket, as when its client stops reading (qore#7653)
+/** The session's output stays in its send buffer, so that tests can keep the end of a response there.  DEBUG builds
+    only.
+
+    @param sock the socket of the connection
+    @param hold True to hold the writes, False to release them
+*/
+static QoreValue f_dbg_socket_hold_h2_writes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_socket_hold_h2_writes() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgHoldH2Writes(get_param_value(params, 1).getAsBool(), xsink);
+    return QoreValue();
+}
+
 //! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
 /** Puts the controller in the state that autostop leaves it in when an idle I/O thread has stopped before another
     one: a test then ends the process in that state, in which the cleanup at exit stopped the controller with an
@@ -24503,6 +25556,39 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
             index);
     }
     return QoreValue();
+}
+
+//! Debug-only: returns the index of the I/O thread of the global async I/O controller that the operations on a pollable object are routed to (qore#7624)
+/** Operations are routed by the socket, not by their key: a test of keys that collide on different I/O threads needs
+    two objects that are routed to different threads.  DEBUG builds only.
+
+    @param sock the pollable I/O object (an EventNotifier, a Socket)
+
+    @return the I/O thread index
+
+    @throw DBG-ARGUMENT-ERROR the object is not a pollable I/O object
+*/
+static QoreValue f_dbg_async_io_route_thread(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* sock_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AbstractPollableIoObjectBase> sock(static_cast<AbstractPollableIoObjectBase*>(
+        const_cast<QoreObject*>(sock_obj)->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!sock) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the object is not a pollable I/O object");
+        return QoreValue();
+    }
+    return static_cast<int64>(AsyncIoCloseTest::routeThread(**ctrl, *sock));
 }
 
 //! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
@@ -26621,7 +27707,10 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
 
 //! Debug-only: creates a child process with fork() while another thread holds a process-wide lock of type retirement
 /** The other thread holds the lock named (see qore_type_dbg_fork_lock(): \c "type_wait_entry", \c "type_epoch_holds",
-    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" or \c "type_info_registry"), as a
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry", \c "type_info_registry", the name
+    of the fork handler of any other lock that is a std::mutex (\c "function_call_names", \c "ir_inline_sites",
+    \c "native_call_names" or \c "class_member_add", for example) or \c "cache_stripe:<n>", a stripe of the locks of
+    the caches of generics that belong to one object each (qore#7554)), as a
     thread does that enters a quiescent wait, arms an epoch hold, makes a tombstone, registers a generic cache entry or
     creates a type or a declaration at the moment of fork().  It holds the lock until the prepare handlers reach the
     fork handler of the same name, which then waits for it, or, if no such handler is registered, until fork() has
@@ -26644,7 +27733,8 @@ static QoreValue f_dbg_fork_while_type_lock_held(const QoreListNode* params, Run
         return QoreValue();
     }
     ForkHoldTest t;
-    t.target = name->c_str();
+    // the handler of a stripe of the locks of the per-object caches of generics is the one of all stripes
+    t.target = !strncmp(name->c_str(), "cache_stripe:", 13) ? "cache_stripes" : name->c_str();
     std::thread holder([&t, lock]() {
         std::unique_lock<std::mutex> held(*lock);
         std::unique_lock<std::mutex> ul(t.m);
@@ -28513,6 +29603,13 @@ static QoreValue f_dbg_run_connect_error_tests(const QoreListNode* params, Runti
 #endif
 
 #ifdef DEBUG
+//! Debug-only: runs the unit tests of the waits for an rsection (qore#7717)
+static QoreValue f_dbg_run_rsection_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_rsection_waiters_woken_on_release(c);
+    return make_unit_test_result(c, xsink);
+}
+
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
@@ -30597,6 +31694,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runConnectClosedSocketAttempt(c);
 #ifdef __linux__
+    AsyncIoDescriptorHoldTest::runSilentTargetInterrupted(c);
     AsyncIoDescriptorHoldTest::runConnectUnixClosedSocket(c);
 #endif
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
@@ -30918,6 +32016,123 @@ static QoreValue f_dbg_continue_reference_lvalue(const QoreListNode* params, Run
     bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
     qore_dbg_reference_lvalue_hook.store(nullptr);
     return rv;
+}
+
+namespace {
+//! a rendezvous of the threads that bind reference elements (qore#7391)
+/** see qore_dbg_reference_bind_hook: each of the first \c parties binds made while the rendezvous is armed arrives at
+    it.  A bind made with an lvalue write lock held fails at once (it would lock the referenced lvalue under the lock
+    of the store, which deadlocks when two threads do it in the opposite order); a bind made with no lock held waits
+    until all parties have arrived, so that the binds of all parties are in progress at the same time.  The wait has a
+    bound only so that a test that is broken does not hang; no result depends on it.
+*/
+struct ReferenceBindRendezvous {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the number of binds that arrive at the rendezvous
+    int64 parties = 0;
+    //! the bound of the wait of a bind for the other parties, in milliseconds
+    int64 timeout_ms = 0;
+    //! the number of binds that have arrived
+    int64 arrived = 0;
+    //! the number of binds that arrived with an lvalue write lock held
+    int64 held = 0;
+    //! the highest number of lvalue write locks that a bind arrived with
+    int64 max_held = 0;
+    //! the number of binds whose wait for the other parties reached its bound
+    int64 timeouts = 0;
+    //! the rendezvous is armed
+    bool armed = false;
+};
+
+ReferenceBindRendezvous& reference_bind_rendezvous() {
+    // not destroyed, as references can be bound while static objects are destroyed
+    static ReferenceBindRendezvous* r = new ReferenceBindRendezvous;
+    return *r;
+}
+
+bool dbg_reference_bind_rendezvous_hook(int held) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::unique_lock<std::mutex> l(r.m);
+    if (!r.armed || r.arrived >= r.parties) {
+        return false;
+    }
+    ++r.arrived;
+    if (held > r.max_held) {
+        r.max_held = held;
+    }
+    if (held > 0) {
+        // the bind fails at once; a party that waits for it is let go
+        ++r.held;
+        r.cond.notify_all();
+        return true;
+    }
+    if (r.arrived == r.parties) {
+        r.cond.notify_all();
+        return false;
+    }
+    if (!r.cond.wait_for(l, std::chrono::milliseconds(r.timeout_ms), [&r]() { return r.arrived >= r.parties; })) {
+        ++r.timeouts;
+    }
+    return false;
+}
+}
+
+//! arms a rendezvous of the next binds of reference elements; see ReferenceBindRendezvous
+static QoreValue f_dbg_reference_bind_rendezvous(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 parties = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (parties < 1 || timeout_ms < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the number of parties and the timeout must be positive");
+        return QoreValue();
+    }
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::lock_guard<std::mutex> l(r.m);
+    if (r.armed) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a reference bind rendezvous is already armed");
+        return QoreValue();
+    }
+    r.parties = parties;
+    r.timeout_ms = timeout_ms;
+    r.arrived = 0;
+    r.held = 0;
+    r.max_held = 0;
+    r.timeouts = 0;
+    r.armed = true;
+    qore_dbg_reference_bind_hook.store(dbg_reference_bind_rendezvous_hook);
+    return QoreValue();
+}
+
+//! disarms the rendezvous and returns its result: the binds that arrived, that held a lock, and whose wait timed out
+static QoreValue f_dbg_reference_bind_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        std::lock_guard<std::mutex> l(r.m);
+        if (!r.armed) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no reference bind rendezvous is armed");
+            return QoreValue();
+        }
+        qore_dbg_reference_bind_hook.store(nullptr);
+        r.armed = false;
+        rv->setKeyValue("parties", r.parties, xsink);
+        rv->setKeyValue("arrived", r.arrived, xsink);
+        rv->setKeyValue("held", r.held, xsink);
+        rv->setKeyValue("max_held", r.max_held, xsink);
+        rv->setKeyValue("timeouts", r.timeouts, xsink);
+    }
+    return rv.release();
+}
+
+//! sets whether a bind of a reference element made with an lvalue write lock held raises DBG-REFERENCE-BIND-HELD
+/** see qore_dbg_reference_bind_strict (qore#7391): a test arms it so that a store path that still binds a reference
+    under an lvalue lock fails it with an exception instead of an assertion; returns the previous setting
+*/
+static QoreValue f_dbg_reference_bind_strict(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool strict = get_param_value(params, 0).getAsBool();
+    return qore_dbg_reference_bind_strict.exchange(strict);
 }
 
 namespace {
@@ -31628,6 +32843,51 @@ static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, Runt
     return (int64)qore_jit_dbg_pipeline_uninitialized_level();
 }
 
+//! loads a module in a foreign thread, which has no current Program, so that the module is loaded without a
+//! requesting Program (as C++ code can load one), and its Program has no parent Program
+/** For examples/test/ir/exec-mode-parentless-module.qtest: the Program of such a module takes the execution mode
+    requested for the process (qore#7495); an exception of the load is raised in the calling thread
+*/
+static QoreValue f_dbg_load_module_in_foreign_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // the string value can be an inline short string (issue #7038)
+    QoreStringDataHelper name_arg(get_param_value(params, 0));
+    std::string name(name_arg.c_str(), name_arg.size());
+    // the error of the load, as text: an exception of the foreign thread is cleared in it before it is deregistered,
+    // which requires that the thread holds no exception (q_deregister_foreign_thread())
+    std::string error;
+    try {
+        std::thread t([&name, &error]() {
+            // nothing may leave the thread
+            try {
+                QoreForeignThreadHelper foreign_thread;
+                ExceptionSink load_xsink;
+                if (ModuleManager::runTimeLoadModule(&load_xsink, name.c_str(), nullptr) || load_xsink) {
+                    QoreValue err = load_xsink.getExceptionErr();
+                    QoreValue desc = load_xsink.getExceptionDesc();
+                    QoreStringValueHelper err_str(err);
+                    QoreStringValueHelper desc_str(desc);
+                    error = std::string(err_str->c_str()) + ": " + desc_str->c_str();
+                    load_xsink.clear();
+                }
+            } catch (std::exception& e) {
+                error = e.what();
+            } catch (...) {
+                error = "unknown exception";
+            }
+        });
+        t.join();
+    } catch (std::system_error& e) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "cannot start a thread: %s", e.what());
+        return QoreValue();
+    }
+    if (!error.empty()) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "the load of module '%s' failed: %s", name.c_str(),
+            error.c_str());
+    }
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler has no queued or in-progress work, detached work included
 static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue();
@@ -31746,6 +33006,11 @@ static QoreValue f_dbg_class_hierarchy_walk_steps(const QoreListNode* params, Ru
     return qore_class_hierarchy_walk_steps.load(std::memory_order_relaxed);
 }
 
+//! returns the number of live sets of private:internal owners of inherited methods
+static QoreValue f_dbg_live_internal_owner_sets(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_live_internal_owner_sets.load(std::memory_order_relaxed);
+}
+
 //! returns the number of values visited by removal bookkeeping in the current thread
 static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -31790,12 +33055,22 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
-//! returns the object count of an object, a hash or a list: the number of its values that need a recursive-reference
-//! scan (needs_scan()), or -1 for a value of another type
+//! returns the object count of an object, a hash or a list, or of the one that a reference names: the number of its
+//! values that need a recursive-reference scan (needs_scan()), or -1 for a value of another type
 /** Tests use it to check that the counts follow the values that the lvalue operations store and remove (qore#7348).
 */
 static QoreValue f_dbg_get_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreValue v = get_param_value(params, 0);
+    // a reference is read through (qore#7342): a list or hash that a weak reference designates, or that holds one, is
+    // passed to the function as a copy of its own, whose count is not the count of the container that it was made from
+    std::unique_ptr<LValueHelper> lvh;
+    if (v.getType() == NT_REFERENCE) {
+        lvh.reset(new LValueHelper(*v.get<const ReferenceNode>(), rc, xsink, LValueHelper::ReadAccess()));
+        if (!*lvh) {
+            return QoreValue();
+        }
+        v = lvh->getValue();
+    }
     switch (v.getType()) {
         case NT_OBJECT:
             return static_cast<int64>(qore_object_private::get(*v.get<const QoreObject>())->getScanCount());
@@ -32016,6 +33291,41 @@ static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, Runtime
     }
     QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
     return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
+//! Debug-only: returns the strings that the signature hash of a class was computed from (qore#7397)
+/** The signature hash identifies a class across Programs and is stored in AOT images, so that a change in these
+    strings needs a new AOT binary format version; examples/test/qore/classes/class-signature-golden.qtest pins them.
+
+    @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c parts (the strings hashed in order: the hash is the XOR of their SHA1 digests; empty for a
+    hash loaded from an AOT image) and \c hash (the hash as a hex string, or \c NOTHING if the class has none)
+*/
+static QoreValue f_dbg_class_signature(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DbgStringNodeHelper path_param(get_param_value(params, 0));
+    const QoreStringNode* path = *path_param;
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const SignatureHash& sh = qore_class_private::get(*qc)->hash;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> parts(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& i : sh.dbgGetParts()) {
+        parts->push(new QoreStringNode(i), xsink);
+    }
+    rv->setKeyValue("parts", parts.release(), xsink);
+    if (sh) {
+        QoreStringNode* hex = new QoreStringNode;
+        sh.toString(*hex);
+        rv->setKeyValue("hash", hex, xsink);
+    }
+    return rv.release();
 }
 
 //! Debug-only: compares two byte strings with the comparison of hash keys and member names (qore#7194)
@@ -32991,6 +34301,12 @@ DerefPointHold deref_marked_hold;
 DerefPointHold deref_delete_hold;
 //! the hold of dbg_hold_deref_last()
 DerefPointHold deref_last_hold;
+//! the hold of dbg_hold_closure_var_collect()
+DerefPointHold closure_var_collect_hold;
+//! the hold of dbg_hold_closure_var_collected()
+DerefPointHold closure_var_collected_hold;
+//! the hold of dbg_hold_closure_call()
+DerefPointHold closure_call_hold;
 #ifdef DEBUG
 //! the hold of dbg_hold_container_free(); its class name is the type of the container ("list" or "hash")
 DerefPointHold container_free_hold;
@@ -33038,6 +34354,20 @@ void dbg_hold_deref_delete_hook(const char* class_name) {
 
 void dbg_hold_deref_last_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
+}
+
+void dbg_hold_closure_var_collect_hook(const char* name) {
+    dbg_run_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook, name,
+        "dbg_hold_closure_var_collect");
+}
+
+void dbg_hold_closure_var_collected_hook(const char* name) {
+    dbg_run_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook, name,
+        "dbg_hold_closure_var_collected");
+}
+
+void dbg_hold_closure_call_hook(const char* class_name) {
+    dbg_run_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, class_name, "dbg_hold_closure_call");
 }
 
 #ifdef DEBUG
@@ -33141,6 +34471,61 @@ static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
         xsink);
+}
+
+//! holds the next dereference that decides to collect a closure-bound variable of the given name with its recursive
+//! set
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has decided and claimed the collection,
+    with no lock held, and before it checks for references taken since and releases the variable's value; another
+    thread can take a reference to the variable meanwhile (a call of a closure that captured it), and tests use the
+    hold to make that deterministic (qore#7546).
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_collect(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook,
+        dbg_hold_closure_var_collect_hook, params, xsink);
+}
+
+//! holds the next dereference that collects a closure-bound variable of the given name with its recursive set once
+//! it has taken the variable's value
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has checked that nothing of the set has
+    been referenced since its decision and has taken the variable's value, with no lock held, and before the deletion
+    releases the value; another thread can read a closure that captured the variable meanwhile, through a weak
+    reference to the value, and call it once the value has been released, and tests use the hold to make that
+    deterministic (qore#7546, qore#7556).
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_collected(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook,
+        dbg_hold_closure_var_collected_hook, params, xsink);
+}
+
+//! holds the next call of a closure created in a method of an object of the given class
+/** The hold is taken once, in UserClosureVariant::evalClosure(), before the call takes a reference to the closure's
+    object; another thread can delete the object meanwhile, and tests use the hold to make that deterministic
+    (qore#7555).
+
+    @param class_name the name of the object's class
+    @param held decremented once the calling thread is held
+    @param release the calling thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_call(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, dbg_hold_closure_call_hook,
+        params, xsink);
 }
 
 //! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
@@ -34401,6 +35786,8 @@ std::atomic<int64_t> dbg_quic_hold_session{0};
 std::atomic<int64_t> dbg_quic_hold_stream{-1};
 //! true: the held stream is released by the next Socket::flushQuicPendingData() of its session
 std::atomic<bool> dbg_quic_hold_until_flush{false};
+//! true if the held stream is held also after its body has ended (qore#7653)
+std::atomic<bool> dbg_quic_hold_end{false};
 }
 
 std::atomic<int> qore_dbg_quic_idle_waiters{0};
@@ -34478,6 +35865,10 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
         && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
 }
 
+bool qore_dbg_quic_stream_end_held() {
+    return dbg_quic_hold_end.load(std::memory_order_acquire);
+}
+
 //! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
 //! flow-control credit
 /** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
@@ -34487,6 +35878,7 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
     @param stream_id the HTTP/3 stream ID of a streaming response
     @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
     thread of its socket before it writes, so that the flush writes the data held (qore#7414)
+    @param with_end if True, the data of a streamed body is held also after the body has ended (qore#7653)
 */
 static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
@@ -34501,6 +35893,7 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
+    dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
     return QoreValue();
 }
@@ -34555,6 +35948,79 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
         return QoreValue();
     }
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: waits until a QUIC session has no data in flight and can send at once (qore#7638)
+/** As dbg_quic_wait_idle(), and also until no timer of the session is due soon: after the session sent, the pacing of
+    its sends (or another timer) can keep it from writing until a moment shortly after, when its own timer writes what
+    is pending, so that a write made before then (Socket::flushQuicPendingData(), for example) writes nothing.  With
+    nothing in flight, the timers that remain (the idle timeout, keep-alive) are far off: a timer due within 100 ms is
+    waited for, until the moment that it is due, which is known, and the state is checked again then.
+
+    @param session_id the QUIC session ID
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if the session has nothing in flight and no timer due within 100 ms, False if the wait timed out
+
+    @throw QUIC-ERROR there is no such QUIC session
+*/
+static QoreValue f_dbg_quic_wait_send_ready(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_send_ready(): invalid session ID %lld or timeout "
+            "%lld", (long long)session_id, (long long)timeout_ms);
+        return QoreValue();
+    }
+    SocketSyncPoll::assertNotOnIoThread("Qore", "dbg_quic_wait_send_ready", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::shared_ptr<QuicSession> session;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        auto i = dbg_quic_sessions.find(session_id);
+        if (i != dbg_quic_sessions.end()) {
+            session = i->second.lock();
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "dbg_quic_wait_send_ready(): no QUIC session with id %lld",
+            (long long)session_id);
+        return QoreValue();
+    }
+    // a timer due within this many nanoseconds is a pending send, not the idle timeout or keep-alive
+    static constexpr int64_t soon_ns = 100 * 1000 * 1000;
+    qore_dbg_quic_idle_waiters.fetch_add(1, std::memory_order_acq_rel);
+    ON_BLOCK_EXIT([] { qore_dbg_quic_idle_waiters.fetch_sub(1, std::memory_order_acq_rel); });
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        uint64_t gen;
+        {
+            std::lock_guard<std::mutex> lk(dbg_quic_idle_m);
+            gen = dbg_quic_idle_gen;
+        }
+        // checked without the waiters' lock: it takes the session's lock
+        int64_t ns = session->dbgNsUntilExpiry();
+        bool in_flight = session->getBytesInFlight() > 0;
+        if (!in_flight && ns > soon_ns) {
+            return true;
+        }
+        // the moment that the timer is due is known: the state is checked again then, or when the session reads
+        auto until = deadline;
+        if (!in_flight) {
+            auto due = std::chrono::steady_clock::now() + std::chrono::nanoseconds(ns)
+                + std::chrono::microseconds(100);
+            if (due < until) {
+                until = due;
+            }
+        }
+        std::unique_lock<std::mutex> lk(dbg_quic_idle_m);
+        bool woken = dbg_quic_idle_cv.wait_until(lk, until, [gen] { return dbg_quic_idle_gen != gen; });
+        if (!woken && std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+    }
 }
 
 //! Debug-only: waits until no QUIC session of the process has data in flight or anything left to write (qore#7452)
@@ -35179,6 +36645,7 @@ static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, Runt
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
     dbg_quic_hold_until_flush.store(false, std::memory_order_release);
+    dbg_quic_hold_end.store(false, std::memory_order_release);
     // a held stream is deferred until it is resumed: without this, its data stayed held after the release
     QuicSession::dbgResumeHeldStreams();
     return QoreValue();
@@ -37292,6 +38759,36 @@ static QoreValue f_dbg_nested_native_load_policy(const QoreListNode* params, Run
     return result.release();
 }
 
+//! Runs a call with a sandboxed caller recorded on the thread and hidden from the walk of the Programs (qore#7684)
+/** The code of \a caller (a sandboxed Program) parses or loads a module in \a target, as Program::parse() does: the
+    thread's current Program is \a target, which hides \a caller from sandbox resolution, and only the sandboxed caller
+    that QoreCallerSandboxHelper records keeps the calling code sandboxed; \a call runs there.  DEBUG builds only.
+*/
+static QoreValue f_dbg_call_with_sandboxed_caller_record(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* caller_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> caller(static_cast<QoreProgram*>(caller_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!caller) {
+        return QoreValue();
+    }
+    const ResolvedCallReferenceNode* call = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    QoreProgram* target = rc.getProgram();
+    ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreCallerSandboxHelper issuer(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ProgramRuntimeParseContextHelper destination(xsink, target);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return call->invoke(nullptr, xsink);
+}
+
 //! Observes a live policy change of a test-owned sandbox while two library initializers are active.
 static QoreValue f_dbg_native_load_init_revocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreSandboxManager> manager(new QoreSandboxManager, nullptr);
@@ -37544,15 +39041,60 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_trusted_build_hides_nothing", f_dbg_trusted_build_hides_nothing, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_lazy_shared_wait_waiting", f_dbg_lazy_shared_wait_waiting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_keep_until_cleanup", f_dbg_keep_until_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    // a function of the static namespace that a Program can add a variant to at run time (qore#7588)
+    qns.addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_int, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "i");
+    qns.addBuiltinVariant("dbg_add_shared_variant", f_dbg_add_shared_variant, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, bigIntTypeInfo, QoreValue(static_cast<int64>(0)), "kind");
+    // a static generic builtin class (qore#7540)
+    dbg_rt_box = new QoreClass("DbgRtBox", "::Qore::DbgRtBox");
+    dbg_rt_box->addTypeParameter("T");
+    qns.addSystemClass(dbg_rt_box);
+    qns.addBuiltinVariant("dbg_rt_box_unsafe", f_dbg_rt_box_unsafe, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_refresh_pending", f_dbg_runtime_refresh_pending, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_variant_refreshes", f_dbg_runtime_variant_refreshes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_program_local_derived_type_scans", f_dbg_program_local_derived_type_scans,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant",
+        QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_add_runtime_naming", f_dbg_add_runtime_naming, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        autoTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "src", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "kind", QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    // a function of the static system namespace to which dbg_add_runtime_naming() adds a variant (qore#7680)
+    qns.addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "i");
+    qns.addBuiltinVariant("dbg_runtime_refs_taken", f_dbg_runtime_refs_taken, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", QC_PROGRAM->getOrNothingTypeInfo(),
+        QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_runtime_refs_pending", f_dbg_runtime_refs_pending, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_fail_next_runtime_refs", f_dbg_fail_next_runtime_refs, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_cross_program_cycles", f_dbg_cross_program_cycles, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_unowned_program_local_names", f_dbg_unowned_program_local_names, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_refused_shared_variants", f_dbg_refused_shared_variants, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_rt_gen_instance", f_dbg_rt_gen_instance, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolOrNothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "arg", boolTypeInfo, QORE_PARAM_NO_ARG, "fail");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,
@@ -37576,6 +39118,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_rsection_tests", f_dbg_run_rsection_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
 #ifndef _Q_WINDOWS
     qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
@@ -37626,6 +39170,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_nested_native_load_policy", f_dbg_nested_native_load_policy, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
         QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_call_with_sandboxed_caller_record", f_dbg_call_with_sandboxed_caller_record,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, autoTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
+        codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_inherited_member_initializer", f_dbg_inherited_member_initializer, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "resolve");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -37889,6 +39436,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_route_thread", f_dbg_async_io_route_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        objectTypeInfo, QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
@@ -37967,6 +39517,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_reference_lvalue", f_dbg_continue_reference_lvalue, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous", f_dbg_reference_bind_rendezvous, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "parties", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous_result", f_dbg_reference_bind_rendezvous_result,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_reference_bind_strict", f_dbg_reference_bind_strict, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "strict");
     qns.addBuiltinVariant("dbg_hold_program_teardown", f_dbg_hold_program_teardown, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_program_teardown_held", f_dbg_wait_program_teardown_held, QCF_NO_FLAGS,
@@ -38029,6 +39586,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_use_after_free", f_dbg_use_after_free, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_llvm_uninitialized_level", f_dbg_llvm_uninitialized_level, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_load_module_in_foreign_thread", f_dbg_load_module_in_foreign_thread, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
@@ -38059,6 +39618,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_generic_parent_check_steps", f_dbg_generic_parent_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_live_internal_owner_sets", f_dbg_live_internal_owner_sets, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_class_hierarchy_walk_steps", f_dbg_class_hierarchy_walk_steps, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
@@ -38107,6 +39668,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
         QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_class_signature", f_dbg_class_signature, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
     qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
@@ -38210,6 +39773,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_closure_var_collect", f_dbg_hold_closure_var_collect,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_var_collected", f_dbg_hold_closure_var_collected,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_call", f_dbg_hold_closure_call,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
@@ -38275,8 +39850,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
-        "stream_id", boolTypeInfo, QoreValue(false), "until_flush");
+        nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id", boolTypeInfo, QoreValue(false), "until_flush", boolTypeInfo, QoreValue(false), "with_end");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
@@ -38298,6 +39873,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_wait_send_ready", f_dbg_quic_wait_send_ready, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_set_client_peer_response_timeout", f_dbg_quic_set_client_peer_response_timeout,
@@ -38317,6 +39895,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_io_uring_defer_completions", f_dbg_io_uring_defer_completions, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_socket_hold_h2_writes", f_dbg_socket_hold_h2_writes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,

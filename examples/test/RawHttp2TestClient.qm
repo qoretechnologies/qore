@@ -1,0 +1,282 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RawHttp2TestClient.qm an HTTP/2 client that tests drive frame by frame
+
+/*  RawHttp2TestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module RawHttp2TestClient {
+    version = "1.0";
+    desc    = "an HTTP/2 client that tests drive frame by frame";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A server test that needs a client that does not read (a client that stops reading its responses, or one that
+    grants no flow-control credit) drives this client: it sends its requests and reads nothing until the test asks it
+    to, so that the server's writes fill the socket's buffers or use up the client's flow-control windows, without an
+    external tool and without stopping a process.
+
+    @par Example:
+    @code{.py}
+%requires ../../RawHttp2TestClient.qm
+
+# a client that grants the largest windows, so that the server waits for the socket, not for credit
+RawHttp2Client c(port);
+on_exit c.close();
+int stream_id = c.get("/");
+# ... the server writes until the socket's buffers are full
+hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
+    @endcode
+*/
+public namespace RawHttp2TestClient {
+#! Frame types (RFC 9113 section 6)
+public const FrameData = 0;
+public const FrameHeaders = 1;
+public const FrameRstStream = 3;
+public const FrameSettings = 4;
+public const FramePing = 6;
+public const FrameGoaway = 7;
+public const FrameWindowUpdate = 8;
+public const FrameContinuation = 9;
+
+#! Flags
+public const FlagEndStream = 0x1;
+public const FlagAck = 0x1;
+public const FlagEndHeaders = 0x4;
+
+#! The largest flow-control window (RFC 9113 section 6.9.1)
+public const MaxWindow = 0x7fffffff;
+
+#! The default flow-control window (RFC 9113 section 6.9.2)
+public const DefaultWindow = 65535;
+
+#! The outcome of a stream that RawHttp2Client::readStream() read
+public hashdecl RawHttp2StreamResult {
+    #! the number of DATA bytes that the stream received
+    int data_bytes = 0;
+    #! True if the stream ended with END_STREAM
+    bool ended = False;
+    #! the error code of the RST_STREAM that ended the stream, if one did
+    *int reset_code;
+    #! the error code of a GOAWAY that the connection received, if one did
+    *int goaway_code;
+    #! True if the server closed the connection before the stream ended
+    bool closed = False;
+}
+
+#! An HTTP/2 client that sends requests and reads frames only when asked to
+public class RawHttp2Client {
+    private {
+        Socket sock();
+        #! True for TLS (ALPN h2), False for cleartext HTTP/2 with prior knowledge
+        bool tls;
+        #! the next client stream ID
+        int next_stream_id = 1;
+        #! the timeout of the connection and of each write
+        timeout io_timeout;
+    }
+
+    #! Connects to the server on 127.0.0.1 and sends the connection preface and the client's settings
+    /** @param port the server's port
+        @param tls True for TLS with ALPN h2 (the server's certificate is not verified), False for cleartext HTTP/2
+        @param window the initial flow-control window of each stream (SETTINGS_INITIAL_WINDOW_SIZE); the connection's
+        window is raised to the same size with a WINDOW_UPDATE frame
+        @param io_timeout the timeout of the connection and of each write
+    */
+    constructor(int port, bool tls = True, int window = MaxWindow, timeout io_timeout = 30s) {
+        self.tls = tls;
+        self.io_timeout = io_timeout;
+        if (tls) {
+            sock.setAlpnProtocols(("h2",));
+            sock.connectSSL(sprintf("127.0.0.1:%d", port), io_timeout);
+        } else {
+            sock.connect(sprintf("127.0.0.1:%d", port), io_timeout);
+        }
+        # SETTINGS_INITIAL_WINDOW_SIZE (0x4)
+        binary out = binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+            + frame(FrameSettings, 0, 0, <0004> + u32(window));
+        if (window > DefaultWindow) {
+            out += frame(FrameWindowUpdate, 0, 0, u32(window - DefaultWindow));
+        }
+        sock.send(out, io_timeout);
+    }
+
+    #! Closes the connection
+    close() {
+        if (sock.isOpen()) {
+            sock.close();
+        }
+    }
+
+    #! Sends a GET request for @p path and returns its stream ID
+    /** The header block uses the static table and literals without Huffman coding: @c :method @c GET,
+        @c :scheme @c https (or @c http), @c :path and @c :authority @c localhost
+    */
+    int get(string path) {
+        int stream_id = next_stream_id;
+        next_stream_id += 2;
+        binary block = (tls ? <8287> : <8286>) + <04> + literalLength(path) + binary(path)
+            + <01> + literalLength("localhost") + binary("localhost");
+        sock.send(frame(FrameHeaders, FlagEndStream | FlagEndHeaders, stream_id, block), io_timeout);
+        return stream_id;
+    }
+
+    #! Reads frames until the stream ends (END_STREAM or RST_STREAM) or the connection is closed
+    /** SETTINGS and PING frames are acknowledged; the data of other streams is read and not counted; each DATA frame
+        of the stream is credited back (WINDOW_UPDATE for the stream and the connection), so that the whole body can
+        be read whatever the client's windows
+
+        @param stream_id the stream to read
+        @param read_timeout the timeout of each read
+
+        @throw SOCKET-TIMEOUT a frame did not arrive in time
+    */
+    hash<RawHttp2StreamResult> readStream(int stream_id, timeout read_timeout) {
+        hash<RawHttp2StreamResult> rv();
+        while (True) {
+            *hash<auto> f = readFrame(read_timeout);
+            if (!f) {
+                rv.closed = True;
+                return rv;
+            }
+            switch (f.type) {
+                case FrameSettings:
+                    if (!(f.flags & FlagAck)) {
+                        if (!sendOrClosed(frame(FrameSettings, FlagAck, 0, binary()))) {
+                            rv.closed = True;
+                            return rv;
+                        }
+                    }
+                    break;
+                case FramePing:
+                    if (!(f.flags & FlagAck)) {
+                        if (!sendOrClosed(frame(FramePing, FlagAck, 0, f.payload))) {
+                            rv.closed = True;
+                            return rv;
+                        }
+                    }
+                    break;
+                case FrameGoaway:
+                    rv.goaway_code = f.payload.size() >= 8 ? u32val(f.payload, 4) : -1;
+                    break;
+                case FrameRstStream:
+                    if (f.stream_id == stream_id) {
+                        rv.reset_code = u32val(f.payload, 0);
+                        return rv;
+                    }
+                    break;
+                case FrameData:
+                    if (f.stream_id == stream_id) {
+                        rv.data_bytes += f.payload.size();
+                    }
+                    if (f.payload.size() && !(f.flags & FlagEndStream)) {
+                        if (!sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
+                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())))) {
+                            rv.closed = True;
+                            return rv;
+                        }
+                    }
+                    if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
+                        rv.ended = True;
+                        return rv;
+                    }
+                    break;
+                case FrameHeaders:
+                    if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
+                        rv.ended = True;
+                        return rv;
+                    }
+                    break;
+            }
+        }
+    }
+
+    #! Reads one frame; returns NOTHING if the server closed the connection
+    private *hash<auto> readFrame(timeout read_timeout) {
+        binary hdr;
+        try {
+            hdr = sock.recvBinary(9, read_timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            if (isPeerClose(ex)) {
+                return;
+            }
+            rethrow;
+        }
+        int len = (hdr[0] << 16) | (hdr[1] << 8) | hdr[2];
+        return {
+            "type": hdr[3],
+            "flags": hdr[4],
+            "stream_id": u32val(hdr, 5) & 0x7fffffff,
+            "payload": len ? sock.recvBinary(len, read_timeout) : binary(),
+        };
+    }
+
+    #! Sends @p data; returns False if the server has closed or reset the connection
+    private bool sendOrClosed(binary data) {
+        try {
+            sock.send(data, io_timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that closes the connection with data of the client unread resets it
+            if (!isPeerClose(ex)) {
+                rethrow;
+            }
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns True if the exception is that of a connection that the server closed or reset
+    /** A server that closes the connection while data of the client is unread makes its TCP stack reset it
+    */
+    private static bool isPeerClose(hash<ExceptionInfo> ex) {
+        # a send after the reset fails with EPIPE on macOS
+        return ex.err == "SOCKET-CLOSED" || (ex.arg.typeCode() == NT_INT && inlist(ex.arg, (ECONNRESET, EPIPE,
+            ECONNABORTED)));
+    }
+
+    #! Returns a serialized frame
+    static binary frame(int type, int flags, int stream_id, binary payload) {
+        return parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, stream_id)) + payload;
+    }
+
+    #! Returns a 32-bit big-endian integer
+    static binary u32(int v) {
+        return parse_hex_string(sprintf("%08x", v));
+    }
+
+    #! Returns the 32-bit big-endian integer at @p offset
+    static int u32val(binary b, int offset) {
+        return (b[offset] << 24) | (b[offset + 1] << 16) | (b[offset + 2] << 8) | b[offset + 3];
+    }
+
+    #! Returns the HPACK length prefix of a literal shorter than 127 bytes, without Huffman coding
+    private static binary literalLength(string str) {
+        int len = str.size();
+        if (len >= 127) {
+            throw "RAW-HTTP2-CLIENT-ERROR", sprintf("literal of %d bytes is too long for this client", len);
+        }
+        return parse_hex_string(sprintf("%02x", len));
+    }
+}
+}

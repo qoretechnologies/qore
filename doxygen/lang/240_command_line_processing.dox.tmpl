@@ -73,7 +73,7 @@
     These options control how %Qore code is executed. See @ref execution_modes for detailed information.
 
     |!Long Param|!Short|!Description
-    |<tt>--exec-mode=</tt><em>arg</em>|n/a|Sets the @ref execution_modes "execution mode": \c ast (AST interpreter), \c ir (IR bytecode interpreter), \c jit (LLVM JIT compilation), or \c tiered (adaptive compilation). The default is \c tiered for @ref modern "%modern" code and \c ast otherwise
+    |<tt>--exec-mode=</tt><em>arg</em>|n/a|Sets the @ref execution_modes "execution mode": \c ast (AST interpreter), \c ir (IR bytecode interpreter), \c jit (LLVM JIT compilation), or \c tiered (adaptive compilation). The default is \c tiered for @ref modern "%modern" code and \c ast otherwise. The mode is the default of every Program of the process that does not set its own (@ref Qore::Program::setExecMode() "Program::setExecMode()"): a child Program and the Program of a module inherit it, as do a Program created without a parent and the Program of a module loaded without a requesting Program (see @ref execution_modes); the code of AOT-compiled modules is native code in every mode
     |<tt>--jit-ir-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting an AST-tier function variant to IR (default: 100)
     |<tt>--jit-jit-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting a function to JIT (default: 1000)
 
@@ -186,21 +186,30 @@ qcc -c --output-dir=build/aot src/lib.qr src/main.qr
 qcc -o myapp build/aot/*.qo
     @endcode
 
+    @anchor cli_parse_diagnostics
     <b>Diagnostic Command-Line Parameters</b>
 
-    These options make %Qore's parse-time diagnostics (errors, warnings, and the
-    "did you mean ...?" suggestions described in @ref identifier_suggestions) available in
-    machine-readable or rendered form, primarily for editors, build tools, and
-    AI-driven coding assistants. Both options are <em>parse-only</em>: %Qore parses
-    the source, emits the diagnostics, and exits <b>without executing the program</b>.
-    The process exit status is \c 2 if any parse error was reported and \c 0
-    otherwise (so a clean parse, or one with only warnings, exits \c 0). Each option
-    has an equivalent environment variable (see @ref environment_variables) for
-    tooling that cannot control the command line.
+    By default (<tt>\--diag-format=text</tt>), the interpreter writes one line to stderr for each error or warning
+    raised while parsing the program, including errors detected when the parse is committed.
+    For example, a function missing a return value can produce a diagnostic of this form:
+    @verbatim
+example.q:4: error: MISSING-RETURN: ...
+    @endverbatim
+    The location includes a 1-based column when available. A diagnostic without a line starts with the
+    file name, or with \c qore if the file is unknown. Embedded newlines appear as <tt>\\n</tt>.
+    As in the legacy format, at most @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" diagnostics are written
+    (10 by default); when more were raised, the last line is
+    <tt>qore: note: maximum exception count reached (</tt><em>n</em><tt>); suppressing further output</tt>.
+    Use <tt>\--diag-format=legacy</tt> for the original multi-line exception and warning reports.
+    Both formats execute the program after a successful parse. Warnings allow execution unless
+    <tt>\--warnings-are-errors</tt> is set. Unhandled runtime exceptions retain their stack traces.
+
+    The JSON and code-frame modes parse the source, emit the diagnostics and exit before execution.
+    In those modes the exit status is \c 2 on a parse error and \c 0 on a clean parse or warnings alone.
 
     |!Long Param|!Short|!Description
-    |<tt>--diag-format=</tt><em>fmt</em>|n/a|Parse only and emit the collected parse diagnostics in the given format to \c stdout, suppressing the normal human-readable error/warning output. The only supported format is \c json. Equivalent to the \c QORE_DIAG_FORMAT environment variable
-    |<tt>--code-frames</tt>|n/a|Parse only and render the collected parse diagnostics as Rust-style code frames (a <tt>file:line:col</tt> header, the offending source line, and a caret span) to \c stderr, suppressing the normal output. Equivalent to the \c QORE_CODE_FRAMES environment variable
+    |<tt>\--diag-format=</tt><em>fmt</em>|n/a|Select \c text (default) or \c legacy for reports on stderr, or \c json to parse only and write a JSON array to stdout. An explicit format takes precedence over \c QORE_DIAG_FORMAT
+    |<tt>\--code-frames</tt>|n/a|Parse only and render the collected diagnostics as code frames on stderr, with the offending source line and a caret span. Equivalent to the \c QORE_CODE_FRAMES environment variable
 
     @section diag_json_format JSON Diagnostic Format
 

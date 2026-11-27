@@ -127,10 +127,130 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     private:internal {
         #! Static lock for connection ID counter
         static Mutex connection_id_lock();
+
+        #! The ID of the Program whose code owns the connection, if known (qore#7544)
+        /** The owner of the connection manager that created it, or the code that created it itself (see
+            setConnectionOwner())
+        */
+        *int owner_pgm_id;
+
+        #! True once the owner of the connection is set
+        bool owner_set;
+
+        #! The ID of the Program whose restricted code took the connection out of the pool (qore#7544)
+        *int taker_pgm_id;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
     abstract string getProtocol();
+
+    #! Sets the owner of the connection, once (qore#7544)
+    /** Called by the constructor of a protocol's connection with the result of its caller check
+        (HttpClientCallerExemption::check()): the owner of the connection manager that creates it, or the Program of
+        the code that creates it itself
+
+        @param owner_pgm_id the ID of the Program whose code owns the connection, if known
+
+        @since HttpClientIo 1.0
+    */
+    private setConnectionOwner(*int owner_pgm_id) {
+        AutoLock al(lock);
+        if (owner_set) {
+            return;
+        }
+        self.owner_pgm_id = owner_pgm_id;
+        owner_set = True;
+    }
+
+    #! Returns @ref True if the calling code may take the socket of the connection as it is (qore#7544)
+    /** Code that no sandbox restricts (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"),
+        and the code of the Program that owns the connection; fails closed: @ref False for restricted code whose
+        Program is not known
+
+        @since HttpClientIo 1.0
+    */
+    private bool callerOwnsConnection() {
+        if (!SandboxManager::isRestricted()) {
+            return True;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        AutoLock al(lock);
+        return exists caller && exists owner_pgm_id && caller == owner_pgm_id;
+    }
+
+    #! Takes the connection out of the pool for restricted code that does not own it, if it is idle (qore#7544)
+    /** The connection then belongs to the code that took it: its stream is reserved for good, so that the connection
+        manager gives it to no other request, and it is leased, so that it is not closed for its idle time; the code that
+        took it can take it again
+
+        @return @ref True if the calling code took the connection, now or before; @ref False if it is not idle (another
+        request uses it or reserved it), was taken by other code, or the calling code's Program is not known
+
+        @since HttpClientIo 1.0
+    */
+    private bool takeIdleForRestrictedCaller() {
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller) {
+            return False;
+        }
+        {
+            AutoLock al(lock);
+            if (exists taker_pgm_id) {
+                return taker_pgm_id == caller;
+            }
+        }
+        # the reservation fails if a request uses the connection or reserved it, or if it is leased (its session's,
+        # qore#6194), in one critical section; it is not released
+        if (getOutstandingStreamCount() || !tryReserveStreamIntern(True)) {
+            return False;
+        }
+        markTaken(caller);
+        return True;
+    }
+
+    #! Takes the connection out of the pool for good for the restricted code of the given %Program (qore#7544)
+    /** The manager gives it to no other request (see @ref tryReserveStream()), and it is leased, so that it is not
+        closed for its idle time
+
+        @param caller the ID of the %Program whose code takes the connection
+
+        @return @ref True if the connection is that code's now, @ref False if other code took it before
+
+        @since HttpClientIo 1.0
+    */
+    private bool markTaken(int caller) {
+        {
+            AutoLock al(lock);
+            if (!markTakenLocked(caller)) {
+                return False;
+            }
+        }
+        setLeased(True);
+        return True;
+    }
+
+    #! Takes the connection out of the pool for the code of the given %Program; the caller holds \c lock
+    /** The caller leases the connection (setLeased()) once it released \c lock
+
+        @return @ref True if the connection is that code's now, @ref False if other code took it before
+
+        @since HttpClientIo 1.0
+    */
+    private bool markTakenLocked(int caller) {
+        if (exists taker_pgm_id) {
+            return taker_pgm_id == caller;
+        }
+        taker_pgm_id = caller;
+        return True;
+    }
+
+    #! Returns @ref True if code that a sandbox restricts took the connection out of the pool (qore#7544)
+    /** @since HttpClientIo 1.0
+    */
+    bool isTaken() {
+        AutoLock al(lock);
+        return exists taker_pgm_id;
+    }
 
     #! Returns the poll operation for this connection
     abstract HttpClientPollOperation getPollOperation();
@@ -283,7 +403,17 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         \c canAcceptStream() + manual reservation..
     */
     bool tryReserveStream() {
+        return tryReserveStreamIntern(False);
+    }
+
+    #! Reserves a stream slot; with \a unleased_only, only on a connection that is not leased (qore#7544)
+    private:internal bool tryReserveStreamIntern(bool unleased_only) {
         AutoLock al(lock);
+        # a connection that restricted code took out of the pool is never given to another request, whatever its
+        # reservation and lease counters say: they can be changed with the connection's public methods (qore#7544)
+        if (exists taker_pgm_id || (unleased_only && leased)) {
+            return False;
+        }
         int cs = self.getConnectionState();
         if (cs != HttpClientConnectionState::Ready
                 && cs != HttpClientConnectionState::Connecting) {
@@ -510,7 +640,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocket());
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -566,7 +696,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocket());
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
 
         return {
@@ -595,7 +725,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocket());
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
     }
 
@@ -700,7 +830,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         closeImpl(close_timeout);
         # the connection and its poll operation reference each other: the cycle is broken once the connection is
         # closed, or neither is ever released (#6286)
-        getPollOperation().clearConnection();
+        HttpClientIoSocketAccess::clearConnectionOf(getPollOperation(), self);
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

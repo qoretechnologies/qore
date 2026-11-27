@@ -57,6 +57,9 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/WeakReferenceNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -585,6 +588,13 @@ bool qore_has_debug() {
 }
 
 int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    // the library's initialization finalizes its builtin classes with no Program (qore_init()): there is no parse to
+    // report the error to, and their hierarchies are fixed and shallow; with a small main thread stack (RLIMIT_STACK
+    // of 192K or less), whose limit leaves less than QORE_PARSE_STACK_RESERVE above the depth of the initialization,
+    // the error crashed the process instead of letting the parse of the program's code fail (qore#7663)
+    if (!getProgram()) {
+        return 0;
+    }
     parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
 }
@@ -4312,6 +4322,27 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
     return QoreValue(copy);
 }
 
+QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        case NT_HASH: {
+            // the lvalue holds the container: releasing the reference read does not free it
+            ValueHolder strong(v, xsink);
+            return new WeakHashReferenceNode(v.get<QoreHashNode>());
+        }
+        case NT_LIST: {
+            ValueHolder strong(v, xsink);
+            return new WeakListReferenceNode(v.get<QoreListNode>());
+        }
+        case NT_WEAKREF: {
+            // a weak reference to an object that the source holds reads as its target, as in the other modes
+            ValueHolder weak(v, xsink);
+            return QoreValue(v.get<const WeakReferenceNode>()->get()).refSelf();
+        }
+        default:
+            return v;
+    }
+}
+
 QoreValue qore_value_copy_on_write(QoreValue& v) {
     // an enum value does not own its base value's node: its callers replace it with an owned copy instead
     assert(!v.isEnum());
@@ -5773,6 +5804,11 @@ QoreHashNode* get_source_location(const QoreProgramLocation* loc) {
     }
 
     ph->setKeyValueIntern("offset", loc->offset);
+
+    // the directories of the sources are external information: code restricted from it gets the file names (qore#7507)
+    if (runtime_no_external_info()) {
+        qore_restrict_location_paths(**h);
+    }
 
     return h.release();
 }

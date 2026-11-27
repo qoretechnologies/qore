@@ -64,6 +64,10 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_4 ProviderIndex v1.4
+    - only code that may change the index that the host published builds an index or runs an index worker:
+      sandboxed code and code restricted from external information are refused (see
+      @ref providerindexutil_published_index;
+      <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>)
     - the internal helpers of @ref ProviderIndex::ProviderIndex "ProviderIndex" are not visible to subclasses
       (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - fixed an index build whose @ref ProviderIndex::ProviderIndexCreateOptions::apps "apps" option names no

@@ -55,14 +55,22 @@ public class DefaultBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         int cnt = 0;
         while (i.next()) {
             hash<auto> rec = i.getValue();
-            if (!rv) {
-                # issue #4457: make sure lists are "list<auto>" type
-                rv = map {$1: ()}, keys rec;
+            # a field the records before this one did not have is a column of its own, with no value for them
+            foreach string key in (keys rec) {
+                if (!rv.hasKey(key)) {
+                    # issue #4457: make sure lists are "list<auto>" type
+                    list<auto> column = ();
+                    for (int row = 0; row < cnt; ++row) {
+                        push column, NOTHING;
+                    }
+                    rv{key} = column;
+                }
             }
             # issue #542: append each value as a single column cell; "+=" concatenates the elements of a
-            # list value into the column and drops NOTHING entirely, either of which misaligns the block
-            foreach hash<auto> field in (rec.pairIterator()) {
-                push rv{field.key}, field.value;
+            # list value into the column and drops NOTHING entirely, either of which misaligns the block; a field
+            # this record does not have has no value in its row, so every column has one cell per record
+            foreach string key in (keys rv) {
+                push rv{key}, rec{key};
             }
             if (++cnt == block_size) {
                 break;

@@ -71,13 +71,9 @@ class HandoverOperation inherits AbstractPollOperation<auto> {
             case "wrap": {
                 AsyncIoController::releaseModuleCleanupWork(handle);
                 # code run on another thread as this work (qore#7339): it runs as work that the cleanup counts, so it
-                # can hand work over in turn, and the cleanup waits for it
-                code<nothing()> c = sub () {
-                    int nested = AsyncIoController::holdModuleCleanupWork();
-                    printf("wrapped code ran: counted: %y\n", nested != 0);
-                    AsyncIoController::releaseModuleCleanupWork(nested);
-                    flush();
-                };
+                # can hand work over in turn, and the cleanup waits for it; the code is made in a static method, as
+                # a closure of this method would run with this object, which can be deleted before the thread runs it
+                code<nothing()> c = HandoverOperation::getWrapCode();
                 code w = AsyncIoController::wrapModuleCleanupWork(c);
                 printf("wrapped: %y, wrapped again: %y\n", w != c, AsyncIoController::wrapModuleCleanupWork(w) == w);
                 background w();
@@ -85,33 +81,55 @@ class HandoverOperation inherits AbstractPollOperation<auto> {
             }
             case "wrap-throw": {
                 AsyncIoController::releaseModuleCleanupWork(handle);
-                # the handle is released when the code raises an exception: the cleanup does not wait for it
-                code w = AsyncIoController::wrapModuleCleanupWork(sub () {
-                    # written before the exception, while the handle is held: the cleanup waits for it
-                    printf("wrapped code raising\n");
-                    flush();
-                    throw "WRAPPED-ERROR", "the wrapped code raised an exception";
-                });
-                background sub () {
-                    try {
-                        w();
-                    } catch (hash<ExceptionInfo> ex) {
-                        printf("wrapped code raised: %s\n", ex.err);
-                        flush();
-                    }
-                    # the wrapped code runs once
-                    try {
-                        w();
-                        printf("wrapped code ran twice\n");
-                    } catch (hash<ExceptionInfo> ex) {
-                        printf("wrapped code called again: %s\n", ex.err);
-                    }
-                    flush();
-                }();
+                # the handle is released when the code raises an exception: the cleanup does not wait for it; the
+                # code is made in static methods, as closures of this method would run with this object, which can be
+                # deleted before the thread runs them
+                code w = AsyncIoController::wrapModuleCleanupWork(HandoverOperation::getThrowCode());
+                background HandoverOperation::getThrowRunner(w)();
                 break;
             }
         }
         flush();
+    }
+
+    #! returns the code of the "wrap" mode, which needs no object
+    static code<nothing()> getWrapCode() {
+        return sub () {
+            int nested = AsyncIoController::holdModuleCleanupWork();
+            printf("wrapped code ran: counted: %y\n", nested != 0);
+            AsyncIoController::releaseModuleCleanupWork(nested);
+            flush();
+        };
+    }
+
+    #! returns the code of the "wrap-throw" mode, which needs no object
+    static code<nothing()> getThrowCode() {
+        return sub () {
+            # written before the exception, while the handle is held: the cleanup waits for it
+            printf("wrapped code raising\n");
+            flush();
+            throw "WRAPPED-ERROR", "the wrapped code raised an exception";
+        };
+    }
+
+    #! returns the code that runs the wrapped code of the "wrap-throw" mode twice on another thread
+    static code<nothing()> getThrowRunner(code w) {
+        return sub () {
+            try {
+                w();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("wrapped code raised: %s\n", ex.err);
+                flush();
+            }
+            # the wrapped code runs once
+            try {
+                w();
+                printf("wrapped code ran twice\n");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("wrapped code called again: %s\n", ex.err);
+            }
+            flush();
+        };
     }
 }
 

@@ -37,6 +37,7 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -164,6 +165,10 @@ struct qore_fs_security_private {
         error means that the path cannot be resolved safely, and guessing at a canonical form
         that the containment checks would then trust could place a path outside the sandbox
         inside it.
+
+        Errors name the path as given, in the form for the code that the messages are built for: without its
+        directories in a scope of messages for code restricted from external information (qore_msg_path(), a module
+        load or the parse of a source for such code, qore#7507)
     */
     std::string canonicalize(const char* path, ExceptionSink* xsink) {
         if (!path || !*path) {
@@ -178,8 +183,9 @@ struct qore_fs_security_private {
         } else {
             std::unique_ptr<char, decltype(&free)> cwd(realpath(".", nullptr), &free);
             if (!cwd) {
+                int err = errno;
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize relative path "
-                    "'%s': the current directory cannot be resolved: %s", path, strerror(errno));
+                    "'%s': the current directory cannot be resolved: %s", qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
             probe = cwd.get();
@@ -207,8 +213,8 @@ struct qore_fs_security_private {
             if (err != ENOENT && err != ENOTDIR) {
                 // the message names the path as given only, never a link target or a directory reached while
                 // resolving it (qore#7498)
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
-                    strerror(err));
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
+                    qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
 
@@ -218,15 +224,16 @@ struct qore_fs_security_private {
             struct stat sb;
             if (!lstat(probe.c_str(), &sb) && S_ISLNK(sb.st_mode)) {
                 if (++links > qore_sandbox_max_symlinks) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
-                        strerror(ELOOP));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
+                        qore_msg_path(path).c_str(), strerror(ELOOP));
                     return "";
                 }
                 char buf[QORE_PATH_MAX + 1];
                 ssize_t len = readlink(probe.c_str(), buf, QORE_PATH_MAX);
                 if (len < 0) {
+                    int link_err = errno;
                     xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a link cannot be "
-                        "read: %s", path, strerror(errno));
+                        "read: %s", qore_msg_path(path).c_str(), strerror(link_err));
                     return "";
                 }
                 assert(len <= QORE_PATH_MAX);
@@ -238,7 +245,7 @@ struct qore_fs_security_private {
                 if (is_in_proc(probe)) {
                     xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a "
                         "descriptor whose file cannot be identified by a path, so the security policy cannot be "
-                        "applied to it", path);
+                        "applied to it", qore_msg_path(path).c_str());
                     return "";
                 }
                 if (*buf == '/') {
@@ -257,7 +264,7 @@ struct qore_fs_security_private {
             // is consumed; this is defensive only
             if (probe == "/") {
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
-                    path, strerror(err));
+                    qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
 
@@ -290,8 +297,9 @@ struct qore_fs_security_private {
             std::string up = base + "/..";
             std::unique_ptr<char, decltype(&free)> real(realpath(up.c_str(), nullptr), &free);
             if (!real) {
+                int err = errno;
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a parent "
-                    "directory cannot be resolved: %s", path, strerror(errno));
+                    "directory cannot be resolved: %s", qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
             base = real.get();
@@ -348,12 +356,13 @@ struct qore_fs_security_private {
         return pathStartsWith(canon_path, sandbox_root);
     }
 
-    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path)
+    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path), in the form for
+    //! the code that the messages are built for (qore_msg_path(), see canonicalize())
     bool checkRules(const std::string& canon, const char* path, int mode, ExceptionSink* xsink) const {
         // Check denied paths first (they always take precedence)
         if (isDenied(canon)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-                "Access to '%s' denied by security policy (path is in denied list)", path);
+                "Access to '%s' denied by security policy (path is in denied list)", qore_msg_path(path).c_str());
             return false;
         }
 
@@ -361,7 +370,7 @@ struct qore_fs_security_private {
         if (!isInSandboxRoot(canon)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
                 "Access to '%s' denied: path is outside sandbox root '%s'",
-                path, sandbox_root.c_str());
+                qore_msg_path(path).c_str(), qore_msg_path(sandbox_root.c_str()).c_str());
             return false;
         }
 
@@ -386,7 +395,7 @@ struct qore_fs_security_private {
 
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
             "Access to '%s' denied: %s access not permitted by security policy",
-            path, mode_str.c_str());
+            qore_msg_path(path).c_str(), mode_str.c_str());
         return false;
     }
 };
@@ -554,7 +563,8 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         // (it gives "/dev/fd/<name of the file>"), and the file is identified by the descriptor that the open gives
         if (resolve_descriptor_alias(path, target)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor "
-                "whose file cannot be identified by a path, so the security policy cannot be applied to it", path);
+                "whose file cannot be identified by a path, so the security policy cannot be applied to it",
+                qore_msg_path(path).c_str());
             return false;
         }
         // errors name the path as given, not the file reached
@@ -563,7 +573,7 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         if (xsink2 || is_descriptor_alias(canon)) {
             xsink2.clear();
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
-                "cannot be resolved", path);
+                "cannot be resolved", qore_msg_path(path).c_str());
             return false;
         }
     }
@@ -584,7 +594,8 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
             if (fstat(pfd, &obuf) || stat(canon.c_str(), &cbuf) || obuf.st_dev != cbuf.st_dev
                     || obuf.st_ino != cbuf.st_ino) {
                 xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
-                    "cannot be identified by a path, so the security policy cannot be applied to it", path);
+                    "cannot be identified by a path, so the security policy cannot be applied to it",
+                    qore_msg_path(path).c_str());
                 return false;
             }
         }
@@ -1438,6 +1449,33 @@ void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
     untrusted_creators[sm] = id;
 }
 
+int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink) {
+    assert(sm);
+    if (max_zones < 0 || max_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the time zone path limits cannot be negative; got: zones "
+            QLLD ", bytes " QLLD, max_zones, max_bytes);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(sm)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "a composite sandbox has no time zone path limits of its own; "
+            "the limits of each of its sandboxes apply");
+        return -1;
+    }
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    // restricted code (also through the code of a module that acts for it) can only lower a limit: a budget that it
+    // could raise, also of a manager that it created, would let it pin memory that the host did not grant (qore#7566)
+    if ((max_zones > account->tz_max_zones.load() || max_bytes > account->tz_max_bytes.load())
+            && qore_caller_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setTimeZonePathLimits(): restricted code can "
+            "only lower the time zone path limits of a sandbox");
+        return -1;
+    }
+    account->tz_max_zones.store(max_zones);
+    account->tz_max_bytes.store(max_bytes);
+    return 0;
+}
+
 int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
     if (!qore_calling_code_is_untrusted()) {
         return 0;
@@ -2029,21 +2067,37 @@ static bool is_module_initialization_resource_read(const char* path, int mode) {
     if (mode != QSEC_READ) {
         return false;
     }
-
-    const char* module_path = get_module_context_path();
-    if (!module_path || !*module_path) {
-        return false;
-    }
-
-    std::string module_root(module_path);
-    struct stat sb;
-    if (stat(module_path, &sb) || !S_ISDIR(sb.st_mode)) {
-        size_t sep = module_root.find_last_of("/\\");
-        if (sep == std::string::npos) {
-            // A module name alone does not establish a safe resource directory.
+    // only library code reads its resources this way: a module that code which is not trusted chose outside of the
+    // module path is read, with its resources, with the file-system policy of that code (qore#7518)
+    // a library module loaded into a container of such code reads its resources beneath its canonical directory of
+    // library code, and not beneath the path that that code gave
+    const char* library_root = nullptr;
+    if (qore_module_load_is_untrusted()) {
+        library_root = qore_module_load_library_root();
+        if (!library_root) {
             return false;
         }
-        module_root.resize(sep ? sep : 1);
+    }
+
+    std::string module_root;
+    if (library_root) {
+        module_root = library_root;
+    } else {
+        const char* module_path = get_module_context_path();
+        if (!module_path || !*module_path) {
+            return false;
+        }
+
+        module_root = module_path;
+        struct stat sb;
+        if (stat(module_path, &sb) || !S_ISDIR(sb.st_mode)) {
+            size_t sep = module_root.find_last_of("/\\");
+            if (sep == std::string::npos) {
+                // A module name alone does not establish a safe resource directory.
+                return false;
+            }
+            module_root.resize(sep ? sep : 1);
+        }
     }
 
     std::unique_ptr<char, decltype(&free)> canonical_root(realpath(module_root.c_str(), nullptr), &free);
@@ -2196,6 +2250,23 @@ void qore_program_private::getSandboxManagerRefs(QoreSandboxManager*& own, QoreS
     }
 }
 
+void qore_program_private::getCreatorSandboxRefs(QoreSandboxManager*& creator, QoreSandboxManager*& policy) {
+    creator = nullptr;
+    policy = nullptr;
+    if (!hasSandboxManager()) {
+        return;
+    }
+    AutoLocker al(sm_lock);
+    QoreSandboxManager* sm = creator_sandbox_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        creator = sm;
+    }
+    sm = creator_policy_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        policy = sm;
+    }
+}
+
 int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace) {
     QoreSandboxManager* old;
     {
@@ -2210,8 +2281,9 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            sandboxed.store(true, std::memory_order_release);
+            // the manager flag first: a reader that sees the Program sandboxed also sees that it has a manager
             any_sandbox_manager.store(true, std::memory_order_release);
+            sandboxed.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -2239,24 +2311,114 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
     return nullptr;
 }
 
-bool qore_object_program_is_sandboxed(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
+namespace {
+//! Returns true if the code that declares the class is sandboxed (see qore_class_declared_by_sandboxed_code())
+bool qore_class_own_code_sandboxed(const qore_class_private& qc, qore_program_id_t* id) {
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram()); a builtin
+    // class without a source Program and without a released state gives false
+    std::lock_guard<std::mutex> al(qc.dataLock());
+    QoreProgram* p = qc.spgm.load();
+    if (p) {
+        if (!qore_program_is_sandboxed(p)) {
+            return false;
+        }
+        if (id) {
+            *id = qore_program_private::get(*p)->getProgramId();
+        }
+        return true;
+    }
+    if (!qc.released_sandboxed.load()) {
         return false;
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    return static_cast<bool>(sm);
+    if (id) {
+        *id = qc.released_spgm_id.load();
+    }
+    return true;
+}
+
+//! Returns true if \a check is true for the class or one of its base classes (qore#7576)
+/** The hierarchy is walked depth first, the class before its base classes, in the order of their declaration, each
+    class once: a class reached through more than one path is not looked at again, so that the walk is linear in the
+    number of classes of the hierarchy
+*/
+template <typename F>
+bool qore_class_hierarchy_any(const qore_class_private& qc, F check) {
+    std::vector<const qore_class_private*> stack{&qc};
+    std::vector<const qore_class_private*> visited;
+    while (!stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (std::find(visited.begin(), visited.end(), c) != visited.end()) {
+            continue;
+        }
+        visited.push_back(c);
+        if (check(*c)) {
+            return true;
+        }
+        if (c->scl) {
+            // pushed in reverse, so that the first base class is looked at first
+            for (auto i = c->scl->rbegin(), e = c->scl->rend(); i != e; ++i) {
+                if ((*i)->sclass) {
+                    stack.push_back(qore_class_private::get(*(*i)->sclass));
+                }
+            }
+        }
+    }
+    return false;
+}
+
+//! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
+/** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
+    was imported into another Program, whose namespace then holds it; once that Program has released the class, the
+    state that it had then is used (see qore_class_private::isSandboxedCode()).
+
+    @param qc the class
+    @param id if not null, set to the ID of the Program that declares the first sandboxed class found
+*/
+bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
+    return qore_class_hierarchy_any(qc, [id] (const qore_class_private& c) {
+        return qore_class_own_code_sandboxed(c, id);
+    });
+}
+
+//! Returns true if the code that declares the class, or one of its base classes, is restricted (qore#7576)
+bool qore_class_declared_by_restricted_code(const qore_class_private& qc) {
+    return qore_class_hierarchy_any(qc, [] (const qore_class_private& c) {
+        return c.isRestrictedCode();
+    });
+}
+}
+
+bool qore_object_program_is_sandboxed(const QoreObject* obj) {
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), nullptr)) {
+        return true;
+    }
+    QoreProgram* pgm = obj->getProgram();
+    return pgm && qore_program_is_sandboxed(pgm);
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
+    try {
+        // the code that declares the class or a base class (qore#7576), and the Program the class is used in
+        if (qore_class_declared_by_restricted_code(*qore_class_private::get(*obj->getClass()))) {
+            return true;
+        }
+    } catch (std::bad_alloc&) {
+        // fails closed
+        return true;
+    }
+    return qore_program_is_restricted(obj->getProgram());
+}
+
+bool qore_program_is_restricted(const QoreProgram* pgm) {
     if (!pgm) {
         return false;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
         // its code only if every member does
-        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
@@ -2270,12 +2432,11 @@ bool qore_object_program_is_restricted(const QoreObject* obj) {
 }
 
 bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
-        return false;
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), &id)) {
+        return true;
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    if (!sm) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
         return false;
     }
     id = qore_program_private::get(*pgm)->getProgramId();
@@ -2380,6 +2541,8 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     if (!qore_caller_is_sandboxed()) {
         return 0;
     }
+    pcs.sandboxed = true;
+    pcs.restricted = qore_caller_has_restricted_code();
     sandboxed.store(true, std::memory_order_release);
     try {
         qore_caller_sandbox_refs(pcs.sm, pcs.policy);
@@ -2426,6 +2589,11 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
         }
         pending_creator_policy = policy.release();
     }
+    // code that restricted code calls is restricted for the classes that it declares, also when a manager of a Program
+    // that trusts its code governs it: such code acts for the restricted code (qore#7635)
+    if (pcs.sandboxed && pcs.restricted) {
+        pending_restricted_caller = true;
+    }
     return 0;
 }
 
@@ -2449,7 +2617,14 @@ void qore_program_private::releaseSandboxManagers(ExceptionSink* xsink) {
     dropPendingCreatorSandbox();
 }
 
+bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
+    assert(parsingLocked());
+    return pending_restricted_caller || commit_restricted_caller
+        || (pending_creator_sandbox && !pending_creator_sandbox->trustsUncontrolledApis());
+}
+
 void qore_program_private::dropPendingCreatorSandbox() {
+    pending_restricted_caller = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2461,16 +2636,19 @@ void qore_program_private::dropPendingCreatorSandbox() {
 }
 
 int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
-    if (!pending_creator_sandbox && !pending_creator_policy) {
-        return 0;
-    }
-    try {
-        addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
-    } catch (std::bad_alloc&) {
-        xsink->outOfMemory();
-        return -1;
+    // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
+    // goes ahead, cleared when it ends
+    const bool restricted = pending_restricted_caller;
+    if (pending_creator_sandbox || pending_creator_policy) {
+        try {
+            addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
     }
     dropPendingCreatorSandbox();
+    commit_restricted_caller = restricted;
     return 0;
 }
 
@@ -2656,6 +2834,20 @@ int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
     return -1;
 }
 
+int qore_check_system_object_change(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // fails closed, as qore_check_process_wide_registration(): true if the governing sandbox cannot be resolved; false
+    // under a module initialization barrier for the code that loads library code
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot call %s() "
+        "with a system constant object: the process-wide standard I/O objects are shared by every Program of the "
+        "process", what);
+    return -1;
+}
+
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
     assert(what);
     assert(xsink);
@@ -2820,7 +3012,7 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
         QoreSandboxPinnedPath& pin, ExceptionSink* xsink) {
     if ((!query && (mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE))) || !q_is_literal_descriptor_alias(name)) {
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: a descriptor alias cannot be "
-            "changed under a security policy", name);
+            "changed under a security policy", qore_msg_path(name).c_str());
         return -1;
     }
     int fd;
@@ -2842,7 +3034,8 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
     std::string target;
     if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, nullptr, target)) {
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor whose "
-            "file cannot be identified by a path, so the security policy cannot be applied to it", name);
+            "file cannot be identified by a path, so the security policy cannot be applied to it",
+            qore_msg_path(name).c_str());
         return -1;
     }
     ExceptionSink xsink2;
@@ -2854,7 +3047,7 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
     if (xsink2 || is_descriptor_alias(canon)) {
         xsink2.clear();
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to cannot be "
-            "resolved", name);
+            "resolved", qore_msg_path(name).c_str());
         return -1;
     }
     pin.canon = canon;
@@ -2940,7 +3133,7 @@ int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool 
         // not a directory (ENOTDIR) is the error of the operation, as without a policy
         if (errno == ELOOP) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
-                "checked", name);
+                "checked", qore_msg_path(name).c_str());
             return -1;
         }
         return -2;

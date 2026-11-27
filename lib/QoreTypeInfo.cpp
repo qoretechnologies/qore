@@ -351,12 +351,15 @@ void QoreLegacyTypeVec::refresh(const orphanable_type_vec_t& src) const {
 namespace {
 class QoreAOTDeferredTypeInfo : public QoreTypeInfo {
 public:
-    QoreAOTDeferredTypeInfo(std::string qore_path, std::string type_path, bool hashdecl,
+    QoreAOTDeferredTypeInfo(std::string qore_path, std::string name, bool hashdecl,
             bool or_nothing)
-            : QoreTypeInfo(type_path.c_str(), makeAcceptVec(hashdecl, or_nothing),
+            : QoreTypeInfo(name.c_str(), makeAcceptVec(hashdecl, or_nothing),
                 makeReturnVec(hashdecl, or_nothing)),
-            qore_path(std::move(qore_path)), type_path(std::move(type_path)), hashdecl(hashdecl),
+            qore_path(std::move(qore_path)), type_path(std::move(name)), hashdecl(hashdecl),
             or_nothing(or_nothing) {
+        // As for a resolved type, getPath() roots the name inside object<...> or hash<...>. Class
+        // signatures use this path even when the declaration is in a later compilation unit (qore#7473).
+        type_path.insert(type_path.find('<') + 1, "::");
         aot_deferred_placeholder = true;
     }
 
@@ -372,19 +375,7 @@ public:
             return false;
         }
         const char* path = QoreTypeInfo::getPath(ti);
-        if (!path) {
-            return false;
-        }
-        if (type_path == path) {
-            return true;
-        }
-        // Deferred paths use the unrooted spelling serialized in AOT contracts, while a loaded
-        // class can render as object<::Ns::Class>.  Ignore only that root qualifier: the kind,
-        // nullable marker, and complete namespace-qualified name must still match.
-        size_t prefix_size = strlen(hashdecl ? "hash<" : "object<") + (or_nothing ? 1 : 0);
-        return !strncmp(path, type_path.c_str(), prefix_size)
-            && path[prefix_size] == ':' && path[prefix_size + 1] == ':'
-            && !strcmp(path + prefix_size + 2, type_path.c_str() + prefix_size);
+        return path && (type_path == path || !strcmp(QoreTypeInfo::getName(this), path));
     }
 
 protected:
@@ -455,10 +446,7 @@ static std::string aotDeferredTypeQorePath(const char* qore_path) {
     between a whole-group parse and a parse against preloaded shells -- and the scheduler then
     rebuilds the whole closure of an edit for a difference that changes no declaration.
 
-    A deferred CLASS previously used the rooted spelling (`object<::X>`), unlike the
-    whole-group contract (`object<X>`); deferred hashdecls already used the unrooted form.
-    A loaded live type can still return a rooted path, which matchesResolvedType() handles
-    separately without changing the serialized spelling.
+    The placeholder keeps this spelling as its name and returns the rooted spelling from getPath().
 */
 static std::string aotDeferredTypePath(const std::string& qore_path, bool hashdecl, bool or_nothing) {
     std::string rv;
@@ -1218,7 +1206,22 @@ std::mutex* qore_type_dbg_fork_lock(const char* name) {
     if (!strcmp(name, "type_info_registry")) {
         return &type_info_registry().m;
     }
-    return qore_thread_type_dbg_fork_lock(name);
+    if (std::mutex* m = qore_thread_type_dbg_fork_lock(name)) {
+        return m;
+    }
+    // a stripe of the locks of the per-object caches of generics (qore#7554)
+    static const char stripe_prefix[] = "cache_stripe:";
+    if (!strncmp(name, stripe_prefix, sizeof(stripe_prefix) - 1)) {
+        const char* num = name + sizeof(stripe_prefix) - 1;
+        char* end = nullptr;
+        unsigned long i = strtoul(num, &end, 10);
+        return end == num || *end ? nullptr : qore_cache_stripe_dbg_lock(i);
+    }
+    // the mutex of any other fork handler of a std::mutex
+    if (QoreForkStdMutex* sm = dynamic_cast<QoreForkStdMutex*>(qore_fork_find_handler(name))) {
+        return &sm->dbgMutex();
+    }
+    return nullptr;
 }
 #endif
 
@@ -1919,11 +1922,19 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         for (QoreTypeOwner* n : mod_refs) {
             n->derefTypeOwner();
         }
+        // and the declarations of other Programs (qore#7680)
+        std::vector<QoreTypeOwner*> xrefs;
+        xrefs.swap(owner->type_owner_xrefs);
+        for (QoreTypeOwner* n : xrefs) {
+            n->derefTypeOwner();
+        }
         return;
     }
     std::vector<QoreTypeOwner*> release_list;
     // the binary module declarations that it named (qore#7533), released after the lock is released
     std::vector<QoreTypeOwner*> mod_refs;
+    // and the declarations of other Programs (qore#7680)
+    std::vector<QoreTypeOwner*> xrefs;
     {
         AutoLocker al(ctl);
         type_owner_counted_registry().erase(owner);
@@ -1931,6 +1942,7 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         retired_derived_naming.erase(owner);
         type_owner_uncount_names(owner, release_list);
         mod_refs.swap(owner->type_owner_module_refs);
+        xrefs.swap(owner->type_owner_xrefs);
         // a member of a group is freed only when the group has been collected, unless it is deleted with its class
         // object (qore_class_private::deref() with in_del): it leaves its group then
         QoreTypeOwnerGroup* g = owner->type_owner_group;
@@ -1949,6 +1961,9 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
     }
     type_owner_release(release_list);
     for (QoreTypeOwner* n : mod_refs) {
+        n->derefTypeOwner();
+    }
+    for (QoreTypeOwner* n : xrefs) {
         n->derefTypeOwner();
     }
 }
@@ -2148,6 +2163,174 @@ void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreType
     }
 }
 
+//! Returns the binary module declarations that a declaration of a Program names (qore#7533): its names that are
+//! module declarations, and what the module classes among them name in their own types; the caller holds ctl
+static std::vector<QoreTypeOwner*> type_owner_module_names(const std::vector<QoreTypeOwner*>& names,
+        qore_type_owner_module_names_cache_t* module_class_names) {
+    std::vector<QoreTypeOwner*> mod_names;
+    for (QoreTypeOwner* n : names) {
+        if (n->isTypeOwnerModule() && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
+            mod_names.push_back(n);
+        }
+    }
+    // a class's type is shared with its copies, so the declaration names a module's original class, whose member and
+    // signature types the code of its Program reads (qore#7533)
+    qore_type_owner_add_module_class_names(mod_names, module_class_names);
+    return mod_names;
+}
+
+//! Gives a declaration the references to the binary module declarations that it names (type_owner_module_refs);
+//! does not throw; the caller holds ctl
+static void type_owner_set_module_refs(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& mod_names) {
+    assert(o->type_owner_module_refs.empty());
+    for (QoreTypeOwner* n : mod_names) {
+        n->refTypeOwner();
+    }
+    o->type_owner_module_refs.swap(mod_names);
+    o->type_owner_module_refs_taken = true;
+}
+
+//! true once a builtin declaration became mortal at run time (qore_runtime_mortal_decls_exist(); qore#7680)
+static std::atomic<bool> runtime_mortal_decls_exist{false};
+
+bool qore_runtime_mortal_decls_exist() {
+    return runtime_mortal_decls_exist.load(std::memory_order_acquire);
+}
+
+void qore_set_runtime_mortal_decls_exist() {
+    if (!runtime_mortal_decls_exist.load(std::memory_order_relaxed)) {
+        runtime_mortal_decls_exist.store(true, std::memory_order_release);
+    }
+}
+
+#ifdef DEBUG
+//! the number of the next calls of qore_type_owner_take_runtime_refs() that fail (qore_dbg_fail_next_runtime_refs())
+static std::atomic<int> dbg_fail_runtime_refs{0};
+
+void qore_dbg_fail_next_runtime_refs(int count) {
+    dbg_fail_runtime_refs.store(count, std::memory_order_relaxed);
+}
+
+//! the number of builtin declarations added at run time to a namespace that no Program owns that name a mortal
+//! declaration (qore_dbg_unowned_program_local_names())
+static std::atomic<int64> dbg_unowned_program_local_names{0};
+
+//! the number of refused builtin variants (qore_dbg_refused_shared_variants())
+static std::atomic<int64> dbg_refused_shared_variants{0};
+
+int64 qore_dbg_refused_shared_variants() {
+    return dbg_refused_shared_variants.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_count_refused_shared_variant() {
+    dbg_refused_shared_variants.fetch_add(1, std::memory_order_relaxed);
+}
+
+int64 qore_dbg_unowned_program_local_names() {
+    return dbg_unowned_program_local_names.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_check_unowned_names(const QoreTypeOwner* owner) {
+    std::vector<QoreTypeOwner*> names;
+    AutoLocker al(ctl);
+    owner->getTypeOwnerNames(names);
+    for (QoreTypeOwner* n : names) {
+        if (!n->isTypeOwnerSystem()) {
+            dbg_unowned_program_local_names.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+    }
+}
+#endif
+
+size_t qore_type_owner_set_refs_pending(const std::vector<QoreTypeOwner*>& owners) {
+    size_t count = 0;
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_module_refs_taken && !o->type_owner_refs_pending) {
+            o->type_owner_refs_pending = true;
+            ++count;
+        }
+    }
+    return count;
+}
+
+void qore_type_owner_get_refs_pending(const std::vector<QoreTypeOwner*>& all, std::vector<QoreTypeOwner*>& pending) {
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : all) {
+        if (o->type_owner_refs_pending) {
+            pending.push_back(o);
+        }
+    }
+}
+
+//! Returns the root namespace of a declaration, or nullptr if it has no namespace or one that is not attached
+static const qore_root_ns_private* type_owner_root(const QoreTypeOwner* o) {
+    const qore_ns_private* ns = o->getTypeOwnerNamespace();
+    return ns ? ns->getRoot() : nullptr;
+}
+
+bool qore_type_owner_take_runtime_refs(const std::vector<QoreTypeOwner*>& owners, const qore_root_ns_private* root) {
+    if (owners.empty() || type_owner_cleanup.load(std::memory_order_acquire)) {
+        return true;
+    }
+    AutoLocker al(ctl);
+    qore_type_owner_module_names_cache_t module_class_names;
+    // every list is made before any reference is taken, so that a failed allocation takes none
+    struct Refs {
+        QoreTypeOwner* owner;
+        std::vector<QoreTypeOwner*> mod_names;
+        std::vector<QoreTypeOwner*> xrefs;
+    };
+    std::vector<Refs> refs;
+    try {
+#ifdef DEBUG
+        if (dbg_fail_runtime_refs.load(std::memory_order_relaxed) > 0) {
+            dbg_fail_runtime_refs.fetch_sub(1, std::memory_order_relaxed);
+            throw std::bad_alloc();
+        }
+#endif
+        refs.reserve(owners.size());
+        std::vector<QoreTypeOwner*> names;
+        for (QoreTypeOwner* o : owners) {
+            if (o->type_owner_module_refs_taken) {
+                continue;
+            }
+            names.clear();
+            o->getTypeOwnerNames(names);
+            refs.push_back(Refs{o, type_owner_module_names(names, &module_class_names), {}});
+            std::vector<QoreTypeOwner*>& xrefs = refs.back().xrefs;
+            for (QoreTypeOwner* n : names) {
+                // a declaration of its own Program is decided with it by its Program's batch
+                if (n->isTypeOwnerSystem() || std::find(owners.begin(), owners.end(), n) != owners.end()
+                        || std::find(xrefs.begin(), xrefs.end(), n) != xrefs.end()) {
+                    continue;
+                }
+                const qore_root_ns_private* nroot = type_owner_root(n);
+                if (root && nroot == root) {
+                    continue;
+                }
+                xrefs.push_back(n);
+            }
+        }
+    } catch (std::bad_alloc&) {
+        return false;
+    }
+    // nothing is thrown from here on
+    for (Refs& i : refs) {
+        type_owner_set_module_refs(i.owner, i.mod_names);
+        assert(i.owner->type_owner_xrefs.empty());
+        for (QoreTypeOwner* n : i.xrefs) {
+            n->refTypeOwner();
+        }
+        i.owner->type_owner_xrefs.swap(i.xrefs);
+    }
+    for (QoreTypeOwner* o : owners) {
+        o->type_owner_refs_pending = false;
+    }
+    return true;
+}
+
 QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
     // after library cleanup, declarations are freed when their last reference is released
     if (type_owner_cleanup.load(std::memory_order_acquire)) {
@@ -2174,6 +2357,17 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             owners.push_back(o);
         }
     }
+    // the references to declarations of this batch that a declaration took as module references before a later
+    // attach marked them, released after the lock is released: this batch references each of them, so no release
+    // frees one (qore#7680)
+    struct SameBatchRefs {
+        std::vector<QoreTypeOwner*> refs;
+        ~SameBatchRefs() {
+            for (QoreTypeOwner* n : refs) {
+                n->derefTypeOwner();
+            }
+        }
+    } same_batch;
     // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
     // (one that survived another Program sharing it) keeps them
     AutoLocker al(ctl);
@@ -2201,23 +2395,22 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             // the binary module declarations that it names are not decided with the declarations of Programs: they
             // are referenced until it is destroyed, as their module can be deleted before it; a hashdecl copy, which
             // references them itself, does not list them (qore#7533)
-            assert(o->type_owner_module_refs.empty());
-            std::vector<QoreTypeOwner*> mod_names;
-            for (QoreTypeOwner* n : names) {
-                if (n->isTypeOwnerModule()
-                        && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
-                    mod_names.push_back(n);
-                }
+            std::vector<QoreTypeOwner*> mod_names = type_owner_module_names(names, &module_class_names);
+            type_owner_set_module_refs(o, mod_names);
+        }
+    }
+    // a builtin declaration that another declaration referenced as a module's while it was not marked yet, and that a
+    // later attach marked in the same Program, is decided with it by this batch: the reference is released, so that
+    // two such declarations that name each other do not keep each other until library cleanup (qore#7680)
+    for (QoreTypeOwner* o : owners) {
+        std::vector<QoreTypeOwner*>& mod = o->type_owner_module_refs;
+        for (auto i = mod.begin(); i != mod.end();) {
+            if (!(*i)->isTypeOwnerSystem() && seen.count(*i)) {
+                same_batch.refs.push_back(*i);
+                i = mod.erase(i);
+            } else {
+                ++i;
             }
-            // a class's type is shared with its copies, so the declaration names a module's original class, whose
-            // member and signature types the code of its Program reads (qore#7533)
-            qore_type_owner_add_module_class_names(mod_names, &module_class_names);
-            // nothing is thrown from here on
-            for (QoreTypeOwner* n : mod_names) {
-                n->refTypeOwner();
-            }
-            o->type_owner_module_refs.swap(mod_names);
-            o->type_owner_module_refs_taken = true;
         }
     }
 }
@@ -2588,6 +2781,11 @@ static void type_owner_find_cyclic_survivors(std::vector<QoreTypeOwner*>& garbag
     for (QoreTypeOwner* o : counted) {
         std::vector<QoreTypeOwner*> refs(o->type_owner_refs);
         o->getTypeOwnerHeldRefs(refs);
+        // the references to the declarations of other Programs, and to a builtin declaration that became mortal after
+        // this one referenced it as a module's: two Programs whose declarations name each other keep each other's
+        // until library cleanup, which frees them (qore#7680)
+        refs.insert(refs.end(), o->type_owner_xrefs.begin(), o->type_owner_xrefs.end());
+        refs.insert(refs.end(), o->type_owner_module_refs.begin(), o->type_owner_module_refs.end());
         std::vector<QoreTypeOwner*>& in_set = held[o];
         for (QoreTypeOwner* n : refs) {
             if (counted.find(n) != counted.end()) {
@@ -2634,6 +2832,43 @@ size_t qore_cyclic_type_owner_count() {
     type_owner_find_cyclic_survivors(garbage);
     return garbage.size();
 }
+
+//! Moves the references that a survivor in a cycle holds to the mortal declarations of other Programs
+//! (type_owner_xrefs, and the mortal ones of type_owner_module_refs) to \a out (qore#7680); the caller holds ctl
+static void type_owner_take_cross_program_refs(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& out) {
+    out.insert(out.end(), o->type_owner_xrefs.begin(), o->type_owner_xrefs.end());
+    o->type_owner_xrefs.clear();
+    std::vector<QoreTypeOwner*>& mod = o->type_owner_module_refs;
+    for (auto i = mod.begin(); i != mod.end();) {
+        if (!(*i)->isTypeOwnerSystem()) {
+            out.push_back(*i);
+            i = mod.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+#ifdef DEBUG
+size_t qore_dbg_cross_program_cycle_count() {
+    std::vector<QoreTypeOwner*> garbage;
+    AutoLocker al(ctl);
+    type_owner_find_cyclic_survivors(garbage);
+    size_t count = 0;
+    for (QoreTypeOwner* o : garbage) {
+        bool cross = !o->type_owner_xrefs.empty();
+        for (QoreTypeOwner* n : o->type_owner_module_refs) {
+            if (!n->isTypeOwnerSystem()) {
+                cross = true;
+            }
+        }
+        if (cross) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
 
 namespace {
 //! Releases the references to declarations that it holds when it goes out of scope, also if an exception is thrown
@@ -2720,6 +2955,8 @@ void delete_qore_types() {
                 names.refs.insert(names.refs.end(), o->type_owner_refs.begin(), o->type_owner_refs.end());
                 o->type_owner_refs.clear();
                 o->type_owner_names_counted = false;
+                // and the references that keep the declarations of other Programs (qore#7680)
+                type_owner_take_cross_program_refs(o, names.refs);
             }
         }
     }
@@ -3401,12 +3638,62 @@ QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* 
     pname = build_parameterized_class_name(base_class, args, or_nothing, true).c_str();
     for (const QoreTypeInfo* arg : args) {
         if (qore_type_needs_decl_pin(arg)) {
-            user_type_args = true;
-            unsafe_receiver = true;
+            user_type_args.store(true, std::memory_order_relaxed);
+            unsafe_receiver.store(true, std::memory_order_relaxed);
             // tested with the type parameter flags by the calls with this receiver
             setUnsafeReceiverCache();
             break;
         }
+    }
+}
+
+void QoreParameterizedClassTypeInfo::upgradeUserTypeArgs() {
+    if (user_type_args.load(std::memory_order_relaxed)) {
+        return;
+    }
+    // the view of the type arguments is read in place: nothing is allocated under the type lock
+    for (const QoreTypeInfo* arg : getTypeArgs()) {
+        if (qore_type_needs_decl_pin(arg)) {
+            // stored before the value of the cache is read; see setUnsafeReceiverCache()
+            unsafe_receiver.store(true, std::memory_order_seq_cst);
+            user_type_args.store(true, std::memory_order_relaxed);
+            setUnsafeReceiverCache();
+            return;
+        }
+    }
+}
+
+#ifdef DEBUG
+//! the number of scans of qore_upgrade_program_local_derived_types(), for the tests of its gate
+static std::atomic<int64> program_local_derived_type_scans{0};
+
+int64 qore_dbg_program_local_derived_type_scans() {
+    return program_local_derived_type_scans.load(std::memory_order_relaxed);
+}
+#endif
+
+void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all) {
+    AutoLocker al(ctl);
+    // a type that names a declaration, directly or in a type that it contains, is a derived type of one of its types,
+    // which is then a key of derived_type_keys: the parameterized class types are scanned only if one is (or if \a all:
+    // the completion of a marking event that did not complete, whose marked types are not known)
+    bool keyed = all;
+    for (const QoreTypeInfo* t : marked_types) {
+        if (keyed) {
+            break;
+        }
+        if (t && derived_type_keys.count(t)) {
+            keyed = true;
+        }
+    }
+    if (!keyed) {
+        return;
+    }
+#ifdef DEBUG
+    program_local_derived_type_scans.fetch_add(1, std::memory_order_relaxed);
+#endif
+    for (auto& i : parameterized_class_map) {
+        i.second->upgradeUserTypeArgs();
     }
 }
 
@@ -3872,6 +4159,128 @@ public:
         return walk<true>(nullptr, ti, 0);
     }
 
+    //! References the mortal declarations that \a ti and the types in it name, also through the target of a reference
+    //! type; the caller holds the type lock (qore#7540)
+    /** A mortal declaration is one that the declaration lifetime system decides (QoreTypeOwner::isTypeOwnerSystem() is
+        false): the builtin declarations of a static namespace or of a module are not referenced.  The marks of
+        QoreTypeInfo::namesNoDeclarations() are not used, as they do not cover the targets of reference types.
+    */
+    DLLLOCAL static void addMortal(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti,
+            int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (!hp->type_owner.isTypeOwnerSystem()) {
+                    get(p).addHashDecl(hd);
+                }
+                // the type arguments of an instance of a generic hashdecl, which an immortal instance made before
+                // they became mortal does not keep
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                addMortalClass(p, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                addMortalClass(p, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                if (!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem()) {
+                    get(p).addEnum(ed);
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                addMortal(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                addMortal(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            addMortal(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                addMortal(p, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                addMortal(p, target, depth + 1);
+            }
+        }
+    }
+
+    //! Appends the own types of the declarations that \a ti names that are not mortal, as addMortal() walks it; the
+    //! caller holds the type lock (qore#7608)
+    DLLLOCAL static void getUnmarked(type_vec_t& out, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (hp->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(hp->getTypeInfo(false));
+                }
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                getUnmarkedClass(out, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                getUnmarkedClass(out, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                const qore_enum_decl_private* ep = qore_enum_decl_private::get(*ed);
+                if (ep->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(ep->getTypeInfo(false));
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                getUnmarked(out, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                getUnmarked(out, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            getUnmarked(out, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                getUnmarked(out, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                getUnmarked(out, target, depth + 1);
+            }
+        }
+    }
+
+    //! References the given declarations, which are distinct; the caller holds the type lock (qore#7607)
+    DLLLOCAL void addDistinct(const std::vector<const QoreClass*>& n_classes,
+            const std::vector<const TypedHashDecl*>& n_hashdecls, const std::vector<const QoreEnumDecl*>& n_enums) {
+        // reserved first, so that nothing can throw once the references are taken
+        classes.reserve(classes.size() + n_classes.size());
+        hashdecls.reserve(hashdecls.size() + n_hashdecls.size());
+        enums.reserve(enums.size() + n_enums.size());
+        for (const QoreClass* qc : n_classes) {
+            QoreClass* c = const_cast<QoreClass*>(qc);
+            classes.push_back(c);
+            qore_class_private::refClass(*c);
+        }
+        for (const TypedHashDecl* hd : n_hashdecls) {
+            hashdecls.push_back(hd);
+            hd->ref();
+        }
+        for (const QoreEnumDecl* ed : n_enums) {
+            enums.push_back(ed);
+            qore_enum_decl_private::get(*ed)->ref();
+        }
+    }
+
     DLLLOCAL ~qore_type_decl_refs_private() {
         for (QoreClass* c : classes) {
             qore_class_private::derefClass(*c, false, false, false);
@@ -3979,6 +4388,20 @@ private:
             qore_enum_decl_private::get(*ed)->ref();
         }
     }
+
+    //! Appends the type of a class for getUnmarked() if it is not mortal
+    DLLLOCAL static void getUnmarkedClass(type_vec_t& out, const QoreClass* qc) {
+        if (qc && qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            out.push_back(qc->getTypeInfo());
+        }
+    }
+
+    //! References a class for addMortal() if it is mortal
+    DLLLOCAL static void addMortalClass(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreClass* qc) {
+        if (qc && !qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            get(p).addClass(qc);
+        }
+    }
 };
 
 //! Returns true if \a ti is null or marked as naming no declaration (QoreTypeInfo::namesNoDeclarations())
@@ -4046,6 +4469,90 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
         }
     }
     priv = p.release();
+}
+
+void QoreTypeDeclRefs::addMortal(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    try {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        qore_type_decl_refs_private::addMortal(p, ti, 0);
+    } catch (...) {
+        // the references already taken are kept: the variant still reads the declarations that they keep
+        priv = p.release();
+        throw;
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types) {
+    if (!ti) {
+        return;
+    }
+    // under the type lock, as addMortal() walks the type
+    AutoLocker al(ctl);
+    qore_type_decl_refs_private::getUnmarked(types, ti, 0);
+}
+
+bool QoreTypeDeclRefs::getMortalDeclName(const QoreTypeInfo* ti, std::string& name) {
+    if (!ti) {
+        return false;
+    }
+    // the references are released when the walk is done
+    QoreTypeDeclRefs refs;
+    refs.addMortal(ti);
+    if (refs.empty()) {
+        return false;
+    }
+    if (!refs.priv->classes.empty()) {
+        name = refs.priv->classes[0]->getName();
+    } else if (!refs.priv->hashdecls.empty()) {
+        name = refs.priv->hashdecls[0]->getName();
+    } else {
+        assert(!refs.priv->enums.empty());
+        name = refs.priv->enums[0]->getName();
+    }
+    return true;
+}
+
+void QoreTypeDeclRefs::addMortalDecls(const std::vector<const QoreClass*>& classes,
+        const std::vector<const TypedHashDecl*>& hashdecls, const std::vector<const QoreEnumDecl*>& enums) {
+    assert(!priv);
+    if (classes.empty() && hashdecls.empty() && enums.empty()) {
+        return;
+    }
+#ifdef DEBUG
+    for (const QoreClass* qc : classes) {
+        assert(!qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem());
+    }
+    for (const TypedHashDecl* hd : hashdecls) {
+        assert(!typed_hash_decl_private::get(*hd)->type_owner.isTypeOwnerSystem());
+    }
+    for (const QoreEnumDecl* ed : enums) {
+        assert(!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem());
+    }
+#endif
+    std::unique_ptr<qore_type_decl_refs_private> p(new qore_type_decl_refs_private);
+    {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        p->addDistinct(classes, hashdecls, enums);
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::getDecls(std::vector<const QoreClass*>& classes,
+        std::vector<const TypedHashDecl*>& hashdecls, std::vector<const QoreEnumDecl*>& enums) const {
+    if (!priv) {
+        return;
+    }
+    classes.insert(classes.end(), priv->classes.begin(), priv->classes.end());
+    hashdecls.insert(hashdecls.end(), priv->hashdecls.begin(), priv->hashdecls.end());
+    enums.insert(enums.end(), priv->enums.begin(), priv->enums.end());
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
@@ -4162,7 +4669,7 @@ qore_type_result_e qore_parameterized_class_accepts(const QoreParameterizedClass
     }
 
     const QoreTypeInfo* mapped_type = qore_class_private::get(*source_pti->getBaseClass())
-        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass());
+        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass(), true);
     const QoreParameterizedClassTypeInfo* mapped_pti = QoreTypeInfo::getParameterizedClassType(mapped_type);
     if (!mapped_pti || mapped_pti->getArgCount() != target_pti->getArgCount()) {
         return QTI_NOT_EQUAL;
@@ -5192,6 +5699,14 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
         const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info, type_param_inst);
         return subst ? subst : ti;
+    }
+
+    // An extends wildcard exposes its bound's return specs. Specialize the bound before interpreting those
+    // specs as the declaration itself, so a parameterized bound keeps its wildcard variance.
+    if (const auto* wildcard = QoreTypeInfo::getWildcardType(ti); wildcard == ti) {
+        const QoreTypeInfo* bound = wildcard->getBound();
+        const QoreTypeInfo* subst = qore_substitute_type_params(bound, receiver_type_info, type_param_inst);
+        return subst == bound ? ti : qore_get_wildcard_type_intern(wildcard->getKind(), subst);
     }
 
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
@@ -6379,8 +6894,8 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     value.
 
     @param weak the weak reference
-    @param target set to the target, with a reference of its own; the caller releases it (an lvalue's lock can be held
-    while a reference is bound to it, and the release of the last reference to the target runs its destructors)
+    @param target set to the target, with a reference of its own; the caller releases it (with no lvalue lock held,
+    qore#7391: the release of the last reference to the target runs its destructors)
     @param conv set to the target converted by the type, with a reference of its own; released as \a target
 
     @return 0 if the target is accepted as it is, -1 if an exception was raised
@@ -6419,26 +6934,251 @@ static __attribute__((noinline)) int qore_reference_bind_weak_check(const QoreTy
     return 0;
 }
 
-//! binds a reference to an lvalue that holds a weak reference (qore#7433)
-/** The lvalue keeps the weak reference if its target is accepted (see qore_reference_bind_weak_check()): nothing is
-    changed.
+#ifdef DEBUG
+std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook{nullptr};
+std::atomic<bool> qore_dbg_reference_bind_strict{false};
+#endif
 
-    @param weak the weak reference, with a reference that the call takes
+//! Binds the reference \a r to the reference type of \a target_ti with no lvalue lock held (qore#7391)
+/** The value of the referenced lvalue is checked or converted to \a target_ti and written back if the conversion
+    changed it.  A store of the write-back that records references of its own (its lvalue's type can bind references)
+    is made again after they have been bound, as any other store.
 */
 template <typename FilterPolicy>
-static __attribute__((noinline)) void qore_reference_bind_weak(LValueHelper& lvh, const QoreTypeInfo* target_ti,
-        QoreValue weak, FilterPolicy policy, ExceptionSink* xsink) {
-    ValueHolder target(xsink);
-    ValueHolder conv(xsink);
-    qore_reference_bind_weak_check(target_ti, weak, policy, target, conv, xsink);
-    // the references are released by the helper's destructor, after the lvalue's lock: the release of the last
-    // reference to the target can run destructors, which can need the lock
-    lvh.saveTemp(weak);
-    lvh.saveTemp(target.release());
-    lvh.saveTemp(conv.release());
-    if (!*xsink) {
-        lvh.suppressObjectScan();
+static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* target_ti, ExceptionSink* xsink,
+        FilterPolicy policy) {
+    // a reference that an outer bind of this thread is binding to the same type is left to it: a cycle of references
+    // ends here
+    if (QoreReferenceBindFrame::active(r, target_ti)) {
+        return;
     }
+#ifdef DEBUG
+    // a test checks that no lvalue lock is held here and makes threads bind at the same time
+    // (dbg_reference_bind_rendezvous())
+    if (qore_dbg_reference_bind_hook_t hook = qore_dbg_reference_bind_hook.load()) [[unlikely]] {
+        // the bind is not made under the locks held: it could deadlock
+        if (hook(qore_lvalue_write_locks_held)) {
+            if (xsink) {
+                xsink->raiseException("DBG-REFERENCE-BIND-HELD", "a reference element was bound while the thread held "
+                    "%d lvalue write lock(s)", qore_lvalue_write_locks_held);
+            }
+            return;
+        }
+    }
+    // a store path that binds under an lvalue lock is a bug: a test that arms dbg_reference_bind_strict() gets an
+    // exception for it, any other bind fails the assertion
+    if (qore_lvalue_write_locks_held && qore_dbg_reference_bind_strict.load(std::memory_order_relaxed)) {
+        if (xsink) {
+            xsink->raiseException("DBG-REFERENCE-BIND-HELD", "a reference element was bound while the thread held %d "
+                "lvalue write lock(s)", qore_lvalue_write_locks_held);
+        }
+        return;
+    }
+    assert(!qore_lvalue_write_locks_held);
+#endif
+    QoreReferenceBindFrame frame(r, target_ti);
+    // a check that runs with a probe installed binds no reference itself
+    QoreReferenceBindProbeSuspend suspend;
+
+    // issue #2891: do not create a value in the source reference if none already exists
+    // do not process if there is no type restriction
+    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
+    // reference's type restriction (which can fold container value types); remember the node so
+    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
+    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
+    // dereference to the helper's destructor, so this pointer is still backed by a live reference
+    // at the comparison below and its address cannot have been reused
+    // returns the result of the assignment: -1 if the value was not stored, because of an exception or because the
+    // store is made again (see QoreBindRetry)
+    auto assign_back = [target_ti, policy](LValueHelper& lvh) -> int {
+        QoreValue val = lvh.getReferencedValue();
+        if (val.isNothing()) {
+            return 0;
+        }
+        const AbstractQoreNode* orig = val.getInternalNode();
+        lvh.setTypeInfo(target_ti);
+        int rc = policy.assign(lvh, val, "<reference>");
+        if (!rc && orig && lvh.getInternalNode() == orig) {
+            // the identical node is still in place, so the set of objects reachable from the
+            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
+            // entire reachable object graph on every reference argument binding
+            lvh.suppressObjectScan();
+        }
+        return rc;
+    };
+
+    // the write-back is a store: one whose check records references of the value of the referenced lvalue is made
+    // again after they have been bound; the lvalue is resolved again for each round, as for any use of the reference
+    QoreBindRetry retry;
+    do {
+        // the variable is resolved for reading first: one that the reference cannot write, such as a
+        // read-only import, is left as it is when its value already has the reference's type
+        // (qore#5664)
+        std::optional<LValueHelper> lvh;
+        lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
+        if (*lvh) {
+            qore_type_t vt = lvh->getType();
+            if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                // the variable keeps a weak reference whose target is accepted (qore#7433): nothing is written, and
+                // the target is checked after the variable's lock has been released, as the check can bind the
+                // references of the target and the release of the references taken for it can run destructors
+                ValueHolder val(lvh->getReferencedValue(), xsink);
+                lvh.reset();
+                ValueHolder target(xsink);
+                ValueHolder conv(xsink);
+                qore_reference_bind_weak_check(target_ti, *val, policy, target, conv, xsink);
+                break;
+            }
+        }
+        if (*lvh && lvh->isWriteProtected()) {
+            bool needs_write = false;
+            {
+                ValueHolder val(lvh->getReferencedValue(), xsink);
+                // the variable's lock is released before the value is converted, as for an assignment
+                lvh.reset();
+                if (!val->isNothing()) {
+                    // the value is converted as the assignment below would convert it: a value that the
+                    // type rejects raises the same error as for a variable that can be written, and only
+                    // a value that the conversion changes has to be written back
+                    ValueHolder conv(val->refSelf(), xsink);
+                    policy.assignment(target_ti, "<reference>", *conv, xsink);
+                    if (!*xsink) {
+                        needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                    }
+                }
+            }
+            if (needs_write && !*xsink) {
+                // the value has to be changed: resolving the variable for writing raises the exception
+                // that says why it cannot be, unless it has become writable in the meantime
+                lvh.emplace(*r, xsink, true);
+                if (*lvh) {
+                    lvh->setBindRetry(retry);
+                    if (assign_back(*lvh)) {
+                        continue;
+                    }
+                }
+            }
+        } else if (*lvh) {
+            lvh->setBindRetry(retry);
+            if (assign_back(*lvh)) {
+                continue;
+            }
+        }
+        break;
+    } while (retry.again());
+}
+
+//! Records the reference \a r found by the check of a store that holds an lvalue lock (qore#7391)
+/** A probe that verifies (the probe of a container operation whose values were checked before it) refuses a reference
+    that needs a bind: the check raises REFERENCE-BIND-ERROR then, and the operation does not store the value
+*/
+template <typename FilterPolicy>
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_record(QoreReferenceBindProbe& probe,
+        ReferenceNode* r, const QoreTypeInfo* target_ti, FilterPolicy policy, ExceptionSink* xsink) {
+    bool ok;
+    if constexpr (std::is_same<FilterPolicy, LexicalTypeFilterPolicy>::value) {
+        ok = probe.record(r, target_ti, policy.policy, true);
+    } else {
+        static_assert(std::is_same<FilterPolicy, DefaultTypeFilterPolicy>::value, "a filter policy of a check");
+        ok = probe.record(r, target_ti, LexicalSemanticPolicy(), false);
+    }
+    if (!ok && xsink) {
+        xsink->raiseException("REFERENCE-BIND-ERROR", "a reference element of a value stored into a locked container "
+            "needs a bind to type '%s' that the check made before the container was changed did not find",
+            QoreTypeInfo::getName(target_ti));
+    }
+}
+
+//! Binds or records the reference \a r accepted by the check of a reference type (qore#7391)
+/** Out of line, so that the check of a value of any other type in QoreTypeSpec::acceptInputImpl() executes no
+    instruction of the bind and keeps the register and stack use that it has without it: the check of a store that
+    holds an lvalue lock records the reference, which the store binds after it has released the lock, and any other
+    check binds it here
+*/
+template <typename FilterPolicy>
+static QORE_INTERN_NOINLINE void qore_reference_bind_accepted(ReferenceNode* r, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink, FilterPolicy policy) {
+    if (QoreReferenceBindProbe* probe = qore_reference_bind_probe) [[unlikely]] {
+        qore_reference_bind_record(*probe, r, target_ti, policy, xsink);
+        return;
+    }
+    qore_reference_bind_unlocked(r, target_ti, xsink, policy);
+}
+
+void qore_reference_bind_pair(const QoreReferenceBindPair& pair, ExceptionSink* xsink) {
+    if (pair.lexical) {
+        qore_reference_bind_unlocked(pair.ref, pair.type, xsink, LexicalTypeFilterPolicy{pair.policy});
+    } else {
+        qore_reference_bind_unlocked(pair.ref, pair.type, xsink, DefaultTypeFilterPolicy{});
+    }
+}
+
+bool QoreTypeInfo::mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<const void*>& seen) {
+    if (!hasType(ti)) {
+        return false;
+    }
+    signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    if (c >= 0) {
+        return c;
+    }
+    // a type that the walk reached already (a hashdecl whose member types refer to the hashdecl) adds nothing to the
+    // walk of its first visit, which gives the result; only the type that the walk started from is cached
+    if (std::find(seen.begin(), seen.end(), ti) != seen.end()) {
+        return false;
+    }
+    seen.push_back(ti);
+    for (const auto& a : ti->getAcceptSpecs()) {
+        const QoreTypeSpec& spec = a.spec;
+        switch (spec.getTypeSpec()) {
+            case QTS_COMPLEXREF:
+            case QTS_COMPLEXHARDREF:
+                return true;
+
+            case QTS_COMPLEXHASH:
+            case QTS_COMPLEXLIST:
+            case QTS_COMPLEXSOFTLIST:
+                if (mayBindReferenceWalk(spec.getElementType(), seen)) {
+                    return true;
+                }
+                break;
+
+            case QTS_HASHDECL: {
+                const TypedHashDecl* hd = spec.getHashDecl();
+                if (std::find(seen.begin(), seen.end(), hd) != seen.end()) {
+                    break;
+                }
+                seen.push_back(hd);
+                for (const auto& m : typed_hash_decl_private::get(*hd)->getMembers().member_list) {
+                    if (mayBindReferenceWalk(m.second->getTypeInfo(), seen)) {
+                        return true;
+                    }
+                }
+                break;
+            }
+
+            // the type argument of a type parameter or a wildcard, and the type of an initializer's conversion
+            // descriptor, are not known here: their check is assumed to bind
+            case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
+                return true;
+
+            default:
+                break;
+        }
+    }
+    return false;
+}
+
+bool QoreTypeInfo::mayBindReferenceIntern(const QoreTypeInfo* ti) {
+    signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    if (c >= 0) {
+        return c;
+    }
+    std::vector<const void*> seen;
+    bool rv = mayBindReferenceWalk(ti, seen);
+    ti->may_bind_reference_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+    return rv;
 }
 
 template <typename FilterPolicy>
@@ -6498,7 +7238,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
-                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass(), /*allow_raw_self=*/true,
+                            /*match_class_type=*/true);
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
                     if (QoreTypeInfo::equal(mapped_type, uTi())
@@ -6667,124 +7408,9 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         ok = true;
                         break;
                     }
-                    // issue #2891: do not create a value in the source reference if none already exists
-                    // do not process if there is no type restriction
-                    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
-                    // reference's type restriction (which can fold container value types); remember the node so
-                    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
-                    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
-                    // dereference to the helper's destructor, so this pointer is still backed by a live reference
-                    // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = uTi(), policy, xsink](LValueHelper& lvh) {
-                        QoreValue val = lvh.getReferencedValue();
-                        if (val.isNothing()) {
-                            return;
-                        }
-                        qore_type_t vt = val.getType();
-                        if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
-                            qore_reference_bind_weak(lvh, target_ti, val, policy, xsink);
-                            return;
-                        }
-                        const AbstractQoreNode* orig = val.getInternalNode();
-                        lvh.setTypeInfo(target_ti);
-                        if (!policy.assign(lvh, val, "<reference>") && orig && lvh.getInternalNode() == orig) {
-                            // the identical node is still in place, so the set of objects reachable from the
-                            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
-                            // entire reachable object graph on every reference argument binding
-                            lvh.suppressObjectScan();
-                        }
-                    };
-                    // the variable is resolved for reading first: one that the reference cannot write, such as a
-                    // read-only import, is left as it is when its value already has the reference's type
-                    // (qore#5664)
-                    // the lock of the assignment being checked can guard the referenced lvalue (qore#7380)
-                    std::optional<LValueHelper> lvh;
-                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), LValueHelper::ReferenceBind());
-                    if (*lvh && lvh->hasReusedBindLock()) {
-                        // under a lock of the assignment being checked the value is only inspected, where it is:
-                        // nothing is changed, so no object scan is needed, and no reference is taken, whose release
-                        // could take the lock that the assignment holds (qore#7380)
-                        lvh->suppressObjectScan();
-                        const QoreValue current = lvh->getValue();
-                        if (!current.isNothing()) {
-                            qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(uTi(), current);
-                            // only a value that certainly needs no conversion is accepted: a value of exactly the
-                            // type, with or without NOTHING, or a valid object of a compatible class for a type that
-                            // does not wrap it in a list; any other value could be converted or rejected by a bind
-                            bool unchanged;
-                            // a weak reference is not checked here: the check takes a reference to its target, whose
-                            // release could need the lock that the assignment holds, so it is refused here although a
-                            // bind without the lock accepts it (qore#7433); a bind resolves a reference that the lvalue
-                            // holds
-                            if (current.isEnum() || current.getType() == NT_WEAKREF
-                                    || current.getType() == NT_WEAKREF_HASH || current.getType() == NT_WEAKREF_LIST
-                                    || current.getType() == NT_REFERENCE) {
-                                unchanged = false;
-                            } else if (current.getType() == NT_OBJECT) {
-                                unchanged = rv != QTI_NOT_EQUAL && current.get<const QoreObject>()->isValid()
-                                    && !QoreTypeInfo::parseAcceptsReturns(uTi(), NT_LIST);
-                            } else {
-                                const QoreTypeInfo* value_ti = current.getTypeInfo();
-                                qore_type_t vt = current.getType();
-                                // a plain scalar that the type returns as it is (an int for a softint); a date is not
-                                // one of them, as a type can restrict it to absolute or relative dates
-                                unchanged = value_ti == uTi() || get_or_nothing_type_check(value_ti) == uTi()
-                                    || (rv == QTI_IDENT && (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER
-                                        || vt == NT_STRING || vt == NT_BOOLEAN || vt == NT_BINARY));
-                            }
-                            if (rv == QTI_NOT_EQUAL) {
-                                xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got "
-                                    "type '%s' instead", QoreTypeInfo::getName(uTi()), current.getFullTypeName());
-                            } else if (!unchanged) {
-                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
-                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
-                                    QoreTypeInfo::getName(uTi()));
-                            }
-                        }
-                    } else if (*lvh && lvh->isWriteProtected()) {
-                        bool needs_write = false;
-                        {
-                            ValueHolder val(lvh->getReferencedValue(), xsink);
-                            // the variable's lock is released before the value is converted, as for an assignment
-                            lvh.reset();
-                            if (!val->isNothing()) {
-                                // the value is converted as the assignment below would convert it: a value that the
-                                // type rejects raises the same error as for a variable that can be written, and only
-                                // a value that the conversion changes has to be written back
-                                qore_type_t vt = val->getType();
-                                if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
-                                    // the variable keeps a weak reference whose target is accepted (qore#7433); the
-                                    // variable's lock is not held, so the references are released here
-                                    ValueHolder target(xsink);
-                                    ValueHolder conv(xsink);
-                                    qore_reference_bind_weak_check(uTi(), *val, policy, target, conv, xsink);
-                                } else {
-                                    ValueHolder conv(val->refSelf(), xsink);
-                                    policy.assignment(uTi(), "<reference>", *conv, xsink);
-                                    if (!*xsink) {
-                                        needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
-                                    }
-                                }
-                            }
-                        }
-                        if (needs_write && !*xsink) {
-                            // the value has to be changed: resolving the variable for writing raises the exception
-                            // that says why it cannot be, unless it has become writable in the meantime
-                            lvh.emplace(*r, xsink, LValueHelper::ReferenceBind());
-                            // the path can differ from the one read above and reach a lock that the assignment holds,
-                            // under which nothing can be written (qore#7380)
-                            if (*lvh && lvh->hasReusedBindLock()) {
-                                lvh->suppressObjectScan();
-                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
-                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
-                                    QoreTypeInfo::getName(uTi()));
-                            } else if (*lvh) {
-                                assign_back(*lvh);
-                            }
-                        }
-                    } else if (*lvh) {
-                        assign_back(*lvh);
-                    }
+                    // the check of a store that holds an lvalue lock records the reference, which the store binds
+                    // after it has released the lock, and any other check binds it here; out of line (qore#7391)
+                    qore_reference_bind_accepted(r, uTi(), xsink, policy);
                     // the type of the reference has been accepted at this point, so this is never a type mismatch:
                     // an exception raised above, including one raised while resolving the lvalue, such as
                     // STACK-LIMIT-EXCEEDED in a long chain of references, is the error to report, and reporting a
@@ -7033,7 +7659,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
-                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass(), /*allow_raw_self=*/true,
+                            /*match_class_type=*/true);
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
                     if (QoreTypeInfo::equal(mapped_type, uTi())
@@ -9689,16 +10316,11 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     // converted to its base value by an element type of its base type, although that type is a superset of the
     // enum's type (qore#6274)
     qore_type_result_e rv = policy.value(elem_ti, v, false);
-    // an lvalue reference whose declared type cannot match the element type must not label the container, or the typed
-    // reads of the compiled modes read it as a value of that type: it goes to the error below, which takes no lock.  A
-    // reference that can match, or that a soft list type would wrap, is kept as it is and not bound or wrapped here:
-    // that can read the referenced variable, and a retype can run while the assignment holds the lock of that variable
-    // (qore#2889, qore#7377; the cases kept this way are qore#7380)
-    if (v.getType() == NT_REFERENCE) {
-        if (rv != QTI_NOT_EQUAL) {
-            return true;
-        }
-    } else if (!v.isEnum()
+    // an lvalue reference is checked as a top-level cast checks it, as it would label the container otherwise: a
+    // reference type binds it, converting or checking the referenced value, and another type converts or refuses it.
+    // A retype made by the check of a store that holds an lvalue lock runs under the store's probe, which records the
+    // reference instead, and the store binds it after it has released the lock (qore#7377, qore#7391)
+    if (v.getType() != NT_REFERENCE && !v.isEnum()
             && (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo())))) {
         return true;
     }

@@ -96,6 +96,47 @@ class D inherits T {
 # the real reference to the object of superseded_cycle()
 our D gd;
 
+#! an object that holds a closure
+class TC inherits T {
+    public {
+        *code c;
+    }
+}
+
+# a weak reference to the object of closure_var_cycle()
+our TC wcv;
+
+# a weak reference to the hash of closure_var_hash_cycle()
+our hash<auto> wcvh;
+
+#! makes the cycle of a closure-bound variable, the hash it holds and a closure that captured it, which the hash
+#! holds, with no object in it, and returns another closure that captured the variable, which is then the only
+#! reference to the cycle from outside it; the closure assigns a new value to the variable when called with True
+code sub make_closure_var_hash_cycle() {
+    hash<auto> cvh = {};
+    cvh.c = string sub (*bool write) {
+        if (write) {
+            cvh = {"t": new T()};
+        }
+        return exists cvh ? "H" : "NOTHING";
+    };
+    wcvh := cvh;
+    return int sub () { return exists cvh ? 1 : 0; };
+}
+
+#! makes a cycle of a closure-bound variable, the object it holds and a closure that captured the variable, which
+#! the object holds, and arms the hold of the collection of the variable, which the return releases
+sub make_closure_var_cycle(Counter held, Counter release) {
+    TC cvx();
+    cvx.c = string sub (Counter entered, Counter go) {
+        entered.dec();
+        go.waitForZero(HoldTimeout);
+        return exists cvx ? cvx.className() : "NOTHING";
+    };
+    wcv := cvx;
+    call_function("dbg_hold_closure_var_collect", "cvx", held, release);
+}
+
 #! holds a weak reference in a member
 class WeakHolder {
     public {
@@ -136,6 +177,12 @@ sub call_while_destroyed(string name, string hook, string kind) {
     hash<auto> h;
     list<auto!> l = (NOTHING,);
     WeakHolder o();
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         T t();
         w := t;
@@ -143,12 +190,15 @@ sub call_while_destroyed(string name, string hook, string kind) {
         h.w := t;
         l[0] := t;
         o.w := t;
-        call_function(hook, "T", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove t;
-        }();
+        handoff.push(t);
+        remove t;
     }
+    call_function(hook, "T", held, release);
+    background sub () {
+        on_exit done.dec();
+        T t = handoff.get();
+        remove t;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("%s: the destroying thread was not held\n", label);
         release.dec();
@@ -244,6 +294,12 @@ sub collected_cycle(int released = 0) {
     Counter done(1);
     C w;
     C wb;
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         C a();
         C b();
@@ -253,12 +309,15 @@ sub collected_cycle(int released = 0) {
         w := a;
         wb := b;
         remove b;
-        call_function("dbg_hold_deref_collect", "C", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove a;
-        }();
+        handoff.push(a);
+        remove a;
     }
+    call_function("dbg_hold_deref_collect", "C", held, release);
+    background sub () {
+        on_exit done.dec();
+        C a = handoff.get();
+        remove a;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("%s: the collecting thread was not held\n", label);
         release.dec();
@@ -305,6 +364,12 @@ sub broken_cycle() {
     Counter release(1);
     Counter done(1);
     C w;
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         C a();
         C b();
@@ -314,12 +379,15 @@ sub broken_cycle() {
         w := a;
         gwb := b;
         remove b;
-        call_function("dbg_hold_deref_collect", "C", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove a;
-        }();
+        handoff.push(a);
+        remove a;
     }
+    call_function("dbg_hold_deref_collect", "C", held, release);
+    background sub () {
+        on_exit done.dec();
+        C a = handoff.get();
+        remove a;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("broken cycle: the collecting thread was not held\n");
         release.dec();
@@ -373,6 +441,9 @@ sub superseded_cycle() {
         remove a;
         # the cycle is made while the call holds a real reference to the object: its scan is deferred
         gd.link(bl[0]);
+        # released here, before the holds are armed, and not when the frame ends, which can be later in native code:
+        # a release of this thread must not be the dereference that the holds catch
+        remove bl;
     }
     Counter decide_held(1);
     Counter decide_release(1);
@@ -429,6 +500,117 @@ sub superseded_cycle() {
     printf("superseded cycle: destroyed: %d\n", T::destroyed.getCount() - destroyed);
 }
 
+#! the release of the frame's reference to a closure-bound variable decides to collect the cycle of the variable, the
+#! object it holds and a closure that captured it, and is held; a call of the closure, made through a weak reference
+#! to the object meanwhile, keeps the variable's value (qore#7546)
+sub closure_var_cycle() {
+    int destroyed = T::destroyed.getCount();
+    Counter held(1);
+    Counter release(1);
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        make_closure_var_cycle(held, release);
+    }();
+    if (held.waitForZero(HoldTimeout)) {
+        printf("closure var: the collecting thread was not held\n");
+        release.dec();
+        done.waitForZero();
+        return;
+    }
+    Counter entered(1);
+    Counter go(1);
+    Queue result();
+    Counter caller_done(1);
+    background sub () {
+        on_exit caller_done.dec();
+        try {
+            result.push(sprintf("call returned %y", call_function(wcv.c, entered, go)));
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }();
+    if (entered.waitForZero(HoldTimeout)) {
+        printf("closure var: the call did not enter the closure\n");
+    }
+    release.dec();
+    if (done.waitForZero(DoneTimeout)) {
+        printf("closure var: the collecting thread did not complete while the call runs\n");
+    }
+    printf("closure var: destroyed while the call runs: %d\n", T::destroyed.getCount() - destroyed);
+    go.dec();
+    printf("closure var: %s\n", result.get());
+    done.waitForZero();
+    caller_done.waitForZero();
+    printf("closure var: destroyed: %d\n", T::destroyed.getCount() - destroyed);
+}
+
+#! the release of the last reference to a cycle of a closure-bound variable from outside it decides to collect it and
+#! is held; a call of the closure of the cycle, made through a weak reference meanwhile, takes a reference to the
+#! variable and releases it before the collection continues: the collection that the dereference abandons is decided
+#! again, and the cycle is collected (qore#7546)
+sub closure_var_hash_cycle() {
+    Counter held(1);
+    Counter release(1);
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        code c2 = make_closure_var_hash_cycle();
+        call_function("dbg_hold_closure_var_collect", "cvh", held, release);
+        remove c2;
+    }();
+    if (held.waitForZero(HoldTimeout)) {
+        printf("closure var hash: the collecting thread was not held\n");
+        release.dec();
+        done.waitForZero();
+        return;
+    }
+    Counter caller_done(1);
+    background sub () {
+        on_exit caller_done.dec();
+        try {
+            printf("closure var hash: call returned %y\n", call_function(wcvh.c));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("closure var hash: %s: %s\n", ex.err, ex.desc);
+        }
+    }();
+    # the call completes and releases its references before the collection continues
+    caller_done.waitForZero();
+    release.dec();
+    done.waitForZero();
+    printf("closure var hash: collected: %y\n", !exists wcvh.c);
+}
+
+#! a thread reads the closure of a cycle of a closure-bound variable through a weak reference after the collection
+#! of the cycle has taken the variable's value, and calls it after the value was released: the call reads nothing
+#! for the variable, and a value that it assigns to the variable is released with the variable (qore#7546); a closure
+#! read before the value was taken keeps the cycle (qore#7556; weak-read-collected-set-member.qtest)
+sub closure_var_late_write() {
+    int destroyed = T::destroyed.getCount();
+    Counter held(1);
+    Counter release(1);
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        code c2 = make_closure_var_hash_cycle();
+        call_function("dbg_hold_closure_var_collected", "cvh", held, release);
+        remove c2;
+    }();
+    if (held.waitForZero(HoldTimeout)) {
+        printf("closure var late write: the collecting thread was not held\n");
+        release.dec();
+        done.waitForZero();
+        return;
+    }
+    code c = wcvh.c;
+    release.dec();
+    done.waitForZero();
+    printf("closure var late write: read: %y\n", c());
+    printf("closure var late write: write: %y\n", c(True));
+    remove c;
+    printf("closure var late write: destroyed: %d\n", T::destroyed.getCount() - destroyed);
+}
+
 if (!Option::HAVE_LIBRARY_DEBUGGING) {
     printf("the debug hooks are only in debug builds\n");
     exit(0);
@@ -443,4 +625,7 @@ collected_cycle();
 collected_cycle(2);
 broken_cycle();
 superseded_cycle();
+closure_var_cycle();
+closure_var_hash_cycle();
+closure_var_late_write();
 printf("destructor calls: %d\n", (select T::log, $1 == "destructor: helper").size());

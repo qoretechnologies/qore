@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+# the source Programs are parsed again after a namespace is added to them at run time (PO_ALLOW_REPARSE)
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeDeclHoldersTest
+
+#! A child Program keeps the declarations of its parent that it does not inherit and that what it inherits names
+/** The typedefs, global variables, constants and functions that a child Program inherits can name declarations of the
+    parent that the child does not inherit: the builtin classes and hashdecls that a binary module added to the parent
+    at run time (freed with the parent since qore#7540) in a child created with \c PO_NO_INHERIT_SYSTEM_CLASSES, user
+    classes and hashdecls in a child created with \c PO_NO_INHERIT_USER_CLASSES, an enum in a child created with
+    \c PO_NO_ENUM, and a class that is not public in any child.  The child keeps them, so that the code that it parses
+    after the parent is deleted checks its types against valid declarations (qore#7607).  The namespace is added with
+    the debug function dbg_add_runtime_namespace(), so the test needs a library with debugging.
+*/
+public class RuntimeDeclHoldersTest inherits QUnit::Test {
+    public {
+        const AddSource = "sub add() { dbg_add_runtime_namespace('DbgRtNs', 1); }
+object sub child(int po) { Program c(PO_NEW_STYLE | po); return c; }";
+
+        #! the holders that a child inherits, parsed after the namespace was added; NS is the namespace of the
+        #! declarations
+        const HolderSource = "public namespace H {
+public const *hash<NS::DbgRtHash> CH = cast<hash<NS::DbgRtHash>>({});
+public typedef TC = *NS::DbgRtClass;
+public typedef TH = *hash<NS::DbgRtHash>;
+}
+public our *NS::DbgRtClass gv;
+public our *hash<NS::DbgRtHash> gh;
+public int sub uf(*NS::DbgRtClass o, *hash<NS::DbgRtHash> h) { return 1; }
+list<NS::DbgRtClass> sub mkl() { return cast<list<NS::DbgRtClass>>(()); }
+";
+
+        #! the uses of the holders in the child, after the parent is deleted, and the type error that each raises
+        const Uses = (
+            ("sub t() { H::TC x = 1; }", "DbgRtClass"),
+            ("sub t() { H::TH x = {'b': 1}; }", "DbgRtHash"),
+            ("sub t() { gv = 1; }", "DbgRtClass"),
+            ("sub t() { gh = {'b': 1}; }", "DbgRtHash"),
+            ("sub t() { string s = H::CH; }", "DbgRtHash"),
+            ("sub t() { uf(1); }", "DbgRtClass"),
+            ("sub t() { uf(NOTHING, {'b': 1}); }", "DbgRtHash"),
+        );
+
+        const UserDecls = "public namespace U {
+public class DbgRtClass {}
+public hashdecl DbgRtHash { int a = 1; }
+}
+";
+    }
+
+    constructor() : QUnit::Test("runtime declaration holders", "1.0") {
+        addTestCase("a child without the system classes keeps those added to its parent at run time",
+            \runtimeNoSystemTest());
+        addTestCase("a child that inherits the classes added to its parent at run time", \runtimeInheritTest());
+        addTestCase("a child without the user classes keeps those of its parent", \userNoUserTest());
+        addTestCase("a child keeps the enums of its parent that what it inherits names", \enumTest());
+        addTestCase("a child keeps the declarations that are not public that inherited functions name",
+            \privateDeclTest());
+        addTestCase("a grandchild keeps the declarations that its parent keeps", \grandchildTest());
+        addTestCase("a value whose type names a class added at run time outlives the Program", \valueTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns the number of declarations of Programs that are not freed, after freeing the retired ones, or -1
+    private static int liveDecls() {
+        call_function("dbg_type_retirement_free");
+        return call_function("dbg_live_type_declarations");
+    }
+
+    #! runs a case and checks that the declarations that it made are freed when it is done
+    private checkFreed(code scenario, string label) {
+        int before = liveDecls();
+        scenario();
+        int after = liveDecls();
+        if (before >= 0) {
+            assertEq(before, after, label + ": the declarations are freed");
+        }
+    }
+
+    #! returns a Program with the holders, after adding the namespace at run time if \a rt
+    private static Program getSource(bool rt) {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.parse(AddSource, "add");
+        if (rt) {
+            p.callFunction("add");
+        }
+        p.parse((rt ? "" : UserDecls) + replace(HolderSource, "NS::", rt ? "DbgRtNs::" : "U::"), "holders");
+        return p;
+    }
+
+    #! returns a child of \a p after deleting \a p
+    private static Program getChild(Program p, int po) {
+        Program c = p.callFunction("child", po);
+        delete p;
+        # the declarations of the deleted Program that nothing keeps are freed now
+        call_function("dbg_type_retirement_free");
+        return c;
+    }
+
+    #! checks that the parse of \a src in \a c raises a type error naming \a name
+    private checkTypeError(Program c, string src, string name, string label) {
+        string err;
+        try {
+            c.parse(src, "child");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err + ": " + ex.desc;
+        }
+        assertRegex("TYPE-ERROR.*" + name, err, label + ": " + src);
+    }
+
+    #! creates a child of a Program with the holders, deletes the Program and uses the holders in the child
+    private checkHolders(bool rt, int po, string label) {
+        checkFreed(sub () {
+            foreach list<string> use in (Uses) {
+                checkTypeError(getChild(getSource(rt), po), use[0], use[1], label);
+            }
+        }, label);
+    }
+
+    runtimeNoSystemTest() {
+        skipIfNoDebugging();
+        # also without the builtin function variants, whose copies keep the classes that their signatures name
+        checkHolders(True, PO_NO_INHERIT_SYSTEM_CLASSES | PO_NO_INHERIT_SYSTEM_HASHDECLS
+            | PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, "runtime, no system classes");
+    }
+
+    runtimeInheritTest() {
+        skipIfNoDebugging();
+        checkHolders(True, 0, "runtime, inherited");
+    }
+
+    userNoUserTest() {
+        skipIfNoDebugging();
+        checkHolders(False, PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS, "user, no user classes");
+    }
+
+    enumTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            # a copy of an enum does not keep its original: also a child that inherits the enum keeps it
+            foreach int po in (PO_NO_ENUM, 0) {
+                foreach list<string> use in (("sub t() { TE x = 'a'; }", "enum typedef"),
+                        ("sub t() { ef('a'); }", "enum parameter")) {
+                    Program p(PO_NEW_STYLE);
+                    p.parse("public namespace E { public enum En { A = 1, B = 2 } }
+public typedef TE = E::En;
+public sub ef(E::En e) {}
+object sub child(int po) { Program c(PO_NEW_STYLE | po); return c; }", "enum");
+                    checkTypeError(getChild(p, po), use[0], "En", sprintf("%s, options %d", use[1], po));
+                }
+            }
+        }, "enum");
+    }
+
+    privateDeclTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            # in a namespace that is not public, which is not copied, and in a public namespace
+            foreach string src in ("namespace Priv { class Foo {} hashdecl Hd { int a = 1; } }
+public namespace Pub {
+public sub f(*Priv::Foo o, *hash<Priv::Hd> h) {}
+}", "public namespace Pub {
+class Foo {}
+hashdecl Hd { int a = 1; }
+public sub f(*Foo o, *hash<Hd> h) {}
+}") {
+                foreach list<string> use in (("sub t() { Pub::f(1); }", "Foo"),
+                        ("sub t() { Pub::f(NOTHING, {'b': 1}); }", "Hd")) {
+                    Program p(PO_NEW_STYLE);
+                    p.parse(src + "\nobject sub child(int po) { Program c(PO_NEW_STYLE | po); return c; }",
+                        "private");
+                    checkTypeError(getChild(p, 0), use[0], use[1], "not public: " + use[1]);
+                }
+            }
+        }, "private declarations");
+    }
+
+    grandchildTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            # the declarations that the child keeps for what it inherited are kept by its own children, which inherit
+            # the functions of the grandparent (the child needs the Program class to make one)
+            foreach list<auto> opt in (
+                    (True, PO_NO_INHERIT_SYSTEM_HASHDECLS | PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, ("DbgRtHash",)),
+                    (False, PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS, ("DbgRtClass", "DbgRtHash")),
+                ) {
+                foreach list<string> use in (Uses) {
+                    if (use[0] !~ /uf\(/ || !opt[2].contains(use[1])) {
+                        continue;
+                    }
+                    Program p = getSource(opt[0]);
+                    Program c = p.callFunction("child", opt[1]);
+                    c.parse("object sub child(int po) { Program g(PO_NEW_STYLE | po); return g; }", "child");
+                    Program g = c.callFunction("child", opt[1]);
+                    delete p;
+                    delete c;
+                    call_function("dbg_type_retirement_free");
+                    checkTypeError(g, use[0], use[1], sprintf("grandchild, runtime: %y, options %d", opt[0], opt[1]));
+                }
+            }
+            # a class that is not public
+            Program p(PO_NEW_STYLE);
+            p.parse("namespace Priv { class Foo {} }
+public sub f(*Priv::Foo o) {}
+object sub child() { Program c(PO_NEW_STYLE); return c; }", "private");
+            Program c = p.callFunction("child");
+            c.parse("object sub child() { Program g(PO_NEW_STYLE); return g; }", "child");
+            Program g = c.callFunction("child");
+            delete p;
+            delete c;
+            call_function("dbg_type_retirement_free");
+            checkTypeError(g, "sub t() { f(1); }", "Foo", "grandchild, not public");
+        }, "grandchild");
+    }
+
+    valueTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(True);
+            list<auto> l = p.callFunction("mkl");
+            delete p;
+            call_function("dbg_type_retirement_free");
+            assertEq("list<object<DbgRtClass>>", l.fullType(), "the type of the list");
+            assertThrows("RUNTIME-TYPE-ERROR", "DbgRtClass", sub () { l += 1; }, (), "a wrong element");
+            remove l;
+        }, "value");
+    }
+}

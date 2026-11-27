@@ -117,6 +117,12 @@ printf("%Y\n", ans.body);
       instance credentials, and then STS \c AssumeRole; the IMDS probe has its own timeout (\c aws_imds_timeout,
       default @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs")
     - added \c prepareAsyncSend() override for AWS Signature V4 signing in async REST requests
+    - added
+      @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequestAsyncTargetWithNotifier() "AwsRestClientIo::restDoEncodedRawRequestAsyncTargetWithNotifier()"
+      for asynchronous requests with encoded path variables, and
+      @ref AwsRestClient::AwsRestClientIo::observeEncodedEventStreamTarget() "AwsRestClientIo::observeEncodedEventStreamTarget()",
+      which opens an event stream that the async I/O controller reads and decodes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7648">issue 7648</a>)
     - added the \c aws_role_arn, \c aws_role_session_name, \c aws_external_id, \c aws_imds_url,
       \c aws_imds_disabled, \c aws_imds_timeout, \c aws_sts_region and \c aws_sts_endpoint options for role
       assumption and the IMDS and STS endpoints,
@@ -1774,6 +1780,129 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             resolveRequestTarget(target, method));
     }
 
+    #! Sends a signed request with encoded path variables and a pre-serialized body without holding a thread
+    /** The request of @ref restDoEncodedRawRequestTarget() as a request of
+        @ref RestClientIo::RestClientIo::restDoRequestAsyncTargetWithNotifier()
+        "RestClientIo::restDoRequestAsyncTargetWithNotifier()": it is sent and read by the async I/O controller,
+        and \a notifier is signaled once when it has ended.  Every attempt of the request is signed with SigV4,
+        with the encoded-path policy of @ref restDoEncodedRawRequest().
+
+        @param method HTTP method
+        @param target API-relative or origin-absolute target with already encoded path variables
+        @param body pre-serialized request body
+        @param hdr additional request headers
+        @param timeout_ms the positive transport deadline of this request in milliseconds, replacing the client's
+        request timeout
+        @param notifier signaled once when the request has ended
+
+        @return a cancellable future containing the deserialized REST response
+
+        @throw REST-REQUEST-TARGET-ERROR invalid target or API root
+        @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+
+        @par Example
+        @code{.py}
+EventNotifier notifier();
+RestClientIo::RestFuture future = client.restDoEncodedRawRequestAsyncTargetWithNotifier("POST",
+    <RestClient::RestRequestTarget>{"mode": RestClient::RestPathMode::OriginAbsolute,
+        "path": "/model/vendor.model%3A0/converse"}, json_body, {"content-type": "application/json"}, 30000,
+    notifier);
+# ... the async I/O controller reports the notifier readable ...
+hash<RestClient::RestResponseInfo> response = future.get();
+        @endcode
+
+        @since AwsRestClient 1.4
+    */
+    RestClientIo::RestFuture restDoEncodedRawRequestAsyncTargetWithNotifier(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr, int timeout_ms,
+            EventNotifier notifier) {
+        if (timeout_ms <= 0) {
+            throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+        }
+        hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(target, method);
+        request_context.path_is_encoded = True;
+        hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr, True, False, notifier,
+            NOTHING, NOTHING, timeout_ms, request_context);
+        RestClientIo::RestClientIoAsyncRequestOperation op = async_info.operation;
+        return new RestClientIo::RestFuture(async_info.future, bool sub () {
+            return op.cancel();
+        }, hash<RestClient::RestResponseInfo> sub (hash<auto> response) {
+            return buildAsyncOperationResponse(response, op);
+        });
+    }
+
+    #! Opens a SigV4-authenticated AWS event stream that the async I/O controller reads
+    /** The request of @ref startEncodedEventStream() for a response-only stream, as an observable: the stream is
+        opened and read by the async I/O controller, its frames are decoded on the I/O thread (see
+        @ref HttpClientIo::HttpClientStreamHandle::installEventStreamState()
+        "HttpClientStreamHandle::installEventStreamState()"), and its observers receive:
+        - @ref HttpClientStreamingIo::EVENT_SSE_CONNECTED "EVENT_SSE_CONNECTED" with the status and headers of the
+          response, when it has started the event stream;
+        - @ref HttpClientStreamingIo::EVENT_SSE_DATA "EVENT_SSE_DATA" for each frame, a hash with the keys of
+          @ref AwsEventStream::AwsEventStreamFrame "AwsEventStreamFrame" (\c headers and \c payload);
+        - @ref HttpClientStreamingIo::EVENT_SSE_CLOSED "EVENT_SSE_CLOSED" when the stream has ended: with no
+          \c reason at its end, with \c reason \c "stream-error" and the decoder's error in \c error
+          (\c AWS-EVENT-STREAM-CRC-ERROR or \c AWS-EVENT-STREAM-FORMAT-ERROR, as
+          @ref AwsSignedEventStream::readFrame() raises them), with \c "idle-timeout", or with
+          \c "startup-error" and the error in \c error for a response that does not start an event stream (the
+          \c AWS-EVENT-STREAM-HTTP-ERROR of @ref AwsSignedEventStream::readFrame() for the same response, with the
+          body of an error response in its \c arg) or a request that failed
+
+        Every attempt of the request is signed with SigV4, with the encoded-path policy of
+        @ref restDoEncodedRawRequest().
+
+        @param method HTTP method
+        @param target API-relative or origin-absolute target with already encoded path variables
+        @param body pre-serialized request body
+        @param hdr additional request headers
+        @param opts observable options, as for
+        @ref RestClientIo::RestClientIo::restObserveSse() "RestClientIo::restObserveSse()" (ex: \c idle_timeout)
+
+        @return the observable; call \c observersReady() after registering observers to start the stream
+
+        @throw REST-REQUEST-TARGET-ERROR invalid target or API root
+
+        @since AwsRestClient 1.4
+    */
+    HttpClientStreamingIo::SseObservable observeEncodedEventStreamTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr, *hash<auto> opts) {
+        hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(target, method);
+        request_context.path_is_encoded = True;
+        # the frames are decoded as they arrive; a compressed response could not be.  An Accept-Encoding header of
+        # the caller in any case is replaced
+        hash<auto!> stream_hdr = {};
+        foreach hash<auto> i in ((hdr ?? {}).pairIterator()) {
+            if (i.key.lwr() != "accept-encoding") {
+                stream_hdr{i.key} = i.value;
+            }
+        }
+        stream_hdr."accept-encoding" = "identity";
+        return restObserveStreamIntern(method, target.path, body, stream_hdr, opts, request_context,
+            RestClientIo::RestClientIoStreamFormat::AwsEventStream, True);
+    }
+
+    #! Raises the errors of AwsSignedEventStream::readFrame() for a response that does not start an AWS event stream
+    /** @copydoc RestClientIo::RestClientIo::raiseStreamObservableStartError() */
+    raiseStreamObservableStartError(RestClientIo::RestClientIoStreamFormat format, hash<auto> raw,
+            *string not_stream_type, *data body, string method, string path, *hash<auto> request_headers,
+            *data request_body, bool req_allow_any_response, *hash<RestClient::RestRequestContext> request_context) {
+        if (format != RestClientIo::RestClientIoStreamFormat::AwsEventStream) {
+            RestClientIo::raiseStreamObservableStartError(format, raw, not_stream_type, body, method, path,
+                request_headers, request_body, req_allow_any_response, request_context);
+            return;
+        }
+        hash<auto> response = raw;
+        if (exists body) {
+            response.body = body;
+        }
+        if (raw.status_code < 200 || raw.status_code >= 300) {
+            throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d", raw.status_code),
+                response;
+        }
+        throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
+            + ((not_stream_type ?? "").split(";")[0] ?? "").lwr(), response;
+    }
+
     #! Opens a SigV4-authenticated AWS event stream without buffering the response
     /** @param method HTTP method
         @param path request path with already percent-encoded path variables
@@ -1867,7 +1996,10 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             *code signer, *hash<RestClient::RestRequestContext> request_context) {
         hash<auto> prepared = RestClientIo::prepareAsyncRequestAttempt(method, \path, body, \hdr, raw,
             \negotiate_context, shdr, signer, request_context);
-        signRequest(method, path, prepared.serialized_body, \hdr);
+        # a path of encoded variables (RestRequestContext::path_is_encoded) is canonicalized as the synchronous
+        # requests with encoded paths canonicalize it: it is not encoded once more as a path of unencoded variables
+        signRequest(method, path, prepared.serialized_body, \hdr,
+            prepared.request_context ? prepared.request_context.path_is_encoded : NOTHING);
         return prepared + {
             "request_headers": hdr,
         };
@@ -2138,40 +2270,7 @@ public class AwsSignedEventStream {
                 if (frame) {
                     return frame;
                 }
-                auto item = stream.readData(timeout_ms);
-                if (!exists item) {
-                    throw "AWS-EVENT-STREAM-TIMEOUT", "timed out waiting for AWS event-stream data";
-                }
-                if (item.typeCode() == NT_HASH && item.error) {
-                    throw item.error.err ?? "AWS-EVENT-STREAM-ERROR", item.error.desc ?? "HTTP stream failed";
-                }
-                if (!checked_response) {
-                    hash<auto> response = stream.getResponse() ?? {};
-                    if (exists response.status_code) {
-                        if (response.status_code < 200 || response.status_code >= 300) {
-                            throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d",
-                                response.status_code), response - "body";
-                        }
-                        string content_type = (response.headers."content-type" ?? "").split(";")[0].lwr();
-                        if (trim(content_type) != "application/vnd.amazon.eventstream") {
-                            throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
-                                + content_type;
-                        }
-                        checked_response = True;
-                    }
-                }
-                if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
-                    if (!checked_response) {
-                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "event data arrived without response headers";
-                    }
-                    decoder.feed(binary(item));
-                } else if (item.typeCode() == NT_HASH && item.end_stream) {
-                    if (!checked_response) {
-                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "stream ended without response headers";
-                    }
-                    decoder.finish();
-                    AutoLock sl(state_lock);
-                    finished = True;
+                if (readItemLocked(timeout_ms)) {
                     return NOTHING;
                 }
             }
@@ -2179,6 +2278,90 @@ public class AwsSignedEventStream {
             close();
             rethrow;
         }
+    }
+
+    #! Waits until the response has started the event stream, without reading an event
+    /** The response's status and media type are checked as @ref readFrame() checks them; the event data that arrives
+        with the response is kept for @ref readFrame().  A caller can retry a request whose response did not start
+        the stream, as no event was delivered from it.
+
+        @param timeout_ms idle timeout; omitted to use the HTTP client's configured timeout
+
+        @return the HTTP response metadata (see @ref getResponseInfo())
+
+        @throw AWS-EVENT-STREAM-TIMEOUT no response arrived before the timeout
+        @throw AWS-EVENT-STREAM-HTTP-ERROR unsuccessful HTTP status (the response is the argument, with its
+        \c status_code and \c headers) or wrong response media type
+        @throw AWS-EVENT-STREAM-CLOSED this session was explicitly closed
+        @note A transport or timeout error closes the stream.
+
+        @since AwsRestClient 1.4
+    */
+    hash<auto> waitForResponse(*timeout timeout_ms) {
+        AutoLock al(read_lock);
+        try {
+            while (!checked_response) {
+                {
+                    AutoLock sl(state_lock);
+                    if (closed) {
+                        throw "AWS-EVENT-STREAM-CLOSED", "event stream was closed";
+                    }
+                }
+                if (readItemLocked(timeout_ms)) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            close();
+            rethrow;
+        }
+        return getResponseInfo();
+    }
+
+    #! Reads one item of the HTTP stream: checks the response, and feeds its event data to the decoder
+    /** Called with \c read_lock held
+
+        @return @ref True if the stream has ended (it is then finished)
+    */
+    private bool readItemLocked(*timeout timeout_ms) {
+        auto item = stream.readData(timeout_ms);
+        if (!exists item) {
+            throw "AWS-EVENT-STREAM-TIMEOUT", "timed out waiting for AWS event-stream data";
+        }
+        if (item.typeCode() == NT_HASH && item.error) {
+            throw item.error.err ?? "AWS-EVENT-STREAM-ERROR", item.error.desc ?? "HTTP stream failed";
+        }
+        if (!checked_response) {
+            hash<auto> response = stream.getResponse() ?? {};
+            if (exists response.status_code) {
+                if (response.status_code < 200 || response.status_code >= 300) {
+                    throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d",
+                        response.status_code), response - "body";
+                }
+                # the media type, without parameters; an empty string for a response without a Content-Type
+                string content_type = (((response.headers."content-type" ?? "").split(";"))[0] ?? "").lwr();
+                if (trim(content_type) != "application/vnd.amazon.eventstream") {
+                    throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
+                        + content_type;
+                }
+                checked_response = True;
+            }
+        }
+        if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
+            if (!checked_response) {
+                throw "AWS-EVENT-STREAM-HTTP-ERROR", "event data arrived without response headers";
+            }
+            decoder.feed(binary(item));
+        } else if (item.typeCode() == NT_HASH && item.end_stream) {
+            if (!checked_response) {
+                throw "AWS-EVENT-STREAM-HTTP-ERROR", "stream ended without response headers";
+            }
+            decoder.finish();
+            AutoLock sl(state_lock);
+            finished = True;
+            return True;
+        }
+        return False;
     }
 
     #! Sends one signed event on a bidirectional upload

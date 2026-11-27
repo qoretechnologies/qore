@@ -55,6 +55,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSerializable.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -777,6 +778,14 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         takeAccessorMembersForMerge(*new_data, ext);
     }
 
+    // the reference elements of the values are bound before the object's lock is taken (qore#7391)
+    QoreReferenceBindPairList bound;
+    if (new_data && !new_data->empty() && mergeBindReferences<Lexical>(*new_data, class_ctx, vl, bound, xsink,
+            policy)) {
+        bound.release(xsink);
+        return;
+    }
+
     if ((new_data && !new_data->empty()) || new_internal_data) {
         QoreAutoVarRWWriteLocker al(rml);
 
@@ -785,7 +794,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
             return;
         }
 
-        mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy);
+        mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy,
+            &bound);
     } else if (raiseIfDeleted(vl, xsink)) {
         // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
         return;
@@ -836,11 +846,18 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
         h = *rest;
     }
 
+    // the reference elements of the values, bound before the object's lock is taken (qore#7391)
+    QoreReferenceBindPairList bound;
     if (!h->empty()) {
         // get the current class context for possible internal data
         const qore_class_private* class_ctx = runtime_get_class();
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
             class_ctx = nullptr;
+        }
+
+        if (mergeBindReferences<Lexical>(h, class_ctx, vl, bound, xsink, policy)) {
+            bound.release(xsink);
+            return;
         }
 
         QoreAutoVarRWWriteLocker al(rml);
@@ -850,7 +867,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
             return;
         }
 
-        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy);
+        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy, &bound);
     } else if (raiseIfDeleted(vl, xsink)) {
         // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
         return;
@@ -982,6 +999,8 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
         ? static_cast<const QoreClosureBase*>(update) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     ClassAccess access;
+    // sandbox_ctx is set for a class of restricted code (qore#7635); the closure's code is that of pgm, which no
+    // sandbox governs (checked above), which keeps the rule for a class of any sandboxed code
     if (!closure_class || closure_class->sandbox_ctx
         || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
         || qore_closure_code_program(closure) != pgm) {
@@ -1028,6 +1047,8 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
         ? static_cast<const QoreClosureBase*>(callback) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
+    // sandbox_ctx is set for a class of restricted code (qore#7635); qore_program_is_sandboxed() refuses the closures
+    // of any sandboxed Program
     if (closure_class && !closure_class->sandbox_ctx && code_pgm && !qore_program_is_sandboxed(code_pgm)) {
         return 0;
     }
@@ -1066,6 +1087,49 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
         "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
+    return -1;
+}
+
+int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // the copy methods of the object's own class must run: a copy with the copy method of a base class (with
+    // Reflection) would skip the copy() methods of the subclasses, which reset what they guard
+    bool own_class = &copy_cls == qore_class_private::get(*theclass);
+    if (own_class && copy_cls.hasUserCopyMethod()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: copy of class '%s'\n", theclass->getName());
+    }
+    if (!own_class) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s' with the copy method of class '%s': the object is shared by every Program of "
+            "the process", theclass->getName(), copy_cls.name.c_str());
+    } else {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is "
+            "shared by every Program of the process", copy_cls.name.c_str());
+    }
+    return -1;
+}
+
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: serialize an object of class '%s'\n",
+            theclass->getName());
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "serialize an object of class '%s': the object is shared by every Program of the process",
+        theclass->getName());
     return -1;
 }
 
@@ -1143,10 +1207,137 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
     return mergeAccessorMembersImpl<true>(ext, class_ctx, vl, xsink, policy);
 }
 
+//! checks the value of a member merged into an object whose type can bind a reference, with the object's lock held
+/** The value is checked with a probe: a reference element that is not in \a bound, the references bound before the
+    lock was taken (qore_object_private::mergeBindReferences()), raises REFERENCE-BIND-ERROR, as binding it under the
+    object's lock can deadlock (qore#7391)
+
+    @return -1 if the merge must stop (an exception was raised), 0 if not
+*/
+template <bool Lexical>
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int mergeCheckBoundMember(const QoreTypeInfo* ti, const char* key,
+        ValueHolder& qv, ExceptionSink* xsink, LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound) {
+    // the object's lock is held
+    QoreReferenceBindProbe probe(nullptr, bound, true);
+    if constexpr (Lexical) {
+        QoreTypeInfo::acceptInputMember(ti, key, *qv, xsink, policy);
+    } else {
+        QoreTypeInfo::acceptInputMember(ti, key, *qv, xsink);
+    }
+    probe.uninstall();
+    if (probe.recorded()) {
+        // the references are also held by the value, so their release here frees nothing
+        probe.pairs.release(xsink);
+        if (!*xsink) {
+            xsink->raiseException("REFERENCE-BIND-ERROR", "internal error: a reference element of the value of member "
+                "'%s' of type '%s' merged into an object was not bound before the object was locked", key,
+                QoreTypeInfo::getName(ti));
+        }
+        return -1;
+    }
+    return *xsink ? -1 : 0;
+}
+
+template <bool Lexical>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_object_private::mergeBindReferences(const QoreHashNode* h,
+        const qore_class_private* class_ctx, const AutoVLock& vl, QoreReferenceBindPairList& bound,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    // the references are recorded by one probe, which records each one once; the object's lock is not held yet,
+    // but the lvalue that holds the object can be locked
+    QoreReferenceBindProbe probe(nullptr, &bound, static_cast<bool>(vl));
+    {
+        // the errors of the access and of the type checks are raised by the merge itself
+        ExceptionSink check_xsink;
+        ConstHashIterator hi(h);
+        while (hi.next()) {
+            const QoreTypeInfo* ti = nullptr;
+            const qore_class_private* member_class_ctx = nullptr;
+            if (checkMemberAccessGetTypeInfo(&check_xsink, hi.getKey(), class_ctx, member_class_ctx, ti)) {
+                check_xsink.clear();
+                continue;
+            }
+            if (!QoreTypeInfo::mayBindReference(ti)) {
+                continue;
+            }
+            // the value is checked as the merge checks it, on a reference of its own
+            ValueHolder qv(hi.getReferenced(), xsink);
+            if constexpr (Lexical) {
+                QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, &check_xsink, policy);
+            } else {
+                QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, &check_xsink);
+            }
+            check_xsink.clear();
+        }
+    }
+    probe.uninstall();
+    if (!probe.recorded()) {
+        return 0;
+    }
+    if (vl) {
+        // binding a reference with the lvalue lock held can deadlock
+        probe.pairs.release(xsink);
+        xsink->raiseException("REFERENCE-BIND-ERROR", "internal error: a reference element of a value merged into an "
+            "object of class '%s' cannot be bound while the lvalue that holds the object is locked",
+            theclass->getName());
+        return -1;
+    }
+    // the references are bound with no lock held, in the order in which the check found them; a sink of their own
+    // tells their errors from an exception that the caller's sink holds already
+    {
+        QoreReferenceBindProbeSuspend suspend;
+        ExceptionSink bind_xsink;
+        for (size_t i = 0, e = probe.pairs.size(); i < e; ++i) {
+            qore_reference_bind_pair(probe.pairs[i], &bind_xsink);
+            if (bind_xsink) {
+                probe.pairs.release(xsink);
+                xsink->assimilate(bind_xsink);
+                return -1;
+            }
+        }
+    }
+    probe.pairs.moveTo(bound);
+    return 0;
+}
+
+bool qore_object_private::mergeMayBindReference(const QoreValue& src) const {
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    ExceptionSink check_xsink;
+    auto may_bind = [&](const QoreHashNode* h) -> bool {
+        ConstHashIterator hi(h);
+        while (hi.next()) {
+            const QoreTypeInfo* ti = nullptr;
+            const qore_class_private* member_class_ctx = nullptr;
+            if (checkMemberAccessGetTypeInfo(&check_xsink, hi.getKey(), class_ctx, member_class_ctx, ti)) {
+                // the merge raises the error
+                check_xsink.clear();
+                continue;
+            }
+            if (QoreTypeInfo::mayBindReference(ti)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    switch (src.getType()) {
+        case NT_HASH:
+            return may_bind(src.get<const QoreHashNode>());
+        case NT_OBJECT: {
+            const qore_object_private& o = *qore_object_private::get(*src.get<const QoreObject>());
+            QoreSafeVarRWReadLocker sl(o.rml);
+            return o.status != OS_DELETED && may_bind(o.data);
+        }
+        default:
+            return false;
+    }
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-        LexicalSemanticPolicy policy) {
+        LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound) {
     //printd(5, "qore_object_private::merge() obj: %p\n", obj);
 
     QoreHashNode* id = nullptr;
@@ -1174,7 +1365,12 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSin
             // silently abandoned partway through
             ValueHolder qv(hi.getReferenced(), xsink);
             ScopedTypeCheckSink ts(xsink);
-            if constexpr (Lexical) {
+            if (QoreTypeInfo::mayBindReference(ti)) [[unlikely]] {
+                // a reference element is not bound under the object's lock: it was bound before (qore#7391)
+                if (mergeCheckBoundMember<Lexical>(ti, hi.getKey(), qv, *ts, policy, bound)) {
+                    return;
+                }
+            } else if constexpr (Lexical) {
                 QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts, policy);
             } else {
                 QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts);
@@ -2632,7 +2828,8 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     if (!sml)
         return;
 
-    for (class_list_t::const_iterator i = sml->begin(), e = sml->end(); i != e; ++i) {
+    BCSMList::View v = sml->view();
+    for (BCSMList::const_iterator i = v.begin(), e = v.end(); i != e; ++i) {
         //printd(5, "qore_object_private::addVirtualPrivateData() this: %p i: %p '%s' key: %d virt: %s\n", this,
         //  i->first, i->first->getName(), i->first->getID(), i->second ? "true" : "false");
         if (i->second)
@@ -2766,6 +2963,9 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             }
 #endif
 
+            // a dereference that abandons a collection because another value of the set has been referenced since
+            // the decision decides again: see below (qore#7556)
+        decide_again:
             while (true) {
                 bool recalc = false;
                 {
@@ -2912,12 +3112,36 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // a weak reference: a call, or a value read from one) keeps the object: the deletion is abandoned, and that
         // thread's last release decides again, so that a call that holds a reference never runs while the object is
         // destroyed (qore#7509)
-        bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases)
+        // So does a reference taken since the decision to another object or closure-bound variable of the set, or to
+        // a list, hash, closure or reference of it (read through a weak reference), which the counts recorded at the
+        // decision show (RSetDerefHelper::referencedSinceDecision(), qore#7556); this dereference then decides again.
+        // Lock order: the object's rml, then the rlck of each member in turn, then the object's rlck
+        bool others_referenced = rrf && cycle_cleanup.referencedSinceDecision();
+        bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases, others_referenced)
             : !takeLastDeleteReference();
         if (abandoned) [[unlikely]] {
             recursive_ref_found = prev_recursive_ref_found;
             sl.unlock();
             qodh.abandonDelete();
+            if (rrf) {
+                // the record's weak references are released with no lock held
+                cycle_cleanup.releaseDecision();
+                if (others_referenced) {
+                    printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' another value of the set "
+                        "referenced since the collection was decided; deciding again\n", this, getClassName());
+                    // this dereference decides again with the counts as they are now, so that the decision does not
+                    // depend on what the release of the reference taken since decided (a release of a member made
+                    // since finds its set invalidated and rescans; a node's release decides nothing unless the node
+                    // is watched).  A reference still held makes the decision fail.  When the set has nodes, the
+                    // other members are still retained by this dereference (cycle_cleanup), so the decision fails
+                    // at them; their releases at the end of this dereference (~RSetDerefHelper()) decide then, and
+                    // the one that finds a node held from outside the set watches it (RSet::canDelete()), so that the
+                    // node's release decides once it is released
+
+                    rrf = false;
+                    goto decide_again;
+                }
+            }
             if (!qodh.getRefs()) {
                 // the thread that took the count from zero took the weak reference that the dereference to zero that
                 // deletes the object releases (customRefIntern()); this dereference to zero does not delete it
@@ -2931,7 +3155,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         in_destructor = true;
         // mark status as in destructor
-        status = q_gettid();
+        status = getDestroyingStatus();
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -2970,6 +3194,20 @@ void qore_object_private::raiseDeletedCall(const qore_class_private* cls, const 
     // same error for a method call whose arguments deleted the object (issue #5824)
     qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
         cls ? cls->name.c_str() : theclass->getName(), mname);
+}
+
+bool qore_object_private::tryStartCall(ExceptionSink* xsink) {
+    if (status == OS_DELETED) {
+        return false;
+    }
+    customRefIntern(true);
+    // an explicit deletion that has completed since the test sets the status under the object's lock; the reference
+    // taken before then keeps the object allocated, and the call runs without it, as for an object deleted before
+    if (status.load(std::memory_order_acquire) == OS_DELETED) [[unlikely]] {
+        customDeref(xsink, true);
+        return false;
+    }
+    return true;
 }
 
 int qore_object_private::startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
@@ -3037,7 +3275,7 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
         (void)pd;
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
 
     // run the destructor
@@ -3295,6 +3533,33 @@ QoreValue qore_object_private::evalMember(QoreObject* obj, const std::string& me
     return obj->priv->evalMember(mem.c_str(), mem.size(), xsink);
 }
 
+bool qore_object_private::memberReadRunsNoCode(const char* mem) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    size_t len = strlen(mem);
+    if (cls->findAccessorMember(mem, len)) {
+        return false;
+    }
+    if (!cls->memberGate) {
+        return true;
+    }
+    // the class context and the access check of evalMember()
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, mem, class_ctx);
+    }
+    const qore_class_private* member_class_ctx = nullptr;
+    if (checkMemberAccess(mem, len, class_ctx, member_class_ctx)) {
+        return false;
+    }
+    // memberGate() is run for a member that the object does not hold
+    QoreAutoVarRWReadLocker al(rml);
+    if (status == OS_DELETED) {
+        return true;
+    }
+    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    return odata && qore_hash_private::get(*odata)->existsKey(mem);
+}
+
 bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreValue& result) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     // A gate, accessor or notification can run user code as part of ordinary lvalue navigation.
@@ -3394,14 +3659,14 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
         if (priv->status == OS_DELETED)
             return;
 
-        if (priv->in_destructor || priv->status > 0) {
+        if (priv->in_destructor || priv->status != OS_OK) {
             xsink->raiseException("DOUBLE-DELETE-EXCEPTION", "destructor called from within destructor for class %s",
                 getClassName());
             return;
         }
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
     priv->doDeleteIntern(xsink);
 }
@@ -3540,15 +3805,16 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
         setValue(key, val, xsink);
         return *xsink ? -1 : 0;
     }
-    {
-        LValueHelper lvh(xsink, true);
-        if (priv->getLValue(key, lvh, qore_class_private::get(*cls), false, xsink)) {
-            val.discard(xsink);
-            return -1;
-        }
-        // consuming semantics: caller transfers the reference in val
-        lvh.assignNative(val, "<set normal class member value>");
-    }
+    // consuming semantics: caller transfers the reference in val; a store whose check records reference elements is
+    // made again after they have been bound with no lvalue lock held (qore#7391)
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    qore_store_with_bind_retry(xsink, true, val,
+        [this, key, class_ctx, xsink](LValueHelper& lvh) -> int {
+            return priv->getLValue(key, lvh, class_ctx, false, xsink);
+        },
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assignNative(v, "<set normal class member value>");
+        });
     return *xsink ? -1 : 0;
 }
 
@@ -3865,6 +4131,27 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     if (!h) {
         // object has been deleted
         return Nothing.getAsString(str, foff, xsink);
+    }
+    // the calling code is shown the members that serialization would give it: not the non-public members that a class
+    // declared by trusted code declares, unless the code is that of a class with private access to the declaring class
+    // or no sandboxed code is in the chain of its callers (qore#7146)
+    {
+        const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+        if (cls->hasSandboxSerialState() && h->size()) {
+            QoreSerializationCaller caller;
+            std::vector<std::string> hidden;
+            ConstHashIterator hi(*h);
+            while (hi.next()) {
+                bool internal = false;
+                const qore_class_private* decl = cls->sandboxSerialProtectedDecl(hi.getKey(), internal);
+                if (decl && caller.restricts(*decl, internal)) {
+                    hidden.push_back(hi.getKey());
+                }
+            }
+            for (const std::string& key : hidden) {
+                h->removeKey(key.c_str(), xsink);
+            }
+        }
     }
 
     if (foff == FMT_YAML_SHORT) {

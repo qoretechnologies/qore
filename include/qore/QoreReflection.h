@@ -289,6 +289,9 @@ public:
     //! returns the type info for the constant
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
+    //! Returns the functional domain required to read the value
+    DLLEXPORT int64 getDomain() const;
+
     //! returns the value of the constant; caller owns any reference returned
     DLLEXPORT QoreValue getReferencedValue() const;
 

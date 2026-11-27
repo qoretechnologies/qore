@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, HTTP/2 (TLS) and HTTP/3 (QUIC) servers answering WebSocket upgrade requests
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires QoreRepl
+%requires DpqlWebSocket
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketHandlerMethodsTest
+
+#! a handler that counts the connections that it creates
+class CountingWsHandler inherits WebSocketHandler {
+    public {
+        Counter created();
+    }
+
+    WebSocketHandler::WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        created.inc();
+        return new WebSocketHandler::WebSocketConnection(self);
+    }
+}
+
+#! WebSocketHandler opens a WebSocket only on GET (HTTP/1.1) or extended CONNECT (HTTP/2, HTTP/3) (qore#7668)
+/** handleRequest() opened a WebSocket for a request of any method that carried the upgrade headers, such as an
+    OPTIONS request, which applications may handle without authentication as a CORS preflight request.  Any other
+    method now gets 405 Method Not Allowed with an Allow header, no connection is created, and the handlers of qlib
+    that count or authenticate connections before they call the parent's method refuse it before they do.
+*/
+class WebSocketHandlerMethodsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        CountingWsHandler handler();
+        int port;
+
+        const Key = "dGhlIHNhbXBsZSBub25jZQ==";
+    }
+
+    constructor() : QUnit::Test("WebSocketHandlerMethodsTest", "1.0", \ARGV) {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("ws", "", NOTHING, handler);
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        on_exit server.stop();
+
+        addTestCase("HTTP/1.1: only GET opens a WebSocket", \http11Test());
+        addTestCase("HTTP/2 and HTTP/3: only extended CONNECT opens a WebSocket", \multiplexedTest());
+        addTestCase("HTTP/2 and HTTP/3 servers refuse other methods", \multiplexedServerTest());
+        addTestCase("handlers that count and authenticate connections refuse other methods first",
+            \subclassesTest());
+        set_return_value(main());
+    }
+
+    #! sends an upgrade request with the given method and returns the response header hash
+    private hash<auto> request(string method) {
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        string req = sprintf("%s / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n", method, Key);
+        if (method != "GET" && method != "OPTIONS") {
+            req += "Content-Length: 0\r\n";
+        }
+        s.send(req + "\r\n");
+        return s.readHTTPHeader(10s);
+    }
+
+    http11Test() {
+        foreach string method in (("OPTIONS", "POST", "PUT", "DELETE", "HEAD")) {
+            hash<auto> h = request(method);
+            assertEq(405, h.status_code, method);
+            assertEq("GET", h.allow, method + ": Allow");
+        }
+        assertEq(0, handler.created.getCount(), "no connection was created for the refused requests");
+        hash<auto> h = request("GET");
+        assertEq(101, h.status_code, "GET");
+    }
+
+    multiplexedTest() {
+        WebSocketHandler wsh();
+        hash<auto> get_hdr = {"method": "GET", "sec-websocket-key": Key, "http_version": "2.0"};
+        foreach string proto in (("http2", "http3")) {
+            hash<auto> r = wsh.handleRequest({"id": 1, "header-info": {proto: True, "stream_id": 1}}, get_hdr);
+            assertEq(405, r.code, proto + " GET");
+            assertEq("CONNECT", r.hdr.Allow, proto + " GET: Allow");
+            # a CONNECT without :protocol is not an extended CONNECT
+            r = wsh.handleRequest({"id": 1, "header-info": {proto: True, "stream_id": 1}},
+                {"method": "CONNECT", "http_version": "2.0"});
+            assertEq(405, r.code, proto + " CONNECT without :protocol");
+            r = wsh.handleRequest({"id": 1, "header-info": {proto: True, "stream_id": 1,
+                "is_extended_connect": True, "is_websocket_connect": True}},
+                {"method": "CONNECT", ":protocol": "websocket", "http_version": "2.0"});
+            assertEq(200, r.code, proto + " extended CONNECT");
+        }
+    }
+
+    #! requests over HTTP/2 and HTTP/3 to a TLS listener: the server sets the protocol of the request, which the
+    #! check relies on (an extended CONNECT opening a WebSocket over HTTP/2 and HTTP/3 is tested by the stream tests)
+    multiplexedServerTest() {
+        HttpServer s(<HttpServerOptionInfo>{});
+        CountingWsHandler h();
+        s.setDefaultHandler("ws", h);
+        int tls_port = s.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem), "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True}).port;
+        s.waitForAsyncIo();
+        on_exit s.stop();
+        foreach hash<auto> o in (({"http_version": "2.0"}, {"http3_mode": "required"})) {
+            string proto = o.http_version ? "HTTP/2" : "HTTP/3";
+            foreach string method in (("GET", "OPTIONS", "HEAD")) {
+                HTTPClient hc({"url": "https://127.0.0.1:" + tls_port, "ssl_verify_cert": False} + o);
+                hash<auto> info;
+                try {
+                    hc.send(NOTHING, method, "/", {"Sec-WebSocket-Key": Key, "Sec-WebSocket-Version": "13"}, False,
+                        \info);
+                } catch (hash<ExceptionInfo> ex) {
+                    # an error status raises an exception; the response is in info
+                }
+                assertEq(405, info."response-headers".status_code, proto + " " + method);
+                assertEq("CONNECT", info."response-headers".allow, proto + " " + method + ": Allow");
+            }
+        }
+        assertEq(0, h.created.getCount(), "no connection was created");
+    }
+
+    subclassesTest() {
+        Counter auth_calls();
+        code auth = bool sub (hash<auto> cx, hash<auto> hdr) {
+            auth_calls.inc();
+            return True;
+        };
+        hash<auto> cx = {"id": 1, "header-info": {}};
+        hash<auto> hdr = {"method": "OPTIONS", "sec-websocket-key": Key, "http_version": "1.1"};
+        QoreReplWebSocketHandler repl(NOTHING, {"auth_callback": auth});
+        hash<auto> r = repl.handleRequest(cx, hdr);
+        assertEq(405, r.code, "QoreReplWebSocketHandler");
+        DpqlWebSocketHandler dpql(NOTHING, {"auth_callback": auth});
+        r = dpql.handleRequest(cx, hdr);
+        assertEq(405, r.code, "DpqlWebSocketHandler");
+        assertEq(0, auth_calls.getCount(), "the authentication callbacks were not called");
+    }
+}

@@ -81,8 +81,11 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! a connection whose async client creation runs restricted code (as a callback can) in the window of the grant
-class CallbackConnection inherits HttpConnection {
+#! what the restricted callback of a CallbackConnection returned
+/** An object of its own, which a private copy of the connection shares: the client of code restricted from NETWORK
+    that was lent the connection is created from such a copy (qore#7499)
+*/
+class TakenRecord {
     public {
         #! True if the restricted code took a proof with HttpClientCreatorProof::forClient()
         *bool taken;
@@ -94,6 +97,13 @@ class CallbackConnection inherits HttpConnection {
         #! the attempt that the restricted code makes in the next call: "take", "own" or "ref"
         string attempt = "take";
     }
+}
+
+#! a connection whose async client creation runs restricted code (as a callback can) in the window of the grant
+class CallbackConnection inherits HttpConnection {
+    public {
+        TakenRecord rec();
+    }
     private {
         Program cb;
     }
@@ -102,18 +112,18 @@ class CallbackConnection inherits HttpConnection {
     }
     #! the window of the grant of get(): the restricted code tries to take it
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        taken = cb.callFunction("take", url);
+        rec.taken = cb.callFunction("take", url);
         return HttpConnection::getImpl(connect, rtopts);
     }
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         # one attempt per call, so that an attempt that takes the grant does not hide what the others would get
-        switch (attempt) {
+        switch (rec.attempt) {
             case "throw": throw "TEST-ERROR", "an exception in the window of the grant";
-            case "take": taken = cb.callFunction("take", url); break;
-            case "own": own = cb.callFunction("own_client", url); break;
+            case "take": rec.taken = cb.callFunction("take", url); break;
+            case "own": rec.own = cb.callFunction("own_client", url); break;
             case "ref": {
                 code ref = cb.callFunction("take_ref");
-                taken_ref = exists ref(url);
+                rec.taken_ref = exists ref(url);
                 break;
             }
         }
@@ -124,11 +134,8 @@ class CallbackConnection inherits HttpConnection {
 #! a REST connection whose async client creation runs restricted code (as a callback can) in the window of the grant
 class CallbackRestConnection inherits RestConnection {
     public {
-        #! see CallbackConnection
-        *bool taken;
-        *string own;
-        *bool taken_ref;
-        string attempt = "take";
+        #! see CallbackConnection: an object of its own, which a private copy of the connection shares (qore#7499)
+        TakenRecord rec();
     }
     private {
         Program cb;
@@ -142,12 +149,12 @@ class CallbackRestConnection inherits RestConnection {
     }
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         # one attempt per call, so that an attempt that takes the grant does not hide what the others would get
-        switch (attempt) {
-            case "take": taken = cb.callFunction("take", target); break;
-            case "own": own = cb.callFunction("own_client", target); break;
+        switch (rec.attempt) {
+            case "take": rec.taken = cb.callFunction("take", target); break;
+            case "own": rec.own = cb.callFunction("own_client", target); break;
             case "ref": {
                 code ref = cb.callFunction("take_ref");
-                taken_ref = exists ref(target);
+                rec.taken_ref = exists ref(target);
                 break;
             }
         }
@@ -453,6 +460,16 @@ string sub edited_conn(object conn, *string url) {
         return why(ex);
     }
 }
+string sub copy_request(object conn, string url) {
+    try {
+        object c = conn.copy();
+        object m = c.getAsync(False);
+        m.request(url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
 string sub mgr_request(object conn, string url) {
     try {
         object m = conn.getAsync(False);
@@ -663,6 +680,7 @@ string sub client_ca_edit(object c, string url, string file) {
         addTestCase("a lent connection keeps its proxy, " + m, sub () { testProxyRemoved(m); });
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
         addTestCase("restricted callback code takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("a copy of a lent connection has no creator proof, " + m, sub () { testLentCopy(m); });
         addTestCase("restricted code in other windows of a grant takes none, " + m,
             sub () { testCallbackWindows(m); });
         addTestCase("restricted callback code of a REST connection takes no grant, " + m,
@@ -938,21 +956,42 @@ string sub client_ca_edit(object c, string url, string file) {
         Program p = getProgram(mode);
         CallbackConnection c(p, sprintf("http://127.0.0.1:%d/", closed_port));
         foreach string a in (("take", "own", "ref")) {
-            c.attempt = a;
+            c.rec.attempt = a;
             c.getAsync(False);
         }
-        assertEq(False, c.taken, "restricted code inside a trusted call, " + mode);
-        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a trusted call, " + mode);
-        assertEq(False, c.taken_ref, "a call reference of restricted code inside a trusted call, " + mode);
-        c.taken = c.own = c.taken_ref = NOTHING;
+        assertEq(False, c.rec.taken, "restricted code inside a trusted call, " + mode);
+        assertEq("PERMISSION-DENIED", c.rec.own, "a client of restricted code inside a trusted call, " + mode);
+        assertEq(False, c.rec.taken_ref, "a call reference of restricted code inside a trusted call, " + mode);
+        c.rec.taken = c.rec.own = c.rec.taken_ref = NOTHING;
         foreach string a in (("take", "own", "ref")) {
-            c.attempt = a;
+            c.rec.attempt = a;
             assertEq("OK", p.callFunction("use_http_conn", c), "the connection's own client, " + a + ", " + mode);
         }
-        assertEq(False, c.taken, "restricted code inside a restricted caller's call, " + mode);
-        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a restricted caller's call, " + mode);
-        assertEq(False, c.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
+        assertEq(False, c.rec.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq("PERMISSION-DENIED", c.rec.own, "a client of restricted code inside a restricted caller's call, "
             + mode);
+        assertEq(False, c.rec.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
+            + mode);
+    }
+
+    #! a copy that restricted code makes of a lent connection has no creator proof: its clients are the restricted
+    #! code's own, which are refused, while the lent connection, whose clients are created from a private copy of it
+    #! that keeps the proof (qore#7499), and a copy that the host made and lent still reach their target (qore#7302)
+    testLentCopy(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("http://127.0.0.1:%d", plain_port);
+        HttpConnection http("h", "h", url);
+        assertEq("DONE", p.callFunction("mgr_request", http, url), "the lent connection, " + mode);
+        assertRegex("^PERMISSION-DENIED", p.callFunction("copy_request", http, url),
+            "a copy that the restricted code made, " + mode);
+        assertEq("DONE", p.callFunction("mgr_request", http, url), "the lent connection afterwards, " + mode);
+        HttpConnection host_copy = http.copy();
+        assertEq("DONE", p.callFunction("mgr_request", host_copy, url), "a copy that the host made and lent, " + mode);
+        # the host's own use of the connection and of its copy
+        assertEq(200, http.getAsync(False).request(url, "GET", "/redirect/ok").status_code,
+            "the host's own client, " + mode);
+        assertEq(200, host_copy.getAsync(False).request(url, "GET", "/redirect/ok").status_code,
+            "the host's own client of its copy, " + mode);
     }
 
     #! restricted code that runs in the window of the grant of a lent connection's get() takes no grant; neither does
@@ -965,11 +1004,11 @@ string sub client_ca_edit(object c, string url, string file) {
         CallbackConnection c(p, url, {"proxy": "http://127.0.0.1:3128"});
         # the synchronous client of the connection's own target, after the window ran
         assertEq("OK", p.callFunction("use_http_conn_sync", c), "get(), " + mode);
-        assertEq(False, c.taken, "restricted code in the window of get(), " + mode);
-        c.taken = NOTHING;
+        assertEq(False, c.rec.taken, "restricted code in the window of get(), " + mode);
+        c.rec.taken = NOTHING;
         assertEq("OK", p.callFunction("use_http_conn_thread", c), "the connection's client in a thread, " + mode);
-        assertEq(False, c.taken, "restricted code in the window in a thread, " + mode);
-        c.attempt = "throw";
+        assertEq(False, c.rec.taken, "restricted code in the window in a thread, " + mode);
+        c.rec.attempt = "throw";
         assertEq("TEST-ERROR", p.callFunction("use_http_conn", c), "an exception in the window, " + mode);
         # a grant left behind would be taken by this trusted code: its own proof has no proxy
         *HttpClientCreatorProof pr = HttpClientCreatorProof::forClient(url);
@@ -985,13 +1024,14 @@ string sub client_ca_edit(object c, string url, string file) {
         string target = sprintf("http://127.0.0.1:%d/rest", plain_port);
         CallbackRestConnection c(p, sprintf("rest://127.0.0.1:%d/rest", plain_port), target);
         foreach string a in (("take", "own", "ref")) {
-            c.attempt = a;
+            c.rec.attempt = a;
             assertEq("200", p.callFunction("rest_get", c, "/rest/x"), "the connection's own client, " + a + ", "
                 + mode);
         }
-        assertEq(False, c.taken, "restricted code inside a restricted caller's call, " + mode);
-        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a restricted caller's call, " + mode);
-        assertEq(False, c.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
+        assertEq(False, c.rec.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq("PERMISSION-DENIED", c.rec.own, "a client of restricted code inside a restricted caller's call, "
+            + mode);
+        assertEq(False, c.rec.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
             + mode);
     }
 

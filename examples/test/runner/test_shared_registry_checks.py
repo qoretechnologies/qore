@@ -44,7 +44,8 @@ NAME = re.compile(r"^(register|deregister|unregister|tryRegister|set[A-Z]\w*(Loo
                   r"registerOrReplace|remove(Type|Scheme|Handler|Codec|Factory|App|Cached|Schema|Resolver|Lookup|"
                   r"Catalog|Listener)|clear|add\w*ToCache$|\w*_register_|\w*_unregister_)")
 CHECK = re.compile(r"isSandboxed\(\)|checkRegistration\(|checkSharedRegistration\(|checkChildRegistration\(|"
-                   r"mayRegisterShared\(|checkChange\(|checkNotGoverned\(|checkNotSandboxed\(|"
+                   r"mayRegisterShared\(|checkChange\(|checkPublishedIndexChange\(|checkNotGoverned\(|"
+                   r"checkNotSandboxed\(|"
                    r"checkProcessWideRegistration\(|isProcessWideRegistrationAllowed\(")
 
 #! the child data provider registries: a child class that one caller registers is created for every caller that

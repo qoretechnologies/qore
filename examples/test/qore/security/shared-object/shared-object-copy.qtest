@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - the copy() dispatch of the JIT and AOT native code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedObjectCopyTest
+
+#! Regression test for qore#7667: copy() of a shared object fails closed for sandboxed code
+/** Code that is sandboxed or acts for sandboxed code (a tenant, a trusted deputy that the tenant calls, the code of
+    the object's own class) cannot copy an object that trusted code marked with SandboxManager::shareObject(), also
+    with Reflection, unless a class of the copy declares a copy() method in Qore code (its own or inherited; a builtin
+    copy method does not count), which resets what the class guards; the refused copy makes no object.  Trusted code
+    copies as before, and no copy is marked as shared.
+
+    SharedObjectCopy.q checks these copies; SharedObjectCopyModules.q checks that the tenant copies the shared objects
+    of each class of the standard modules that guards its state with SandboxManager::isSharedObject(self), and that
+    its copy has none of that state.  Their output must be the one in the .expected files in every execution mode,
+    and in programs compiled with qcc -O0 and -O3 (the tenant's code is parsed at run time, so the compiled copies
+    there are those of the trusted code: the deputies and the code of the object's class).  A copy with the copy
+    method of a base class is refused too, as it would not run the copy() method of the object's class.
+*/
+class SharedObjectCopyTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        list<string> fixtures = ("SharedObjectCopy", "SharedObjectCopyModules");
+    }
+
+    constructor() : QUnit::Test("shared object copy", "1.0", \ARGV) {
+        foreach string fixture in (fixtures) {
+            string name = fixture;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(name + ": execution mode " + mode, sub () {
+                    # the library modules' code chooses its own execution, so the native compilation is not checked
+                    assertEq(expected(name), ExecModeHarness::run_stdout(command(name, execution_mode),
+                        ExecModeHarness::NativeCheck::None));
+                });
+            }
+            addTestCase(name + ": qcc -O0", sub () { checkQcc(name, 0); });
+            addTestCase(name + ": qcc -O3", sub () { checkQcc(name, 3); });
+        }
+
+        set_return_value(main());
+    }
+
+    private string fixture(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+    }
+
+    private string command(string name, string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture(name)));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(string name, int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/" + name;
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture(name))));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected(name), backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

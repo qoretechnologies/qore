@@ -120,11 +120,27 @@ public class HashDataType inherits QoreDataType {
         return rv;
     }
 
+    #! Makes a copy of the type that belongs to the code that makes it
+    /** The copy is not a shared object (see AbstractDataProviderType::copy(), which resets its shared and frozen
+        state): what the class does for a type that is a shared object keeps no state of its own.  getDefaultValue()
+        records the check of the default value in an update scope for such a type, and the result is the same for the
+        copy, which has the same fields and default value, and which records the next result as an ordinary type; the
+        types and fields that it holds are those of the original, and those added to it are frozen only if it is
+        frozen (qore#7728, qore#7667)
+    */
+    copy() {
+        # no own guarded state
+    }
+
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         checkChange("fields");
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
+            # a type that a frozen type holds is shared as well (qore#7728)
+            if (frozen) {
+                default_other_field_type.freeze();
+            }
             has_default_other_field_type = default_other_field_type.hasType();
             if (default_other_field_type.getTags().dynamic) {
                 setDynamicTag();
@@ -225,11 +241,25 @@ auto v = t.getDefaultValue();
     */
     *hash<auto> getDefaultValue() {
         if (default_value && default_value_needs_check) {
+            bool ok;
             try {
                 acceptsValue(default_value);
-                remove default_value_needs_check;
+                ok = True;
             } catch (hash<ExceptionInfo> ex) {
-                remove default_value;
+            }
+            # a type that is a shared object records the result of the check in an update scope, as its reader can
+            # be sandboxed (qore#7728)
+            code record = sub () {
+                if (ok) {
+                    remove default_value_needs_check;
+                } else {
+                    remove default_value;
+                }
+            };
+            if (SandboxManager::isSharedObject(self)) {
+                SandboxManager::updateSharedObject(self, record);
+            } else {
+                record();
             }
         }
         return default_value;
@@ -473,6 +503,10 @@ node.setFields(fields);
     */
     HashDataType setFields(hash<string, AbstractDataField> fields) {
         checkChange("fields");
+        # the fields of a frozen type are shared as well (qore#7728)
+        if (frozen) {
+            map $1.freeze(), fields.iterator();
+        }
         self.fields = fields;
         if (type == AutoHashType) {
             scanFieldsForRequired();
@@ -719,12 +753,16 @@ response.setFieldList((id_field, name_field));
 
     #! adds a field to the type
     private addFieldIntern(AbstractDataField field) {
+        # a field added to a frozen type is shared as well (qore#7728)
+        if (frozen) {
+            field.freeze();
+        }
         postProcessAddedField(fields{field.getName()} = field);
     }
 
     #! adds a field to the type from a typed hash member
     private addFieldIntern(Qore::Reflection::TypedHashMember mem) {
-        postProcessAddedField(fields{mem.getName()} = new QoreDataField(mem));
+        addFieldIntern(new QoreDataField(mem));
     }
 
     #! Set the "required_fields" flag if any fields are mandatory

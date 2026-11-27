@@ -1,0 +1,18 @@
+HashDataType: the tenant copies a shared one (shared: True): its copy is shared: False
+  the tenant adds a field: to the shared type: SANDBOX-REGISTRATION-ERROR; to its copy: changed
+  the type's guarded state: frozen: False
+QoreDataField: the tenant copies a shared one (shared: True): its copy is shared: False
+  the tenant sets a default: of the shared field: SANDBOX-REGISTRATION-ERROR; of its copy: changed
+  the field's guarded state: shared_object: False
+OpenApi3Schema: the tenant copies a shared one (shared: True): its copy is shared: False
+  the document's type build lock is its own: True, its type cache is empty: True (the document's: False)
+SchemaObject: the tenant copies a shared one (shared: True): its copy is shared: False
+  the schema object's guarded state: shared_object: False, cached type: False (the object's: True)
+  the tenant's copy builds its type: True, the document's type cache is unchanged: True
+  the copy caches its own type: True, not the object's: True
+SwaggerSchema: the tenant copies a shared one (shared: True): its copy is shared: False
+  the document's type build lock is its own: True, its type cache is empty: True (the document's: False)
+SchemaObject: the tenant copies a shared one (shared: True): its copy is shared: False
+  the schema object's guarded state: shared_object: False, cached type: False (the object's: True)
+  the tenant's copy builds its type: True, the document's type cache is unchanged: True
+  the copy caches its own type: True, not the object's: True

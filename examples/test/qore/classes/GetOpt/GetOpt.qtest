@@ -20,6 +20,7 @@ class Test inherits QUnit::Test {
     constructor() : QUnit::Test("GetOpt", "1.0") {
         addTestCase("GetOpt::parse(list)", \parseList());
         addTestCase("GetOpt named calls", \namedCallTest());
+        addTestCase("leading wrapper options", \leadingTest());
         set_return_value(main());
     }
 
@@ -32,6 +33,33 @@ class Test inherits QUnit::Test {
 
         h = g.parse2(\l);
         testAssertionValue("GetOpt::parse2(list)", (), l);
+    }
+
+    leadingTest() {
+        GetOpt g({"verbose": "v,verbose", "listen": "l,listen=s@"});
+        list<string> args = ("-vl", "file", "--listen=file", "file", "-v", "--unknown", "--");
+        list<string> original = args;
+        hash<auto> opts = g.parseLeading(arguments: \args);
+        assertTrue(opts.verbose);
+        assertEq(("file", "file"), opts.listen);
+        assertEq(("file", "-v", "--unknown", "--"), args);
+        assertEq(7, original.size());
+        foreach string stop in ("-", "--", "", "program") {
+            args = ("--listen", "-value", stop, "--verbose");
+            assertEq({"listen": ("-value",)}, g.parseLeading(\args));
+            assertEq((stop, "--verbose"), args);
+        }
+        args = ("-v",);
+        assertTrue(g.parseLeading(\args).verbose);
+        assertEq((), args);
+        assertEq({}, g.parseLeading(\args));
+        args = ("--unknown", "program");
+        assertThrows("GETOPT-ERROR", sub () { g.parseLeading(\args); });
+        args = ("--listen",);
+        assertThrows("GETOPT-ERROR", sub () { g.parseLeading(\args); });
+        args = ("program", "-v");
+        assertTrue(g.parse2(\args).verbose);
+        assertEq(("program",), args);
     }
 
     namedCallTest() {

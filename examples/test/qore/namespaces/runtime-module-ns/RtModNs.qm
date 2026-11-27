@@ -1,0 +1,26 @@
+%modern
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+module RtModNs {
+    version = "1.0";
+    desc = "A user module whose namespace a binary module adds declarations to at run time (qore#7609)";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace RtModNs {
+    public class RtModClass {
+        public int v() {
+            return 7;
+        }
+    }
+
+    public hashdecl RtModHash {
+        int a = 1;
+    }
+
+    public int sub rtModFunc(RtModClass c) {
+        return c.v();
+    }
+}

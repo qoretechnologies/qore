@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+module TzLibInit {
+    version = "1.0";
+    desc = "library module whose initialization loads a time zone from a path (test of qore#7566)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        *string path = ENV.QORE_TZLIB_PATH;
+        if (path) {
+            try {
+                TimeZone tz(path);
+                TzLibInit::result = "loaded";
+            } catch (hash<ExceptionInfo> ex) {
+                TzLibInit::result = ex.err;
+            }
+        }
+    };
+}
+
+#! the result of the initialization's load
+public namespace TzLibInit {
+public our *string result;
+public *string sub get() {
+    return result;
+}
+}

@@ -12,6 +12,7 @@
 #define _QORE_TOKENIZER_SEQUENCE_DECODER_H
 
 #include "decoders/AbstractDecoder.h"
+#include "normalizers/ReplaceNormalizer.h"
 
 #include <string>
 #include <vector>
@@ -22,7 +23,7 @@ namespace QoreTokenizer {
 //! Fuse decoder: joins all tokens with no separator
 class FuseDecoder : public AbstractDecoder {
 public:
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 };
 
 //! Strip decoder: strips characters from the start and/or end of each token
@@ -34,7 +35,7 @@ public:
     */
     StripDecoder(const QoreHashNode* config, ExceptionSink* xsink);
 
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 
 private:
     //! character to strip
@@ -56,20 +57,25 @@ public:
     */
     ReplaceDecoder(const QoreHashNode* config, ExceptionSink* xsink);
 
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 
 private:
-    //! string pattern to search for
-    std::string pattern;
+    ReplaceNormalizer replace;
+};
 
-    //! replacement string
-    std::string content;
+//! Original BPE decoder using the configured end-of-word suffix
+class BPESuffixDecoder : public AbstractDecoder {
+public:
+    explicit BPESuffixDecoder(std::string suffix) : suffix(std::move(suffix)) {
+    }
+
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
+
+private:
+    std::string suffix;
 };
 
 //! Sequence decoder: applies multiple decoders in sequence
-/** The first decoder receives the token list. Subsequent decoders receive
-    a single-element list containing the result string from the previous decoder.
-*/
 class SequenceDecoder : public AbstractDecoder {
 public:
     //! Constructor: reads config and creates child decoders
@@ -83,7 +89,7 @@ public:
     */
     explicit SequenceDecoder(std::vector<std::unique_ptr<AbstractDecoder>> decoders);
 
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 
 private:
     //! child decoders applied in order

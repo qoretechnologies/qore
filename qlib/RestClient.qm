@@ -177,6 +177,9 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_7 RestClient v2.7
+    - added @ref RestClient::RestRequestContext::path_is_encoded "RestRequestContext::path_is_encoded", which tells a
+      signer that canonicalizes the path that the caller percent-encoded the path variables of the request
+      (<a href="https://github.com/qoretechnologies/qore/issues/7648">issue 7648</a>)
     - a ping of a @ref RestClient::RestConnection "RestConnection" without the \c ping_method option connects to the
       server, as its polling ping does, instead of succeeding without a check, and every ping, also a polling ping,
       of a connection whose configuration cannot work (not yet authorized, for example) fails with its error
@@ -703,6 +706,15 @@ public hashdecl RestRequestContext {
     string path;
     #! The validator that owns this request's namespace and response
     AbstractRestSchemaValidator validator;
+    #! @ref True if the caller percent-encoded the path variables of the target
+    /** A signer that canonicalizes the path, such as AWS Signature V4, then does not encode the path once more as
+        it would encode a path of unencoded variables; set by the client methods that take encoded paths (ex:
+        @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequestAsyncTargetWithNotifier()
+        "AwsRestClientIo::restDoEncodedRawRequestAsyncTargetWithNotifier()")
+
+        @since RestClient 2.7
+    */
+    bool path_is_encoded = False;
 }
 
 #! Composes an API endpoint or accepts an explicit origin-absolute target
@@ -5960,7 +5972,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         } else {
             new_opts.validator = new NullRestSchemaValidator(logger);
         }
-        return setupRestClientConfig(cast<RestClient>(getImpl(False, new_opts)));
+        # for restricted code that was lent the connection, the client is created with its creator's file and location
+        # options (qore#7327)
+        return setupRestClientConfig(cast<RestClient>(cast<AbstractRestConnection>(getLentTargetSource(new_opts))
+            .getImpl(False, new_opts)));
     }
 
     #! gets options
@@ -6121,7 +6136,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         }
         auto ping_body = getPingBody();
 
-        hash<auto> ping_opts = real_opts + {
+        # the options of the ping's client: for restricted code that was lent the connection, its creator's file and
+        # location options (qore#7327)
+        hash<auto> ping_opts = cast<AbstractRestConnection>(getLentTargetSource()).real_opts + {
             "ping_path": ping_path,
             "ping_body": ping_body,
         };

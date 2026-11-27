@@ -1,0 +1,40 @@
+top-level block local: [1, 7], [1, 7]
+top-level root local: {a: 1, b: 2}, {a: 1, b: 2}
+top-level root local list: [1, 2, 3], [1, 2, 3]
+notify 1 m: [1, 2]
+notify 2 m: [1, 2]
+notify 3 m: [1, 2, 3]
+replaced through a parameter: "replaced", w: []
+notify 1 m: [1, 2]
+notify 2 m: [1, 2, 3]
+replaced through a local: "replaced"
+share check: a: [2, 2], w: []
+notification deletes the object
+Deleting dtor
+deleted: null
+typed: [1, 2, 3], [1, 2, 3]
+typed b: RUNTIME-TYPE-ERROR: <list element assignment> expects type 'int', but got type 'string' instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned (while converting types for list<int> subtype); [1, 2, 3], [1, 2, 3]
+typed c: RUNTIME-TYPE-ERROR
+typed c: ["a"], ["a"]
+typed d: {a: 1}
+reference to reference: [1, 2, 3], [1, 2, 3], [1, 2, 3]
+closure-bound: [1, 2, 3, 4], [1, 2, 3, 4]
+hash element: {a: [1, 2, 3]}, [1, 2, 3]
+list element: [[1, 2, 3]], [1, 2, 3]
+list += hash: RUNTIME-TYPE-ERROR
+list += hash: [1, 2], [1, 2]
+hash += list: {a: 1}, {a: 1}
+string += list: "abc"
+nothing += list: [1]
+int += list: 1
+result: [1, 2, 3], [1, 2, 3], [1, 2, 3]
+nested result: [1, 2, 3, 5, 1, 2, 3, 5], [], [1, 2, 3, 5, 1, 2, 3, 5]
+notify 1 i: 1
+notify 2 s: "a"
+notify 3 m: {a: 1}
+notify 4 i: 3
+notify 5 s: "ab"
+notify 6 m: {a: 1, b: 2}
+notify 7 i: 8
+notifications: 8 "ab" {a: 1, b: 2}
+done

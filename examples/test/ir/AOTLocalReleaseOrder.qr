@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+# Object locals whose values the compiled code holds in reload storage are destroyed in reverse declaration order,
+# whatever the order in which the code first used them; every mode must match the interpreter
+
+our list<string> events = ();
+our hash<string, int> released = {};
+our int created = 0;
+
+class Tracker {
+    public {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+        ++created;
+    }
+    destructor() {
+        events += name;
+        released{name} = (released{name} ?? 0) + 1;
+    }
+}
+
+sub touch() {
+}
+
+# handlers force the locals to be published to and reloaded from the runtime; an inner block clears its local
+string sub handlers(int which) {
+    Tracker h0("h0");
+    on_exit { events += "on_exit"; }
+    Tracker h1("h1");
+    on_error { events += "on_error"; }
+    Tracker h2("h2");
+    {
+        Tracker h3("h3");
+        on_exit { events += "inner_on_exit"; }
+        if (which == 0) { throw "INNER"; }
+    }
+    if (which == 1) { throw "OUTER"; }
+    return "end";
+}
+
+# the locals are first used in reverse declaration order
+string sub reverseUse(int which) {
+    Tracker a("a");
+    on_exit { events += "on_exit"; }
+    Tracker b("b");
+    Tracker c("c");
+    events += c.name + b.name + a.name;
+    touch();
+    if (which == 0) { throw "X"; }
+    events += b.name;
+    if (which == 1) { return "early"; }
+    return "end";
+}
+
+# locals first used in an order unrelated to their declaration, in loops with block handlers
+string sub loops(int which) {
+    Tracker c0("c0");
+    Tracker c1("c1");
+    for (int i = 0; i < 2; ++i) {
+        on_exit { events += "loop_exit"; }
+        Tracker inner("ci" + i);
+        events += c1.name + inner.name + c0.name;
+        if (which == 0 && i == 1) { throw "X"; }
+        if (which == 1 && i == 1) { return "loop return"; }
+    }
+    Tracker c2("c2");
+    on_exit { events += "exit " + c2.name; }
+    events += c2.name + c0.name;
+    touch();
+    events += c1.name;
+    if (which == 2) { throw "Y"; }
+    return "end";
+}
+
+# locals replaced in a handler, in reverse declaration order, on a normal exit
+string sub replaced(int which) {
+    Tracker r0("r0");
+    Tracker r1("r1");
+    Tracker r2("r2");
+    on_exit {
+        events += "exit";
+        r2 = new Tracker("r2'");
+        r1 = new Tracker("r1'");
+        r0 = new Tracker("r0'");
+        events += "replaced";
+    }
+    touch();
+    events += r1.name + r0.name + r2.name;
+    return "end";
+}
+
+sub check(string label, code test) {
+    events = ();
+    released = {};
+    int start = created;
+    try {
+        events += "result " + test();
+    } catch (hash<ExceptionInfo> ex) {
+        events += "caught " + ex.err;
+    }
+    int total = 0;
+    foreach int n in (released.values()) {
+        total += n;
+    }
+    if (created - start != total) {
+        throw "COUNT-ERROR", sprintf("%s: created %d, released %d: %y", label, created - start, total, events);
+    }
+    foreach hash<auto> i in (released.pairIterator()) {
+        if (i.value != 1) {
+            throw "DOUBLE-RELEASE", sprintf("%s: %s released %d times", label, i.key, i.value);
+        }
+    }
+    printf("%s: %y\n", label, events);
+}
+
+for (int i = 0; i <= 2; ++i) {
+    check("handlers " + i, string sub () { return handlers(i); });
+    check("reverse use " + i, string sub () { return reverseUse(i); });
+    check("loops " + i, string sub () { return loops(i); });
+}
+check("replaced", string sub () { return replaced(0); });
+printf("aot-local-release-order: ok\n");

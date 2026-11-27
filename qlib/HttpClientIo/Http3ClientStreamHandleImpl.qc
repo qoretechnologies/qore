@@ -118,7 +118,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             *int sid = h3conn.getSessionId();
             if (sid) {
                 try {
-                    h3conn.getSocket().unregisterQuicDatagramQueue(sid, stream_id);
+                    (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).unregisterQuicDatagramQueue(sid, stream_id);
                 } catch () {
                     # Best-effort cleanup during teardown; session may already be gone
                 }
@@ -190,7 +190,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
         try {
-            h3conn.getSocket().submitQuicDatagram(qsid, sid, datagram);
+            (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).submitQuicDatagram(qsid, sid, datagram);
         } catch (hash<ExceptionInfo> ex) {
             # Cancel the request we just submitted
             try { conn.cancelRequest(sid); } catch () {}
@@ -442,7 +442,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             }
             sid = stream_id;
         }
-        return h3conn.getSocket().waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
     }
 
     #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
@@ -751,7 +751,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
-        h3conn.getSocket().submitQuicDatagram(sid, stream_id, data);
+        (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).submitQuicDatagram(sid, stream_id, data);
         # Wake the I/O controller so the datagram is written promptly
         conn.notifyPendingData();
     }
@@ -782,7 +782,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # block on a bounded Queue.
         if (!exists datagram_queue) {
             datagram_queue = new Queue(-1);
-            h3conn.getSocket().registerQuicDatagramQueue(sid, stream_id, datagram_queue);
+            (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).registerQuicDatagramQueue(sid, stream_id, datagram_queue);
         }
         try {
             auto v = datagram_queue.get(timeout_ms);
@@ -803,7 +803,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             return False;
         }
-        return h3conn.getSocket().isQuicDatagramSupported(sid);
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).isQuicDatagramSupported(sid);
     }
 
     #! Get the maximum datagram payload size for this connection
@@ -815,7 +815,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             return 0;
         }
-        return h3conn.getSocket().getQuicMaxDatagramSize(sid, stream_id);
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).getQuicMaxDatagramSize(sid, stream_id);
     }
 
     #! Records on the stream's frame state that the application sends its WebSocket close frame itself
@@ -905,6 +905,18 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     /** @see HttpClientStreamHandle::installSseState() for full documentation
     */
     installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        installQueueStateIntern(queue, notifier, initial_body, False);
+    }
+
+    #! Installs a decoder of the AWS binary event stream on an existing streaming request
+    /** @see HttpClientStreamHandle::installEventStreamState() for full documentation
+    */
+    installEventStreamState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        installQueueStateIntern(queue, notifier, initial_body, True);
+    }
+
+    #! Installs the SSE parser or the decoder of the AWS binary event stream (qore#7247)
+    private installQueueStateIntern(Queue queue, *EventNotifier notifier, *data initial_body, bool event_stream) {
         int sid;
         *data install_body = initial_body;
         bool restore_pending_body = False;
@@ -932,7 +944,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         try {
-            h3conn.installSseState(sid, queue, notifier, install_body);
+            if (event_stream) {
+                h3conn.installEventStreamState(sid, queue, notifier, install_body);
+            } else {
+                h3conn.installSseState(sid, queue, notifier, install_body);
+            }
         } catch (hash<ExceptionInfo> ex) {
             AutoLock al(lock);
             if (restore_pending_body && !exists pending_body) {

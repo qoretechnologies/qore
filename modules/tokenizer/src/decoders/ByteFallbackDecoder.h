@@ -29,7 +29,7 @@ public:
     */
     ByteFallbackDecoder(const QoreHashNode* config, ExceptionSink* xsink);
 
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 
 private:
     //! Checks if a token matches the <0xHH> byte token pattern

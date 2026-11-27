@@ -484,8 +484,14 @@ public class UnstructuredRestConnection inherits RestClient::RestConnection {
         \c platform_url option overrides it.
     */
     UnstructuredPlatformRestClientIo getPlatformClient(*hash<auto> rtopts) {
+        # for restricted code that was lent the connection, from its creator's file and location options (qore#7499)
         return new UnstructuredPlatformRestClientIo(
-            RestConnection::getConnectionOptions(rtopts) ?? {});
+            cast<UnstructuredRestConnection>(getLentTargetSource(rtopts)).getPlatformClientOptions(rtopts));
+    }
+
+    #! Returns the options of the Platform API client: the REST connection's options
+    private hash<auto> getPlatformClientOptions(*hash<auto> rtopts) {
+        return RestConnection::getConnectionOptions(rtopts) ?? {};
     }
 
     #! Returns the deployments to try when the configured one rejects the API key

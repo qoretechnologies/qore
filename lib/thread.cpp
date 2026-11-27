@@ -76,6 +76,7 @@
 #include "qore/intern/QC_Gate.h"
 #include "qore/intern/QC_Sequence.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 #include "qore/intern/QC_Future.h"
@@ -103,6 +104,7 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -5628,6 +5630,21 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     rc.cls = c;
 }
 
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, bool keep_class)
+        : td(thread_data.get()) {
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    td->current_obj = obj;
+    td->current_class = keep_class ? old_class : c;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    if (!keep_class) {
+        rc.cls = c;
+    }
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
         QoreSetCallProgramContext, ExceptionSink* xsink) : td(thread_data.get()), call_pgm_xsink(xsink) {
     // as the constructor without the call Program context, in one call
@@ -8191,6 +8208,40 @@ QoreProgram* qore_builtin_caller_program() {
     return own->getProgram();
 }
 
+bool qore_innermost_frame_is_builtin() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    return own && own->getCallType() == CT_BUILTIN;
+}
+
+void qore_thread_program_stack(std::vector<QoreProgram*>& pgms) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    auto add = [&pgms] (QoreProgram* pgm) {
+        if (pgm && std::find(pgms.begin(), pgms.end(), pgm) == pgms.end()) {
+            pgms.push_back(pgm);
+        }
+    };
+    add(td->current_pgm);
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        add(ch->getOldProgram());
+    }
+}
+
+bool qore_caller_in_untrusted_module_init() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return false;
+    }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    return !mib.lift && mib.loader_untrusted;
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
@@ -8411,6 +8462,39 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
 
 int qore_caller_sandbox_state() {
     return qore_caller_sandbox_state_intern(nullptr);
+}
+
+bool qore_caller_has_restricted_code() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // restricted code: a sandbox that does not trust its code governs its Program, or it is sandboxed without a manager
+    // (fails closed, as qore_program_is_restricted())
+    auto restricted = [] (const QoreProgram* pgm) -> bool {
+        return pgm && qore_program_is_restricted(pgm);
+    };
+    // the same scope as qore_caller_sandbox_state_intern()
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())
+        && td->sandboxed_caller->isRestricted()) {
+        return true;
+    }
+    if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (restricted(td->current_pgm)) {
+            return true;
+        }
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            break;
+        }
+        if (restricted(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    return !mib && td->current_pgm != td->call_program_context && restricted(td->call_program_context);
 }
 
 bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
@@ -10002,6 +10086,42 @@ int qore_push_sandbox_policy_barrier() {
     return 0;
 }
 
+//! Returns true if a sandboxed Program was entered on the thread, innermost first; sets \a pgm_id to its ID if given
+static bool thread_has_sandboxed_program(ThreadData* td, qore_program_id_t* pgm_id = nullptr) {
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        if (pgm_id) {
+            *pgm_id = td->current_pgm->getProgramId();
+        }
+        return true;
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (qore_program_is_sandboxed(ch->getOldProgram())) {
+            if (pgm_id) {
+                *pgm_id = ch->getOldProgram()->getProgramId();
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns true if the thread's work that no sandboxed code on its call stack runs for runs for no application
+/** The work of a thread that module code started can serve every caller of the module, so it runs for no application
+    (qore#7010), as does the host code that it calls, and the work that it hands off: a thread that it starts, a task
+    that it submits, an operation that it submits (QoreSandboxContext::app_id, qore#7148).  The work of an operation or
+    a task that the thread continues has the context of its submitter instead.
+*/
+static bool thread_work_for_no_app(ThreadData* td) {
+    // a continued context decides only if it has a sandbox: one that keeps only the isolation of a trusted build does
+    // not hide the context that the thread started with
+    if (td->sandbox_context && (td->sandbox_context->manager || td->sandbox_context->policy_manager)) {
+        return td->sandbox_context->app_id == QORE_NO_PROGRAM_ID;
+    }
+    const QoreSandboxContext* ctx = td->inherited_sandbox_context;
+    return ctx && (ctx->app_id == QORE_NO_PROGRAM_ID
+        || (ctx == td->thread_start_sandbox_context && ctx->capturer_module));
+}
+
 QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     ThreadData* td = thread_data.get();
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
@@ -10028,6 +10148,12 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     program_ids.erase(std::unique(program_ids.begin(), program_ids.end()), program_ids.end());
     // the code that captures the context runs in a sandboxed Program (see skip_inherited_for_creator())
     capturer_sandboxed = td && qore_program_private::isSandboxed(td->current_pgm);
+    capturer_module = td && td->current_pgm && qore_program_is_module(td->current_pgm);
+    // the application that the capturing code acts for, which the work that continues the context acts for
+    // (qore#7148); only where a sandbox governs the code, as only such work is restricted to an application
+    if (td && (current || policy || provenance || provenance_policy)) {
+        app_id = qore_aio_caller_app_id(1);
+    }
     // nothing but the sandbox inherited from the code that started the thread governs the capturing code (see
     // qore_scope_creator_is_sandboxed()); only possible with such a sandbox, or a context that has the property
     // already, so the common capture of sandboxed code does not look it up
@@ -10073,6 +10199,8 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
     // qore_scope_creator_is_sandboxed())
     inherited_only = src->inherited_only;
     capturer_sandboxed = src->capturer_sandboxed;
+    capturer_module = src->capturer_module;
+    app_id = src->app_id;
     // copied first, as they can throw std::bad_alloc; the references below are taken only after that
     program_ids = src->program_ids;
     budgets = src->budgets;
@@ -10180,6 +10308,31 @@ static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, 
         }
     }
     return td->call_program_context && !qore_program_is_module_inline(td->call_program_context);
+}
+
+bool qore_trusted_build_hides_nothing() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
+    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
+    // acts for (fails closed: also if it cannot be resolved), the restrictions of the calling code that what the code
+    // creates would record (see qore_get_creation_origin_restrictions()), also those that a lent method masks (see
+    // qore_get_lent_to_restrictions()), and the code that lends what it creates (see qore_creation_by_lending_code()):
+    // under the barrier nothing that the builder creates is a capability
+    if (td->sandboxed_caller) {
+        return false;
+    }
+    if (qore_caller_sandbox_state_intern(nullptr)) {
+        return false;
+    }
+    if (!qore_get_calling_code_restrictions(td).empty() || !qore_get_lent_to_restrictions(td).empty()) {
+        return false;
+    }
+    bool in_lent_method;
+    const QoreProgram* lent_pgm;
+    return !qore_creation_by_lending_code(td, in_lent_method, lent_pgm);
 }
 
 QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans, bool* capability) {
@@ -10322,6 +10475,12 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
     if (!qore_caller_is_sandboxed(&sandboxed_pgm_id)) {
         return;
     }
+    // decided before this record is pushed: an outer record of the caller is still the thread's
+    restricted = qore_caller_has_restricted_code();
+    // the application that the caller acts for, which the host's code that runs for it in the other Program acts for
+    // (qore#7148): none for the work of a thread that module code started, for example
+    // (qore_caller_is_sandboxed() returned true above)
+    app_id = qore_aio_caller_app_id(1);
     previous = td->sandboxed_caller;
     td->sandboxed_caller = this;
     pushed = true;
@@ -10629,6 +10788,9 @@ QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, Q
     sm->ref();
     holder.ctx->policy_manager = sm;
     holder.ctx->pgm_id = governed->getProgramId();
+    // the work of the call belongs to the application of the governed Program (see qore_governed_app_applies()), also
+    // the work of the code of another Program that the factory calls (qore#7148)
+    holder.ctx->app_id = governed->getProgramId();
     QoreSandboxContextHelper sandbox_helper(*holder.ctx);
     // a call of the governed sandbox: its call budgets (time, CPU, stack, memory) count the factory's work, as they
     // count a call into the governed Program (a call made inside a budget of the manager starts none)
@@ -11112,6 +11274,104 @@ QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po_state.po;
 }
 
+bool runtime_no_external_info() {
+    // no Program has had the restriction: no code is restricted, and the thread's data is not looked up
+    if (!qore_no_external_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the code of a Program that is not a module's, with no restrictions of a sandboxed caller and no provenance of
+    // restricted code: the rule below decides on the Program's options alone, without walking further (see
+    // qore_get_caller_domain_restrictions())
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !td->runtime_po_state.caller_restrictions && !td->sandbox_provenance
+            && !qore_program_is_module_inline(pgm)) {
+        return !!(qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO);
+    }
+    // the rule of every check of the caller's domains: the code runs for code with the restriction (library module
+    // code called by it, a thread or a continuation of work that it started)
+    if (qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+        return true;
+    }
+    // the code of a module whose own Program has the restriction, which it inherited from the Program that loaded it,
+    // where no other code is the caller: under the initialization barrier of a library module, which hides the
+    // loader (the init closure, the module code that it calls), and in a thread that such code started
+    if (pgm && qore_program_is_module_inline(pgm)
+            && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return !qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td));
+    }
+    return false;
+}
+
+std::string qore_path_file_name(const char* path) {
+    const char* end = path + strlen(path);
+    // separators at the end of the path (a directory) are not part of the last component
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? std::string(path, end - path) : std::string(last, end - last);
+}
+
+// true while the module loader builds messages for code restricted from external information (qore#7507)
+static thread_local bool qore_msg_restricted_scope = false;
+
+QoreRestrictedMessageScopeHelper::QoreRestrictedMessageScopeHelper(bool restricted)
+        : old(qore_msg_restricted_scope) {
+    if (restricted) {
+        qore_msg_restricted_scope = true;
+    }
+}
+
+QoreRestrictedMessageScopeHelper::~QoreRestrictedMessageScopeHelper() {
+    qore_msg_restricted_scope = old;
+}
+
+bool qore_msg_restricted() {
+    return qore_msg_restricted_scope;
+}
+
+std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
+        : std::string(path);
+}
+
+bool qore_caller_no_external_info(const QoreProgram* pgm) {
+    if (runtime_no_external_info()) {
+        return true;
+    }
+    if (pgm && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return true;
+    }
+    const QoreProgram* cpgm = qore_thread_current_program_if_any();
+    return cpgm && (qore_program_private::getParseOptions(*cpgm) & PO_NO_EXTERNAL_INFO);
+}
+
+std::string qore_msg_path(const char* path) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+}
+
+QoreStringNode* qore_msg_path_node(const char* path) {
+    return new QoreStringNode(qore_msg_path(path));
+}
+
+const char* qore_msg_detail(const char* text) {
+    return qore_msg_restricted_scope ? "(the details name files of the host, which code restricted from external "
+        "information is not given)" : text;
+}
+
 void qore_get_aot_dispatch_thread_context(QoreAOTDispatchThreadContext& ctx) {
     ThreadData* td = thread_data.get();
     if (!td) {
@@ -11306,6 +11566,109 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
     return caller_pgm ? caller_pgm->getProgramId() : 0;
 }
 
+bool qore_sandbox_policy_elevated() {
+    ThreadData* td = thread_data.get();
+    // SandboxManager::callWithSystemPolicy() and the capabilities of SandboxManager::createSystemPolicyCall() push a
+    // policy barrier (QoreSandboxPolicyBarrierHelper)
+    if (!td || !td->sandbox_policy_barrier) {
+        return false;
+    }
+    // a sandboxed Program entered inside the barrier governs its code and the code that it calls, also by its flag
+    // alone (a Program that sandboxed code created has no manager of its own)
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return false;
+    }
+    const ProgramThreadCountContextHelper* barrier_ctx = td->sandbox_policy_barrier_ctx.back();
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch && ch != barrier_ctx;
+            ch = ch->getOldContext()) {
+        if (qore_program_is_sandboxed(ch->getOldProgram())) {
+            return false;
+        }
+    }
+    // and so does the policy of the sandbox of any other code inside the barrier (the provenance of an object or a
+    // closure created by sandboxed code); fails closed: not elevated if it cannot be resolved for lack of memory
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
+        return !sm;
+    } catch (std::bad_alloc&) {
+        return false;
+    }
+}
+
+bool qore_host_code_sandboxed_app_id(qore_program_id_t& app_id, const QoreProgram* host,
+        const qore_program_id_t* callback_app, int sandboxed) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the work of a SandboxManager::callGoverned() call belongs to the application of the governed Program: judged by
+    // the host Program, as the current Program is the module's where module code that it calls asks
+    if (qore_governed_app_applies(td, host)) {
+        return false;
+    }
+    auto set = [&app_id] (qore_program_id_t id) -> bool {
+        // a sandbox that no known Program set: the code acts for no application
+        app_id = id ? id : QORE_NO_PROGRAM_ID;
+        return true;
+    };
+    // the sandboxed code that called the host code on this thread: a sandboxed caller that a parse or module load hid
+    // first, as in qore_caller_is_sandboxed(), then the innermost sandboxed Program entered on the thread; also inside
+    // the callback of an operation, whose application is not that of sandboxed code that the callback calls
+    if (td->sandboxed_caller) {
+        return set(td->sandboxed_caller->getAppId());
+    }
+    qore_program_id_t caller_id = 0;
+    if (thread_has_sandboxed_program(td, &caller_id)) {
+        return set(caller_id);
+    }
+    // the work of a thread that module code started, and the work that it hands off, runs for no application, also
+    // where the module's closure that the thread runs carries the sandbox of the caller whose call started it
+    if (thread_work_for_no_app(td)) {
+        app_id = QORE_NO_PROGRAM_ID;
+        return true;
+    }
+    // the application that the code that created the object or the closure that runs acted for
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        const QoreSandboxContext* ctx = frame->getContext();
+        if (ctx->manager || ctx->policy_manager || ctx->provenance_manager || ctx->provenance_policy_manager) {
+            return set(ctx->app_id);
+        }
+    }
+    if (callback_app) {
+        app_id = *callback_app;
+        return true;
+    }
+    if (sandboxed < 0) {
+        sandboxed = qore_caller_is_sandboxed() ? 1 : 0;
+    }
+    if (!sandboxed) {
+        return false;
+    }
+    // the operation or the task that the thread continues
+    if (td->sandbox_context && (td->sandbox_context->manager || td->sandbox_context->policy_manager)) {
+        return set(td->sandbox_context->app_id);
+    }
+    // the code that started the thread or submitted the task
+    if (const QoreSandboxContext* ctx = td->inherited_sandbox_context) {
+        return set(ctx->app_id);
+    }
+    // sandboxed by a Program on the call stack that the walk above did not report, or a sandbox that could not be
+    // resolved: no known application (fails closed)
+    app_id = QORE_NO_PROGRAM_ID;
+    return true;
+}
+
+qore_program_id_t qore_host_code_app_id(const QoreProgram* host, int sandboxed) {
+    if (qore_sandbox_policy_elevated()) {
+        return runtime_get_module_call_app_id(host);
+    }
+    qore_program_id_t app_id;
+    if (qore_host_code_sandboxed_app_id(app_id, host, qore_aio_callback_app_id(), sandboxed)) {
+        return app_id;
+    }
+    return runtime_get_module_call_app_id(host);
+}
+
 qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm) {
     // module code that calls module code for a sandboxed caller passes the caller's application on
     if (td->runtime_po_state.sandboxed && td->runtime_po_state.app_pgm_id
@@ -11317,6 +11680,24 @@ qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QorePr
     // or of the calling code (see AsyncIoControllerPriv::callerAppId())
     if (caller_pgm && qore_program_is_module(caller_pgm) && !td->runtime_po_state.module_pgm) {
         return 0;
+    }
+    // the module code that trusted code calls after it elevated explicitly acts for that code's own application
+    // (qore#7148): the caller of a call that a builtin makes in the elevation (a call reference given to
+    // SandboxManager::callWithSystemPolicy()) can be the sandboxed code that called the trusted code, but no sandboxed
+    // code runs inside the elevation (see qore_sandbox_policy_elevated()), so the trusted Program is the current one
+    if (qore_sandbox_policy_elevated()) {
+        const QoreProgram* trusted = (caller_pgm && !qore_program_is_sandboxed(caller_pgm)) ? caller_pgm
+            : td->current_pgm;
+        if (trusted && !qore_program_is_module(trusted) && !qore_program_is_sandboxed(trusted)) {
+            return runtime_get_module_call_app_id(trusted);
+        }
+    }
+    // the host's code acts for the sandboxed code that it runs for, and so does the module code that it calls
+    // (qore#7148)
+    if (caller_pgm && !qore_program_is_module(caller_pgm) && !qore_program_is_sandboxed(caller_pgm)) {
+        // called only where the caller's restrictions are inherited (runtime_module_call_inherits_caller_restrictions()),
+        // that is where a sandbox governs the code, so the full lookup of qore_caller_is_sandboxed() is not needed
+        return qore_host_code_app_id(caller_pgm, 1);
     }
     return runtime_get_module_call_app_id(caller_pgm);
 }
@@ -12795,15 +13176,29 @@ public:
 
     void complete(ThreadArg* arg) {
         arg->native_id = pthread_self();
-        AutoLocker al(mutex);
-        assert(started && !stopping && !arg->next);
-        if (tail) {
-            tail->next = arg;
-        } else {
-            head = arg;
+        {
+            AutoLocker al(mutex);
+            if (started) {
+                assert(!stopping && !arg->next);
+                if (tail) {
+                    tail->next = arg;
+                } else {
+                    head = arg;
+                }
+                tail = arg;
+                condition.signal();
+                return;
+            }
         }
-        tail = arg;
-        condition.signal();
+        // the thread started before a fork() that it made, and ends in the child, where the reaper of the parent
+        // does not exist (see forkChild()) and no thread can join it: it detaches itself and releases what the reaper
+        // would have released after joining it (qore#7579); a reaper is not started for it, as it would keep the child
+        // alive after its last thread has ended.  The count is released before the thread's thread-local destructors
+        // run, as in completeCounted()
+        assert(forked);
+        pthread_detach(pthread_self());
+        delete arg;
+        qore_counter_ops(tp_thread_counter).dec();
     }
 
     // Only called after the external counter reaches zero, either by
@@ -12857,6 +13252,7 @@ public:
     */
     void forkChild() {
         started = stopping = false;
+        forked = true;
         // the reapers do not exist in the child
         reapers.clear();
         ended.clear();
@@ -12888,6 +13284,8 @@ private:
     //! the number of reapers that are waiting for a thread to join, or starting
     unsigned idle = 0;
     bool started = false;
+    //! true in a child process created with fork(), where the reaper of the parent does not exist
+    bool forked = false;
     bool stopping = false;
 
     static void* entry(void* arg) {
@@ -14079,6 +14477,8 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initGateClass(*Thread));
     Thread->addSystemClass(initSequenceClass(*Thread));
     Thread->addSystemClass(initCounterClass(*Thread));
+    Thread->addSystemClass(initLazySharedValueClass(*Thread));
+    Thread->addSystemClass(initLazySharedMapClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
     Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));

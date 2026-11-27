@@ -92,6 +92,9 @@ public final class HttpClientCreatorProof {
         *string ca_file;
         *string ca_path;
 
+        #! the ID of the Program of the code that took the proof, if known (qore#7544)
+        *int owner_pgm_id = SandboxManager::getCallerProgramId();
+
         #! the register of the proofs that were issued and of their grants (see HttpClientCreatorProofRegistry)
         static HttpClientCreatorProofRegistry registry();
 
@@ -123,6 +126,16 @@ public final class HttpClientCreatorProof {
         reg = registry;
         AutoLock al(reg.lock);
         reg.issued{self.uniqueHash()} = True;
+    }
+
+    #! Returns the ID of the Program of the code that took the proof, if known (qore#7544)
+    /** The connection manager created with the proof is that code's: the code of that Program takes the sockets of its
+        connections (see @ref HttpClientIo::HttpClientConnection::getSocket() "HttpClientConnection::getSocket()")
+
+        @since HttpClientIo 1.0
+    */
+    *int getOwnerProgramId() {
+        return owner_pgm_id;
     }
 
     #! Withdraws the proof

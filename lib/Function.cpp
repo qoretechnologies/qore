@@ -835,7 +835,8 @@ static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec
 }
 
 //! Infers the type arguments of a generic variant from the argument types and the explicit type arguments
-static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
+template <typename ArgumentType>
+static bool qore_infer_signature_type_args_impl(const UserSignature* sig, size_t nargs, ArgumentType argument_type,
         const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args = nullptr,
         const QoreTypeParamInstantiation* explicit_inst = nullptr) {
@@ -843,7 +844,6 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         type_param_inst->clear();
     }
 
-    const UserSignature* sig = qore_get_variant_generic_signature(variant);
     if (!sig) {
         return !explicit_type_args || explicit_type_args->empty();
     }
@@ -876,10 +876,10 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         if (supplied && (pi >= supplied->size() || !(*supplied)[pi])) {
             continue;
         }
-        if (pi >= arg_types.size()) {
+        if (pi >= nargs) {
             continue;
         }
-        const QoreTypeInfo* actual = arg_types[pi];
+        const QoreTypeInfo* actual = argument_type(pi);
         if (!actual || !QoreTypeInfo::hasType(actual)) {
             continue;
         }
@@ -899,6 +899,15 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         type_param_inst->type_args = std::move(bindings);
     }
     return true;
+}
+
+static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
+        const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args = nullptr,
+        const QoreTypeParamInstantiation* explicit_inst = nullptr) {
+    return qore_infer_signature_type_args_impl(qore_get_variant_generic_signature(variant), arg_types.size(),
+        [&](size_t i) { return arg_types[i]; }, supplied, receiver_type_info, type_param_inst, explicit_type_args,
+        explicit_inst);
 }
 
 static const QoreTypeInfo* qore_get_runtime_value_type_info(const QoreValue& v) {
@@ -978,14 +987,33 @@ static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVar
         return true;
     }
 
-    type_vec_t arg_types;
-    size_t nargs = args ? args->size() : 0;
-    arg_types.reserve(nargs);
-    for (size_t i = 0; i < nargs; ++i) {
-        arg_types.push_back(qore_get_runtime_value_type_info(args->retrieveEntry(i)));
+    const size_t nargs = args ? args->size() : 0;
+    auto argument_type = [args](size_t i) { return qore_get_runtime_value_type_info(args->retrieveEntry(i)); };
+    if (sig->positional_type_params && sig->resolved && type_param_inst && nargs == sig->numParams()
+            && (!explicit_inst || explicit_inst->type_args.size() <= nargs)) {
+        // The signature already proves the mapping. An exact explicit argument agrees with inference; a
+        // different one needs the usual substitution and compatibility check. NOTHING may need a default.
+        type_param_inst->type_args.clear();
+        type_param_inst->type_args.reserve(nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            const QoreTypeInfo* actual = argument_type(i);
+            if (!QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
+                break;
+            }
+            if (explicit_inst && i < explicit_inst->type_args.size()
+                    && (explicit_inst->type_args[i] != actual || qore_type_contains_type_parameter(actual))) {
+                break;
+            }
+            type_param_inst->type_args.push_back(actual);
+        }
+        if (type_param_inst->type_args.size() == nargs) {
+            type_param_inst->owner = sig;
+            return true;
+        }
     }
-    return qore_infer_signature_type_args(variant, arg_types, nullptr, receiver_type_info, type_param_inst, nullptr,
-        explicit_inst);
+
+    return qore_infer_signature_type_args_impl(sig, nargs, argument_type, nullptr, receiver_type_info, type_param_inst,
+        nullptr, explicit_inst);
 }
 
 static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi);
@@ -1088,14 +1116,65 @@ static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
     return ti == referenceOrNothingTypeInfo ? anyTypeInfo : ti;
 }
 
-bool IList::hasInternalBefore(const_iterator aqfi) const {
-    assert(aqfi != begin());
-    for (const_iterator i = begin() + 1; i != aqfi; ++i) {
-        if ((*i).access == Internal) {
+size_t InternalOwnerIndex::get(const qore_class_private* qc) {
+    std::pair<std::unordered_map<qore_classid_t, size_t>::iterator, bool> i
+        = ids.insert(std::make_pair(qc->classID, classes.size()));
+    if (i.second) {
+        classes.push_back(qc);
+        if (qc->injectedClass && qc->injectedClass != qc) {
+            injected.push_back(i.first->second);
+        }
+    }
+    return i.first->second;
+}
+
+bool InternalOwnerSet::contains(const qore_class_private& qc) const {
+    // the same class or a copy of it, which has its ID
+    std::unordered_map<qore_classid_t, size_t>::const_iterator i = index->ids.find(qc.classID);
+    if (i != index->ids.end() && test(i->second)) {
+        return true;
+    }
+    // a class injected in place of a class of the set, or the class context's injected class: as sameClass()
+    for (size_t j : index->injected) {
+        if (test(j) && index->classes[j]->sameClass(qc)) {
             return true;
         }
     }
+    if (qc.injectedClass && qc.injectedClass != &qc) {
+        for (size_t j = 0, e = index->classes.size(); j < e; ++j) {
+            if (test(j) && index->classes[j]->sameClass(qc)) {
+                return true;
+            }
+        }
+    }
     return false;
+}
+
+void MethodFunctionBase::resolveOwnerCopies() {
+    // an index and a set shared by several entries are copied once; a class's copy keeps its ID
+    std::unordered_map<const InternalOwnerIndex*, std::shared_ptr<InternalOwnerIndex>> indexes;
+    std::unordered_map<const InternalOwnerSet*, owner_set_t> copies;
+    // the sets copied are kept until the end, so that their addresses, the keys of the copies, are not reused
+    std::vector<owner_set_t> copied;
+    for (INode& n : ilist) {
+        if (!n.owners()) {
+            continue;
+        }
+        owner_set_t& c = copies[n.owners()];
+        if (!c) {
+            copied.push_back(owner_set_t(n.owners()));
+            std::shared_ptr<InternalOwnerIndex>& ci = indexes[n.owners()->index.get()];
+            if (!ci) {
+                ci = std::make_shared<InternalOwnerIndex>();
+                for (const qore_class_private* qc : n.owners()->index->classes) {
+                    ci->get(qore_class_private_get_new_copy(qc));
+                }
+            }
+            c = make_owner_set(ci);
+            c->bits = n.owners()->bits;
+        }
+        n.setOwners(c);
+    }
 }
 
 QoreFunction* IList::getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
@@ -1120,8 +1199,12 @@ QoreFunction* IList::getNextFunction(const qore_class_private* class_ctx, const 
     // path that it cannot access does not hide another path from it; the ancestors on the inaccessible path have its
     // access or a more restrictive one, unless another path reaches them (qore#7381)
     for (; aqfi != aqfe; ++aqfi) {
-        if (last_class && (*aqfi).access != Public && !(class_ctx && (*aqfi).access == Private)
-                && ((*aqfi).access != Internal || !internal_access || hasInternalBefore(aqfi))) {
+        const INode& n = *aqfi;
+        // a private:internal ancestor is accessible only to the code of the classes whose private:internal
+        // inheritance reaches it, by identity (qore#7036), not to the code of the other classes of the hierarchy
+        // (qore#7410)
+        if (last_class && n.access() != Public && !(class_ctx && (n.access() == Private
+                || (n.access() == Internal && n.owners()->contains(*class_ctx))))) {
             continue;
         }
         return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
@@ -1136,21 +1219,29 @@ QoreFunction* IList::getNextFunction(const qore_class_private* class_ctx, const 
 inline QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
     assert(aqfi != aqfe);
-    if (!last_class || (*aqfi).access == Public || (class_ctx && (*aqfi).access == Private)) {
+    if (!last_class || (*aqfi).access() == Public || (class_ctx && (*aqfi).access() == Private)) {
         return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
     }
     return getNextFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
 }
 
 bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
-        const QoreTypeInfo* receiver) const {
-    // check varargs flags first
-    if (varargs != sig.varargs) {
-        //printd(5, "AbstractFunctionSignature::compare() varargs: %d sig.varargs: %d\n", varargs, sig.varargs);
+        const QoreTypeInfo* receiver, bool implements_abstract) const {
+    if (num_param_types != sig.num_param_types) {
         return false;
     }
-
-    if (num_param_types != sig.num_param_types || min_param_types != sig.min_param_types) {
+    if (implements_abstract) {
+        // Every call admitted by the declaration must still be valid, including a named call omitting a
+        // particular parameter. The implementation may accept extra arguments or provide extra defaults.
+        if (sig.varargs && !varargs) {
+            return false;
+        }
+        for (unsigned i = 0; i < sig.numParams(); ++i) {
+            if (sig.hasDefaultArg(i) && !hasDefaultArg(i)) {
+                return false;
+            }
+        }
+    } else if (varargs != sig.varargs || min_param_types != sig.min_param_types) {
         return false;
     }
 
@@ -2333,7 +2424,8 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         if ((va > Public && !class_ctx) || (va == Internal
             && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
-                mv->className(), func->getName(), mv->getSignature()->getSignatureText());
+                qore_class_private::get(*mv->getClass())->memberDiagnosticName(), func->getName(),
+                mv->getSignature()->getSignatureText());
             return -1;
         }
     }
@@ -2799,8 +2891,10 @@ UserSignature::UserSignature(int first_line, int last_line, QoreValue params, Re
     bool bare_refs = (bool)(po & PO_ALLOW_BARE_REFS);
 
     // assign no return type if return type declaration is missing and PO_REQUIRE_TYPES or PO_REQUIRE_PROTOTYPES is set
-    if (!retTypeInfo && needs_types)
+    if (!retTypeInfo && needs_types) {
         returnTypeInfo = nothingTypeInfo;
+        implied_return_type = true;
+    }
     delete retTypeInfo;
 
     if (!params) {
@@ -3283,6 +3377,16 @@ int UserSignature::resolveTypes() {
         }
     }
 
+    if (!err && !type_params.empty() && type_params.size() == typeList.size()) {
+        positional_type_params = true;
+        for (size_t i = 0; i < typeList.size(); ++i) {
+            const auto* param = qore_get_type_parameter_type_info(typeList[i]);
+            if (type_params[i].hasBound() || !param || param->getOwnerSignature() != this || param->getIndex() != i) {
+                positional_type_params = false;
+                break;
+            }
+        }
+    }
     types_err = err;
     return err;
 }
@@ -3415,6 +3519,12 @@ static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctio
     assert(dynamic_cast<const MethodFunctionBase*>(f));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
+    // a private:internal variant can be called only by the code of its own class, whichever method has it: the
+    // method that a class creates to implement an abstract variant has the variants of its parent classes, whose
+    // class is not the method's (qore#7410)
+    if (va == Internal) {
+        return !class_ctx || !qore_class_private::get(*mvb->getClass())->sameClass(*class_ctx);
+    }
     // a variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
     const MethodFunctionBase* mf = static_cast<const MethodFunctionBase*>(f);
     if (mf->hasImplementedVariantAccess()) {
@@ -4684,6 +4794,51 @@ int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* 
     return rv | qore_denied_domains(vflags, po);
 }
 
+//! returns the functional domain bits of a builtin method variant that the restrictions of the caller do not allow
+/** qore#7543: a method call that entered another Program (a method of a class of another Program, such as a class of
+    a module) is searched for with the options of that Program, as is a call through a call reference to a method of
+    a class of the Program that calls it.  A Qore class can hold a builtin variant as a method of its own: the builtin
+    implementation, inherited from a builtin class, of an abstract method that it inherits from another parent class
+    (see AbstractMethodMap::parseInit()), or the inherited builtin overload of a method that it declares itself.  That
+    variant is builtin code that the caller calls, as on an object of the builtin class itself, where its domains are
+    checked against the caller's restrictions, which the options of the Program entered must not lift: they are also
+    checked against the restrictions of the caller (of the creator for a call through a call reference, which has no
+    \a user_dom_code_pgm), as the domains declared on a user variant are.
+
+    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program) or that is
+    made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function and a
+    variant that module code may call without the restrictions it inherits from its caller
+    (QCF_CALLER_RESTRICTION_RELIEF, which only static builtin methods have) are checked as before.
+*/
+static QORE_INTERN_NOINLINE int64 qore_get_entered_builtin_method_denied_domains(
+        const AbstractQoreFunctionVariant* variant, int64 vflags, const QoreParseOptions& user_dom_po,
+        const QoreProgram* user_dom_code_pgm) {
+    assert(vflags);
+    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF) || !variant->getClass()) {
+        return QDOM_DEFAULT;
+    }
+    return user_dom_code_pgm
+        ? qore_denied_domains(vflags, qore_relieve_module_declared_domains(user_dom_po, user_dom_code_pgm))
+        : qore_denied_domains(vflags, user_dom_po);
+}
+
+//! returns the functional domain bits of \a variant, which has the functional domains \a vflags, that a call resolved
+//! at run time in the Program \a pgm may not use; see qore_get_variant_denied_domains()
+/** Out of line, so that the run-time variant search of the calls of variants without functional domains keeps its code
+*/
+static QORE_INTERN_NOINLINE int64 qore_get_runtime_variant_denied_domains(const AbstractQoreFunctionVariant* variant,
+        int64 vflags, const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po,
+        const QoreProgram* user_dom_code_pgm, const QoreProgram* pgm) {
+    assert(pgm);
+    int64 denied = qore_get_variant_denied_domains_intern(variant, vflags, ppo, user_dom_po, user_dom_code_pgm);
+    // a call that did not enter another Program has the Program of the code that makes it (pgm is not nullptr, so a
+    // call through a call reference, which has no user_dom_code_pgm, is included; qore#7543)
+    if (user_dom_code_pgm != pgm && user_dom_po) {
+        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm);
+    }
+    return denied;
+}
+
 //! raises INVALID-FUNCTION-ACCESS for a variant whose functional domains are not allowed
 static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, int64 denied) {
@@ -5001,12 +5156,17 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
         // pgm could be zero if called from a foreign thread with no current Program
         if (pgm) {
-            // check the functional domains of the variant
-            if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po, user_dom_code_pgm)) {
-                if (!(variant_filter & QRFV_ONLY_USER)) {
-                    raise_invalid_function_access(xsink, this, variant, denied);
+            // check the functional domains of the variant; those of a builtin method variant of a call that entered
+            // another Program or that is made through a call reference are also checked against the restrictions of
+            // the caller (qore#7543)
+            if (int64 vflags = variant->getFunctionality()) {
+                if (int64 denied = qore_get_runtime_variant_denied_domains(variant, vflags, ppo, user_dom_po,
+                        user_dom_code_pgm, pgm)) {
+                    if (!(variant_filter & QRFV_ONLY_USER)) {
+                        raise_invalid_function_access(xsink, this, variant, denied);
+                    }
+                    return 0;
                 }
-                return 0;
             }
 
             assert(!(variant->getParseOptions(ppo) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS))
@@ -5063,6 +5223,56 @@ bool QoreFunction::hasInheritedVariants() const {
         return true;
     }
     return false;
+}
+
+const AbstractQoreFunctionVariant* QoreFunction::getSinglePositionalMethodVariant(unsigned nargs) const {
+    if (numVariants() != 1) {
+        return nullptr;
+    }
+    const AbstractQoreFunctionVariant* own = first();
+    if (!hasInheritedVariants()) {
+        return own;
+    }
+
+    const MethodVariantBase* method = own->getMethodVariantBase();
+    const UserVariantBase* user = own->getUserVariantBase();
+    if (!user || !method || method->getAccess() != Public || method->isAbstract()
+            || (own->getFlags() & QCF_RUNTIME_NOOP) || hasGenericClassAncestor()) {
+        return nullptr;
+    }
+    const UserSignature* sig = user->getUserSignature();
+    if (sig->numParams() != nargs || sig->declaresTypeParameters() || sig->needsTypeParameterSubstitution()) {
+        return nullptr;
+    }
+    // runtimeFindVariant() stops at the first class with a match. A zero-parameter method always matches a
+    // zero-argument call. For typed calls, an ancestor with the same positional acceptance cannot win instead.
+    if (!nargs) {
+        return own;
+    }
+    for (size_t i = 1; i < ilist.size(); ++i) {
+        const QoreFunction* parent = ilist[i].func;
+        if (static_cast<const MethodFunctionBase*>(parent)->isAbstract()) {
+            continue;
+        }
+        for (const auto* variant : parent->vlist) {
+            if (variant->getMethodVariantBase()->isAbstract()) {
+                continue;
+            }
+            const UserVariantBase* inherited = variant->getUserVariantBase();
+            const UserSignature* other = inherited ? inherited->getUserSignature() : nullptr;
+            if (!other || other->numParams() != nargs || other->declaresTypeParameters()
+                    || other->needsTypeParameterSubstitution()) {
+                return nullptr;
+            }
+            for (unsigned n = 0; n < nargs; ++n) {
+                if (other->getParamTypeInfo(n) != sig->getParamTypeInfo(n) || other->hasDefaultArg(n)
+                        || other->getParameterPolicy(n).needsFilter() || sig->getParameterPolicy(n).needsFilter()) {
+                    return nullptr;
+                }
+            }
+        }
+    }
+    return own;
 }
 
 QORE_INTERN_NOINLINE void QoreFunction::noteAncestor(const QoreFunction& ancestor) {
@@ -5922,9 +6132,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args) const {
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
+        bool* runtime_possible) const {
     if (type_param_inst) {
         type_param_inst->clear();
+    }
+    if (runtime_possible) {
+        *runtime_possible = false;
     }
 
     int score_len = -1;
@@ -6143,13 +6357,19 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
         variant = pvariant;
     }
     // a variant is committed only when no other variant could be resolved at run time (see parseFindVariant())
+    bool other_variant_may_match = false;
     if (variant && parseOtherVariantMayMatch(variant, receiver_type_info, &best_type_param_inst, argTypeInfo,
             class_ctx, parse_get_parse_options())) {
         variant = nullptr;
+        other_variant_may_match = true;
     }
 
     if (variant && type_param_inst) {
         *type_param_inst = best_type_param_inst;
+    }
+
+    if (runtime_possible && !variant) {
+        *runtime_possible = runtime_match || other_variant_may_match;
     }
 
     return variant;
@@ -6406,7 +6626,10 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
 }
 
 const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo,
-        const name_vec_t& argNames, const qore_class_private* class_ctx, QoreParseOptions po) const {
+        const name_vec_t& argNames, const qore_class_private* class_ctx, QoreParseOptions po, bool* matched) const {
+    if (matched) {
+        *matched = false;
+    }
     const QoreTypeInfo* rv = nullptr;
     bool found = false;
     const qore_class_private* last_class = nullptr;
@@ -6431,6 +6654,9 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
             if (!bind_named_call_args(sig, argTypeInfo, argNames, cb, failure)
                     && !qore_signature_takes_only_nothing(sig, argTypeInfo.size())) {
                 continue;
+            }
+            if (matched) {
+                *matched = true;
             }
             // the return type of a generic variant depends on its type arguments, which are not known here
             const UserVariantBase* uvb = v->getUserVariantBase();
@@ -8501,9 +8727,17 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     return isTerminator(block->instructions.back()->opcode);
 }
 
+std::mutex& UserVariantBase::specializedIRMutex() const {
+    return qore_cache_stripe_lock(this);
+}
+
+//! serializes the building of the call names of user variants; a leaf lock that a child of fork() gets free (qore#7554)
+static std::mutex user_variant_call_name_lock;
+static QoreForkStdMutex user_variant_call_name_fork_handler(user_variant_call_name_lock, QFLR_LEAF,
+    "function_call_names");
+
 void UserVariantBase::buildCallName() const {
-    static std::mutex lck;
-    std::lock_guard<std::mutex> lock(lck);
+    std::lock_guard<std::mutex> lock(user_variant_call_name_lock);
     if (call_name_ready.load(std::memory_order_relaxed)) {
         return;
     }
@@ -8975,8 +9209,12 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
 // Requirements: all params and body locals are IR-only, no varargs,
 // no reference-type params, no closure-captured params, same QoreProgram.
+/** @param ref_fast_entry if not null, set to true when the callee is not eligible only because parameters of a
+    reference type are not private to its body: it can then have a reference parameter fast entry, whose callers bind
+    those parameters on the runtime stack (BatchCalleeInfo::ref_fast_entry, issue #7271)
+*/
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
-        QoreProgram* root_pgm) {
+        QoreProgram* root_pgm, bool* ref_fast_entry = nullptr) {
     // not "debug", which would hide the debugging level that printd() compares with
     bool batch_debug = QORE_ENV_IS_SET("QORE_BATCH_DEBUG");
 
@@ -9028,6 +9266,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
 
     // Check all params
     unsigned num_params = sig->numParams();
+    bool runtime_reference_params = false;
     for (unsigned i = 0; i < num_params; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -9039,6 +9278,12 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // Referenced parameters must be IR-only; unused parameters do not
         // require a runtime-stack local and can still use the direct ABI.
         if (!qore_ir_fast_entry_param_is_private(*callee_ir, lv)) {
+            // a parameter of a reference type is bound on the runtime stack by the callers of a reference parameter
+            // fast entry
+            if (ref_fast_entry && qore_ir_fast_entry_param_is_runtime_reference(lv)) {
+                runtime_reference_params = true;
+                continue;
+            }
             if (batch_debug) {
                 printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not private\n",
                     callee_ir->name.c_str(), lv->getName());
@@ -9046,6 +9291,17 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
             return false;
         }
 
+    }
+
+    if (runtime_reference_params) {
+        // the reference parameters of a generic function are bound with its type arguments, which the callers do not
+        // give the binding
+        *ref_fast_entry = !sig->hasTypeParameters();
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: reference parameters; reference parameter fast entry: %s\n",
+                callee_ir->name.c_str(), *ref_fast_entry ? "yes" : "no");
+        }
+        return false;
     }
 
     if (batch_debug) {
@@ -9324,7 +9580,10 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 // bypassing the qore_rt_call_fast() runtime dispatch overhead.
 
                 // Check Approach B eligibility (direct LLVM arg passing)
-                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+                bool ref_fast_entry = false;
+                // a closure with captures given to its fast entry has no reference parameter fast entry
+                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm,
+                    capture_locals.empty() ? &ref_fast_entry : nullptr);
                 unsigned num_params = uvb->getUserSignature()->numParams();
 
                 callees.push_back(QoreJIT::BatchCallee{
@@ -9334,7 +9593,8 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     approach_b,
                     num_params,
                     batch_only,
-                    std::move(capture_locals)
+                    std::move(capture_locals),
+                    ref_fast_entry
                 });
                 if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
                     worklist.push_back(callee_ir);
@@ -9641,7 +9901,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     // the call's types are live; the cache is searched with them as they are, without making a key
     const QoreGenericSpecializationView view(receiver_type_info, type_param_instantiation);
     {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         auto it = specialized_ir_cache.find(view);
         if (it != specialized_ir_cache.end()) {
             return it->second;
@@ -9678,7 +9938,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     }
     SpecializedIRCache* registration;
     {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         if (!specialized_ir_registration) {
             specialized_ir_registration.reset(new SpecializedIRCache(*this));
         }
@@ -9689,7 +9949,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     QoreSpecializedIRRef loser;
     // issue #5765: the entry is added with the registry locked, so it is removed when one of its types is destroyed
     qore_generic_cache_insert(registration, key_types, [&] () {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         auto it = specialized_ir_cache.emplace(std::move(key), rv).first;
         if (it->second.get() != rv.get()) {
             loser = std::move(rv);
@@ -9701,7 +9961,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
 
 void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
         qore_generic_cache_release_list_t& release) {
-    std::lock_guard<std::mutex> lock(v.specialized_ir_mutex);
+    std::lock_guard<std::mutex> lock(v.specializedIRMutex());
     for (auto i = v.specialized_ir_cache.begin(), e = v.specialized_ir_cache.end(); i != e;) {
         bool is_dead = dead.count(i->first.receiver);
         for (auto ti = i->first.type_args.begin(), te = i->first.type_args.end(); !is_dead && ti != te; ++ti) {
@@ -10643,6 +10903,10 @@ QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self,
     return qore_release_value_with_exception(rv, xsink);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_closure_call_hook_t> qore_dbg_closure_call_hook{nullptr};
+#endif
+
 QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
         QoreObject* self, ExceptionSink* xsink, bool ref_obj) const {
     QORE_TRACE("UserClosureVariant::evalClosure()");
@@ -10670,7 +10934,36 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
             qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
         }
 
-        CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
+#ifdef DEBUG
+        // the call is about to take a reference to the closure's object; tests hold it here, so that another thread
+        // deletes the object meanwhile (qore#7555)
+        if (self) {
+            if (qore_dbg_closure_call_hook_t hook = qore_dbg_closure_call_hook.load()) {
+                hook(self->getClassName());
+            }
+        }
+#endif
+        // a closure created in a method runs whether or not its object has been deleted (issue #1303): the reference
+        // is taken here, if the object has not been deleted, in one step with the test, and not by the frame's
+        // helper, whose reference raises OBJECT-ALREADY-DELETED for a deleted object (qore#7555); a call on the
+        // current object takes none, as the helper takes none
+        struct ClosureObjectRef {
+            QoreObject* obj = nullptr;
+            ExceptionSink* xsink;
+            ClosureObjectRef(QoreObject* self, bool ref_obj, ExceptionSink* xsink) : xsink(xsink) {
+                if (self && ref_obj && self != runtime_get_stack_object()
+                        && qore_object_private::get(*self)->tryStartCall(xsink)) {
+                    obj = self;
+                }
+            }
+            // released after the frame's helper is destroyed, as the helper releases its reference
+            ~ClosureObjectRef() {
+                if (obj) {
+                    qore_object_private::get(*obj)->endCall(xsink);
+                }
+            }
+        } closure_obj_ref(self, ref_obj, xsink);
+        CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), false);
 
         // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
         // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
@@ -11161,7 +11454,7 @@ QoreValue UserClosureFunction::evalClosureBody(const QoreClosureBase& closure_ba
         if (*xsink) {
             return QoreValue();
         }
-        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
     }
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
@@ -11171,7 +11464,7 @@ QoreValue UserClosureFunction::evalClosureBody(const QoreClosureBase& closure_ba
     }
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
-    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
 }
 
 QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
@@ -11200,7 +11493,7 @@ QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_b
         return QoreValue();
     }
     assert(variant);
-    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {

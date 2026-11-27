@@ -64,6 +64,11 @@ public class RestSchemaActionOperation {
             value there is no host for the request to go to at all.
         */
         const LocationOrder = (RSAL_HOST, RSAL_PATH, RSAL_BODY, RSAL_BODY_ROOT, RSAL_QUERY, RSAL_HEADER);
+
+        #! The response media types that are sequences of JSON records, one per line; see isRecordSequence()
+        const RecordSequenceMediaTypes = {
+            "application/x-ndjson": True,
+        };
     }
 
     private {
@@ -196,6 +201,26 @@ public class RestSchemaActionOperation {
                 buildResponseType();
             }
         }
+        # an operation that trusted code builds belongs to a set that is shared by every Program of the process:
+        # sandboxed code cannot change or delete it, nor the types that it gives (qore#7714)
+        if (SandboxManager::createsSharedObjects()) {
+            if (request_type) {
+                request_type.freeze();
+            }
+            if (response_type) {
+                response_type.freeze();
+            }
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! Copies the operation
+    /** The copy shares the type objects of the operation copied, which are frozen if it is shared (qore#7714)
+
+        @since RestSchemaActions 1.0
+    */
+    copy() {
+        # no own guarded state: the types of a shared operation are frozen
     }
 
     #! Returns the stable action ID
@@ -283,7 +308,9 @@ public class RestSchemaActionOperation {
                     on_error rethrow $1.err, sprintf("%s (while building the output type of action %y from "
                         "\"%s %s\")", $1.desc, info.action, info.method.upr(), info.path);
                     built = buildResponseValues();
-                    if (DataProvider::mayRegisterShared()) {
+                    # a shared operation is changed only by code that may change shared state (qore#7714)
+                    if (DataProvider::mayRegisterShared() && (!SandboxManager::isSharedObject(self)
+                            || SandboxManager::isProcessWideRegistrationAllowed())) {
                         publishResponseValues(built);
                     }
                 }
@@ -767,6 +794,13 @@ public class RestSchemaActionOperation {
     auto processResponse(auto body) {
         # the response conversions are derived with the output type
         hash<auto> response_values = getResponseValues();
+        if (isRecordSequence()) {
+            list<auto> records = RestSchemaActionOperation::parseRecordSequence(body, info.action);
+            if (response_values.conv) {
+                records = map RestSchemaActionOperation::convertValue($1, response_values.conv, False), records;
+            }
+            return records;
+        }
         foreach string name in (info.response_unwrap) {
             if (!exists body) {
                 break;
@@ -782,6 +816,57 @@ public class RestSchemaActionOperation {
             body = RestSchemaActionOperation::convertValue(body, response_values.conv, False);
         }
         return body;
+    }
+
+    #! Returns @ref True if the selected response media type is a sequence of JSON records (newline-delimited JSON)
+    bool isRecordSequence() {
+        return RecordSequenceMediaTypes{info.response_content_type ?? ""} ?? False;
+    }
+
+    #! Returns the records of a newline-delimited JSON response body
+    /** Each line that is not blank is one JSON value; a body that the client already decoded (a single record, or
+        a list of records) is returned as a list.
+
+        @param body the response body
+        @param action the action, for error messages
+
+        @return the records
+
+        @throw REST-SCHEMA-ACTION-ERROR a line is not valid JSON
+    */
+    static list<auto> parseRecordSequence(auto body, string action) {
+        switch (body.typeCode()) {
+            case NT_NOTHING:
+                return ();
+            case NT_LIST:
+                return body;
+            case NT_HASH:
+                return (body,);
+            case NT_BINARY:
+                body = body.toString("UTF-8");
+                break;
+            case NT_STRING:
+                break;
+            default:
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y received a %y response body, which is not "
+                    "newline-delimited JSON", action, body.type());
+        }
+        list<auto> records = ();
+        int line_no = 0;
+        foreach string line in (body.split("\n")) {
+            ++line_no;
+            line = trim(line);
+            if (!line.val()) {
+                continue;
+            }
+            try {
+                records += (parse_json(line),);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y received a newline-delimited JSON response "
+                    "whose line %d is not valid JSON: %s: %s", action, line_no, ex.err, ex.desc);
+            }
+        }
+        return records;
     }
 
     #! Resolves the manifest entry to a path item and operation in the schema
@@ -1441,6 +1526,10 @@ public class RestSchemaActionOperation {
             response_schema);
         AbstractDataProviderType type = body_field.getType();
 
+        if (info.response_unwrap && isRecordSequence()) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y cannot unwrap the response %y: it is a sequence of "
+                "records", info.action, info.response_content_type);
+        }
         foreach string name in (info.response_unwrap) {
             *hash<string, AbstractDataField> tfields = type.getFields();
             if (!tfields{name}) {
@@ -1457,6 +1546,11 @@ public class RestSchemaActionOperation {
             type = applyTypeOverlay(type, info.response_fields, "response body", \node, "response");
             conv = node;
         }
+        # a response that is a sequence of records (NDJSON) is published as the list of its records, each of the
+        # type that the schema declares (qore#6503)
+        if (isRecordSequence()) {
+            type = new ListDataType(type);
+        }
         return {
             "type": info.response_envelope ? makeResponseEnvelopeType(type) : type,
             "conv": conv,
@@ -1465,6 +1559,10 @@ public class RestSchemaActionOperation {
 
     #! Keeps the output type and the response conversions that buildResponseValues() built
     private publishResponseValues(hash<auto> values) {
+        # the types of a shared operation are shared with it (qore#7714); only code that may change it publishes them
+        if (values.type && SandboxManager::isSharedObject(self)) {
+            values.type.freeze();
+        }
         response_type = values.type;
         response_conv = values.conv;
         remove response_schema;
