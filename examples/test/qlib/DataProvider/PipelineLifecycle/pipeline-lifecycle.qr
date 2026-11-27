@@ -151,6 +151,29 @@ class FanOutPipeline {
     }
 }
 
+#! a pipeline whose debug log the queue threads call, and that records the thread that destroys it
+class HoldPipeline inherits DataProviderPipeline {
+    public {
+        #! the number of debug log calls
+        int logged = 0;
+
+        #! the TID of the thread that ran the destructor
+        static *int destroyed_in;
+    }
+
+    constructor() : DataProviderPipeline(<PipelineOptionInfo>{"name": "hold"}) {
+    }
+
+    destructor() {
+        HoldPipeline::destroyed_in = gettid();
+    }
+
+    #! called by the queue threads, which hold the pipeline while they call it
+    logDebug(string fmt, ...) {
+        ++logged;
+    }
+}
+
 #! records the records that it gets, and the threads that it gets them in
 class SinkProc inherits DataProvider::AbstractDataProcessor {
     public {
@@ -550,6 +573,44 @@ switch (c) {
         }
         printf("%s: every accepted record was processed in %d iterations (%s)\n", c, iters,
             accepted == iters ? "all accepted" : "not all accepted");
+        break;
+    }
+
+    # the queue threads hold the pipeline while they call it (its debug log here, qore#7509), and release it before
+    # they end with the run: once waitDone() has returned, the caller's reference is the last one, and its release
+    # destroys the pipeline at once, in the caller's thread
+    case "hold-released": {
+        for (int run = 0; run < 2; ++run) {
+            HoldPipeline p();
+            p.append(0, new AddProc(1));
+            int q1 = p.appendQueue(0);
+            int q2 = p.appendQueue(0);
+            CountProc c1();
+            CountProc c2();
+            p.append(q1, new BufProc());
+            p.append(q1, c1);
+            p.append(q2, c2);
+            for (int i = 0; i < 3; ++i) {
+                p.submit(i);
+            }
+            if (run) {
+                # another thread ends the run while this one waits for it
+                Counter ended(1);
+                background sub () {
+                    on_exit ended.dec();
+                    p.waitDone();
+                }();
+                p.waitDone();
+                ended.waitForZero();
+            } else {
+                p.waitDone();
+            }
+            int logged = p.logged;
+            remove p;
+            printf("run %d: processed %d and %d; debug log called: %y; destroyed: %y\n", run, c1.seen.getCount(),
+                c2.seen.getCount(), logged > 0, HoldPipeline::destroyed_in == gettid());
+            remove HoldPipeline::destroyed_in;
+        }
         break;
     }
 
