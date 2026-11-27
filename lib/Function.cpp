@@ -2010,11 +2010,14 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     qore_dbg_runtime_chosen_variant = false;
 #endif
     QoreSandboxProvenanceHelper::set(self);
-    // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
-    qore_mark_serializing_receiver_call(static_cast<const QoreSandboxProvenanceHelper&>(*this), func);
-    // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
-    if (getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
-        return;
+    // only for a receiver with provenance, which the call applied as a frame: no other work on the common path
+    if (getContext()) [[unlikely]] {
+        // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
+        qore_mark_serializing_receiver_call(static_cast<const QoreSandboxProvenanceHelper&>(*this), func);
+        // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+        if (qore_sandbox_check_isolation(xsink, "calling a method")) {
+            return;
+        }
     }
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");

@@ -10159,6 +10159,18 @@ QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const QoreObject* objec
     set(object);
 }
 
+// records the frame that \a frame applied for \a object (qore#7146); out of line and cold, so that the common path of
+// QoreSandboxProvenanceHelper::set() (an object without provenance) keeps its code
+[[gnu::noinline, gnu::cold]] static void qore_record_receiver_provenance(const QoreSandboxProvenanceHelper* frame,
+        const QoreObject* object) {
+    ThreadData* td = thread_data.get();
+    try {
+        td->receiver_provenance.emplace_back(frame, object);
+    } catch (std::bad_alloc&) {
+        // not recorded: the frame counts for its receiver too (fails closed)
+    }
+}
+
 void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
     if (object) {
         auto* captured = qore_object_private::get(*object)->sandbox_provenance;
@@ -10166,12 +10178,7 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
             captured->ref();
             apply(captured);
             if (context) {
-                ThreadData* td = thread_data.get();
-                try {
-                    td->receiver_provenance.emplace_back(this, object);
-                } catch (std::bad_alloc&) {
-                    // not recorded: the frame counts for its receiver too (fails closed)
-                }
+                qore_record_receiver_provenance(this, object);
             }
         }
     }
