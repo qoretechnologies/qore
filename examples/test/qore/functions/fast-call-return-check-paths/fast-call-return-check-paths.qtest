@@ -67,9 +67,18 @@ class FastCallReturnCheckPathsTest inherits QUnit::Test {
         string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", env(), shellQuote(libqore_dir),
             shellQuote(qcc_bin), opt_level, shellQuote(exe), shellQuote(fixture)));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        assertEq(expected, backquote(sprintf("%s %s 2>&1", env(), shellQuote(exe))), "executable");
-        assertEq(expected, backquote(sprintf("%s QORE_AOT_DISABLE_PRELINKED_CALLS=1 %s 2>&1", env(),
-            shellQuote(exe))), "executable without its prelinked calls");
+        checkExecutable(sprintf("%s %s", env(), shellQuote(exe)), "executable");
+        checkExecutable(sprintf("%s QORE_AOT_DISABLE_PRELINKED_CALLS=1 %s", env(), shellQuote(exe)),
+            "executable without its prelinked calls");
+    }
+
+    #! runs the executable: it ends normally and prints the output expected, and nothing on stderr apart from the
+    #! module loader's warnings (qore#7805)
+    private checkExecutable(string cmd, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     #! compiled modules that call each other through the runtime's direct AOT call

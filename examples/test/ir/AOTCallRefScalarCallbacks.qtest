@@ -87,12 +87,21 @@ class CallRefScalarCallbacksTest inherits QUnit::Test {
                 }
                 assertEq(env != "QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1", ir =~ /call i32 @qore_rt_call_ref_/,
                     label + ": helper calls");
-                assertEq(Fixtures{fixture}, backquote(sprintf("%s 2>&1", shellQuote(program))), label);
-                assertEq(Fixtures{fixture}, backquote(sprintf("QORE_DISABLE_AOT_CALLREF_ENTRIES=1 %s 2>&1",
-                    shellQuote(program))), label + ": helpers disabled");
+                checkProgram(shellQuote(program), Fixtures{fixture}, label);
+                checkProgram("QORE_DISABLE_AOT_CALLREF_ENTRIES=1 " + shellQuote(program), Fixtures{fixture},
+                    label + ": helpers disabled");
                 unlink(program);
             }
         }
+    }
+
+    #! runs a compiled program: it ends normally and prints the output expected, and nothing on stderr apart from the
+    #! module loader's warnings (qore#7805)
+    private checkProgram(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     private static string shellQuote(string value) {

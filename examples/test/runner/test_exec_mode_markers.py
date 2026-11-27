@@ -217,7 +217,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
-        # - AOTBatchRefusedErrorOutput (#7700): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -300,23 +299,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   started with a module directory of library code, as a module's initialization runs once in a process
         # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
         #   execution mode, under a small stack rlimit, as the checks are of the start of the process
-        # - AOTStringSplitTrim (#5578 theme F), StringFastPathFrames (#7711) and ListJoinFastPathFrames (#7731): their
-        #   checks run in child processes that set their own execution modes and in qcc executables
         # - module-hash-deps and module-deps-hash (#7796): their checks load modules from source and compiled with qcc
         #   in child processes that set their own execution modes, as a module is loaded once in a process
         # - qcc-require-cycles (#7808): its checks compile modules with qcc and load them from source and AOT in child
         #   processes that set their own execution modes
-        # - TruncatedQmod (#7804): its checks cut a module that it compiles with qcc and load it in child processes that
-        #   set their own execution modes and from a qcc executable
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/qore/misc/module-loader/qcc-require-cycles.qtest",
-                                 "examples/test/qore/misc/module-loader/TruncatedQmod.qtest",
                                  "examples/test/qore/misc/module-loader/module-hash-deps.qtest",
                                  "examples/test/module-cpp-api/module-deps/module-deps-hash.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
-                                 "examples/test/ir/AOTStringSplitTrim.qtest",
-                                 "examples/test/ir/StringFastPathFrames.qtest",
-                                 "examples/test/ir/ListJoinFastPathFrames.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
@@ -326,7 +317,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
-                                 "examples/test/ir/AOTBatchRefusedErrorOutput.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",

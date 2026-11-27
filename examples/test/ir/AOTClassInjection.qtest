@@ -1,5 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc, the executables that it links and qore in child processes started
+# without an execution mode
 # test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -9,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTClassInjectionTest
@@ -323,15 +326,19 @@ as base: stand
     }
 
     #! runs an executable; returns what it printed, without the teardown report, which it checks
+    /** the output on stdout of an executable that runs, which writes nothing else on stderr, or the output on stdout
+        and stderr of one that fails; the module loader's warnings are not output of the program (qore#7805)
+    */
     private string run(string exe, *bool fails) {
-        int rc;
-        string out = backquote(sprintf("%s %s %s 2>&1", env, teardownEnv(), exe), \rc);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env, teardownEnv(),
+            exe), NOTHING, "QORE_JIT_TIMING=1");
         if (fails) {
-            assertNeq(0, rc, exe + ": " + out);
-        } else {
-            assertEq(0, rc, exe + ": " + out);
+            assertNeq(0, r.rc, exe + ": " + r.out);
+            return checkTeardown(r.out);
         }
-        return checkTeardown(out);
+        assertEq(0, r.rc, exe + ": " + r.out);
+        assertEq("", checkTeardown(r.stderr), exe + ": stderr");
+        return r.stdout;
     }
 
     #! the environment that makes a library-debug build report the declarations left at exit

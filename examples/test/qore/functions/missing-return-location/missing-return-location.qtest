@@ -103,10 +103,12 @@ class MissingReturnLocationTest inherits QUnit::Test {
             shellQuote(fixture)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         # the program must also end normally: a crash after its last line fails the test
-        int status;
-        output = backquote(shellQuote(program) + " 2>&1", \status);
-        assertEq(0, status, "the exit status of the compiled program; output: " + output);
-        check(output, FastEntryErrors.qcc);
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "the exit status of the compiled program; output: " + r.out);
+        assertEq("", r.stderr, "stderr");
+        check(r.stdout, FastEntryErrors.qcc);
     }
 
     private static string shellQuote(string value) {

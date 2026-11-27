@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %exec-class ListJoinFastPathFramesTest
 
 #! The exceptions of the list join fast paths have the builtin's frame, after the map that they join (qore#7731)
@@ -46,17 +47,30 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
+    #! runs a command; its output on stdout, and on stderr apart from the module loader's warnings (qore#7805)
+    private hash<ExecModeHarness::ModeRunResult> runResult(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(prefix + "LD_LIBRARY_PATH="
+            + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir) + " "
+            + timeout_prefix + (map ListJoinFastPathFramesTest::quote($1), args).join(" "), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        return r;
+    }
+
+    #! runs qcc and returns its output on stdout and stderr
     private string run(list<string> args, string prefix = "") {
-        int status;
-        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
-            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir) + " " + timeout_prefix
-            + (map ListJoinFastPathFramesTest::quote($1), args).join(" ") + " 2>&1", \status);
-        assertEq(0, status, output);
-        return output;
+        return runResult(args, prefix).out;
+    }
+
+    #! runs the fixture with qore or as an executable, which writes nothing on stderr; returns its output
+    private string runFixture(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> r = runResult(args, prefix);
+        assertEq("", r.stderr, "stderr");
+        return r.stdout;
     }
 
     private string getExpected() {
-        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+        return expected ?? (expected = runFixture((qore, "--exec-mode=ast", fixture)));
     }
 
     interpreter() {
@@ -127,11 +141,11 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
     modes() {
         string ast = getExpected();
         foreach string mode in (("ir", "jit", "tiered")) {
-            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture),
+            assertEq(ast, runFixture((qore, "--exec-mode=" + mode, fixture),
                 "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
         }
         # tiered execution on the IR tier: the IR interpreter's fast paths
-        assertEq(ast, run((qore, "--exec-mode=tiered", fixture),
+        assertEq(ast, runFixture((qore, "--exec-mode=tiered", fixture),
             "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1000000000 "), "tiered-ir");
     }
 
@@ -145,8 +159,8 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
                 string out = run((qcc, level, "-o", executable, fixture), prefix);
                 # negative: the compile does not refuse any function
                 assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
-                assertEq(ast, run((executable,), prefix), label);
-                assertEq(ast, run((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
+                assertEq(ast, runFixture((executable,), prefix), label);
+                assertEq(ast, runFixture((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
                     label + " without prelinked calls");
             }
         }

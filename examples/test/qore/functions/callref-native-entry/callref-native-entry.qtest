@@ -100,7 +100,7 @@ class CallRefNativeEntryTest inherits QUnit::Test {
     }
 
     #! returns the qcc compiler, or skips the test
-    private string qcc() {
+    private string qccBin() {
         if (!qcc_bin) {
             testSkip("qcc not found");
         }
@@ -111,15 +111,22 @@ class CallRefNativeEntryTest inherits QUnit::Test {
     private string compile(string tmp, string script, int opt, *string env, *string opts) {
         string program = tmp + "/" + basename(script) + ".O" + opt;
         string output = backquote(sprintf("cd %s && %s%s -O%d %s-o %s %s 2>&1", shellQuote(dir), env ? env + " " : "",
-            shellQuote(qcc()), opt, opts ? opts + " " : "", shellQuote(program), shellQuote(script)));
+            shellQuote(qccBin()), opt, opts ? opts + " " : "", shellQuote(program), shellQuote(script)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         return program;
     }
 
     #! runs a compiled program in the fixtures' directory and returns its output
+    /** The program must end normally and write nothing on stderr; the module loader's warnings are not output of the
+        program (qore#7805)
+    */
     private string runProgram(string program, *string args, *string env) {
-        return backquote(sprintf("cd %s && %s%s%s 2>&1", shellQuote(dir), env ? env + " " : "", shellQuote(program),
-            args ? " " + args : ""));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("cd %s && %s%s%s",
+            shellQuote(dir), env ? env + " " : "", shellQuote(program), args ? " " + args : ""), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", program, r.out));
+        assertEq("", r.stderr, program + ": stderr");
+        return r.stdout;
     }
 
     private checkQcc(int opt) {
@@ -159,7 +166,7 @@ class CallRefNativeEntryTest inherits QUnit::Test {
         string tmp = make_tmp_dir();
         on_exit remove_tree(tmp);
         string ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 %s -O0 -o %s %s 2>&1", shellQuote(dir),
-            shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+            shellQuote(qccBin()), shellQuote(tmp + "/program"), shellQuote(fixture)));
         foreach string name in (EntryFunctions) {
             assertTrue(regex(ir, "define internal i64 @" + name + "_[^ ]*_fast[^ ]*_cref\\(ptr"), "entry of " + name);
         }
@@ -178,11 +185,11 @@ class CallRefNativeEntryTest inherits QUnit::Test {
         }
 
         ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION=1 %s -O0 -o %s %s "
-            "2>&1", shellQuote(dir), shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+            "2>&1", shellQuote(dir), shellQuote(qccBin()), shellQuote(tmp + "/program"), shellQuote(fixture)));
         assertFalse(regex(ir, "_cref\\(ptr"), "no entries");
         assertFalse(ir =~ /qore_aot_callref_register/, "no registration");
         ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1 %s -O0 -o %s %s "
-            "2>&1", shellQuote(dir), shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+            "2>&1", shellQuote(dir), shellQuote(qccBin()), shellQuote(tmp + "/program"), shellQuote(fixture)));
         assertFalse(ir =~ /call i32 @qore_rt_call_ref_/, "no helper calls");
     }
 
@@ -193,8 +200,9 @@ class CallRefNativeEntryTest inherits QUnit::Test {
         assertEq(host_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=ast %s 2>&1", shellQuote(dir),
             shellQuote(qore_bin), shellQuote(host_fixture))), "source module");
         foreach int opt in ((0, 3)) {
-            string output = backquote(sprintf("cd %s && %s -O%d -m -o %s %s 2>&1", shellQuote(tmp), shellQuote(qcc()),
-                opt, shellQuote(tmp + "/CallRefNativeEntryModule.qmod"), shellQuote(module_source)));
+            string output = backquote(sprintf("cd %s && %s -O%d -m -o %s %s 2>&1", shellQuote(tmp),
+                shellQuote(qccBin()), opt, shellQuote(tmp + "/CallRefNativeEntryModule.qmod"),
+                shellQuote(module_source)));
             assertTrue(is_file(tmp + "/CallRefNativeEntryModule.qmod"), "the module compiled: " + output);
             foreach string mode in (ExecModeHarness::ExecModes) {
                 assertEq(host_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
@@ -214,7 +222,7 @@ class CallRefNativeEntryTest inherits QUnit::Test {
         on_exit remove_tree(tmp);
         assertEq(concurrent_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=ast %s 2>&1",
             shellQuote(dir), shellQuote(qore_bin), shellQuote(concurrent_fixture))), "AST");
-        string output = backquote(sprintf("cd %s && %s -O3 -m -o %s %s 2>&1", shellQuote(tmp), shellQuote(qcc()),
+        string output = backquote(sprintf("cd %s && %s -O3 -m -o %s %s 2>&1", shellQuote(tmp), shellQuote(qccBin()),
             shellQuote(tmp + "/CallRefNativeEntryModule.qmod"), shellQuote(module_source)));
         assertTrue(is_file(tmp + "/CallRefNativeEntryModule.qmod"), "the module compiled: " + output);
         string program = compile(tmp, concurrent_fixture, 3);

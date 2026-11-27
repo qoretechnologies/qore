@@ -46,8 +46,8 @@ runs that stay as they are, as no loader warning can fail what they check, are i
 and an anchor: a part of the call, or of an assignment that it is built of, that only that call has, compared with
 runs of whitespace as one space.
 
-The tests that still have such runs are in ``PENDING_AOT3`` (converted on the AOT3 branch, not yet merged) and
-``PENDING`` (to be converted), each with the number of its runs; these lists, and the allow-list, only shrink: their
+The tests that still have such runs are in ``PENDING_AOT3`` (converted on the AOT3 branch: empty since its merge)
+and ``PENDING`` (to be converted), each with the number of its runs; these lists, and the allow-list, only shrink: their
 sizes are pinned in ``SIZES``, and a test's number of runs must stay as recorded (lower it when a run is converted).
 
 The check reads the text of the tests, not their code paths, so it does not see: a command whose ``2>&1`` comes from a
@@ -224,28 +224,13 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 41, "PENDING_AOT3": 14, "PENDING": 126}
+SIZES = {"ALLOWED": 41, "PENDING_AOT3": 0, "PENDING": 126}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
 #: converted, lower it, or remove the test when none is left)
 PENDING_AOT3 = {
-    # converted on the AOT3 branch (#7799 test/7799-aot3, #7805 test/7805-aot3-ir-3): on develop, not on BQ; they
-    # leave this list when AOT3 is merged
-    "examples/test/ir/AggregateProjectionCancellation.qtest": 1,
-    "examples/test/qore/classes/abstract-redeclared-parent-order.qtest": 1,
-    "examples/test/qore/classes/abstract-typed-call-created-method.qtest": 1,
-    "examples/test/qore/classes/method-access-diagnostic-names.qtest": 1,
-    "examples/test/qore/classes/own-private-internal-method-typed-call.qtest": 1,
-    "examples/test/qore/classes/private-internal-subclass-calls.qtest": 1,
-    "examples/test/qore/classes/same-name-class-type-identity.qtest": 1,
-    "examples/test/qore/operators/weak-assignment-own-path.qtest": 1,
-    "examples/test/qore/operators/weak-reference-holder-counts.qtest": 1,
-    "examples/test/qore/operators/weak-reference-share-copy.qtest": 1,
-    "examples/test/qore/operators/weak-source-untyped-path.qtest": 1,
-    "examples/test/qore/values/hashdecl-member-reference-args.qtest": 1,
-    "examples/test/qore/values/reference-element-read.qtest": 1,
-    "examples/test/qore/vars/weak-store-destructor-exception.qtest": 1,
+    # the tests converted on the AOT3 branch (#7799, #7805) left this list when AOT3 was merged with develop
 }
 PENDING = {
     # the runs of qcc executables with 2>&1 whose commands are built by concatenation or in a variable, which the check

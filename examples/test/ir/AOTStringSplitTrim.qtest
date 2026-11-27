@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %exec-class AOTStringSplitTrimTest
 
 #! The AOT calls of <string>::split() and trim() without an argument list
@@ -47,22 +48,31 @@ class AOTStringSplitTrimTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
-    private string runStatus(list<string> args, reference<int> status, string prefix = "") {
-        return backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+    #! runs a command; its output on stdout, and on stderr apart from the module loader's warnings (qore#7805)
+    private hash<ExecModeHarness::ModeRunResult> runResult(list<string> args, string prefix = "") {
+        return ExecModeHarness::run_command(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
             + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir)
             + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 " + timeout_prefix
-            + (map AOTStringSplitTrimTest::quote($1), args).join(" ") + " 2>&1", \status);
+            + (map AOTStringSplitTrimTest::quote($1), args).join(" "), NOTHING, "QORE_JIT_TIMING=1");
     }
 
+    #! runs a tool (qcc, nm) and returns its output on stdout and stderr
     private string run(list<string> args, string prefix = "") {
-        int status;
-        string output = runStatus(args, \status, prefix);
-        assertEq(0, status, output);
-        return output;
+        hash<ExecModeHarness::ModeRunResult> r = runResult(args, prefix);
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+
+    #! runs the fixture with qore or as an executable: it ends normally and writes nothing on stderr; returns its output
+    private string runFixture(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> r = runResult(args, prefix);
+        assertEq(0, r.rc, r.out);
+        assertEq("", r.stderr, "stderr");
+        return r.stdout;
     }
 
     private string getExpected() {
-        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+        return expected ?? (expected = runFixture((qore, "--exec-mode=ast", fixture)));
     }
 
     private assertLine(string out, string line) {
@@ -118,7 +128,7 @@ class AOTStringSplitTrimTest inherits QUnit::Test {
     modes() {
         string ast = getExpected();
         foreach string mode in (("ir", "jit", "tiered")) {
-            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture)), mode);
+            assertEq(ast, runFixture((qore, "--exec-mode=" + mode, fixture)), mode);
         }
     }
 
@@ -130,9 +140,9 @@ class AOTStringSplitTrimTest inherits QUnit::Test {
                 {"name": "trim-disabled", "env": "QORE_DISABLE_AOT_STRING_TRIM=1 ", "split": True, "trim": False}) {
             string out_dir = dir.path + "/" + control.name;
             mkdir(out_dir);
-            int status;
-            string out = runStatus((qcc, "-O3", "-c", "--output-dir=" + out_dir, fixture), \status, control.env);
-            assertEq(0, status, control.name + ": " + out);
+            hash<ExecModeHarness::ModeRunResult> r = runResult((qcc, "-O3", "-c", "--output-dir=" + out_dir, fixture),
+                control.env);
+            assertEq(0, r.rc, control.name + ": " + r.out);
             string object = out_dir + "/AOTStringSplitTrim.qo";
             assertTrue(is_file(object), control.name);
             string undefined = run(("nm", "-u", object));
@@ -142,9 +152,9 @@ class AOTStringSplitTrimTest inherits QUnit::Test {
                 control.name + " trim: " + undefined);
             # the executable compiled the same way gives the interpreter's results
             string executable = out_dir + "/fixture";
-            out = runStatus((qcc, "-O3", "-o", executable, fixture), \status, control.env);
-            assertEq(0, status, control.name + ": " + out);
-            assertEq(getExpected(), run((executable,)), control.name);
+            r = runResult((qcc, "-O3", "-o", executable, fixture), control.env);
+            assertEq(0, r.rc, control.name + ": " + r.out);
+            assertEq(getExpected(), runFixture((executable,)), control.name);
         }
     }
 
@@ -155,14 +165,12 @@ class AOTStringSplitTrimTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string label = prefix + level;
-                int status;
-                string out = runStatus((qcc, level, "-o", executable, fixture), \status, prefix);
-                assertEq(0, status, label + ": " + out);
+                string out = run((qcc, level, "-o", executable, fixture), prefix);
                 # negative: the compile does not refuse any function
                 assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
-                assertEq(ast, run((executable,), prefix), label);
+                assertEq(ast, runFixture((executable,), prefix), label);
                 # the calls without the prelinked targets take the ordinary path
-                assertEq(ast, run((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
+                assertEq(ast, runFixture((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
                     label + " without prelinked calls");
             }
         }
