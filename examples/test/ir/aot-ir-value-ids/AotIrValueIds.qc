@@ -104,7 +104,10 @@ class AotIrValueIdsBase inherits QUnit::Test {
         expected = r.out;
         string out_path = tmp.path + "/AotIrIdsMod.qmod";
         int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m "
+        # compiled with -g, as the module runs with a debugger attached, which runs its IR: without -g, its code
+        # keeps none of the debugger's run-time checks, and the debugger's warning about it changes the output
+        # (qore#7676)
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -g -m "
             "--aot-metadata-compression=none -o %s %s/AotIrIdsMod.qm 2>&1", libqore_dir, libqore_dir, src_dir, qcc_bin,
             out_path, src_dir), \rc);
         if (rc || !is_file(out_path)) {
@@ -230,10 +233,10 @@ class AotIrValueIdsBase inherits QUnit::Test {
                 assertEq(expected, r.out, label);
             }
         }
-        # an executable compiled with qcc
+        # an executable compiled with qcc, with -g, as it runs with a debugger too (see the module's compilation)
         string exe = tmp.path + "/runner";
         int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -g -o %s %s 2>&1", libqore_dir,
             libqore_dir, qcc_bin, exe, get_script_dir() + "/runner.q"), \rc);
         assertEq(0, rc, "qcc runner: " + out);
         foreach bool debug in ((False, True)) {
