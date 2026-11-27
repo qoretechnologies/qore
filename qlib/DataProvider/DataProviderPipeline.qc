@@ -344,6 +344,12 @@ class PipelineQueue {
         #! The exception raised by the pipeline's thread callback in a new thread (see startThreadIfNeeded())
         *hash<ExceptionInfo> thread_start_error;
 
+        #! The generation of the pipeline's run, incremented when a run ends (see endRun())
+        /** A thread that waits for the queue (waitDone(), awaitFlush()) returns when the run that it waits for has
+            ended, also when another thread has ended it, and the queue has no thread to process or flush its data
+        */
+        int run_gen = 0;
+
         #! Pipeline elements
         /** elements are either:
             - AbstractDataProcessor objects
@@ -450,6 +456,22 @@ class PipelineQueue {
             # the thread has ended its work without taking the lock
             tid = 0;
             throw ex.err, ex.desc, ex.arg;
+        }
+    }
+
+    #! Ends the queue's part of the pipeline's run; called with the pipeline lock held
+    /** The threads that wait for the run (waitDone(), awaitFlush()) return, and the flags of the run are reset for
+        the next one
+    */
+    endRun() {
+        ++run_gen;
+        do_flush = False;
+        remove data_flushed;
+        if (queue_waiting) {
+            cond.broadcast();
+        }
+        if (flush_waiting) {
+            flush_cond.broadcast();
         }
     }
 
@@ -641,26 +663,37 @@ class PipelineQueue {
         the last record but is still submitting it to child queues during fan-out.
     */
     waitDone() {
-        while (!queue_stop && (queue || processing)) {
+        # the run that this thread waits for; it returns when the run has ended (see endRun())
+        int gen = run_gen;
+        while (gen == run_gen && !queue_stop && (queue || processing)) {
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
         }
+        if (gen != run_gen) {
+            return;
+        }
 
         if (elems.last().typeCode() == NT_LIST) {
             map $1.waitDone(), elems.last();
+            if (gen != run_gen) {
+                return;
+            }
         }
 
-        if (!id) {
+        if (!id && !queue_stop) {
             do_flush = True;
         }
-        while (!id && !queue_stop && do_flush) {
+        while (!id && gen == run_gen && !queue_stop && do_flush) {
             if (data_waiting) {
                 cond.broadcast();
             }
             ++flush_waiting;
             flush_cond.wait(lck);
             --flush_waiting;
+        }
+        if (gen != run_gen) {
+            return;
         }
 
         if (data_flushed) {
@@ -697,10 +730,14 @@ class PipelineQueue {
         @since DataProvider 3.4
     */
     awaitFlush() {
-        while (!queue_stop && do_flush) {
+        int gen = run_gen;
+        while (gen == run_gen && !queue_stop && do_flush) {
             ++flush_waiting;
             flush_cond.wait(lck);
             --flush_waiting;
+        }
+        if (gen != run_gen) {
+            return;
         }
         # If the child's flush produced data for grandchildren, wait for them to finish
         if (data_flushed) {
@@ -2008,6 +2045,18 @@ public class DataProviderPipeline {
 
         #! True when the current run has used synchronous processing and needs synchronous flush
         bool synchronous_processing = False;
+
+        #! The ID of the current run, incremented when a run ends (see endRunIntern())
+        int run_id = 0;
+
+        #! True while a run is ending (see endRunIntern())
+        bool run_ending = False;
+
+        #! Signaled when a run has ended
+        Condition run_end_cond();
+
+        #! The number of threads waiting on run_end_cond
+        int run_end_waiting = 0;
     }
 
     #! Creates the object with the given options
@@ -2271,20 +2320,25 @@ public class DataProviderPipeline {
     }
 
     #! Waits for all queues to have processed remaining data
-    /** @throws PIPELINE-FAILED thrown if there are any errors in pipeline processing, in which case the exception
+    /** Returns when the run has ended; if another thread ends the run (with waitDone() or abort()) while this
+        thread waits, this method returns when it has ended, and the other thread reports its result
+
+        @throws PIPELINE-FAILED thrown if there are any errors in pipeline processing, in which case the exception
         argument will have a list of exception arguments thrown by pipeline queue threads
     */
     waitDone() {
         lck.lock();
         on_exit lck.unlock();
 
+        waitRunEndIntern();
         if (!locked) {
             return;
         }
-        # the queue threads end with the run; unlock on exit
-        on_exit {
-            stopThreadsIntern();
-            locked = False;
+        # the run that this thread waits for
+        int run = run_id;
+        # the queue threads end with the run; unlock on exit, unless another thread has ended the run
+        on_exit if (run == run_id) {
+            endRunIntern();
         }
 
         # wait for primary queue to complete processing
@@ -2293,6 +2347,11 @@ public class DataProviderPipeline {
             synchronous_processing = False;
         } else {
             pmap."0".waitDone();
+            if (run != run_id) {
+                # another thread has ended the run
+                waitRunEndIntern();
+                return;
+            }
         }
 
         # set the stop time
@@ -2338,14 +2397,28 @@ public class DataProviderPipeline {
             }
         }
 
+        # a run that another thread is ending has ended when it returns
+        waitRunEndIntern();
+
         logInfo("pipeline %y: abort(<%s exceptions>) called with %sactive pipeline", name,
             ignore_exceptions ? "throw" : "ignore", locked ? "" : "in");
 
         if (!locked) {
             return;
         }
+        # the run that this thread aborts
+        int run = run_id;
+        # the queue threads end with the run; unlock on exit, unless another thread has ended the run
+        on_exit if (run == run_id) {
+            endRunIntern();
+        }
 
         pmap."0".waitDone();
+        if (run != run_id) {
+            # another thread has ended the run
+            waitRunEndIntern();
+            return;
+        }
 
         stop_time = now_us();
         stop_mono_us = clock_get_monotonic_us();
@@ -2355,10 +2428,6 @@ public class DataProviderPipeline {
             metrics_collector.forceCallback();
             metrics_collector.shutdown();
         }
-
-        # the queue threads end with the run
-        stopThreadsIntern();
-        locked = False;
 
         if (ignore_exceptions) {
             remove error_list;
@@ -2535,13 +2604,13 @@ public class DataProviderPipeline {
         if (shape == DataProviderShape::DataFrameBlock) {
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
             logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
-            record_count += rec_cnt;
             pmap."0".submit(_data);
+            record_count += rec_cnt;
         } else if (do_bulk && (shape == DataProviderShape::HashOfLists || shape == DataProviderShape::BufferColumns)
                 && ((int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape)) > 1)) {
             logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
-            record_count += rec_cnt;
             pmap."0".submit(_data);
+            record_count += rec_cnt;
         } else {
             submitDataIntern(_data);
         }
@@ -2551,8 +2620,10 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitDataIntern(auto _data) {
-        record_count += AbstractDataProcessor::shapeRecordCount(_data);
+        int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data);
         pmap."0".submit(_data);
+        # only records that the queue accepted are counted
+        record_count += rec_cnt;
     }
 
     #! Submits bulk data for processing
@@ -2565,8 +2636,8 @@ public class DataProviderPipeline {
             DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(recs, shape);
             logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
-            record_count += rec_cnt;
             pmap."0".submit(recs);
+            record_count += rec_cnt;
         }
     }
 
@@ -2662,10 +2733,9 @@ public class DataProviderPipeline {
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # a thread callback raised an error: the run does not start, and the error is raised to the
-                    # caller (qore#7777)
+                    # caller (qore#7777); the run is ended before the error is logged, as the log can raise an error
+                    endRunIntern();
                     logError("pipeline %y: cannot start a queue thread: %s", name, get_exception_string(ex));
-                    stopThreadsIntern();
-                    locked = False;
                     rethrow;
                 }
             }
@@ -2716,6 +2786,8 @@ public class DataProviderPipeline {
     private:internal stopThreadsIntern() {
         bool stop;
         foreach PipelineQueue q in (pmap.iterator()) {
+            # the threads that wait for the run return (see PipelineQueue::waitDone())
+            q.endRun();
             if (q.tid) {
                 q.queue_stop = True;
                 q.cond.broadcast();
@@ -2730,6 +2802,36 @@ public class DataProviderPipeline {
             if (!stop_flag) {
                 q.queue_stop = False;
             }
+            # the flags of the run that its thread set while it ended are reset for the next run
+            q.do_flush = False;
+            remove q.data_flushed;
+        }
+    }
+
+    #! Ends the current run; the lock must be held
+    /** The run is ended first (run_id), so that the threads that wait for it, and that the lock is released to while
+        the queue threads end, do not end it again; waitDone() and abort() wait until it has ended
+        (waitRunEndIntern())
+    */
+    private:internal endRunIntern() {
+        ++run_id;
+        run_ending = True;
+        on_exit {
+            locked = False;
+            run_ending = False;
+            if (run_end_waiting) {
+                run_end_cond.broadcast();
+            }
+        }
+        stopThreadsIntern();
+    }
+
+    #! Waits until a run that another thread is ending has ended; the lock must be held
+    private:internal waitRunEndIntern() {
+        while (run_ending) {
+            ++run_end_waiting;
+            run_end_cond.wait(lck);
+            --run_end_waiting;
         }
     }
 
