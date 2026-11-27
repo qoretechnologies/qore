@@ -566,6 +566,15 @@ public:
                        ExceptionSink* xsink);
 
     //! Submit an HTTP/3 response (server side)
+    /** A response on a stream that has closed before it, as when the client reset the stream at the deadline of its
+        request while the handler still ran, is not sent: the client takes no response on the stream, and nghttp3 no
+        longer knows it.  If the peer reset the stream with an error, its watched transmission result is reported as
+        not sent (see watchResponseSend()); a stream that the peer only stopped reading (STOP_SENDING with
+        H3_NO_ERROR) closes without an error, so a watch registered before the close reports it as sent.  The same as
+        with HTTP/2 (Http2Session::submitResponse(); qore#7803).
+
+        @return 0 on success, also if the stream has closed before the response, which is not sent; -1 on error
+    */
     DLLLOCAL int submitResponse(int64_t stream_id, int status_code,
                        const qore_http_header_pairs_t& headers,
                        const void* body, size_t body_len, ExceptionSink* xsink);
@@ -573,6 +582,9 @@ public:
     //! Submit an HTTP/3 streaming response (server side, headers only)
     /** Sets up a deferred data reader callback that will return NGHTTP3_ERR_WOULDBLOCK
         until data is provided via sendStreamData().
+
+        A stream that has closed before the response (see submitResponse()) raises \c QUIC-STREAM-CLOSED, as a send on
+        it does (sendStreamData()), so that nothing is staged for it (qore#7803).
 
         @param stream_id the HTTP/3 stream ID to respond on
         @param status_code the HTTP status code
@@ -1872,6 +1884,12 @@ private:
         return (stream_id & 3) == 0 && stream_id >= 0 && stream_id <= max_bidi_stream_id_
             && !open_bidi_streams_.count(stream_id);
     }
+
+    //! Describes how a stream that isClosedStreamLocked() reports closed came to close, for a message
+    /** The peer's reset is known while its record is kept (until the application releases the stream, see
+        releaseStream()).  Must be called with mtx_ held.
+    */
+    DLLLOCAL std::string describeClosedStreamLocked(int64_t stream_id) const;
 
     //! The peer sent STOP_SENDING: it stopped reading the stream (ngtcp2 1.24 and later)
     /** Called when the frame arrives, before the frames that follow it are processed, so a sender sees the stop

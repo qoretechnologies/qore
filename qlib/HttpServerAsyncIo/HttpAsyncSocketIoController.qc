@@ -3996,6 +3996,15 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
                     return;
                 }
+                # the stream closed before the response, as when the client reset it at the deadline of its request
+                # while the handler still ran: the client takes no response on it, and has nothing to be told
+                # (qoretechnologies/qore#7803; a response with a body in memory is then not sent without an error, as
+                # with HTTP/2)
+                if (ex.err == "QUIC-STREAM-CLOSED") {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the response is not sent: %s",
+                        session_id, stream_id, uh, ex.desc);
+                    return;
+                }
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",
                     session_id, stream_id, uh, ex.err, ex.desc);

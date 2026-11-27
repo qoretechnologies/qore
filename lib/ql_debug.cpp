@@ -36775,6 +36775,7 @@ static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, Runtim
 
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
+std::atomic<int64_t> qore_dbg_quic_responses_on_closed_streams{0};
 std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
 std::atomic<int64_t> qore_dbg_quic_server_validated_drops{0};
 
@@ -36801,6 +36802,16 @@ static QoreValue f_dbg_quic_stateless_reset_counts(const QoreListNode* params, R
     h->setKeyValue("sent", qore_dbg_quic_stateless_resets_sent.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("received", qore_dbg_quic_stateless_resets_received.load(std::memory_order_relaxed), xsink);
     return h.release();
+}
+
+//! returns the responses that the HTTP/3 servers of the process were given for streams that had closed before them
+/** Counted since the process started, when the server takes the response and does not send it (a response with its
+    body in memory, which is dropped, and a streaming response, which raises \c QUIC-STREAM-CLOSED), so that a test
+    can tell that a late response was handled (qore#7803).
+*/
+static QoreValue f_dbg_quic_responses_on_closed_streams(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_responses_on_closed_streams.load(std::memory_order_acquire);
 }
 
 namespace {
@@ -40457,6 +40468,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QoreValue(0), "skip");
     qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_responses_on_closed_streams", f_dbg_quic_responses_on_closed_streams,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
         listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,

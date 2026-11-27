@@ -1,0 +1,306 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH3ResponseAfterReset.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/3 (QUIC) stream resets by the client and the close of a stream before its response
+#
+# qoretechnologies/qore#7803: a handler that answered a request after its client had given up on it (the client resets
+# the stream at the deadline of its request) had its response refused by nghttp3 with ERR_STREAM_NOT_FOUND, as the
+# stream had closed: the server logged an error for every such request, and then submitted a 500 response and a
+# reset to a stream that did not exist any more.  The server now drops a response on a stream that closed before it,
+# as it does with HTTP/2, and a streaming response on such a stream raises QUIC-STREAM-CLOSED, which the controller
+# does not report as an error either.  The handlers of this test answer only once the client's reset has closed the
+# stream (they wait for the stream's transmission result, which is reported when the stream closes), so the
+# response always comes after the close, whatever the timing.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH3ResponseAfterResetTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The body of the late responses
+const LateBody = "the response after the client gave up";
+
+#! The client sessions of the load case
+const Sessions = 8;
+#! The client threads of the load case
+const Threads = 16;
+#! The requests of each client thread of the load case
+const Requests = 100;
+
+#! Records the messages that the server logs at ERROR level or above, and those that report a response not sent
+class ErrorRecorder inherits LoggerAppenderWithLayout {
+    private {
+        Mutex m();
+        list<string> errors = ();
+        list<string> not_sent = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("h3-response-after-reset", new LoggerLayoutPattern("%p: %m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        if (params =~ /^(ERROR|FATAL): /) {
+            AutoLock al(m);
+            errors += params;
+        } else if (params =~ /^DEBUG: HTTP\/3 session=.*: the response is not sent: /) {
+            AutoLock al(m);
+            not_sent += params;
+        }
+    }
+
+    #! Returns the messages logged so far that report a response not sent
+    list<string> getNotSent() {
+        AutoLock al(m);
+        return not_sent;
+    }
+
+    #! Returns the errors logged so far
+    list<string> getErrors() {
+        AutoLock al(m);
+        return errors;
+    }
+}
+
+#! Answers /late only after the stream of the request has closed; answers every other request at once
+class LateHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! gets an entry when a request to /late has reached the handler
+        Queue entered();
+        #! gets the transmission result of each request to /late, reported when its stream closed
+        Queue closed();
+        #! if True, the late response has an InputStream body, which the I/O thread sends as a streaming response
+        bool stream_body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path !~ /^\/?late/) {
+            return makeResponse(200, "OK " + hdr.path, {"Content-Type": "text/plain"});
+        }
+        # the result of the stream's transmission is reported when the stream closes: before the response here, as
+        # the client resets the stream
+        Queue result();
+        code<nothing(code<nothing(bool)>)> watch = cx."header-info".watch_response_send;
+        watch(sub (bool sent) {
+            result.push(sent);
+        });
+        entered.push(True);
+        closed.push(result.get(HangGuard));
+        if (stream_body) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": new BinaryInputStream(binary(LateBody)),
+                "hdr": {"Content-Type": "application/octet-stream"},
+            };
+        }
+        return makeResponse(200, LateBody, {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerH3ResponseAfterResetTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        ErrorRecorder recorder;
+    }
+
+    constructor() : QUnit::Test("HttpServerH3ResponseAfterReset", "1.0") {
+        addTestCase("HTTP/3: a response after the client canceled its stream is not an error",
+            \testCanceledStream());
+        addTestCase("HTTP/3: a streamed response after the client canceled its stream is not an error",
+            \testCanceledStreamStreamedBody());
+        addTestCase("HTTP/3: a response after the client's request timed out is not an error",
+            \testRequestTimeout());
+        addTestCase("HTTP/3: short requests on concurrent sessions are all answered without an error",
+            \testShortRequestLoad());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        recorder = new ErrorRecorder();
+        # DEBUG: the controller reports a streaming response that it could not send at that level
+        logger = new Logger("h3-response-after-reset", LoggerLevel::getLevelDebug());
+        logger.addAppender(recorder);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Starts a server with HTTP/3 and the given handler; returns its port
+    private int startServer(HttpServer hs, LateHandler handler) {
+        hs.setDefaultHandler("late", handler);
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        hs.waitForAsyncIo();
+        return port;
+    }
+
+    #! Returns a connection manager whose requests use HTTP/3
+    private HttpClientIo::HttpClientConnectionManager getManager(timeout request_timeout = HangGuard) {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": request_timeout,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    #! Returns the errors that the server logged since @p start
+    private list<string> getErrors(int start) {
+        return recorder.getErrors()[start..];
+    }
+
+    #! Returns the count of dbg_quic_responses_on_closed_streams(), or NOTHING if the library does not have it
+    /** A release build has no debug functions; a library before qore#7803 does not have this one, and then only the
+        checks of the logged errors tell
+    */
+    private *int getClosedStreamResponses() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !existsFunction("dbg_quic_responses_on_closed_streams")) {
+            return;
+        }
+        return call_function("dbg_quic_responses_on_closed_streams");
+    }
+
+    #! Checks the outcome of a late response once the server has stopped
+    /** The stop waits for the handler's task, which submits the late response; the count of the responses on closed
+        streams (a debug build) and, for a streaming response, the controller's message show that the submit was made
+        before the check of the errors, which therefore is not vacuous.
+
+        @param start the count of the errors logged before the case
+        @param not_sent_start the count of the "not sent" messages logged before the case
+        @param closed_start the count of dbg_quic_responses_on_closed_streams() before the case
+        @param stream_body True if the late response was a streaming one
+    */
+    private checkLateResponse(int start, int not_sent_start, *int closed_start, bool stream_body) {
+        assertEq((), getErrors(start), "the server logs no error for the response that the client did not wait for");
+        if (exists closed_start) {
+            assertEq(closed_start + 1, getClosedStreamResponses(),
+                "the late response was submitted, and not sent, before the check");
+        }
+        list<string> not_sent = recorder.getNotSent()[not_sent_start..];
+        if (stream_body) {
+            assertEq(1, not_sent.size(), "the controller reports the streaming response that it did not send");
+            assertRegex("the stream closed before the response \\(the peer reset it with HTTP/3 error code 0x10c\\)",
+                not_sent[0]);
+        } else {
+            assertEq((), not_sent, "a response with its body in memory is dropped without a message");
+        }
+    }
+
+    #! The client cancels its stream while the handler runs; the handler answers once the stream has closed
+    private canceledStreamImpl(bool stream_body) {
+        int start = recorder.getErrors().size();
+        int not_sent_start = recorder.getNotSent().size();
+        *int closed_start = getClosedStreamResponses();
+        LateHandler handler();
+        handler.stream_body = stream_body;
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, handler);
+        string url = sprintf("https://127.0.0.1:%d", port);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        {
+            on_exit delete mgr;
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            stream.startStreaming("GET", "/late");
+            handler.entered.get(HangGuard);
+            stream.cancel();
+            assertFalse(handler.closed.get(HangGuard), "the stream closed before the response");
+            # the session is still usable: the reset concerned the one stream
+            assertEq(200, mgr.request(url, "GET", "/next", NOTHING, NOTHING).status_code,
+                "a request after the canceled one is answered");
+        }
+        # the stop waits for the handler's task, which submits the late response
+        hs.stop();
+        checkLateResponse(start, not_sent_start, closed_start, stream_body);
+    }
+
+    testCanceledStream() {
+        canceledStreamImpl(False);
+    }
+
+    testCanceledStreamStreamedBody() {
+        canceledStreamImpl(True);
+    }
+
+    #! As in the CI runs of qore#7803: the client resets the stream at the deadline of its request
+    testRequestTimeout() {
+        int start = recorder.getErrors().size();
+        int not_sent_start = recorder.getNotSent().size();
+        *int closed_start = getClosedStreamResponses();
+        LateHandler handler();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, handler);
+        string url = sprintf("https://127.0.0.1:%d", port);
+
+        # the handler does not answer before the stream has closed, so the request always times out
+        HttpClientIo::HttpClientConnectionManager mgr = getManager(500ms);
+        {
+            on_exit delete mgr;
+            assertThrows("HTTPCLIENT-TIMEOUT", \mgr.request(), (url, "GET", "/late", NOTHING, NOTHING));
+            assertFalse(handler.closed.get(HangGuard), "the stream closed before the response");
+        }
+        hs.stop();
+        checkLateResponse(start, not_sent_start, closed_start, False);
+    }
+
+    #! Many short GET requests, on several sessions at once
+    testShortRequestLoad() {
+        int start = recorder.getErrors().size();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, new LateHandler());
+        string url = sprintf("https://127.0.0.1:%d", port);
+
+        list<HttpClientIo::HttpClientConnectionManager> mgrs = map getManager(), xrange(Sessions);
+        on_exit {
+            foreach HttpClientIo::HttpClientConnectionManager mgr in (mgrs) {
+                delete mgr;
+            }
+        }
+        Queue failures();
+        Counter done();
+        for (int t = 0; t < Threads; ++t) {
+            done.inc();
+            background sub (int t) {
+                on_exit done.dec();
+                for (int i = 0; i < Requests; ++i) {
+                    string path = sprintf("short/%d/%d", t, i);
+                    try {
+                        hash<auto> resp = mgrs[(t + i) % Sessions].request(url, "GET", "/" + path, NOTHING, NOTHING);
+                        if (resp.status_code != 200 || resp.body != "OK " + path) {
+                            failures.push(sprintf("%s: %d %y", path, resp.status_code, resp.body));
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        failures.push(sprintf("%s: %s: %s", path, ex.err, ex.desc));
+                    }
+                }
+            }(t);
+        }
+        done.waitForZero();
+        list<string> failed = map failures.get(), xrange(failures.size());
+        assertEq((), failed, "every request is answered");
+        assertEq((), getErrors(start), "the server logs no error");
+    }
+}
