@@ -12458,9 +12458,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
 
 //! list.string.join: join() of a list of strings
 extern "C" DLLEXPORT uint64_t qore_fast_join_list(uint64_t separator_bits, uint64_t list_bits,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink) try {
     return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, false, xsink);
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 //! list.string.join.identity-map: <list>::join() of the identity map of a list
 extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
@@ -12470,9 +12470,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
 
 //! list.string.join.identity-map: join() of the identity map of a list
 extern "C" DLLEXPORT uint64_t qore_fast_join_list_identity_map(uint64_t separator_bits, uint64_t list_bits,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink) try {
     return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, true, xsink);
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 uint64_t qore_rt_list_string_join_inst(const QoreIRInstruction* inst, bool identity, uint64_t separator_bits,
         uint64_t list_bits, ExceptionSink* xsink) {
@@ -12624,11 +12624,14 @@ static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_finis
     if (prefix.isNothing()) {
         return toBits(rv.release());
     }
-    SimpleRefHolder<QoreStringNode> result(prefix.get<const QoreStringNode>()->copy());
+    // the values are read in either string representation: the join of the call can be an inline short string
+    QoreStringNodeValueHelper prefix_str(prefix);
+    SimpleRefHolder<QoreStringNode> result(prefix_str->copy());
     QoreStringValueHelper separator_str(separator);
     result->concat(*separator_str, xsink);
     if (!*xsink) {
-        result->concat(rv->get<const QoreStringNode>(), xsink);
+        QoreStringValueHelper joined(*rv);
+        result->concat(*joined, xsink);
     }
     return *xsink ? toBits(QoreValue()) : toBits(QoreValue(result.release()));
 }
@@ -12661,6 +12664,7 @@ static QORE_ALWAYS_INLINE bool qore_rt_string_join_append_raw(qore_string_privat
     if (node->getType() != NT_STRING) {
         return false;
     }
+    // note: safe; an inline short string, which has no node, was appended above
     const qore_string_private* vp = qore_string_private::get(*static_cast<const QoreStringNode*>(node));
     if (vp->getEncoding() != p->getEncoding()) {
         return false;
@@ -12741,9 +12745,12 @@ static __attribute__((noinline)) uint64_t qore_rt_string_method_join_other(QoreV
         return toBits(first);
     }
 
-    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start())
+    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start()); the join is the
+    // string node that the start made, and an inline short string, which has no reference, is given as it is
     assert(value.isNothing());
-    first.getInternalNode()->ref();
+    if (!first.isShortString()) {
+        first.getInternalNode()->ref();
+    }
     return toBits(first);
 }
 
@@ -12770,12 +12777,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
     assert(!xsink || !*xsink);
     QoreValue first = fromBits(first_bits);
     QoreValue value = fromBits(value_bits);
-    // a step of the join with a value of the map, the usual case
-    if (first.hasNode() && !value.isNothing()) [[likely]] {
+    // a step of the join with a value of the map, the usual case, or its finish
+    if (first.hasNode()) [[likely]] {
         AbstractQoreNode* node = first.getInternalNode();
         if (node->getType() == NT_STRING) [[likely]] {
-            return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
-                fromBits(separator_bits), value, xsink);
+            if (!value.isNothing()) [[likely]] {
+                // note: safe; the node of the value (an inline short string has none), which is the join that the
+                // start made
+                return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
+                    fromBits(separator_bits), value, xsink);
+            }
+            // the finish of the join
+            node->ref();
+            return first_bits;
         }
     }
     return qore_rt_string_method_join_other(first, fromBits(separator_bits), value, xsink);

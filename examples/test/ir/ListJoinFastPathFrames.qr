@@ -147,3 +147,12 @@ string sub ss(string s) {
 string sub f_ssjoin(list<string> l) { return (map ss($1), l).join(","); }
 show("ssjoin", auto sub () { return f_ssjoin(("a", "bb", "日", "a")); });
 show("ssjoin-bad", auto sub () { return f_ssjoin(("a", "bb", badsj, "a")); });
+# the joins of lists with values and a separator in inline short string storage, which raise nothing or raise for a
+# value that cannot be converted (the plain joins, a join of a map, and the redo of its failed join)
+string sub f_ssmjoin(list<string> l, string sep) { return l.join(sep); }
+string sub f_ssfjoin(list<string> l, string sep) { return join(sep, l); }
+show("ss-mjoin", auto sub () { return f_ssmjoin((ss("a"), ss("bb"), "日"), ss(",")); });
+show("ss-fjoin", auto sub () { return f_ssfjoin((ss("a"), ss("bb")), ss(",")); });
+show("ss-mjoin-bad", auto sub () { return f_ssmjoin((ss("a"), badsj, ss("bb")), ss(",")); });
+show("ss-fjoin-bad", auto sub () { return f_ssfjoin((ss("a"), badsj), ss(",")); });
+show("ss-mapjoin-bad", auto sub () { return f_ssjoin((ss("bb"), badsj, ss("a"), "日")); });
