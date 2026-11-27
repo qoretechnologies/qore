@@ -36,10 +36,11 @@
 #include "qore/intern/StringInputStream.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 // returns the Program of the calling code, for which the trusted forms of the serialization API serialize and
-// deserialize all state, or nullptr with a SANDBOX-ACCESS-ERROR exception if the calling code is sandboxed or acts for
-// sandboxed code, also through a call reference (qore#7146)
+// deserialize all state, or nullptr with a SANDBOX-ACCESS-ERROR exception if the calling code is restricted by a sandbox
+// or acts for restricted code, also through a call reference (qore#7146)
 static QoreProgram* serializable_trusted_program(const char* api, ExceptionSink* xsink) {
     if (!qore_serialization_calling_code_trusted()) {
         xsink->raiseException("SANDBOX-ACCESS-ERROR", "Serializable::%s() can only be called by trusted code: "
@@ -47,18 +48,23 @@ static QoreProgram* serializable_trusted_program(const char* api, ExceptionSink*
             "trusted code", api);
         return nullptr;
     }
-    // the Program of the code that invokes the builtin, which is not sandboxed (checked above), or the current one
+    // the Program of the code that invokes the builtin, which is not restricted (checked above), or the current one
     QoreProgram* pgm = qore_builtin_caller_program();
     if (!pgm) {
         pgm = getProgram();
     }
-    // the classes of the data are resolved and their code runs in this Program, which must not be a sandboxed one
-    // (such as the Program that the code of a trusted class runs in for sandboxed code)
-    if (!pgm || qore_program_is_sandboxed(pgm)) {
+    // the classes of the data are resolved and their code runs in this Program, which must not be restricted, as the
+    // restriction rules decide it (qore#7737): a Program that a sandbox restricts, such as one with a class that
+    // trusted code parsed before the Program got its sandbox manager, is refused; a Program that a sandbox governs
+    // (one that allows uncontrolled APIs), whose code is trusted code, is not; fails closed
+    if (!pgm || qore_program_is_restricted(pgm)) {
         xsink->raiseException("SANDBOX-ACCESS-ERROR", "Serializable::%s() can only be called by trusted code in a "
-            "Program that is not sandboxed", api);
+            "Program that is not restricted by a sandbox", api);
         return nullptr;
     }
+    // note: deserializeTrusted() passes this Program to QoreSerializable::deserializeForProgram(), whose check of class
+    // names that name classes declared by sandboxed code compares the other Programs of the stack only: the data is
+    // the trusted code's own by the contract of the API
     return pgm;
 }
 
@@ -655,8 +661,8 @@ binary bin = Serializable::serializeTrusted(val);
     @throw SERIALIZATION-ERROR the value cannot be serialized
     @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
     in the chain of callers (see @ref sandbox_shared_objects)
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -688,8 +694,8 @@ Serializable::serializeTrusted(val, stream);
     @throw SERIALIZATION-ERROR the value cannot be serialized
     @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
     in the chain of callers (see @ref sandbox_shared_objects)
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -721,8 +727,8 @@ hash<SerializationInfo> h = Serializable::serializeTrustedToData(val);
     @throw SERIALIZATION-ERROR the value cannot be serialized
     @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
     in the chain of callers (see @ref sandbox_shared_objects)
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -758,8 +764,8 @@ auto val = Serializable::deserializeTrusted(bin);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -792,8 +798,8 @@ auto val = Serializable::deserializeTrusted(str);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -826,8 +832,8 @@ auto val = Serializable::deserializeTrusted(stream);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
@@ -860,8 +866,8 @@ auto val = Serializable::deserializeTrusted(h);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
-    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
-    the method through a call reference (see @ref sandbox_trusted_serialization)
+    @throw SANDBOX-ACCESS-ERROR the calling code is restricted by a sandbox or acts for restricted code, or restricted
+    code invokes the method through a call reference (see @ref sandbox_trusted_serialization)
 
     @note Code that also runs with older versions of %Qore can test for this method with the
     \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)

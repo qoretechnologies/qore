@@ -79,6 +79,16 @@ class StCache {
         }
     }
 
+    #! serializes the given object, which the test shares, with the trusted form
+    static string serializeShared(object o) {
+        try {
+            Serializable::serializeTrusted(o);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     #! deserializes the stored data, which the trusted code wrote, with the plain form
     static string loadPlain() {
         try {
@@ -98,6 +108,11 @@ class StCache {
             return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
+}
+
+#! a call reference to the trusted form that trusted code outside a class creates
+code sub st_host_ref() {
+    return \Serializable::serializeTrusted();
 }
 
 public class SandboxSerializationTrustedTest inherits QUnit::Test {
@@ -143,12 +158,39 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
             "        return ex.err;\n"
             "    }\n"
             "}\n"
-            "code sub closure() { return auto sub (auto v) { return Serializable::serializeTrusted(v); }; }\n",
+            "code sub closure() { return auto sub (auto v) { return Serializable::serializeTrusted(v); }; }\n"
+            "string sub deser_form(string form) {\n"
+            "    binary b = Serializable::serialize(1);\n"
+            "    try {\n"
+            "        switch (form) {\n"
+            "            case \"string\": Serializable::deserializeTrusted(b.toString(\"ISO-8859-1\")); break;\n"
+            "            case \"stream\": Serializable::deserializeTrusted(new BinaryInputStream(b)); break;\n"
+            "            case \"data\": Serializable::deserializeTrusted(Serializable::serializeToData(1)); break;\n"
+            "        }\n"
+            "        return \"OK\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n"
+            "string sub call_shared(object o) { return StCache::serializeShared(o); }\n"
+            "string sub by_name() {\n"
+            "    try {\n"
+            "        call_static_method(\"Serializable\", \"serializeTrusted\", 1);\n"
+            "        return \"OK\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n"
+            "nothing sub in_background(Queue q) {\n"
+            "    background q.push(direct(\"serializeTrusted\"));\n"
+            "}\n",
             "sandboxed");
 
         addTestCase("trusted code that sandboxed code calls", \trustedCalleeTest());
         addTestCase("sandboxed callers", \sandboxedCallerTest());
         addTestCase("trusted code without a sandbox", \noSandboxTest());
+        addTestCase("a governed sandbox", \governedTest());
+        addTestCase("shared objects", \sharedObjectTest());
         addTestCase("parse define", \defineTest());
         set_return_value(main());
     }
@@ -177,6 +219,45 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("invoke", deser, StCache::stored));
         code c = p.callFunction("closure");
         assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("invoke", c, new StOrderData()));
+        # a call reference that trusted code outside a class created
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("invoke", st_host_ref(), new StOrderData()));
+        # the other forms of deserializeTrusted()
+        foreach string form in ("string", "stream", "data") {
+            assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("deser_form", form), form);
+        }
+        # a call by name, and a call in a background thread that sandboxed code starts
+        assertRegex("SANDBOX-ACCESS-ERROR|ACCESS-ERROR|PRIVILEGE", p.callFunction("by_name"));
+        Queue q();
+        p.callFunction("in_background", q);
+        assertEq("SANDBOX-ACCESS-ERROR", q.get(30s));
+    }
+
+    #! a sandbox that allows uncontrolled APIs governs trusted code, which can call the trusted forms (qore#7737)
+    governedTest() {
+        SandboxManager gm();
+        gm.setUncontrolledApiPolicy(True);
+        Program g(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        g.setSandboxManager(gm);
+        g.importClass("StOrderData");
+        g.parse("string sub round_trip() {\n"
+            "    try {\n"
+            "        StOrderData o = Serializable::deserializeTrusted(Serializable::serializeTrusted(new StOrderData()));\n"
+            "        return o.getSecret();\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return sprintf(\"%s: %s\", ex.err, ex.desc);\n"
+            "    }\n"
+            "}\n", "governed");
+        assertEq("ORDER-STATE", g.callFunction("round_trip"));
+    }
+
+    #! the rule of shared objects applies to the trusted forms as to the plain forms (qore#7673)
+    sharedObjectTest() {
+        StOrderData o();
+        SandboxManager::shareObject(o);
+        # trusted code that no sandboxed code calls
+        assertEq("ORDER-STATE", Serializable::deserializeTrusted(Serializable::serializeTrusted(o)).getSecret());
+        # trusted code that sandboxed code calls
+        assertEq("SHARED-OBJECT-ERROR", p.callFunction("call_shared", o));
     }
 
     #! trusted code that no sandboxed code calls gets the same result as with the plain forms
@@ -191,11 +272,11 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         assertEq("ORDER-STATE", o.getSecret());
     }
 
+    #! the parse define, in a Program of its own
     defineTest() {
-%ifdef QORE_HAS_SERIALIZE_TRUSTED
-        assertTrue(True);
-%else
-        assertTrue(False, "QORE_HAS_SERIALIZE_TRUSTED is not defined");
-%endif
+        Program d(PO_NEW_STYLE);
+        d.parse("bool sub has() {\n%ifdef QORE_HAS_SERIALIZE_TRUSTED\nreturn True;\n%else\nreturn False;\n%endif\n}\n",
+            "define");
+        assertEq(True, d.callFunction("has"));
     }
 }
