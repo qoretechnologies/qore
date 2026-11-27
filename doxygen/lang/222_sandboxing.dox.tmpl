@@ -1275,7 +1275,10 @@ authenticate();
       makes of a lent object, or an object that trusted code creates for it under a host grant (a policy barrier or a
       system-policy capability): the grant does not outlive itself
     - a sandbox that governs the calling code still governs the method's code (its policy, limits and interrupts);
-      only the restrictions of the calling code's functional domains are lent
+      only the restrictions of the calling code's functional domains are lent: the file-system and network policy of
+      the sandbox also applies to the paths and locations that the host configured the object with, so that a host
+      whose sandboxed tenants use such an object (a connection, for example) allows those paths and targets in the
+      sandbox
 
     @warning Every public method of every module object that the host hands to restricted code (also an object that
     a host API creates from parameters of the restricted code, such as a data provider created by name) lends the
@@ -1360,6 +1363,11 @@ authenticate();
     and the clients of an HTTP-based connection use the creator's file options; a changed file option, or one given
     as a runtime or data provider option, raises \c PERMISSION-DENIED
     (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
+
+    A sandbox's file-system and network policy also applies to the connections that are lent to the code that it
+    governs, including the paths and locations that the lending host configured them with (there is no exemption for
+    the creator's paths): a host that wants its tenants to use such a connection allows those paths and targets in
+    the sandbox.
 
     @since %Qore 3.0
 

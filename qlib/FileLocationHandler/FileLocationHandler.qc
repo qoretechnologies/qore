@@ -377,12 +377,17 @@ public class AbstractFileLocationHandler {
           the capability of the code that bound it, while the module's default handlers are not bound and refuse a
           restricted caller; and @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM" when the options
           name local files that the handler reads for the caller (the \c ssl_cert_path and \c ssl_key_path options of
-          the \c http and \c https handlers, the \c ssh2_private_key and \c ssh2_public_key options of the \c sftp
-          handler)
-        - other handlers, such as those of the \c data and \c conn schemes and the handlers that host code
-          registers: none, by default: the handler applies its own policy (a \c conn location the policy of its
-          connection, see @ref FileLocationHandler::setConnectionFilter(); the options that the caller adds to a
-          \c conn location are checked with the handler that the connection gives the location to)
+          the \c http, \c https, \c rest and \c rests handlers, the \c ssh2_private_key and \c ssh2_public_key
+          options of the \c sftp handler), and the domains of the location of the \c swagger option of the \c rest
+          and \c rests handlers (its schema, which the handler reads for the caller; a path without a scheme is a
+          local file)
+        - the \c conn handler: the domains of the options above that the caller adds to the location (they replace
+          the connection's own), and @ref Qore::DOM_NETWORK "DOM_NETWORK" for a \c proxy option that the caller adds;
+          the connection's policy decides the rest (see
+          @ref FileLocationHandler::setConnectionFilter()): the handler that the connection gives the location to does
+          not refuse the domains that it uses with the options of the connection
+        - other handlers, such as those of the \c data scheme and the handlers that host code registers: none, by
+          default: the handler applies its own policy
 
         A caller restricted from more than one of the domains is refused with the names of all of them.
 
@@ -391,6 +396,9 @@ public class AbstractFileLocationHandler {
 
         @return the @ref Qore::functional_domain_constants "functional domains" of the handler for the scheme, as a
         bitmask of \c DOM_* constants
+
+        @throw LOCATION-ERROR a location that an option gives (such as \c swagger) cannot be parsed or has an unknown
+        scheme
 
         @since %FileLocationHandler 3.0
     */
@@ -479,6 +487,55 @@ public class AbstractFileLocationHandler {
         "THREAD_CONTROL": DOM_THREAD_CONTROL,
         "EMBEDDED_LOGIC": DOM_EMBEDDED_LOGIC,
     };
+
+    private:internal {
+        #! the location options of the built-in handlers that name local files, which the handler reads for the caller
+        const LocalFileOptions = ("ssl_cert_path", "ssl_key_path", "ssh2_private_key", "ssh2_public_key");
+
+        #! the location options of the built-in handlers that give a location that the handler reads for the caller
+        const LocationOptions = ("swagger",);
+
+        #! the location options of the built-in handlers that name a host that the handler connects to for the caller
+        const NetworkOptions = ("proxy",);
+    }
+
+    #! Returns the functional domains of the location options that name local files or locations
+    /** @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM" if an option names a local file (LocalFileOptions),
+        @ref Qore::DOM_NETWORK "DOM_NETWORK" if an option names a host to connect to (NetworkOptions), and the domains
+        of the location that an option gives (LocationOptions, see
+        @ref FileLocationHandler::FileLocationHandler::getLocationCallerDomains() "FileLocationHandler::getLocationCallerDomains()")
+
+        @param opts the location options
+
+        @return the domains of the options, as a bitmask of \c DOM_* constants
+
+        @throw LOCATION-ERROR a location that an option gives cannot be parsed or has an unknown scheme
+    */
+    private static int getOptionCallerDomains(*hash<auto> opts) {
+        int rv = 0;
+        foreach string opt in (LocalFileOptions) {
+            if (opts{opt}.val()) {
+                rv |= DOM_FILESYSTEM;
+                break;
+            }
+        }
+        foreach string opt in (NetworkOptions) {
+            if (opts{opt}.val()) {
+                rv |= DOM_NETWORK;
+                break;
+            }
+        }
+        foreach string opt in (LocationOptions) {
+            auto v = opts{opt};
+            if (v.val()) {
+                # a value that is not a string is counted as a local file
+                rv |= v.typeCode() == NT_STRING
+                    ? FileLocationHandler::getLocationCallerDomains(v)
+                    : DOM_FILESYSTEM;
+            }
+        }
+        return rv;
+    }
 
     #! Checks text read in its encoding with the given encoding_errors option
     /** Text read in memory, such as the text of a file received over the network and tagged with its encoding, is
@@ -1110,6 +1167,28 @@ public class FileLocationHandler {
         return exists cache{scheme};
     }
 
+    #! Returns the functional domains that the handler of a location uses for the code that calls it
+    /** The handler of the location's scheme decides the domains with the location's options (see
+        @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "AbstractFileLocationHandler::getCallerDomains()");
+        checkCallerLocation() refuses a caller restricted from any of them.
+
+        @param location the location, as given to the read or write methods
+        @param read @ref True if the location is read, @ref False if it is written (for the check of its options)
+        @param opts options for the location's handler that are given with the location, such as the
+        \c read_options of getResourceFromLocation(); they take precedence over the options in the location string
+
+        @return the @ref Qore::functional_domain_constants "functional domains" of the location, as a bitmask of
+        \c DOM_* constants
+
+        @throw LOCATION-ERROR the location string cannot be parsed; unknown location scheme; invalid location option
+
+        @since %FileLocationHandler 3.0
+    */
+    static int getLocationCallerDomains(string location, bool read = True, *hash<auto> opts) {
+        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, read, opts);
+        return info.handler.getCallerDomains(info.scheme, info.opts);
+    }
+
     #! Refuses a location that the calling code gives if that code is restricted from a functional domain of its handler
     /** Library code that reads or writes a location that its caller gives (for example a field of a data provider
         action's request) calls this method before it uses the location and before any other operation for the
@@ -1123,11 +1202,25 @@ public class FileLocationHandler {
         (see @ref sandbox_lent_objects), which lends the file system and the network to the code that it calls, the code
         that the object was lent to counts, as the location is that code's input, whoever created the object.
 
+        The read and write methods judge only the code that calls them (as by
+        @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"), so that an object that
+        the host creates with a location of its own and lends keeps reading it for the code that it is lent to: in a
+        method of a lent object they do not refuse a location that the borrower gave, which a borrower restricted from
+        the network or the file system could otherwise have the object read or write for it (an \c http, \c rest or
+        \c sftp location, a local file named in an option such as \c ssl_cert_path, or a \c proxy added to a
+        \c conn location).  Library code whose objects
+        the host can lend must therefore call this method for every location that its caller gives, and only for those
+        (not for the locations that the object was created with).
+
         A @ref Qore::SandboxManager "SandboxManager" policy that governs the calling code is not checked here: it
-        applies when the location is used.
+        applies when the location is used, also when a lent object uses a location that the host configured it with
+        (a host whose sandboxed tenants use such an object allows the location in the sandbox).
 
         @param location the location, as given to the read or write methods
         @param read @ref True if the location is read, @ref False if it is written (for the check of its options)
+        @param opts options for the location's handler that are given with the location, such as the
+        \c read_options of getResourceFromLocation(); they take precedence over the options in the location string,
+        so options that the caller gives must be checked with it
 
         @throw LOCATION-ERROR the location string cannot be parsed; unknown location scheme; invalid location option
         @throw PERMISSION-DENIED the calling code (or the code that a lent object was lent to) is restricted from a
@@ -1141,8 +1234,8 @@ binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
 
         @since %FileLocationHandler 3.0
     */
-    static checkCallerLocation(string location, bool read = True) {
-        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, read);
+    static checkCallerLocation(string location, bool read = True, *hash<auto> opts) {
+        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, read, opts);
         int dom = info.handler.getCallerDomains(info.scheme, info.opts);
         if (!dom || !SandboxManager::isLentToRestricted(dom)) {
             return;
@@ -1160,6 +1253,9 @@ binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
         @return the resource data as a string
 
         @throw LOCATION-ERROR the location string cannotbe parsed; unknown location scheme; invalid location option
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static string getTextFileFromLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
@@ -1172,6 +1268,9 @@ binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
         @return the resource data as a binary value
 
         @throw LOCATION-ERROR the location string cannotbe parsed; unknown location scheme; invalid location option
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static binary getBinaryFileFromLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
@@ -1183,6 +1282,9 @@ binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
         @param location the location string
 
         @throw LOCATION-ERROR invalid location or empty location string
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static data getFileFromLocation(bool text, string location) {
         return text
@@ -1194,6 +1296,9 @@ binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
     /** @param location the location string
 
         @throw LOCATION-ERROR invalid location or empty location string
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static Qore::AbstractPollOperation getIoPollerForLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
@@ -1220,6 +1325,9 @@ string base = res.info.effective_location ?? res.info.requested_location;
         @note This method can throw any exception raised by the location's handler when retrieving the data
 
         @since FileLocationHandler 3.0
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, with the
+        read options that the caller gives, as this method does not refuse the code that a lent object was lent to
     */
     static hash<FileResourceResult> getResourceFromLocation(string location, *hash<auto> read_options) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True, read_options);
@@ -1260,6 +1368,9 @@ hash<FileResourceResult> res = op.getOutput();
         @throw UNIMPLEMENTED the location's handler does not support non-blocking reads
 
         @since FileLocationHandler 3.0
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, with the
+        read options that the caller gives, as this method does not refuse the code that a lent object was lent to
     */
     static Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerForLocation(string location,
             *hash<auto> read_options) {
@@ -1282,6 +1393,9 @@ hash<FileResourceResult> res = op.getOutput();
     /** @param location the location of the file data
 
         @return a stream reader for the file's data
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static Qore::StreamReader getStreamReaderFromLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
@@ -1292,6 +1406,9 @@ hash<FileResourceResult> res = op.getOutput();
     /** @param location the location of the file data
 
         @return an input stream for the file's data
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static Qore::InputStream getBinaryStreamFromLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
@@ -1301,6 +1418,9 @@ hash<FileResourceResult> res = op.getOutput();
     #! Writes data to a file at the given location
     /** @param location the location of the file data
         @param contents the file contents to write to the location
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static writeFileToLocation(string location, data contents) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, False);
@@ -1316,6 +1436,9 @@ getHandlerNames
           deadlock
         - The data written to the OutputStreamWrapper object may be written in the background; to ensure that the data has
           been written to the target, call OutputStreamWrapper::waitForIo()
+
+        @note Library code that uses a location that its caller gives calls checkCallerLocation() first, as this
+        method does not refuse the code that a lent object was lent to
     */
     static OutputStreamWrapper getOutputStreamForLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, False);

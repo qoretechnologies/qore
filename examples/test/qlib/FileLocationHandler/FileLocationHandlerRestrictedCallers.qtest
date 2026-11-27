@@ -9,7 +9,10 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+# the module of the lent object of testLent()
+%prepend-module-path "${SCRIPT_DIR}"
 %requires FileLocationHandler
+%requires FileLocationLentReader
 
 %exec-class FileLocationHandlerRestrictedCallersTest
 
@@ -23,6 +26,10 @@
     only the module's own checks restrict the calls).  The restricted calls leave the directory of the test as it was.
     A \c conn location follows the policy of the connection (FileLocationHandlerConnection.qtest), and a scheme that
     host code registers the policy of its handler (testRegistered()).
+
+    The read and write methods do not refuse the code that a lent object was lent to; library code checks the
+    locations that its caller gives with checkCallerLocation(), which refuses a borrower restricted from a domain of
+    the location, including the options that name local files or locations (qore#7806, testLent()).
 */
 class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
     private {
@@ -84,6 +91,38 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
                 "{ssl_key_path=%s}\", port, d + \"/f\"))",
             "sftp ssh2_private_key": "FileLocationHandler::getTextFileFromLocation(sprintf(\"sftp://localhost:%d/x"
                 "{ssh2_private_key=%s}\", port, d + \"/f\"))",
+            "rest ssl_cert_path": "FileLocationHandler::getTextFileFromLocation(sprintf(\"rest://localhost:%d/x"
+                "{ssl_cert_path=%s}\", port, d + \"/f\"))",
+            "rests ssl_key_path": "FileLocationHandler::getTextFileFromLocation(sprintf(\"rests://localhost:%d/x"
+                "{ssl_key_path=%s}\", port, d + \"/f\"))",
+            "rest swagger": "FileLocationHandler::getTextFileFromLocation(sprintf(\"rest://localhost:%d/x"
+                "{swagger=%s}\", port, d + \"/f\"))",
+        };
+
+        #! the locations that a borrower restricted from the network gives a lent object (given the closed port)
+        const LentNetworkLocations = {
+            "http": "http://localhost:%d/x",
+            "https": "https://localhost:%d/x",
+            "rest": "rest://localhost:%d/x",
+            "rests": "rests://localhost:%d/x",
+            "ftp": "ftp://localhost:%d/x",
+            "ftps": "ftps://localhost:%d/x",
+            "sftp": "sftp://localhost:%d/x",
+        };
+
+        #! the locations that a borrower restricted from the file system gives a lent object (given the closed port
+        #! and the file)
+        const LentFilesystemLocations = {
+            "file": "file://%s",
+            "no scheme": "%s",
+            "https ssl_cert_path": "https://localhost:%d/x{ssl_cert_path=%s}",
+            "https ssl_key_path": "https://localhost:%d/x{ssl_key_path=%s}",
+            "rest ssl_cert_path": "rest://localhost:%d/x{ssl_cert_path=%s}",
+            "rests ssl_key_path": "rests://localhost:%d/x{ssl_key_path=%s}",
+            "rest swagger path": "rest://localhost:%d/x{swagger=%s}",
+            "rest swagger file location": "rest://localhost:%d/x{swagger=file://%s}",
+            "sftp ssh2_private_key": "sftp://localhost:%d/x{ssh2_private_key=%s}",
+            "sftp ssh2_public_key": "sftp://localhost:%d/x{ssh2_public_key=%s}",
         };
     }
 
@@ -96,8 +135,10 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
             addTestCase("the handlers of getHandler(), " + m, sub () { testHandlers(m); });
             addTestCase("options that name local files, " + m, sub () { testPathOptions(m); });
             addTestCase("handlers bound to a client, " + m, sub () { testBound(m); });
+            addTestCase("locations that a lent object reads, " + m, sub () { testLent(m); });
         }
         addTestCase("registered scheme", \testRegistered());
+        addTestCase("the domains of locations", \testLocationDomains());
         set_return_value(main());
     }
 
@@ -185,6 +226,120 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
         string rv = p.callFunction("host", h);
         assertNeq("PERMISSION-DENIED", rv, "bound by trusted code, " + mode);
         assertNeq("called", rv, "bound by trusted code, " + mode);
+    }
+
+    #! a borrower of a lent object that is restricted from a domain of a location that it gives is refused by
+    #! checkCallerLocation(), while the object's own location keeps working for it (qore#7806)
+    private testLent(string mode) {
+        TmpDir tmp("qore-flh-lent-");
+        string d = tmp.path;
+        string f = d + "/f";
+        writeFile(f);
+        string before = listing(d);
+        int port = get_free_port();
+        LentReader lr();
+        string rv;
+
+        foreach hash<auto> i in (LentNetworkLocations.pairIterator()) {
+            string loc = sprintf(i.value, port);
+            assertEq("PERMISSION-DENIED", lent(mode, PO_NO_NETWORK, lr, "read", loc), sprintf("network %s, %s",
+                i.key, mode));
+        }
+        assertEq("PERMISSION-DENIED", lent(mode, PO_NO_NETWORK, lr, "write", sprintf("http://localhost:%d/x", port),
+            "x"), "network write, " + mode);
+
+        foreach hash<auto> i in (LentFilesystemLocations.pairIterator()) {
+            string loc = i.value =~ /%d/ ? sprintf(i.value, port, f) : sprintf(i.value, f);
+            assertEq("PERMISSION-DENIED", lent(mode, PO_NO_FILESYSTEM, lr, "read", loc), sprintf("file system %s, %s",
+                i.key, mode));
+        }
+        assertEq("PERMISSION-DENIED", lent(mode, PO_NO_FILESYSTEM, lr, "write", "file://" + d + "/w", "x"),
+            "file system write, " + mode);
+        # read options that the caller gives are checked with the location
+        assertEq("PERMISSION-DENIED", lent(mode, PO_NO_FILESYSTEM, lr, "readResource",
+            sprintf("https://localhost:%d/x", port), NOTHING, NOTHING, {"ssl_cert_path": f}),
+            "file system read option, " + mode);
+        rv = lent(mode, PO_NO_FILESYSTEM, lr, "readResource", sprintf("https://localhost:%d/x", port), NOTHING,
+            NOTHING, {"timeout": 1000});
+        assertNeq("PERMISSION-DENIED", rv, "read option without a file, " + mode);
+        assertNeq("called", rv, "read option without a file, " + mode);
+        assertEq(before, listing(d), "the directory after the restricted uses, " + mode);
+
+        # without options that name local files, or with a schema on the network, the request is made, and fails as
+        # nothing listens on the port
+        foreach string loc in (sprintf("rest://localhost:%d/x", port),
+                sprintf("rest://localhost:%d/x{swagger=http://localhost:%d/s}", port, port)) {
+            rv = lent(mode, PO_NO_FILESYSTEM, lr, "read", loc);
+            assertNeq("PERMISSION-DENIED", rv, sprintf("file system %s, %s", loc, mode));
+            assertNeq("called", rv, sprintf("file system %s, %s", loc, mode));
+        }
+        # an unrestricted borrower: the certificate file is read, and is not a certificate
+        rv = lent(mode, 0, lr, "read", sprintf("rest://localhost:%d/x{ssl_cert_path=%s}", port, f));
+        assertNeq("PERMISSION-DENIED", rv, "unrestricted, " + mode);
+        assertNeq("called", rv, "unrestricted, " + mode);
+        assertEq("data", lent(mode, PO_NO_NETWORK, lr, "read", "file://" + f, NOTHING, True),
+            "a file for a borrower restricted from the network, " + mode);
+
+        # the location that the host created the object with is read for a borrower restricted from the file system
+        LentReader own("file://" + f);
+        assertEq("data", lent(mode, PO_NO_FILESYSTEM, own, "readOwn", NOTHING, NOTHING, True),
+            "the object's own location, " + mode);
+    }
+
+    #! the domains of locations with the options that name local files or locations (qore#7806)
+    private testLocationDomains() {
+        hash<string, int> expected = {
+            "file:///x": DOM_FILESYSTEM,
+            "/x": DOM_FILESYSTEM,
+            "data://x": 0,
+            "https://localhost/x": DOM_NETWORK,
+            "https://localhost/x{ssl_cert_path=/x}": DOM_NETWORK | DOM_FILESYSTEM,
+            "rest://localhost/x": DOM_NETWORK,
+            "rest://localhost/x{ssl_key_path=/x}": DOM_NETWORK | DOM_FILESYSTEM,
+            "rest://localhost/x{swagger=/x}": DOM_NETWORK | DOM_FILESYSTEM,
+            "rest://localhost/x{swagger=http://localhost/s}": DOM_NETWORK,
+            "rest://localhost/x{swagger=data://s}": DOM_NETWORK,
+            "sftp://localhost/x{ssh2_public_key=/x}": DOM_NETWORK | DOM_FILESYSTEM,
+            "ftp://localhost/x": DOM_NETWORK,
+            "conn://c/x": 0,
+            "conn://c/x{ssl_cert_path=/x}": DOM_FILESYSTEM,
+            "conn://c/x{ssh2_private_key=/x}": DOM_FILESYSTEM,
+            "conn://c/x{swagger=/x}": DOM_FILESYSTEM,
+            "conn://c/x{swagger=http://localhost/s}": DOM_NETWORK,
+            "conn://c/x{proxy=http://localhost:1}": DOM_NETWORK,
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, FileLocationHandler::getLocationCallerDomains(i.key), i.key);
+        }
+        # options given with the location
+        assertEq(DOM_NETWORK | DOM_FILESYSTEM, FileLocationHandler::getLocationCallerDomains("https://localhost/x",
+            True, {"ssl_key_path": "/x"}), "https with a read option");
+        assertEq(DOM_FILESYSTEM, FileLocationHandler::getLocationCallerDomains("conn://c/x", True,
+            {"ssl_cert_path": "/x"}), "conn with a read option");
+        assertThrows("LOCATION-ERROR", \FileLocationHandler::getLocationCallerDomains(),
+            "rest://localhost/x{swagger=nosuchscheme://s}");
+    }
+
+    #! calls a method of a lent object from a Program with the given restrictions; returns "called", the text read
+    #! (with \a text) or the code of its exception
+    private static string lent(string mode, int po, object o, string method, *string arg, *string data,
+            *bool text, *hash<auto> read_options) {
+        Program p(PO_NEW_STYLE | po);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\nstring sub t(object o, string m, list<auto> args, bool text) { try { auto v = "
+            "call_object_method_args(o, m, args); return text ? v : \"called\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; } }", "borrower");
+        list<auto> args = ();
+        if (exists arg) {
+            push args, arg;
+        }
+        if (exists data) {
+            args += data;
+        }
+        if (exists read_options) {
+            push args, read_options;
+        }
+        return p.callFunction("t", o, method, args, text ?? False);
     }
 
     #! a scheme that unrestricted host code registers follows its handler's own policy

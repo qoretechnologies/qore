@@ -561,8 +561,12 @@ class RestConnectionTlsTest inherits QUnit::Test {
         conn.real_opts.ssl_key_path = other;
         assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", loc));
         conn.real_opts.ssl_key_path = key;
-        assertThrows("LOCATION-ERROR", "unsupported read option.*ssl_cert_path", \restricted.callFunction(),
+        # a certificate file that the caller adds is refused to a caller restricted from the file system before the
+        # option is checked against the connection's handler (qore#7806), which does not support it
+        assertThrows("PERMISSION-DENIED", "FILESYSTEM", \restricted.callFunction(),
             ("read", loc + "{ssl_cert_path=" + other + "}"));
+        assertThrows("LOCATION-ERROR", "unsupported read option.*ssl_cert_path",
+            \FileLocationHandler::getTextFileFromLocation(), loc + "{ssl_cert_path=" + other + "}");
         writeFixture(cert, "");
         assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \restricted.callFunction(), ("read", loc));
         writeFixture(cert, TestCertificates::CertPem);
