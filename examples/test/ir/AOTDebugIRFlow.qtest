@@ -119,8 +119,9 @@ class AOTDebugIRFlowTest inherits QUnit::Test {
 
     private string compile(string name, string env) {
         string exe = tmp_dir + "/" + name;
-        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s %s -b --compile --output %s %s 2>&1", libqore_dir,
-            env, qore_bin, exe, src));
+        # with debugging (qcc -g): the debugger's requests are taken in the AOT code (qore#7676)
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s %s -b --compile --compile-debugging --output %s "
+            "%s 2>&1", libqore_dir, env, qore_bin, exe, src));
         assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
         if (env) {
             # the loop body with its step events is outlined
