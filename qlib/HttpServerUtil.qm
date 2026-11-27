@@ -3658,18 +3658,15 @@ public class AbstractStreamRequest {
     */
     static hash<auto> filterContext(hash<auto> cx) {
         hash<auto> rv;
-        # plain data only, never an object or code (qore#7303); the header information is checked for its keys
         foreach string key in (ContextKeys) {
-            if (cx.hasKey(key) && ((key == "header-info" && cx{key}.typeCode() == NT_HASH)
-                    || !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key}))) {
+            if (cx.hasKey(key)) {
                 rv{key} = cx{key};
             }
         }
         if (cx."header-info".typeCode() == NT_HASH) {
             hash<auto> info;
             foreach string key in (HeaderInfoKeys) {
-                if (cx."header-info".hasKey(key)
-                        && !AbstractHttpRequestHandler::holdsObjectOrCode(cx."header-info"{key})) {
+                if (cx."header-info".hasKey(key)) {
                     info{key} = cx."header-info"{key};
                 }
             }
