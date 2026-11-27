@@ -1726,6 +1726,82 @@ static auto SandboxManager::callWithSystemPolicy(code call, *softlist<auto> call
     return call->invoke(*arglist, xsink);
 }
 
+//! Calls the given code with its file-system access confined to a directory
+/** The call can reach only the files under @p root, with the access given, in addition to what the sandboxes that
+    govern the calling code allow: every file-system policy check made in the call on the calling thread is checked
+    against the directory as well.  Paths are checked as the file-system policy of a sandbox checks them: by their real
+    paths, with symbolic links resolved, and the file or directory reached is pinned against a concurrent change of the
+    path after the check, so that a symbolic link that leaves the directory, or one that replaces a component of a
+    path while the path is checked, is refused (see @ref sandbox_filesystem).  Symbolic links that stay under the
+    directory work as usual.
+
+    A library that confines the paths that its callers give to a directory (the data providers of
+    @ref FileDataProvider::FileDataProvider "FileDataProvider" with a root directory and \c lock, for example) runs
+    the operation through this method, so that the confinement also holds against symbolic links.
+
+    @param root the directory; must be an absolute path; its real path is the directory that the call is confined to
+    @param access_modes the @ref sandbox_fs_access "QSEC_*" access allowed under @p root (ex:
+    @ref Qore::QSEC_READ "QSEC_READ" for read access only, @ref Qore::QSEC_ALL "QSEC_ALL" for any access)
+    @param call the code to call
+    @param call_args optional arguments for @p call
+
+    @return the return value of @p call
+
+    @throw SANDBOX-PATH-ERROR @p root is not an absolute path, contains a NUL character, or cannot be canonicalized
+    @throw SANDBOX-CONFINEMENT-ERROR the confinement cannot be established: no thread data
+    @throw FILESYSTEM-ACCESS-DENIED (raised by the code called) a path is outside of @p root or the access is not in
+    @p access_modes
+
+    @note
+    - the confinement applies to the calling thread for the duration of the call, but not inside a policy barrier
+      (callWithSystemPolicy()), a system-policy capability (createSystemPolicyCall()) or the initialization of a
+      module entered in the call, whose policy the code that called this method does not decide; the threads and
+      asynchronous operations that the call starts are not confined
+    - it grants no access that the sandboxes of the calling code do not grant, so any code may call this method;
+      inside the call, the checks that depend on whether a file-system policy applies treat the code as code that a
+      sandbox governs (for example, a time zone is then loaded by its region name only, not by a path, and
+      isGoverned() returns @ref True)
+    - on Windows, a path is checked by its name before it is used: the file reached is not pinned against a
+      concurrent change of the path
+    - a hard link names its file by another path: a hard link under @p root to a file elsewhere reaches that file
+
+    @par Example:
+    @code{.py}
+string data = SandboxManager::callWithFilesystemRoot("/srv/data", QSEC_READ,
+    \ReadOnlyFile::readTextFile(), (path,));
+    @endcode
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::callWithFilesystemRoot(string root, int access_modes, code call,
+        *softlist<auto> call_args) [flags=NAMED_ARGS] {
+    // a path cut at a NUL character would name a shorter path, so the confinement would cover more than given
+    if (q_check_path(*root, "SANDBOX-PATH-ERROR", xsink)) {
+        return QoreValue();
+    }
+    if (!q_absolute_path(root->c_str())) {
+        xsink->raiseException("SANDBOX-PATH-ERROR", "the root directory of a confined call must be an absolute path; "
+            "got '%s'", root->c_str());
+        return QoreValue();
+    }
+    // a manager that restricts only the file system: everything else is left to the sandboxes that govern the code
+    ReferenceHolder<QoreSandboxManager> confinement(new QoreSandboxManager, xsink);
+    confinement->network().setDefaultPolicy(true);
+    confinement->setUncontrolledApiPolicy(true);
+    confinement->filesystem().setDefaultPolicy(false);
+    if (confinement->filesystem().addAllowedPath(root->c_str(), access_modes, xsink)) {
+        return QoreValue();
+    }
+    if (qore_push_fs_confinement(*confinement)) {
+        xsink->raiseException("SANDBOX-CONFINEMENT-ERROR", "cannot confine the call to '%s': no thread data",
+            root->c_str());
+        return QoreValue();
+    }
+    ON_BLOCK_EXIT(qore_pop_fs_confinement);
+    ReferenceHolder<QoreListNode> arglist(call_args ? call_args->listRefSelf() : nullptr, xsink);
+    return call->invoke(*arglist, xsink);
+}
+
 //! Binds a callback to the sandbox that governs its registration
 /** Use this when accepting a pre-existing callback from a sandboxed interface. A method reference can bind a
     pre-existing object's selected method without modifying a shared object. Invoke this method in the registering
