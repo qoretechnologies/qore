@@ -377,6 +377,8 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("a capability of a module that is not the loaded HttpServer module makes no request current",
             \testUnusableCapability());
         addTestCase("sandboxed code that loads the HttpServer module first", \testFirstLoadSandboxed());
+        addTestCase("code that may not use uncontrolled APIs loads the HttpServerUtil module first",
+            \testRestrictedFirstLoad());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -628,6 +630,44 @@ public class Holder {
         assertEq(0, rc, out);
         assertEq("plain: 200, stream: 500, plain again: 200\nstream after: 200, stream again: 200\n"
             "logged: 1 (check not made)\n", out);
+    }
+
+    testRestrictedFirstLoad() {
+        # code that may not use uncontrolled APIs loads the HttpServerUtil module first, from its source, in a process
+        # of its own (see restricted-first-load.q): the module parses; the dispatch capability of the HTTP server
+        # cannot be checked with the system policy then, so it fails closed: the server's stream requests are refused
+        # (permanently) while its other requests are served, and it is logged once; with a trusted first loader the
+        # capability works
+        TmpDir tmp("qore-dispatch-capability-restricted-");
+        string src = sourceModuleDir(tmp.path);
+        foreach hash<auto> i in ({
+                "restricted": "loaded: True\nplain: 200, stream: 500, plain again: 200, stream again: 500\n"
+                    "logged: 1 (no system-policy call)\n",
+                "trusted": "loaded: True\nplain: 200, stream: 200, plain again: 200, stream again: 200\n"
+                    "logged: 0\n",
+            }.pairIterator()) {
+            string cmd = sprintf("QORE_MODULE_DIR=%s:%s %s -b %s/HttpServerDispatchCapability/restricted-first-load.q "
+                "%s", src, ENV.QORE_MODULE_DIR ?? "", TestInterpreter::qore_interpreter(), get_script_dir(), i.key);
+            int rc;
+            string out = backquote(cmd, \rc);
+            assertEq(0, rc, i.key + ": " + out);
+            assertEq(i.value, out, i.key);
+        }
+    }
+
+    #! Returns a directory of links to the entries of the qlib directory of the repository except its AOT modules
+    #! (*.qmod), so that its modules are loaded from their sources
+    private string sourceModuleDir(string tmp) {
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        string dir = tmp + DirSep + "source-modules";
+        mkdir(dir);
+        foreach string e in (glob(qlib + DirSep + "*") ?? ()) {
+            string name = basename(e);
+            if (name !~ /\.qmod$/) {
+                symlink(e, dir + DirSep + name);
+            }
+        }
+        return dir;
     }
 
     #! runs by-path-before-load.q in a process of its own, with the given module path, if any
