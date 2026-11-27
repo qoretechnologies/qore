@@ -1166,11 +1166,14 @@ static bool aotEmitDebugInfo() {
 }
 
 //! Returns true if the code is compiled with debugging (qcc -g, which sets QORE_AOT_DEBUGGING; qore#7676)
-/** Debug support that costs performance is emitted only in code compiled with debugging: the debugger checks of its
-    calls (aotDebuggerChecks()), the debug IR of the functions whose native code's IR differs from the IR that a
-    debugger can interpret (aotLowerUnrewrittenDebugIR()), and the calls that -O0 keeps for a debugger to step into
-    (aotPreserveDebugCalls()).  The binary records it in its header (QORE_AOT_FLAG_DEBUGGING), and a debugger that
-    attaches while code compiled without it is loaded gets a warning (qore_aot_warn_debugging_unsupported()).
+/** Debug support that costs performance at run time is emitted only in code compiled with debugging: the debugger
+    checks of its calls (aotDebuggerChecks()), the calls of closures through the runtime, the calls that -O0 keeps for
+    a debugger to step into (aotPreserveDebugCalls()) and the function forms of string calls in top-level code.  The
+    serialized IR of every function is written without it too, separately lowered when the native code's IR is not
+    one that the IR interpreter can run (aotLowerUnrewrittenDebugIR()): a source-stripped build runs it at parse time
+    as well as a debugger, and it costs only compile time.  The binary records the choice in its header
+    (QORE_AOT_FLAG_DEBUGGING), and a debugger attached to a Program with code compiled without it gets a warning
+    (qore_aot_note_code_without_debugging()).
 */
 static bool aotCompileWithDebugging() {
     static constinit QoreEnvFlag debugging_env("QORE_AOT_DEBUGGING");
@@ -22317,14 +22320,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
                 // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
-                // the serialized IR cannot express (#7733); code compiled without debugging has none then, as the IR
-                // of its native code is not one that a debugger can interpret: the function runs its native code under
-                // a debugger (qore#7676)
+                // the serialized IR cannot express (#7733); also in code compiled without debugging: the serialized IR
+                // is not only the debugger's, a source-stripped build runs it at parse time
+                // (UserVariantBase::materializeLazyAOTFunctionIR()), and the lowering costs compile time only
                 std::unique_ptr<QoreIRFunction> debug_ir_func;
                 const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
-                const bool needs_debug_ir_lowering = rewritten || ir_func->has_debug_ir_call_forms;
-                const bool no_debug_ir = needs_debug_ir_lowering && !aotCompileWithDebugging();
-                if (needs_debug_ir_lowering && !no_debug_ir) {
+                if (rewritten || ir_func->has_debug_ir_call_forms) {
                     std::string debug_error;
                     debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, function_name.c_str(), pgm, func,
                         const_reverse_map, debug_error);
@@ -22734,18 +22735,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.native_ir.reset(ir_func);
                         ir_func = debug_ir_func.release();
                     }
-                    if (no_debug_ir) {
-                        // no debug IR is serialized (see above)
-                        cf.native_ir.reset(ir_func);
-                    } else {
-                        // Keep the serialized debug IR source-visible.  The LLVM
-                        // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
-                        // to avoid dynamic-linker interposition; stack traces and
-                        // diagnostics must keep the original Qore variant key.
-                        ir_func->name = variant_key;
-                        ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
-                        cf.debug_ir.reset(ir_func);
-                    }
+                    // Keep the serialized debug IR source-visible.  The LLVM
+                    // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                    // to avoid dynamic-linker interposition; stack traces and
+                    // diagnostics must keep the original Qore variant key.
+                    ir_func->name = variant_key;
+                    ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
+                    cf.debug_ir.reset(ir_func);
                     ir_func = nullptr;
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
@@ -22874,13 +22870,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     bool will_outline = outline_probe.run(ir_func, false);
                     outline_probe.undo();
                     // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
-                    // the serialized IR cannot express (#7733); none in code compiled without debugging (qore#7676; see
-                    // the functions above)
+                    // the serialized IR cannot express (#7733); also without debugging (see the functions above)
                     std::unique_ptr<QoreIRFunction> debug_ir_func;
                     const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
-                    const bool needs_debug_ir_lowering = rewritten || ir_func->has_debug_ir_call_forms;
-                    const bool no_debug_ir = needs_debug_ir_lowering && !aotCompileWithDebugging();
-                    if (needs_debug_ir_lowering && !no_debug_ir) {
+                    if (rewritten || ir_func->has_debug_ir_call_forms) {
                         std::string debug_error;
                         debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, method_name.c_str(), pgm, nullptr,
                             const_reverse_map, debug_error);
@@ -23262,18 +23255,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             cf.native_ir.reset(ir_func);
                             ir_func = debug_ir_func.release();
                         }
-                        if (no_debug_ir) {
-                            // no debug IR is serialized (see above)
-                            cf.native_ir.reset(ir_func);
-                        } else {
-                            // Keep the serialized debug IR source-visible.  The LLVM
-                            // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
-                            // to avoid dynamic-linker interposition; stack traces and
-                            // diagnostics must keep the original Qore variant key.
-                            ir_func->name = variant_key;
-                            ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
-                            cf.debug_ir.reset(ir_func);
-                        }
+                        // Keep the serialized debug IR source-visible.  The LLVM
+                        // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                        // to avoid dynamic-linker interposition; stack traces and
+                        // diagnostics must keep the original Qore variant key.
+                        ir_func->name = variant_key;
+                        ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
+                        cf.debug_ir.reset(ir_func);
                         ir_func = nullptr;
                         const size_t owner_index = compiled_funcs.size();
                         compiled_funcs.push_back(std::move(cf));

@@ -99,7 +99,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         foreach string level in ("-O0", "-O3") {
             TmpDir dir("qore-aot-generic-local-type-debug-");
             string exe = dir.path + "/probe-debug";
-            run((qcc_bin, level, "-o", exe, debug_probe));
+            run((qcc_bin, level, "-g", "-o", exe, debug_probe));
             assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level + " with a debugger");
         }
     }
