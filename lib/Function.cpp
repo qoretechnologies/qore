@@ -2010,6 +2010,8 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     qore_dbg_runtime_chosen_variant = false;
 #endif
     QoreSandboxProvenanceHelper::set(self);
+    // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
+    qore_mark_serializing_receiver_call(static_cast<const QoreSandboxProvenanceHelper&>(*this), func);
     // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
     if (getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
         return;

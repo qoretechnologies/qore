@@ -23807,6 +23807,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     if (!variant) {
         return false;
     }
+    // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
+    qore_mark_serializing_receiver_call(provenance, qore_method_private::get(*method)->getFunction());
     // copy() must go through dispatch_method_on_object → execCopy to create a new object; the length and the bytes
     // of the name are compared inline (a std::string == const char* that the compiler leaves out of line calls
     // strlen() at every call)

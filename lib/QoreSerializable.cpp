@@ -260,6 +260,20 @@ bool qore_serialization_calling_code_trusted() {
     return !qore_caller_is_sandboxed();
 }
 
+//! returns the function of an instance method of Serializable
+static const QoreFunction* serializable_method_function(const char* name) {
+    const QoreMethod* m = QC_SERIALIZABLE->findLocalMethod(name);
+    assert(m);
+    return m ? qore_method_private::get(*m)->getFunction() : nullptr;
+}
+
+bool qore_serializable_receiver_function(const QoreFunction* func) {
+    // set once the first object with provenance is called, after the library's initialization
+    static const QoreFunction* const serialize = serializable_method_function("serialize");
+    static const QoreFunction* const serialize_to_data = serializable_method_function("serializeToData");
+    return func && (func == serialize || func == serialize_to_data);
+}
+
 bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool internal) {
     if (unrestricted) {
         return false;
@@ -618,7 +632,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {
-            if (opriv->checkSharedSerialize(xsink)) {
+            if (opriv->checkSharedSerialize(xsink, context.caller.getReceiver())) {
                 return context.imap.end();
             }
         }

@@ -2609,20 +2609,39 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
 
-//! Returns qore_caller_is_sandboxed() for a builtin method that serializes its receiver (qore#7146)
-/** The innermost frame of provenance is not counted if it was applied for a call of a method of the receiver (see
-    QoreSandboxProvenanceHelper): the call of the method, or, if that call applied no frame as the innermost one had
-    the same context, the call of the receiver's method that called it.  The method serializes the object for the code
-    that called it, as Serializable::serialize() with the object as its argument does, which applies no provenance, so
-    the code that called it decides.  Every other frame of provenance counts (the method calls of other objects, call
-    references, closures and destructors), as do the Programs of the stack, the code of sandboxed Programs that runs in
-    other Programs and the sandboxes of continued operations and of the code that started the thread
+class QoreFunction;
+
+//! Returns qore_caller_is_sandboxed() for a builtin method of Serializable that serializes its receiver (qore#7146)
+/** The innermost frame of provenance is not counted if the call of that method applied it for the receiver (see
+    qore_mark_serializing_receiver_frame()): the method serializes the object for the code that called it, as
+    Serializable::serialize() with the object as its argument does, which applies no provenance, so the code that
+    called it decides.  Every other frame of provenance counts: one that a method or the destructor of the receiver
+    applied, in which the call applied none as its context was the same, the method calls of other objects, call
+    references and closures; as do the Programs of the stack, the code of sandboxed Programs that runs in other
+    Programs and the sandboxes of continued operations and of the code that started the thread
 
     @param receiver the object whose method serializes it, or nullptr
 
     Fails closed as qore_caller_is_sandboxed()
 */
 DLLLOCAL bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver);
+
+//! Marks the provenance frame that \a frame applied for the receiver of the call of a builtin method of Serializable
+//! that serializes it (see qore_receiver_caller_is_sandboxed()); nothing if it applied none
+DLLLOCAL void qore_mark_serializing_receiver_frame(const QoreSandboxProvenanceHelper& frame);
+
+//! Returns true if \a func is a builtin method of Serializable that serializes its receiver (Serializable::serialize(),
+//! Serializable::serializeToData()) (qore#7146)
+DLLLOCAL bool qore_serializable_receiver_function(const QoreFunction* func);
+
+//! Marks the provenance frame that \a frame applied for the receiver of the call of \a func, if \a func is a
+//! builtin method of Serializable that serializes its receiver (qore#7146)
+static inline void qore_mark_serializing_receiver_call(const QoreSandboxProvenanceHelper& frame,
+        const QoreFunction* func) {
+    if (frame.getContext() && qore_serializable_receiver_function(func)) [[unlikely]] {
+        qore_mark_serializing_receiver_frame(frame);
+    }
+}
 
 //! Returns true if the barrier of a trusted build (SandboxManager::createTrustedBuildCall()) would hide nothing of the
 //! calling code: no sandboxed caller recorded by a parse or module load, no sandbox that governs the code or that it

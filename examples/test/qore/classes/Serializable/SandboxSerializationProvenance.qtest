@@ -57,6 +57,39 @@ class SspHolder {
     }
 }
 
+#! a class of the host whose own code serializes its object, which holds an object of another class with
+#! non-public state
+class SspSelf inherits Serializable {
+    public {
+        SspTrusted inner();
+        static *string dtor_method;
+        static *string dtor_static;
+    }
+
+    destructor() {
+        try {
+            binary b = self.serialize();
+            dtor_method = b ? "OK" : "EMPTY";
+        } catch (hash<ExceptionInfo> ex) {
+            dtor_method = ex.err;
+        }
+        try {
+            binary b = Serializable::serialize(self);
+            dtor_static = b ? "OK" : "EMPTY";
+        } catch (hash<ExceptionInfo> ex) {
+            dtor_static = ex.err;
+        }
+    }
+
+    binary serSelf() {
+        return self.serialize();
+    }
+
+    binary serSelfStatic() {
+        return Serializable::serialize(self);
+    }
+}
+
 #! objects that the host's code creates while sandboxed code calls it carry the sandbox of their creation; when the
 #! host itself later serializes them, no sandboxed code calls it, and it gets their non-public state (qore#7146)
 public class SandboxSerializationProvenanceTest inherits QUnit::Test {
@@ -67,14 +100,21 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("SandboxSerializationProvenance", "1.0") {
         p.setSandboxManager(manager);
+        p.importClass("SspTrusted");
         p.parse("auto sub call(code c) { return c(); }\n"
             "auto sub call_arg(code c, auto arg) { return c(arg); }\n"
             "binary sub ser_method(Serializable v) { return v.serialize(); }\n"
-            "code sub sb_closure() { return binary sub (Serializable v) { return v.serialize(); }; }\n", "sandboxed");
+            "code sub sb_closure() { return binary sub (Serializable v) { return v.serialize(); }; }\n"
+            "code sub sb_method_ref(Serializable v) { return \\v.serialize(); }\n"
+            "class SbSub inherits SspTrusted {}\n"
+            "object sub sb_sub() { return new SbSub(); }\n", "sandboxed");
 
         addTestCase("host class", \hostClassTest());
         addTestCase("qlib class", \qlibClassTest());
         addTestCase("sandboxed callers", \sandboxedCallerTest());
+        addTestCase("own code of the object", \ownCodeTest());
+        addTestCase("sandbox subclass", \sandboxSubclassTest());
+        addTestCase("shared object", \sharedObjectTest());
         set_return_value(main());
     }
 
@@ -94,6 +134,9 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         check(Serializable::deserialize(SspSerializer::serMethod(o)), "host class with a method call");
         hash<auto> h = Serializable::deserialize(Serializable::serialize({"value": o}));
         check(h.value, "a container of the object");
+        BinaryOutputStream stream();
+        o.serialize(stream);
+        check(Serializable::deserialize(stream.getData()), "serialize(OutputStream)");
     }
 
     hostClassTest() {
@@ -138,8 +181,51 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         code sbc = p.callFunction("sb_closure");
         assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", sbc, (o,));
         assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", sbc, (new SspTrusted(),));
+        # a call reference to the object's method that sandboxed code created, which the host calls
+        code mref = p.callFunction("sb_method_ref", o);
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", mref);
         # the same object, serialized by the host itself
         assertEq("PRIV-STATE", Serializable::deserialize(SspSerializer::serMethod(o)).getPriv());
         assertEq("PRIV-STATE", Serializable::deserialize(o.serialize()).getPriv());
+    }
+
+    #! the code of the object's own class runs for the sandbox that created it: its method and destructor get what the
+    #! static form gets there
+    ownCodeTest() {
+        SspSelf o = createUnderSandbox(object sub () { return new SspSelf(); });
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \o.serSelf());
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \o.serSelfStatic());
+        # the host's own call of the method that serializes the object
+        assertEq("PRIV-STATE", Serializable::deserialize(o.serialize()).inner.getPriv());
+        delete o;
+        assertEq("SERIALIZATION-ERROR", SspSelf::dtor_method);
+        assertEq("SERIALIZATION-ERROR", SspSelf::dtor_static);
+
+        # an object that the host created itself
+        SspSelf h();
+        assertEq("PRIV-STATE", Serializable::deserialize(h.serSelf()).inner.getPriv());
+        assertEq("PRIV-STATE", Serializable::deserialize(h.serSelfStatic()).inner.getPriv());
+        delete h;
+        assertEq("OK", SspSelf::dtor_method);
+        assertEq("OK", SspSelf::dtor_static);
+    }
+
+    #! an object of a class that sandboxed code declared with a trusted base class
+    sandboxSubclassTest() {
+        object o = p.callFunction("sb_sub");
+        # the host gets the state of the trusted base class with both forms
+        assertRegex("PRIV-STATE", sprintf("%N", o.serializeToData()));
+        assertRegex("PRIV-STATE", sprintf("%N", Serializable::serializeToData(o)));
+        # sandboxed code does not
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("ser_method", o));
+    }
+
+    #! an object shared by every Program (qore#7673) that the host's code created while sandboxed code called it
+    sharedObjectTest() {
+        object o = createUnderSandbox(object sub () { return new SspTrusted(); });
+        SandboxManager::shareObject(o);
+        assertEq("PRIV-STATE", Serializable::deserialize(o.serialize()).getPriv());
+        assertEq("PRIV-STATE", Serializable::deserialize(Serializable::serialize(o)).getPriv());
+        assertThrows("SHARED-OBJECT-ERROR", \p.callFunction(), ("ser_method", o));
     }
 }

@@ -210,6 +210,11 @@ public:
         receiver = obj;
     }
 
+    //! returns the object that a builtin method of Serializable serializes, if any
+    DLLLOCAL const QoreObject* getReceiver() const {
+        return receiver;
+    }
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
