@@ -30,6 +30,44 @@ void check(bool ok, const char* what) {
     }
 }
 
+//! the folded-multiply hash as first written, with its constants computed at each call: the reference that the hasher
+//! with precomputed factors must equal
+uint64_t ref_fold64(uint64_t k0, uint64_t k1, uint64_t v) {
+    auto fold = [](uint64_t a, uint64_t b) -> uint64_t {
+        unsigned __int128 r = static_cast<unsigned __int128>(a) * b;
+        return static_cast<uint64_t>(r) ^ static_cast<uint64_t>(r >> 64);
+    };
+    uint64_t m = fold(v ^ k0, ((v << 23) | (v >> 41)) ^ k1 ^ 0x9e3779b97f4a7c15ull);
+    return fold(m ^ k1, (k0 ^ 0xd6e8feb86659fd93ull) | 1);
+}
+
+//! SipHash-1-3 written directly from the specification, one byte at a time: the reference of the inputs longer than
+//! 255 bytes, whose length byte wraps (the last word holds the length modulo 256)
+uint64_t ref_siphash13(uint64_t k0, uint64_t k1, const unsigned char* in, size_t len) {
+    uint64_t v[4] = {k0 ^ 0x736f6d6570736575ull, k1 ^ 0x646f72616e646f6dull, k0 ^ 0x6c7967656e657261ull,
+        k1 ^ 0x7465646279746573ull};
+    auto rotl = [](uint64_t x, int b) { return (x << b) | (x >> (64 - b)); };
+    auto round = [&]() {
+        v[0] += v[1]; v[1] = rotl(v[1], 13); v[1] ^= v[0]; v[0] = rotl(v[0], 32);
+        v[2] += v[3]; v[3] = rotl(v[3], 16); v[3] ^= v[2];
+        v[0] += v[3]; v[3] = rotl(v[3], 21); v[3] ^= v[0];
+        v[2] += v[1]; v[1] = rotl(v[1], 17); v[1] ^= v[2]; v[2] = rotl(v[2], 32);
+    };
+    uint64_t m = 0;
+    for (size_t i = 0; i < len; ++i) {
+        m |= static_cast<uint64_t>(in[i]) << (8 * (i % 8));
+        if (i % 8 == 7) {
+            v[3] ^= m; round(); v[0] ^= m;
+            m = 0;
+        }
+    }
+    m |= static_cast<uint64_t>(len & 0xff) << 56;
+    v[3] ^= m; round(); v[0] ^= m;
+    v[2] ^= 0xff;
+    round(); round(); round();
+    return v[0] ^ v[1] ^ v[2] ^ v[3];
+}
+
 #ifdef __GLIBCXX__
 // libstdc++ stores the hashes of the keys in the nodes of containers with the keyed hashers, as it does for strings
 // with std::hash, so that a rehash and an erase do not hash the keys again
@@ -129,6 +167,22 @@ int main(int argc, char** argv) {
             }
         }
         check(same_fast, "qore_siphash13_fast() is qore_siphash13() for 0 - 64 bytes");
+        // inputs longer than 255 bytes: the length byte of the last word wraps
+        unsigned char lbuf[300];
+        for (size_t i = 0; i < sizeof lbuf; ++i) {
+            lbuf[i] = static_cast<unsigned char>(i * 131 + 7);
+        }
+        bool same_long = true;
+        for (size_t len = 0; len <= sizeof lbuf; ++len) {
+            uint64_t r = ref_siphash13(k[0], k[1], lbuf, len);
+            if (qore_siphash13(k[0], k[1], lbuf, len) != r || qore_siphash13_fast(k[0], k[1], lbuf, len) != r) {
+                same_long = false;
+            }
+        }
+        check(same_long, "SipHash-1-3 equals the reference for 0 - 300 bytes");
+        check(qore_siphash13(k[0], k[1], lbuf, 256) != qore_siphash13(k[0], k[1], lbuf, 255)
+            && ref_siphash13(k[0], k[1], lbuf, 256) == qore_siphash13_fast(k[0], k[1], lbuf, 256),
+            "SipHash-1-3 of 256 bytes");
         uint64_t v = 0x0123456789abcdefull;
         unsigned char vb[8];
         for (size_t i = 0; i < 8; ++i) {
@@ -229,6 +283,18 @@ int main(int argc, char** argv) {
         check(same, "the folded-multiply hasher is qore_keyed_fold64() with the fold keys");
         check(keyed, "the folded-multiply hash depends on the key");
         check(unrelated, "the folded-multiply hash has no fixed pairs of values with the same hash");
+        // the factors that are computed once give the hashes of the per-call computation
+        check(fk[2] == (fk[1] ^ 0x9e3779b97f4a7c15ull) && fk[3] == ((fk[0] ^ 0xd6e8feb86659fd93ull) | 1),
+            "the precomputed factors of the folded-multiply hash");
+        bool unchanged = true;
+        for (uint64_t i = 0; i < 4096; ++i) {
+            uint64_t u = i * 0x9e3779b97f4a7c15ull + (i << 40) - 7;
+            if (fh(u) != static_cast<size_t>(ref_fold64(fk[0], fk[1], u))
+                    || qore_keyed_fold64(fk[0], fk[1], u) != ref_fold64(fk[0], fk[1], u)) {
+                unchanged = false;
+            }
+        }
+        check(unchanged, "the folded-multiply hasher gives the hashes of the per-call computation");
         qore_keyed_fold_int_map<int64_t, int> fm;
         for (int64_t i = 0; i < 1000; ++i) {
             fm[i * 4096] = static_cast<int>(i);
