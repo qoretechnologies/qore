@@ -2128,6 +2128,12 @@
     \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
     (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
 
+    @par The Immediate Caller of Library Code
+    @ref Qore::SandboxManager::getImmediateCaller() and @ref Qore::SandboxManager::isImmediateCallerModule() tell
+    library code which code called it immediately (module code that serves its caller, or a callback of restricted
+    code), so that it hands a capability only to code of a given module; see @ref sandbox_immediate_caller
+    (<a href="https://github.com/qoretechnologies/qore/issues/7302">issue 7302</a>).
+
     @par The Tenant of an Object's Class
     Library code can identify the sandboxed %Program whose code declares the class of an object, to mark what such an
     object produces, such as the messages that a data provider subclass writes to the host's process-wide logger:

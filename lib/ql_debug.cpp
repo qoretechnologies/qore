@@ -17369,6 +17369,76 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     of the Program that compiled the code and the override that records it), and as the options of a callback install
     it (a hold and the override)
 */
+//! the immediate caller of library code counts code compiled in a restricted or sandboxed Program that runs in
+//! another Program (a foreign code entry, which enters no Program context) as restricted, in the frame that it runs
+//! in, also when the override that it set was cleared by the host code that it called (qore#7302 with qore#7202)
+static void ut_immediate_caller_foreign_code(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
+        return parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po)
+            : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po);
+    };
+    QoreProgram* host = make_pgm(QoreParseOptions());
+    QoreProgram* tenant = make_pgm(QoreParseOptions());
+    QoreProgram* restricted = make_pgm(QoreParseOptions(PO_NO_FILESYSTEM));
+    // the library code that asks for its immediate caller
+    QoreProgram* lib = new QoreProgram(QoreParseOptions(PO_IN_MODULE));
+    qore_program_private::get(*lib)->module_program.store(true, std::memory_order_release);
+    qore_program_private::get(*lib)->library_module = true;
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    tenant->setSandboxManager(sm);
+    auto foreign_override = [](const QoreProgram* code_pgm) -> QoreCallParseOptionsOverride {
+        QoreCallParseOptionsOverride o;
+        o.code_pgm = code_pgm;
+        return o;
+    };
+    // the immediate caller of the library code entered now
+    auto ask = [&xsink, lib](QoreImmediateCallerInfo& info) -> int {
+        ProgramThreadCountContextHelper lib_ctx(&xsink, lib, true);
+        return qore_get_immediate_caller(info);
+    };
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "immediate caller: the host is entered");
+        QoreImmediateCallerInfo info;
+        UT_ASSERT(c, !ask(info) && info.pgm == host && !info.restricted && info.trusted_frame >= 0,
+            "immediate caller: the host's own code is trusted");
+        for (QoreProgram* code_pgm : {tenant, restricted}) {
+            const char* what = code_pgm == tenant ? "sandboxed" : "restricted";
+            {
+                // the code compiled in the other Program runs in the host, as a call of a user variant runs it
+                ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+                UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(code_pgm, &xsink), "immediate caller: held");
+                RuntimeParseOptionsOverrideHelper po(foreign_override(code_pgm));
+                QoreImmediateCallerInfo in_foreign;
+                UT_ASSERT(c, !ask(in_foreign) && in_foreign.restricted && in_foreign.trusted_frame < 0,
+                    (std::string("immediate caller: the foreign code itself is restricted: ") + what).c_str());
+                {
+                    // host code that the foreign code calls clears the override; the foreign code stays below it
+                    RuntimeParseOptionsOverrideHelper cleared;
+                    cleared.setCleared();
+                    QoreImmediateCallerInfo below;
+                    std::string msg = std::string("immediate caller: the frame that runs the foreign code is "
+                        "restricted: ") + what;
+                    UT_ASSERT(c, !ask(below) && below.pgm == host && below.restricted && below.trusted_frame < 0,
+                        msg.c_str());
+                }
+            }
+            QoreImmediateCallerInfo after;
+            UT_ASSERT(c, !ask(after) && !after.restricted && after.trusted_frame >= 0,
+                (std::string("immediate caller: trusted again once the foreign code has been left: ") + what).c_str());
+        }
+    }
+    UT_ASSERT(c, !xsink, "immediate caller: no exception");
+    xsink.clear();
+    sm->deref(nullptr);
+    lib->waitForTerminationAndDeref(&xsink);
+    restricted->waitForTerminationAndDeref(&xsink);
+    tenant->waitForTerminationAndDeref(&xsink);
+    host->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
 static void ut_foreign_code_counts_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
     ExceptionSink xsink;
     auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
@@ -30612,6 +30682,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_immediate_caller_foreign_code(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
@@ -31536,6 +31607,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_immediate_caller_foreign_code(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());

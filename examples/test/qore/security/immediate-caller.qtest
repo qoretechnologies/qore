@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation of calls into module Programs, closures and call references
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class ImmediateCallerTest
+
+#! The immediate caller of library code (SandboxManager::getImmediateCaller(), qore#7302)
+/** Library code can tell the code that called it immediately (host code, restricted code, another module, which it
+    names) from the code that it serves: the module's own nested functions and methods are skipped, a closure of
+    restricted code that module code calls is restricted code, a call reference that restricted code created makes
+    the code reached through it restricted, and so do a listener and a logger appender of restricted code that
+    library code calls back.  The checks are in immediate-caller/immediate-caller-worker.q, which is run in each
+    execution mode and on the IR tier, with the modules compiled to AOT modules, and as a program compiled with qcc;
+    the modules in immediate-caller/lib are library code (a trusted module directory).
+*/
+class ImmediateCallerTest inherits QUnit::Test {
+    public {
+        #! the cases of the worker, in the order it runs them
+        const HostCases = (
+            "host", "host-frames", "nested", "method", "other-module", "other-module-program", "other-module-frame",
+            "other-module-trusted-frame", "is-module-other", "is-module-other-name", "is-module-host", "called-back",
+            "path-module", "is-module-path", "init", "module-thread", "grant-host-object",
+            "grant-host-object-reentry", "grant-not-taken-after-window",
+        );
+
+        #! the cases of the worker for each restricted tenant
+        const TenantCases = (
+            "direct", "is-module", "via-other", "via-other-run", "is-module-via", "closure-called-by-module",
+            "closure-called-by-module-own", "closure-called-by-host", "closure-via-other", "closure-via-other-run",
+            "ref-called-by-module", "ref-called-by-module-own", "ref-called-by-host", "ref-is-module",
+            "ref-via-other", "ref-via-other-run", "object-called-by-module", "object-called-by-host",
+            "object-called-by-host-run", "object-reentry-host", "object-reentry-own", "grant-object",
+            "grant-object-reentry", "listener-count", "listener", "appender-count", "appender",
+        );
+
+        #! the cases of the worker for the unrestricted tenant
+        const UnrestrictedCases = ("unrestricted-direct", "unrestricted-closure", "unrestricted-ref");
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = get_script_dir() + DirSep + "immediate-caller";
+    }
+
+    constructor() : QUnit::Test("ImmediateCallerTest", "1.0", \ARGV) {
+        addTestCase("each execution mode", \testModes());
+        addTestCase("AOT modules", \testAotModules());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker
+    private static string expected() {
+        list<string> cases = HostCases;
+        foreach string t in (("restricted", "sandboxed")) {
+            cases += map t + "-" + $1, TenantCases;
+        }
+        cases += UnrestrictedCases;
+        return (map $1 + "=ok\n", cases).join("");
+    }
+
+    #! the environment of a run, with \a lib as a trusted module directory
+    private string makePrefix(string lib) {
+        return "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR="
+            + quote(libdir) + " QORE_MODULE_DIR=" + quote(lib) + ":$QORE_MODULE_DIR ";
+    }
+
+    testModes() {
+        string prefix = makePrefix(dir + DirSep + "lib");
+        string worker = quote(dir + DirSep + "immediate-caller-worker.q");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the tenant Programs run in the same execution mode
+            assertEq(expected(), ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + worker + " " + mode, ExecModeHarness::NativeCheck::None), mode);
+        }
+        assertEq(expected(), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + worker + " ir"), ExecModeHarness::IRTierName);
+    }
+
+    #! the modules compiled with qcc -m: their code, which asks, runs as native code of their own Programs
+    testAotModules() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-immediate-caller-");
+        copy_file(dir + DirSep + "ImmPath.qm", tmp.path + DirSep + "ImmPath.qm");
+        copy_file(dir + DirSep + "immediate-caller-worker.q", tmp.path + DirSep + "immediate-caller-worker.q");
+        string lib = tmp.path + DirSep + "lib";
+        mkdir(lib);
+        foreach string f in (("ImmAsk.qm", "ImmOther.qm", "ImmInit.qm")) {
+            copy_file(dir + DirSep + "lib" + DirSep + f, lib + DirSep + f);
+        }
+        string prefix = makePrefix(lib);
+        foreach list<string> m in ((lib, "ImmAsk"), (lib, "ImmOther"), (lib, "ImmInit"), (tmp.path, "ImmPath")) {
+            ExecModeHarness::run_any(sprintf("cd %s && %s%s -m -o %s.qmod %s.qm", quote(m[0]), prefix,
+                quote(qcc_bin), m[1], m[1]));
+            assertTrue(is_file(m[0] + DirSep + m[1] + ".qmod"), m[1] + ".qmod was compiled");
+        }
+        string worker = quote(tmp.path + DirSep + "immediate-caller-worker.q");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + worker + " " + mode, ExecModeHarness::NativeCheck::None), "AOT modules, " + mode);
+        }
+    }
+
+    #! the worker compiled with qcc
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        string prefix = makePrefix(dir + DirSep + "lib");
+        TmpDir tmp("qore-immediate-caller-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "immediate-caller" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " "
+                + quote(dir + DirSep + "immediate-caller-worker.q"));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected(), ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

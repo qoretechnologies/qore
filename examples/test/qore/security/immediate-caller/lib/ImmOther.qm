@@ -1,0 +1,83 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of immediate-caller.qtest: library code (a trusted module directory) that calls ImmAsk (qore#7302)
+
+%modern
+
+%requires Logger
+%requires HttpClientIo
+%requires ImmAsk
+
+module ImmOther {
+    version = "1.0";
+    desc = "immediate caller probe: another module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ImmOther {
+#! returns the immediate caller of ImmAsk::ask() when this module code calls it
+public *hash<ImmediateCallerInfo> sub ask_via() {
+    return ImmAsk::ask();
+}
+
+#! returns ImmAsk::is_module() when this module code calls it
+public bool sub is_module_via(string name) {
+    return ImmAsk::is_module(name);
+}
+
+#! module code that calls the code that it is given
+public auto sub call(code c) {
+    return c();
+}
+
+#! module code that calls ImmAsk, which calls this module back, which calls ImmAsk::ask()
+public *hash<ImmediateCallerInfo> sub ask_back() {
+    return ImmAsk::call(\ImmOther::ask_via());
+}
+
+#! an object whose method calls ImmAsk::ask()
+public class Thing {
+    public *hash<ImmediateCallerInfo> ask() {
+        return ImmAsk::ask();
+    }
+
+    #! module code that calls this object's ask() again (a re-entry of the object through module code)
+    public *hash<ImmediateCallerInfo> outer() {
+        return ImmOther::call_method(self);
+    }
+
+    #! returns True if a client created here would take the proof that is granted
+    public bool take(HttpClientIo::HttpClientCreatorProof p, string url) {
+        return HttpClientIo::HttpClientCreatorProof::forClient(url) === p;
+    }
+
+    #! module code that grants the proof and calls this object's take() again
+    public bool outer_take(HttpClientIo::HttpClientCreatorProof p, string url) {
+        return ImmOther::window(p, self, url);
+    }
+}
+
+#! grants a proof to the next client of its target, as a connection object's get() does, and calls the object's
+#! take() in the window of the grant
+public bool sub window(HttpClientIo::HttpClientCreatorProof p, Thing t, string url) {
+    HttpClientIo::HttpClientCreatorProofGrant g = p.grantNext();
+    return t.take(p, url);
+}
+
+#! returns a proof of the calling code for the given target
+public HttpClientIo::HttpClientCreatorProof sub proof(string url) {
+    return HttpClientIo::HttpClientCreatorProof::get(url);
+}
+
+#! module code that calls a method of an object that it is given
+public *hash<ImmediateCallerInfo> sub call_method(Thing t) {
+    return t.ask();
+}
+
+#! module code that logs an event with the logger that it is given
+public sub log_with(Logger logger) {
+    logger.info("event");
+}
+}

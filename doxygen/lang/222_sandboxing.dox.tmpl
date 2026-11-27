@@ -1363,6 +1363,42 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_immediate_caller The Immediate Caller of Library Code
+
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and
+    @ref Qore::SandboxManager::getCallerProgramId() "SandboxManager::getCallerProgramId()" answer for the nearest
+    %Program on the stack that is not a module's: they cannot tell module code that serves that %Program from the
+    %Program's own code that the module code called back (a callback, a logger appender or an event listener that the
+    caller supplied).  Library code that hands something to code of a given module only asks for its immediate caller
+    instead: @ref Qore::SandboxManager::getImmediateCaller() "SandboxManager::getImmediateCaller()" returns the code of
+    the nearest frame below it whose %Program is another one (its %Program ID, the name of its module and whether it is
+    library code, whether it is restricted, and the number of its frame and of the outermost frame of the unbroken run
+    of trusted code that ends with it), and
+    @ref Qore::SandboxManager::isImmediateCallerModule() "SandboxManager::isImmediateCallerModule()" tells whether it
+    is the unrestricted code of a given library module:
+    - the frames are the calls between the code of different %Programs, which every execution mode records, also for
+      AOT-compiled modules; the asking module's own nested calls are not frames
+    - a closure runs in the %Program that compiled it, so a closure of restricted code that module code calls is
+      restricted code; a call reference or closure that restricted or sandboxed code created (also one of library
+      code) makes the code reached through it restricted, so that a callback that restricted code chose is never
+      taken for the module code that called it; an object runs its class's code, but an object that code restricted
+      from the file system, the network or external information created makes the code that calls its methods
+      restricted as well, each time it calls one of them (also when the object's own code is on the stack below); an
+      object of code that only a sandbox governs (without such a restriction) does not, as the objects that a lent
+      method creates for a sandboxed borrower have the borrower's sandbox too; this leaves the grant of a lent
+      connection unaffected, as the connection grants its proof only to a borrower restricted from the network
+    - the provenance of a call reference or object counts for the code that calls it: library code that restricted code
+      reaches through a call reference is still that library's code (as when restricted code calls it directly), but
+      the run of trusted code ends at the code that called the reference
+    - the caller is unknown, which counts as restricted code, at the start of a thread, in the initialization of
+      library code below the module that is initialized, in a trusted build and at the start of work that the thread
+      runs for other code
+
+    It reveals only what is on the current thread's call stack.  The grant of a lent connection's proof (see
+    @ref sandbox_lent_connections) uses it.
+
+    @since %Qore 3.0
+
     @subsection sandbox_lent_connections Connections That the Host Lends
 
     A connection object that the host creates and gives to restricted code is the host's: the code that it was lent
@@ -1380,7 +1416,14 @@ authenticate();
     @ref ConnectionProvider::AbstractConnection::getPollImpl() "getPollImpl()" raise \c PERMISSION-DENIED for it,
     and it uses the connection's async client where that is bound.  A connection that restricted code looks up by
     name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
-    are refused to it.
+    are refused to it.  The connection grants its proof to the next client of its target created in the thread while
+    it creates its client, and only trusted code that the connection's code called itself takes it (see
+    @ref sandbox_immediate_caller): restricted code that runs meanwhile (a callback, a logger appender or a listener
+    that the restricted code supplied), a client that such code creates, also through library code, and a call
+    reference that restricted code created take nothing, and the grant stays for the connection's own client.  The
+    clients that a lent connection creates from a private copy of itself (see below) take it as its own; a copy that
+    restricted code makes of a lent connection has no proof, so its clients are that code's own and are refused, while
+    a copy that the host makes keeps it.
 
     The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
     Memcached, MLLP, MongoDB, Connect, file and datasource connections, and the poll operations of WebSocket and

@@ -36,6 +36,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QC_SandboxManager.h"
 #include "qore/intern/CallReferenceNode.h"
 
 #include <atomic>
@@ -605,6 +606,41 @@ hashdecl SandboxConfigInfo {
         @since %Qore 3.0
     */
     int enforcement_level;
+}
+
+//! The code that made the call immediately before the running code (see SandboxManager::getImmediateCaller())
+/** @since %Qore 3.0
+*/
+hashdecl ImmediateCallerInfo {
+    //! the ID of the %Program whose code is the immediate caller
+    /** For code compiled in another %Program than the one that it runs in, the %Program that compiled it
+    */
+    int program_id;
+    //! the name of the module whose code is the immediate caller, if it is the code of a registered user module
+    *string module;
+    //! @ref True "True" if the immediate caller is the code of a library module (from a trusted module directory)
+    bool library;
+    //! @ref True "True" if the immediate caller is restricted code
+    /** The code of a %Program that is not a module's and has a restriction or a sandbox, of code compiled in such a
+        %Program, or of a module that is not library code (loaded by its path) whose %Program has one; or any code if,
+        while it or the running code ran, a closure or call reference that restricted or sandboxed code created was
+        called, or a method of an object that code restricted from the file system, the network or external
+        information created (an object of code that only a sandbox governs does not count)
+    */
+    bool restricted;
+    //! the number of the immediate caller's frame
+    /** Frames are counted from the start of the thread, one for each call between the code of different %Programs:
+        the number stays the same while the frame is on the stack
+    */
+    int frame;
+    //! the outermost frame of the run of trusted code that ends with the immediate caller
+    /** @ref nothing if the immediate caller is restricted.  Trusted code is the code of library modules and of
+        %Programs that have no restriction and no sandbox; the run ends below a frame of other code, below a frame in
+        which a closure or call reference that restricted or sandboxed code created (or a method of an object that code
+        restricted from a domain that a host grant lends created) was called, and where the caller is not known (see
+        SandboxManager::getImmediateCaller())
+    */
+    *int trusted_frame;
 }
 
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
@@ -3099,6 +3135,116 @@ prov.setLogger(logger);
 */
 static nothing SandboxManager::transferObjectToCaller(object obj) {
     qore_transfer_object_to_caller(*obj, xsink);
+}
+
+//! Returns the code that made the call immediately before the running code
+/** The running code is the code that calls this method; its immediate caller is the code of the nearest frame below
+    it on the thread's call stack whose %Program is another one.  For library module code that asks, this is the code
+    that called into the module: the module's own functions and methods that called one another to reach the running
+    code are not frames.  Unlike getCallerProgramId() and
+    isCallerRestricted(), which answer for the nearest %Program that is not a module's, it tells module code that
+    serves the caller (also other library module code, which it names) from the code of the caller itself, such as a
+    callback, a logger appender or an event listener that the caller supplied and that the module code called.
+
+    A closure runs in the %Program that compiled it and a call reference runs the code of its target, so the closure of
+    restricted code that module code calls is the immediate caller of the library code that the closure calls, as
+    restricted code.  In addition, the immediate caller is restricted if a closure or call reference that restricted
+    or sandboxed code created (also one of library module code that restricted code created) was called while the
+    immediate caller's code or the running code ran: library code reached through a callback that restricted code
+    chose is never called by the module code that called the callback.  An object runs its class's code: a method of a
+    library module's class is that module's code, but calling a method of an object that code restricted from the
+    file system, the network or external information created (domains that a host grant lends, so such an object was
+    created outside any grant) makes the calling code restricted as well.  The provenance of a reference or object
+    counts for the code that calls it, not for the code that it reaches: library code that restricted code reaches
+    through a call reference is that library's code, as when restricted code calls it directly
+    (isImmediateCallerModule() returns @ref True for it), while the run of trusted code (\c trusted_frame) ends at the
+    code that called the reference.
+
+    The frames are the calls between the code of different %Programs, which every execution mode records, also for
+    the code of AOT-compiled modules; calls within a %Program are not frames, so the method costs the calls nothing.
+    The immediate caller is unknown, and the method returns @ref nothing, where the walk reaches the start of the
+    thread, the initialization of library code or a trusted build (whose caller is never known, see
+    getCallerProgramId()), or the start of work that the thread runs for other code (a thread pool task, for example),
+    before it finds another %Program's code.  An unknown immediate caller must be treated as restricted code.
+
+    It reveals only what is on the current thread's call stack, so it is not restricted itself.
+
+    @return the immediate caller, or @ref nothing if it is unknown
+
+    @par Example:
+    @code{.py}
+# a capability handed to the next client created in this thread is taken only by code that the trusted code that
+# granted it called itself, never by a callback of restricted code that runs meanwhile
+*hash<ImmediateCallerInfo> caller = SandboxManager::getImmediateCaller();
+if (caller && !caller.restricted && caller.trusted_frame <= grant_frame) {
+    take(grant);
+}
+    @endcode
+
+    @see isImmediateCallerModule()
+
+    @since %Qore 3.0
+*/
+static *hash<ImmediateCallerInfo> SandboxManager::getImmediateCaller() [flags=RET_VALUE_ONLY] {
+    QoreImmediateCallerInfo info;
+    if (qore_get_immediate_caller(info)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclImmediateCallerInfo, xsink), xsink);
+    h->setKeyValue("program_id", static_cast<int64>(info.pgm_id), xsink);
+    if (info.module_name) {
+        h->setKeyValue("module", new QoreStringNode(*info.module_name), xsink);
+    }
+    h->setKeyValue("library", info.library_module, xsink);
+    h->setKeyValue("restricted", info.restricted, xsink);
+    h->setKeyValue("frame", info.frame, xsink);
+    if (info.trusted_frame >= 0) {
+        h->setKeyValue("trusted_frame", info.trusted_frame, xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
+}
+
+//! Returns @ref True if the immediate caller of the running code is the unrestricted code of the given library module
+/** See getImmediateCaller() for the immediate caller.  Library code uses it to hand a capability only to the code of
+    a given module: it returns @ref True only if the immediate caller is known, is the code of the library module
+    (a module loaded from a trusted module directory) registered with the given name, and is not restricted (see
+    @ref ImmediateCallerInfo::restricted "ImmediateCallerInfo::restricted": its code did not call a closure or call
+    reference of restricted code, or a method of an object of code restricted from a lent domain, for the running
+    code).  The code that called the module's code is not considered: the module's code that restricted code
+    reaches, directly or through a call reference that it created, is the module's code (getImmediateCaller() tells
+    with \c trusted_frame whether the module's code was reached from trusted code only).
+
+    It reveals only what is on the current thread's call stack, so it is not restricted itself.
+
+    @param module the name of the module
+
+    @return @ref True if the immediate caller is the unrestricted code of the library module \a module
+
+    @par Example:
+    @code{.py}
+# only the code of the ConnectionProvider module may take the token
+if (!SandboxManager::isImmediateCallerModule("ConnectionProvider")) {
+    throw "PERMISSION-DENIED", "the token is handed only to the ConnectionProvider module";
+}
+    @endcode
+
+    @see getImmediateCaller()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isImmediateCallerModule(string module) [flags=RET_VALUE_ONLY] {
+    QoreImmediateCallerInfo info;
+    if (qore_get_immediate_caller(info) || info.restricted || !info.library_module || !info.module_name) {
+        return false;
+    }
+    TempEncodingHelper str(module, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return *info.module_name == str->c_str();
 }
 
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
