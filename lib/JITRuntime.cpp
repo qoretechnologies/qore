@@ -14772,7 +14772,7 @@ enum class QoreFunctionReferenceAdmission {
 };
 
 //! the call admitted by qore_rt_admit_function_reference()
-struct QoreFunctionReferenceCall {
+struct DLLLOCAL QoreFunctionReferenceCall {
     const LocalFunctionCallReferenceNode* ref = nullptr;
     //! the explicit Program of the call (the reference's Program), or nullptr
     QoreProgram* ref_pgm = nullptr;
