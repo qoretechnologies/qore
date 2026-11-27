@@ -15,7 +15,7 @@
 #include <set>
 
 QoreLabelEncoder::QoreLabelEncoder() {
-    QORE_KEYED_HASH_SITE("ml-5", class_to_label);
+    QORE_KEYED_HASH_SITE("ml-4", class_to_label);
 }
 
 void QoreLabelEncoder::fit(const QoreListNode* values, ExceptionSink* xsink) {

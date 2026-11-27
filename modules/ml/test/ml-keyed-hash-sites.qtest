@@ -28,7 +28,7 @@
 class MlKeyedHashSitesTest inherits QUnit::Test {
     public {
         #! the sites of the module
-        const Sites = ("ml-1", "ml-2", "ml-3", "ml-4", "ml-5");
+        const Sites = ("ml-1", "ml-2", "ml-3", "ml-4");
 
         #! the time limit of a child process
         const ChildTimeout = 120s;

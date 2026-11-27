@@ -68,7 +68,7 @@ MatrixXd QoreOneHotEncoder::transform(const MatrixXd& X, ExceptionSink* xsink) c
         int start = drop_first ? 1 : 0;
         // Build lookup map for O(1) category->column mapping
         qore_keyed_fold_int_map<int, int> cat_to_col;
-        QORE_KEYED_HASH_SITE("ml-4", cat_to_col);
+        QORE_KEYED_HASH_SITE("ml-3", cat_to_col);
         for (int c = start; c < (int)cats.size(); ++c) {
             cat_to_col[cats[c]] = col_offset + c - start;
         }
