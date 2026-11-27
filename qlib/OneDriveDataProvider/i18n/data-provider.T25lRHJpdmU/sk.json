@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
+          "source": "Get drive info",
           "message": "Získať informácie o disku"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Získať metadáta OneDrivu aktuálneho používateľa vrátane kvóty úložiska, typu disku a informácií o vlastníkovi"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "Vyhľadať položky"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Poradie zoradenia výsledkov (napr. `name asc`, `size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Získať položku"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Cesta položky relatívna ku koreňu disku (napr. `/Documents/file.txt`). Zadajte buď `id` alebo `path`"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Vytvoriť priečinok"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Zlyhať požiadavku s chybou"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Odoslať súbor"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "ID nadradeného priečinka. Ak je vynechané, súbor sa nahrá do koreňového adresára disku"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Vytvoriť reláciu nahrávania"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Zlyhať požiadavku s chybou"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Jedinečný identifikátor súboru na stiahnutie"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Odstrániť položku"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Jedinečný identifikátor položky na odstránenie"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aktualizovať položku"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -868,7 +868,7 @@
           "message": "ID cieľového priečinka, do ktorého sa má položka presunúť. Nastavte toto pole, ak chcete položku presunúť do iného priečinka"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
+          "source": "Copy item",
           "message": "Kopírovať položku"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Zlyhať požiadavku s chybou"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Vytvoriť odkaz na zdieľanie"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Dátum a čas vypršania platnosti odkazu na zdieľanie"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Zmenený súbor alebo priečinok"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

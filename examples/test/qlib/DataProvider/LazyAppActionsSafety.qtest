@@ -141,11 +141,11 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a lazy registration that sandboxed code makes is refused", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
-        addTestCase("a sandboxed thread loading a module is refused a lazy value that is not built",
+        addTestCase("a sandboxed thread loading a module builds a lazy value that is not built",
             \sandboxedValueLoadTest());
         addTestCase("lazy values whose builders need each other end with an error instead of a deadlock",
             \valueCycleTest());
-        addTestCase("lazy values are registered by modules; a module that sandboxed code loads builds them at once",
+        addTestCase("lazy values are registered by modules; a module that sandboxed code loads builds them on first use",
             \valueRegistrationTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
         addTestCase("no worker runs until a sandboxed reader needs one, and the process ends with it", \exitTest());
@@ -308,10 +308,11 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         tenant.parse("int sub run(code cap, string app, int value) { return cap(app, value); }\n", "barrier-tenant");
         tenant.setSandboxManager(sm);
         int reader_tid = tenant.callFunction("run", cap, app, Values::thread);
-        # the registration and the value ran on a worker, not on the tenant's thread
+        # the registration ran on a worker, not on the tenant's thread; the value was built on the tenant's thread,
+        # as trusted code (qore#7712)
         int closure_tid = tids.get(0);
         assertTrue(closure_tid != reader_tid, "the registration did not run on the tenant's thread");
-        assertTrue(Values::built_in != reader_tid, "the value was not built on the tenant's thread");
+        assertEq(reader_tid, Values::built_in, "the value was built on the tenant's thread");
         assertEq(("eager-a", "lazy-b"), map $1.action, DataProviderActionCatalog::getActions(app, False));
         # what the registration created belongs to no sandbox
         sm.requestInterrupt();
@@ -730,7 +731,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             "sandboxed-value");
         sandboxed.setSandboxManager(new SandboxManager());
         assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \sandboxed.callFunction(), ("reg",));
-        # a module that sandboxed code loads: its value is built while it is loaded
+        # a module that sandboxed code loads: its value is private, and built on its first use (qore#7712)
         Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         loader.parse("sub load(string path) { load_module(path); }\n"
             "auto sub get(string m) { return call_static_method(\"LazyAppActionsGovernedValues::GovernedValues\", m); }\n",
@@ -741,8 +742,10 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         # a module that sandboxed code chose is not given to trusted code
         assertThrows("LOAD-MODULE-ERROR", "loaded from outside the module path by code that a sandbox governs",
             \load_module(), (path,));
-        assertEq(1, loader.callFunction("get", "getRuns"));
+        assertEq(0, loader.callFunction("get", "getRuns"));
         int id = loader.callFunction("get", "getId");
+        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        assertEq(1, loader.callFunction("get", "getRuns"));
         assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
         assertEq(1, loader.callFunction("get", "getRuns"));
     }
@@ -754,8 +757,9 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         background LazyAppActionsSafetyTest::getValue(Values::cycle_a, done, results);
         background LazyAppActionsSafetyTest::getValue(Values::cycle_b, done, results);
         assertEq(0, done.waitForZero(Deadline), "neither thread waits for ever");
-        assertEq(("DATA-PROVIDER-LAZY-VALUE-ERROR", "DATA-PROVIDER-LAZY-VALUE-ERROR"),
-            (results.get(), results.get()));
+        # the thread that closes the cycle of waits gets SHARED-INIT-CYCLE; the other one then builds both values,
+        # and the builder that needs its own value, through the other one, raises SHARED-INIT-ERROR (qore#7712)
+        assertEq(("SHARED-INIT-CYCLE", "SHARED-INIT-ERROR"), sort((results.get(), results.get())));
     }
 
     sandboxedValueLoadTest() {
@@ -768,9 +772,9 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
                 result = ex.err;
             }
         });
-        # refused instead of waiting for the worker, which could be loading the same module
-        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
-        assertEq(0, Values::runs);
+        # built on the thread loading the module, as trusted code, with no wait for a worker (qore#7712)
+        assertEq("counted", result);
+        assertEq(1, Values::runs);
         assertEq("counted", DataProviderActionCatalog::getLazyValue(Values::counted));
         assertEq(1, Values::runs);
     }
@@ -973,7 +977,7 @@ string sub test() {
         \"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", \"groups\": (AppGroup::DataTransformation,),
         \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\", \"dynamic\": True});
     DataProviderActionCatalog::registerLazyAppActions(\"RestrictedApp\", sub () { reg(\"RestrictedApp\", \"lazy-a\"); });
-    # the module's lazy value was built when the module was loaded
+    # the module's lazy value is built on its first use (qore#7712)
     return sprintf(\"%y %y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
         DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"),
         LazyAppActionsGovernedValues::GovernedValues::runs,
@@ -999,7 +1003,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
             output));
         string out = ReadOnlyFile::readTextFile(output);
         assertEq(0, rc, out);
-        assertLines(("[\"lazy-a\"] False 1 \"governed\"",), out);
+        assertLines(("[\"lazy-a\"] False 0 \"governed\"",), out);
     }
 
     governedNowTest() {

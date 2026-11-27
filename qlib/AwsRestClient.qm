@@ -2334,7 +2334,7 @@ public class AwsSignedEventStream {
     #! Returns the negotiated transport protocol
     /** @return the protocol identifier, for example <tt>h2</tt> */
     string getProtocol() {
-        return stream.getConnection().getProtocol();
+        return stream.getConnectionView().getProtocol();
     }
 
     #! Cancels the stream and wakes any blocked reader; safe to call repeatedly

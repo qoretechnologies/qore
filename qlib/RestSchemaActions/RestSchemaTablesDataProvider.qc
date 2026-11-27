@@ -346,7 +346,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         if (ids.search_records.val()) {
             DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>(base + {
                 "action": ids.search_records,
-                "display_name": "Search Records",
+                "display_name": "Search records",
                 "short_desc": "Search for matching records in the given table",
                 "desc": "Returns every record in the given table matching the search criteria",
                 "action_code": DPAT_FIND,
@@ -355,7 +355,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         if (ids.search_single_record.val()) {
             DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>(base + {
                 "action": ids.search_single_record,
-                "display_name": "Find a Single Record",
+                "display_name": "Find a single record",
                 "short_desc": "Search for a single matching record in the given table",
                 "desc": "Returns the one record in the given table matching the search criteria; it is an "
                     "error if more than one matches",
@@ -365,7 +365,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         if (ids.create_records.val() && dpinfo.supports_create) {
             DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>(base + {
                 "action": ids.create_records,
-                "display_name": "Create Records",
+                "display_name": "Create records",
                 "short_desc": "Create new records in the given table",
                 "desc": "Creates new records in the given table",
                 "action_code": DPAT_CREATE,
@@ -374,7 +374,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         if (ids.update_records.val() && dpinfo.supports_update) {
             DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>(base + {
                 "action": ids.update_records,
-                "display_name": "Update Records",
+                "display_name": "Update records",
                 "short_desc": "Update the records matching the search criteria",
                 "desc": "Updates every record in the given table matching the search criteria",
                 "action_code": DPAT_UPDATE,
@@ -383,7 +383,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         if (ids.delete_records.val() && dpinfo.supports_delete) {
             DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>(base + {
                 "action": ids.delete_records,
-                "display_name": "Delete Records",
+                "display_name": "Delete records",
                 "short_desc": "Delete the records matching the search criteria",
                 "desc": "Deletes every record in the given table matching the search criteria",
                 "action_code": DPAT_DELETE,

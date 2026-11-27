@@ -22,7 +22,7 @@ public class BflGenerateImageRequestDataType inherits HashDataType {
         addQoreFields(Fields);
         getFields().model.setAllowedValues(map <AllowedValueInfo>{"value": $1,
             "display_name": regex_subst(regex_subst(BflApi::Operations{
-                BflApi::actionForPath(ImageModelPathMap{$1})}[2], "^Start ", ""), " Image$", "")}, keys ImageModelPathMap);
+                BflApi::actionForPath(ImageModelPathMap{$1})}[2], "^Start ", ""), " image$", "")}, keys ImageModelPathMap);
         hash<string, bool> added = {"prompt": True, "model": True};
         foreach string model in (keys ImageModelPathMap) {
             foreach AbstractDataField field in (BflApi::getActionSet().getOperationEx(

@@ -16,7 +16,7 @@
           "message": "Acceso al sistema de archivos del servidor"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Copiar archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
@@ -64,7 +64,7 @@
           "message": "¿Deben sobrescribirse los archivos de destino existentes?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
+          "source": "Follow symlinks",
           "message": "Seguir enlaces simbólicos"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "¿Deben seguirse los enlaces simbólicos?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
+          "source": "Create file",
           "message": "Crear archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "El modo para el nuevo archivo (por defecto `0664`)"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Eliminar archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
@@ -148,7 +148,7 @@
           "message": "La ruta del archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Obtener archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
@@ -196,7 +196,7 @@
           "message": "La codificación de cadenas que se usará si `text` = `True` (por defecto: `UTF-8`)"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Errores de codificación"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -208,7 +208,7 @@
           "message": "Lo que produce el texto que no es válido en su codificación de caracteres si `text` = `True`: `raise` (el valor predeterminado) genera un error `INVALID-ENCODING`, `latin1` devuelve el texto como `ISO-8859-1`, y `keep` lo devuelve en la codificación sin comprobación"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
+          "source": "Max len",
           "message": "Longitud máxima"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
@@ -220,7 +220,7 @@
           "message": "La longitud máxima de los datos devueltos en bytes"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Listar archivos"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
@@ -244,7 +244,7 @@
           "message": "La ruta del archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
+          "source": "Create directory",
           "message": "Crear directorio"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
@@ -280,7 +280,7 @@
           "message": "El modo para el nuevo archivo (predeterminado `0775`)"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Mover archivo"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
@@ -328,7 +328,7 @@
           "message": "¿Deben sobrescribirse los archivos de destino existentes?"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
+          "source": "Get info",
           "message": "Obtener información"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {

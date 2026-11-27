@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# operand-read-snapshot.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The value that an operand of an operator read is the value that the operator uses, also when a later operand of the
+# same operator changes the variable that the value came from in place, in every execution mode: the temporaries of a
+# statement live to its end (qoretechnologies/qore#7085), and the change copies the value first
+# (qoretechnologies/qore#7722)
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class OperandReadSnapshotTest
+
+our list<int> g_list;
+
+#! a class whose constructor takes an argument, for a declaration that constructs its value in an operand
+class ArgTaker {
+    constructor(auto x) {
+    }
+}
+
+class OperandReadSnapshotTest inherits QUnit::Test {
+    constructor() : QUnit::Test("OperandReadSnapshot", "1.0") {
+        addTestCase("comparison operators", \testComparison());
+        addTestCase("the plus operator", \testPlus());
+        addTestCase("push in a later operand", \testPush());
+        addTestCase("a global variable", \testGlobal());
+        addTestCase("numbers", \testNumber());
+        addTestCase("a change nested in a call or a list", \testNested());
+        addTestCase("other change operators", \testOtherChanges());
+        addTestCase("other operators", \testOtherOperators());
+        addTestCase("a later operand without an effect", \testNoEffect());
+        set_return_value(main());
+    }
+
+    #! returns a list that the variable it is assigned to holds alone (a list built at run time)
+    private static list<int> ownList(list<int> l) {
+        list<int> rv = ();
+        foreach int i in (l) {
+            push rv, i;
+        }
+        return rv;
+    }
+
+    testComparison() {
+        list<int> a = ownList((1, 2));
+        # the left operand is the list before the change, the right one the list after it
+        assertFalse(a == (a += 3), "list ==");
+        assertEq((1, 2, 3), a);
+        a = ownList((1, 2));
+        assertTrue(a != (a += 3), "list !=");
+
+        hash<auto> h = {"a": 1};
+        h.b = 2;
+        assertFalse(h == (h += {"c": 3}), "hash ==");
+        assertEq(3, h.size());
+
+        string s = sprintf("%s", "ab");
+        assertFalse(s == (s += "c"), "string ==");
+        assertEq("abc", s);
+        s = sprintf("%s", "ab");
+        assertTrue(s < (s += "c"), "string <");
+
+        binary b = binary(sprintf("%s", "ab"));
+        assertFalse(b == (b += <00>), "binary ==");
+        assertEq(3, b.size());
+
+        # the case of the issue: the variable holds a list of its own from the second iteration on
+        list<auto> l = ();
+        for (int i = 0; i < 5; ++i) {
+            assertFalse(l == (l += i), sprintf("iteration %d", i));
+        }
+    }
+
+    testPlus() {
+        list<int> a = ownList((1, 2));
+        assertEq((1, 2, 1, 2, 3), a + (a += 3), "list +");
+        string s = sprintf("%s", "ab");
+        assertEq("ababx", s + (s += "x"), "string +");
+        hash<auto> h = {"a": 1};
+        h.b = 2;
+        assertEq({"a": 1, "b": 2, "c": 3}, h + (h += {"c": 3}), "hash +");
+    }
+
+    testPush() {
+        list<int> a = ownList((1, 2));
+        assertFalse(a == (push a, 3), "push");
+        assertEq((1, 2, 3), a);
+    }
+
+    testGlobal() {
+        g_list = ownList((1, 2));
+        assertFalse(g_list == (g_list += 3), "global list ==");
+        assertEq((1, 2, 3), g_list);
+    }
+
+    testNoEffect() {
+        list<int> a = ownList((1, 2));
+        assertTrue(a == a, "the same value");
+        assertTrue(a == (1, 2), "an equal literal");
+        assertEq((1, 2, 1, 2), a + a);
+    }
+
+    testNumber() {
+        number n = 1.5n + 1n;
+        assertFalse(n == (n += 1n), "number +=");
+        assertEq(3.5n, n);
+        n = 1.5n + 1n;
+        assertTrue(n < ++n, "number ++");
+    }
+
+    testNested() {
+        list<int> a = ownList((3, 1));
+        # a change nested in the argument of a function that has no effect itself
+        assertEq((3, 1, 1, 2, 3), a + sort(a += 2), "in a call");
+        a = ownList((1, 2));
+        # a change nested in an element of a list, which is the list as it is after the change
+        assertEq((1, 2, 0, (1, 2, 3)), a + (0, a += 3), "in a list");
+        string s = sprintf("%s", "ab");
+        assertEq("abab x", s + trim(s += " x "), "in a call of a string function");
+        # a change in the argument of a declaration that constructs its value
+        a = ownList((1, 2));
+        list<auto> r = a + (ArgTaker c(a += 3));
+        assertEq(3, r.size(), "in a declaration that constructs its value");
+        assertEq((1, 2), r[0..1]);
+    }
+
+    testOtherChanges() {
+        list<int> a = ownList((1, 2, 3));
+        assertFalse(a == (splice a, 0, 1), "splice");
+        a = ownList((1, 2, 3));
+        # extract returns the elements that it removes
+        assertEq((1, 2, 3, 1), a + (extract a, 0, 1), "extract");
+        a = ownList((1, 2));
+        assertFalse(a == (unshift a, 0), "unshift");
+        string s = sprintf("%s\n", "ab");
+        # chomp returns the number of characters that it removes
+        assertEq("ab\n1", s + (chomp s), "chomp");
+        s = sprintf("%s", " ab ");
+        assertFalse(s == (trim s), "trim");
+    }
+
+    testOtherOperators() {
+        string s = sprintf("%s", "ab");
+        assertEq(-1, s <=> (s += "c"), "<=>");
+        list<int> a = ownList((1, 2));
+        assertFalse(a === (a += 3), "===");
+        number n = 1.5n + 1n;
+        assertEq(-1n, n - (n += 1n), "number -");
+        n = 1.5n + 1n;
+        assertEq(8.75n, n * (n += 1n), "number *");
+    }
+}

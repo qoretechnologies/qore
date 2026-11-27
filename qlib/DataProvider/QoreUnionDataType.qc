@@ -110,6 +110,10 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         if (types.size() < 2) {
             throw "TYPE-ERROR", sprintf("union types require at least two alternatives; got %y", types);
         }
+        # the alternatives of a frozen union are shared as well (qore#7728)
+        if (frozen) {
+            map freezeHeld($1), types;
+        }
         self.types = types;
         name = (map $1.getName(), types).join("|");
         return self;
@@ -481,6 +485,11 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
             return self;
         }
         return copyUnion(map $1.getMandatoryType(), types);
+    }
+
+    #! Returns the alternatives; see AbstractDataProviderType::getHeld()
+    private *list<object> getHeld() {
+        return types;
     }
 
     #! Marks the types that the type holds as shared; see AbstractDataProviderType::freeze()

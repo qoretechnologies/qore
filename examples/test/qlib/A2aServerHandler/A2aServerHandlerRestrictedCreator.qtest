@@ -58,6 +58,7 @@ class A2aServerHandlerRestrictedCreatorTest inherits QUnit::Test {
     constructor() : Test("A2aServerHandlerRestrictedCreatorTest", "1.0") {
         addTestCase("restricted code constructs a handler; push needs the host's manager", \restrictedTest());
         addTestCase("unrestricted code creates the push manager when a config is registered", \unrestrictedTest());
+        addTestCase("a handler of sandboxed code gets the dispatch keys of the request", \dispatchKeysTest());
         set_return_value(main());
     }
 
@@ -120,6 +121,43 @@ class A2aServerHandlerRestrictedCreatorTest inherits QUnit::Test {
             assertEq(1, webhook.requests.size(), "the handler's own manager delivers");
             assertEq(task.id, webhook.requests[0].body.id);
         });
+    }
+
+    #! The methods of a handler that sandboxed code constructs get the request without its credentials, with the
+    #! handler's dispatch keys (qore#7724)
+    /** The A2A version of the request header (\c a2a_version) selects the protocol of the response: a v1.0 request
+        with a v0.3 method name is answered in v1.0, as by a handler of trusted code
+    */
+    dispatchKeysTest() {
+        string trusted = sendV10(new A2aServerHandler(new Logger("trusted", LoggerLevel::getLevelInfo()), AgentCard));
+        assertEq("TASK_STATE_WORKING", trusted, "trusted code: a v1.0 response");
+        foreach hash<auto> mode in (Modes.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            # the default sandbox does not trust its code
+            p.setSandboxManager(new SandboxManager());
+            p.setExecMode(mode.value);
+            p.parse("%modern\n%requires Logger\n%requires A2aServerHandler\n"
+                "auto sub make(hash<auto> card) { return new A2aServerHandler::A2aServerHandler("
+                "new Logger::Logger(\"sandboxed\", Logger::LoggerLevel::getLevelInfo()), card); }", "sandboxed");
+            assertEq(trusted, sendV10(p.callFunction("make", AgentCard)), mode.key + ": sandboxed code");
+        }
+    }
+
+    #! sends a v1.0 message with a v0.3 method name and the A2A-Version header; returns the state of the task
+    private string sendV10(A2aServerHandler handler) {
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("http", LoggerLevel::getLevelInfo())});
+        on_exit http.stop();
+        http.setDefaultHandler("a2a", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        HTTPClient hc({"url": sprintf("http://localhost:%d", port)});
+        string body = make_json({"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": {
+            "message": {"messageId": "m1", "role": "ROLE_USER", "parts": ({"text": "hi"},)},
+        }});
+        hash<auto> rv = parse_json(hc.post("/", body, {"Content-Type": MimeTypeJson, A2aVersionHeader: A2aVersionV10}));
+        if (rv.error) {
+            return sprintf("error: %y", rv.error);
+        }
+        return rv.result.status.state;
     }
 
     #! serves the handler and a webhook for the call

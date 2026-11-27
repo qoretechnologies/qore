@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoStepPollInfoReleaseTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! records the messages that the controller logs
+class QueueLogger inherits LoggerInterfaceBase {
+    public {
+        Queue messages();
+    }
+
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        messages.push(vsprintf(message, format_args));
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+
+#! a socket object whose destructor raises an exception
+class ThrowingSocket inherits Socket {
+    destructor() {
+        throw "STEP-POLL-INFO-DESTRUCTOR", "raised while the previous poll info of an operation is released";
+    }
+}
+
+#! A poll operation whose first step waits for a socket object that only its poll info holds
+/** The second step waits for data on the real socket, and the third completes the operation
+*/
+class SwitchSocketOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of continuePoll() calls
+        int calls = 0;
+
+        #! gets True when the operation waits for data on the real socket
+        Queue waiting();
+    }
+
+    private {
+        Socket sock;
+        bool done;
+    }
+
+    constructor(Socket sock) {
+        self.sock = sock;
+    }
+
+    string getGoal() {
+        return "data";
+    }
+
+    string getState() {
+        return done ? "data" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        ++calls;
+        if (calls == 1) {
+            return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": new ThrowingSocket()};
+        }
+        if (calls > 2) {
+            done = True;
+            return;
+        }
+        waiting.push(True);
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": sock};
+    }
+
+    auto getOutput() {
+    }
+
+    abort() {
+    }
+}
+
+#! A poll operation that waits for a socket object that was deleted
+class DeletedSocketOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of continuePoll() calls
+        int calls = 0;
+    }
+
+    string getGoal() {
+        return "data";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        ++calls;
+        Socket s();
+        hash<SocketPollInfo> rv = <SocketPollInfo>{"events": SOCK_POLLIN, "socket": s};
+        delete s;
+        return rv;
+    }
+
+    auto getOutput() {
+    }
+
+    abort() {
+    }
+}
+
+#! The async I/O thread waits for the poll info that a step returns, whatever releasing the previous one does
+/** When a step returned an operation's next poll info, the I/O thread released the previous one itself, which ran the
+    destructors of the objects that only it held on the I/O thread; an exception that one raised kept the I/O thread
+    from waiting for the new poll info, so the operation was not run again when its socket became ready, but timed
+    out (or waited forever without a timeout).  The previous poll info is released off the I/O thread, as the other
+    references that the controller drops, and an exception that a command of the I/O thread leaves pending does not
+    affect the commands after it (qoretechnologies/qore#7713)
+*/
+class AsyncIoStepPollInfoReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AsyncIoStepPollInfoRelease", "1.0") {
+        addTestCase("the release of the previous poll info raises an exception", \throwingReleaseTest());
+        addTestCase("a step waits for a deleted socket object", \deletedSocketTest());
+        set_return_value(main());
+    }
+
+    throwingReleaseTest() {
+        QueueLogger logger();
+        AsyncIoController::setLogger(logger);
+        on_exit AsyncIoController::setLogger();
+
+        hash<auto> pair = makeConnection();
+        on_exit {
+            pair.client.close();
+            pair.server.close();
+        }
+        SwitchSocketOperation op(pair.client);
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": pair.client,
+            "spop": op,
+            "owner": "asyncio-step-poll-info-release-test",
+            "key": "switch",
+            "to": HangGuard,
+        });
+        assertTrue(op.waiting.get(HangGuard), "the operation waits for data on its socket");
+        pair.server.send("x", HangGuard);
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertNothing(result.ex, "the operation completed when its socket became ready");
+        assertEq(3, op.calls, "the operation ran again when its socket became ready");
+
+        # the exception of the destructor is logged by the worker thread that released the previous poll info
+        string msg;
+        while (True) {
+            msg = logger.messages.get(HangGuard);
+            if (msg =~ /STEP-POLL-INFO-DESTRUCTOR/) {
+                break;
+            }
+        }
+        assertRegex("release cleanup", msg, "the previous poll info was released off the I/O thread");
+    }
+
+    deletedSocketTest() {
+        hash<auto> pair = makeConnection();
+        on_exit {
+            pair.client.close();
+            pair.server.close();
+        }
+        DeletedSocketOperation op();
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": pair.client,
+            "spop": op,
+            "owner": "asyncio-step-poll-info-release-test",
+            "to": HangGuard,
+        });
+        assertEq("OBJECT-ALREADY-DELETED", result.ex.err, "the operation ends with the error of its poll info");
+        assertEq(1, op.calls, "the operation ran once");
+    }
+
+    #! Returns a connected socket pair: {"client": Socket, "server": Socket}
+    private hash<auto> makeConnection() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, HangGuard);
+        Socket server = listener.accept(HangGuard);
+        return {"client": client, "server": server};
+    }
+}

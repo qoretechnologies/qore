@@ -1542,10 +1542,6 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
-        //! the stream's acknowledged bytes when its body last made progress, and the time of it on the monotonic
-        //! clock in ms, for the no-progress bound of the body (qore#7280)
-        int64_t bound_acked = -1;
-        int64_t bound_progress_ms = 0;
         //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
         bool is_regular_file = false;
 
@@ -1591,9 +1587,31 @@ public:
         @param window_ms the window of the minimum rate in milliseconds
         @param stall_ms the time in milliseconds after which a body that the client acknowledges nothing of is ended
 
-        The bounds of a connection are set once, with its first such body; later calls are ignored.
+        @param listener_default true for the default of the listener that the session was accepted on: it applies
+        only until the bounds are set by a call without it (qore#7653)
+
+        The bounds of a connection are set once, with its first such body; later calls are ignored, except that a
+        call without \a listener_default replaces a listener's default.  Without bounds, the minimum rate is set by
+        the first checkStreamSendRate() of a send of a handler thread.
     */
-    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms,
+        bool listener_default = false);
+
+    //! Checks the connection's minimum rate for a send on a handler thread that waits for the client (qore#7280)
+    /** The connection's rate is measured across all its streams while one of them waits for the client, the bodies
+        that the I/O thread pumps and the sends of handler threads alike; called on the I/O thread
+
+        @param stream_id the stream of the send
+        @param waiting true while the send waits for the client; false once it is done, which ends its wait
+        @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet
+        @param window_ms the window of the minimum rate in milliseconds, if the connection's rate is not set yet
+        @param verdict set to true if this call found the connection below the rate, which ends the other waiting
+        bodies as well
+
+        @return true if the connection was found below the minimum rate while the send waited: the send must end
+    */
+    DLLLOCAL bool checkStreamSendRate(int64_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict);
 
     //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
     DLLLOCAL int getInputStreamPollTimeoutMs() const;
@@ -2293,14 +2311,77 @@ private:
     SendRateWindow pump_send_rate_;
     //! the no-progress bound of a pumped body in milliseconds
     int64_t pump_stall_ms_ = 30 * 60 * 1000;
-    //! true once the bounds of the pumped bodies have been set
+    //! true once the bounds of the response bodies have been set
     bool pump_bound_set_ = false;
+    //! true once the minimum rate of the connection has been set by a send of a handler thread, without bounds
+    bool pump_rate_set_ = false;
+    //! the streams whose sends on handler threads wait for the client, which the connection's minimum rate covers
+    std::unordered_set<int64_t> send_rate_waiters_;
+    //! the streams whose sends on handler threads waited when the connection was found below its minimum rate, and
+    //! which have not been told yet
+    std::unordered_set<int64_t> send_rate_ended_;
+    //! true if the bounds were set by a call that is not a listener's default (qore#7653)
+    bool pump_bound_explicit_ = false;
 
-    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
+    //! A response body that the bounds charge to its client until the client has acknowledged it (qore#7653)
+    struct BoundBody {
+        //! the size of a buffered body, whose acknowledged bytes are counted in acked; 0 for a pumped body, whose
+        //! acknowledged bytes are those of its streaming_body_data_ entry
+        uint64_t buffered_size = 0;
+        uint64_t acked = 0;
+        //! the body's acknowledged bytes when it last made progress, and the time of it on the monotonic clock in ms
+        //! (0: not seen waiting yet)
+        int64_t bound_acked = -1;
+        int64_t bound_progress_ms = 0;
+    };
+    //! the response bodies charged to their clients by stream ID, registered while the bounds are set; a body is
+    //! removed when its client has acknowledged all its data, when its stream is cancelled or closes, and when a bound
+    //! ends it (qore#7653)
+    std::unordered_map<int64_t, BoundBody> bound_bodies_;
+
+    //! Registers a response body for the bounds if they are set; \a buffered_size is 0 for a pumped body (qore#7653)
+    DLLLOCAL void addBoundBody(int64_t stream_id, uint64_t buffered_size);
+    //! Removes a body from the bounds (qore#7653)
+    DLLLOCAL void eraseBoundBody(int64_t stream_id);
+    //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under mtx_
+    DLLLOCAL void updateActiveInputStreams();
+    //! Returns the bytes of a bounded body that its client has acknowledged
+    DLLLOCAL uint64_t getBoundBodyAcked(int64_t stream_id, const BoundBody& b) const;
+
+    //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
     DLLLOCAL void checkInputStreamSendBound();
 
-    //! Returns true if a pumped body has data that its client has not acknowledged
-    DLLLOCAL bool isInputStreamWaiting(int64_t stream_id) const;
+    //! Sets the minimum rate of the connection if it has no bounds; the caller holds the lock
+    DLLLOCAL void setSendRateUnlocked(int64_t min_rate, int64_t window_ms);
+
+    //! Returns true if a send of a handler thread other than @p except, or a bounded body, waits for the client
+    DLLLOCAL bool isConnectionWaitingUnlocked(int64_t except) const;
+
+    //! Updates the connection's minimum rate; the caller holds the lock
+    /** When the connection is below the rate while a body waits, every waiting bounded body is added to @p ended,
+        for the caller to end, every waiting send of a handler thread is recorded in send_rate_ended_, and a new
+        measurement starts
+
+        @param now_ms the time of the update
+        @param ended the bounded bodies that a verdict ends; bodies already in it are not added again
+        @param leaving a waiting send that ends its wait with this update, or -1: the time until now is charged as
+        waiting time for it, and the time from now on only if another body waits
+
+        @return true if the connection was found below the rate
+    */
+    DLLLOCAL bool updateSendRateUnlocked(int64_t now_ms, std::vector<int64_t>& ended, int64_t leaving = -1);
+
+    //! Ends the bounded bodies that a bound ended: their sources stop, and their streams are cancelled
+    DLLLOCAL void endBoundBodiesUnlocked(const std::vector<int64_t>& ended);
+
+    //! Ends the wait of a send of a handler thread whose stream closes; the caller holds the lock
+    /** The state of the connection's measurement is recorded without a verdict (which is not reached inside an
+        ngtcp2 callback): the low credit of a connection that was below the rate is found by the next check
+    */
+    DLLLOCAL void endSendRateWaitUnlocked(int64_t stream_id);
+
+    //! Returns true if a bounded body has data that its client has not acknowledged (qore#7653)
+    DLLLOCAL bool isBoundBodyWaiting(int64_t stream_id, const BoundBody& b) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};

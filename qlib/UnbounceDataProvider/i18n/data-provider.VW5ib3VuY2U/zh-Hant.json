@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "列出帳戶"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -416,7 +416,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "取得帳戶"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "帳戶 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
-          "source": "List Sub-Accounts",
+          "source": "List sub-accounts",
           "message": "列出子帳戶"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
@@ -520,7 +520,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
-          "source": "Get a Sub-Account",
+          "source": "Get a sub-account",
           "message": "取得子帳戶"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
@@ -540,7 +540,7 @@
           "message": "子帳戶 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "列出網域"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
@@ -624,7 +624,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
-          "source": "Get a Domain",
+          "source": "Get a domain",
           "message": "取得網域"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
@@ -644,7 +644,7 @@
           "message": "網域 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
-          "source": "List Page Groups",
+          "source": "List page groups",
           "message": "列出頁面群組"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "列出頁面"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
@@ -828,7 +828,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
-          "source": "Get a Page",
+          "source": "Get a page",
           "message": "取得頁面"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
@@ -848,7 +848,7 @@
           "message": "頁面 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
-          "source": "List Form Fields",
+          "source": "List form fields",
           "message": "列出表單欄位"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "列出潛在客戶"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
@@ -968,7 +968,7 @@
           "message": "結果偏移量"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "取得潛在客戶"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -988,7 +988,7 @@
           "message": "潛在客戶 ID"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "建立潛在客戶"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "要與此潛在客戶關聯的訪客 ID"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "刪除潛在客戶"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "要刪除的潛在客戶之唯一識別碼"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Get Lead Deletion Request",
+          "source": "Get lead deletion request",
           "message": "取得潛在客戶刪除請求"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1148,7 +1148,7 @@
           "message": "刪除請求 ID"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Create Lead Deletion Request",
+          "source": "Create lead deletion request",
           "message": "建立潛在客戶刪除請求"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "刪除在此日期或之前建立的潛在客戶"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "取得使用者"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "使用者 ID（若為目前使用者請保留空白）"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
-          "source": "Watch New Leads",
+          "source": "Watch new leads",
           "message": "監看新潛在客戶"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {

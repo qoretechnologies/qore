@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
-          "source": "Create Client",
+          "source": "Create client",
           "message": "Crea cliente"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
@@ -468,7 +468,7 @@
           "message": "Paese"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
-          "source": "Update Client",
+          "source": "Update client",
           "message": "Aggiorna cliente"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
@@ -588,7 +588,7 @@
           "message": "Paese"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
-          "source": "Search Clients",
+          "source": "Search clients",
           "message": "Cerca clienti"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Numero massimo di risultati da restituire (max 100)"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
-          "source": "Get Client",
+          "source": "Get client",
           "message": "Ottieni cliente"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
@@ -688,7 +688,7 @@
           "message": "L'ID del cliente"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
-          "source": "Delete Client",
+          "source": "Delete client",
           "message": "Elimina cliente"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Il cliente da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
-          "source": "Create Service",
+          "source": "Create service",
           "message": "Crea servizio"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Indica se questo servizio è fatturabile ai clienti"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
-          "source": "Update Service",
+          "source": "Update service",
           "message": "Aggiorna servizio"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
@@ -816,7 +816,7 @@
           "message": "Indica se il servizio è fatturabile"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
-          "source": "Search Services",
+          "source": "Search services",
           "message": "Cerca servizi"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
-          "source": "Get Service",
+          "source": "Get service",
           "message": "Ottieni servizio"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
@@ -888,7 +888,7 @@
           "message": "L'ID del servizio"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
-          "source": "Delete Service",
+          "source": "Delete service",
           "message": "Elimina servizio"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Il servizio da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Crea preventivo"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Numero ordine di acquisto"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
-          "source": "Search Estimates",
+          "source": "Search estimates",
           "message": "Cerca preventivi"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Ottieni preventivo"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "L'ID del preventivo"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Aggiorna preventivo"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Numero ordine di acquisto"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Elimina preventivo"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "Il preventivo da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Crea spesa"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Percentuale imposta"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Aggiorna spesa"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Percentuale imposta"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Elimina spesa"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "La spesa da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Ottieni spesa"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "L'ID della spesa"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
-          "source": "Search Expenses",
+          "source": "Search expenses",
           "message": "Cerca spese"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Crea fattura"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Numero ordine di acquisto"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aggiorna fattura"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "Numero ordine di acquisto"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Cerca fatture"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Recupera fattura"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "L'ID fattura"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Elimina fattura"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "La fattura da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Crea articolo"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Imposta 2 predefinita"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aggiorna elemento"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "Imposta 2 predefinita"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "Cerca articoli"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Ottieni articolo"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "L'ID dell'articolo"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Elimina elemento"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -2232,7 +2232,7 @@
           "message": "L'elemento da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Crea pagamento"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "Nota di pagamento"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Aggiorna pagamento"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "Nota di pagamento"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Elimina pagamento"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Il pagamento da eliminare"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
-          "source": "Search Payments",
+          "source": "Search payments",
           "message": "Cerca pagamenti"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Ottieni pagamento"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "L'ID del pagamento"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nuova fattura"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nuovo pagamento"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
-          "source": "New Client",
+          "source": "New client",
           "message": "Nuovo cliente"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
@@ -2652,7 +2652,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Nuova spesa"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Nuovo preventivo"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {

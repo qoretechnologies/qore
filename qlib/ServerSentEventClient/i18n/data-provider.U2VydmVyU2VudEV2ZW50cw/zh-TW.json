@@ -16,7 +16,7 @@
           "message": "接收伺服器發送事件 (SSE)"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
-          "source": "Server Sent Event (SSE) Message",
+          "source": "Server sent event (SSE) message",
           "message": "伺服器發送事件 (SSE) 訊息"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {

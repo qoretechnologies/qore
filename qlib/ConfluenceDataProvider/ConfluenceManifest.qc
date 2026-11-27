@@ -257,7 +257,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/pages",
                 "operation_id": "getPages",
-                "display_name": "List Pages",
+                "display_name": "List pages",
                 "short_desc": "List the pages on the site",
                 "desc": "Lists pages across the whole site.\n\n"
                     "`space-id` restricts the listing to particular spaces, `status` selects drafts or "
@@ -281,7 +281,7 @@ public class ConfluenceManifest {
                 "method": "POST",
                 "path": "/pages",
                 "operation_id": "createPage",
-                "display_name": "Create Page",
+                "display_name": "Create page",
                 "short_desc": "Create a page in a space",
                 "desc": "Creates a page.\n\n"
                     "`spaceId` is required. Without `parentId` the page is created at the top level of "
@@ -306,7 +306,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/pages/{id}",
                 "operation_id": "getPageById",
-                "display_name": "Get Page",
+                "display_name": "Get page",
                 "short_desc": "Retrieve one page",
                 "desc": "Retrieves a page.\n\n"
                     "Set `body-format` to get the content - `storage` for the XHTML storage format - and "
@@ -323,7 +323,7 @@ public class ConfluenceManifest {
                 "method": "PUT",
                 "path": "/pages/{id}",
                 "operation_id": "updatePage",
-                "display_name": "Update Page",
+                "display_name": "Update page",
                 "short_desc": "Update a page's title, body, parent or status",
                 "desc": "Updates a page.\n\n"
                     "This is a **read-modify-write**: `version.number` must be one greater than the "
@@ -349,7 +349,7 @@ public class ConfluenceManifest {
                 "method": "PUT",
                 "path": "/pages/{id}/title",
                 "operation_id": "updatePageTitle",
-                "display_name": "Rename Page",
+                "display_name": "Rename page",
                 "short_desc": "Change only a page's title",
                 "desc": "Changes a page's title without touching its body.\n\n"
                     "This exists because **Update Page** requires the body as well, so renaming a page "
@@ -372,7 +372,7 @@ public class ConfluenceManifest {
                 "method": "DELETE",
                 "path": "/pages/{id}",
                 "operation_id": "deletePage",
-                "display_name": "Delete Page",
+                "display_name": "Delete page",
                 "short_desc": "Move a page to the trash, or purge it",
                 "desc": "Deletes a page.\n\n"
                     "By default the page goes to the space's trash and can be restored. `purge` removes "
@@ -388,7 +388,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/spaces/{id}/pages",
                 "operation_id": "getPagesInSpace",
-                "display_name": "List Pages in Space",
+                "display_name": "List pages in space",
                 "short_desc": "List the pages in one space",
                 "desc": "Lists the pages in a space.",
                 "groups": (GroupPages,),
@@ -402,7 +402,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/labels/{id}/pages",
                 "operation_id": "getLabelPages",
-                "display_name": "List Pages for Label",
+                "display_name": "List pages for label",
                 "short_desc": "List the pages carrying one label",
                 "desc": "Lists the pages a label is applied to.",
                 "groups": (GroupPages,),
@@ -419,7 +419,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/blogposts",
                 "operation_id": "getBlogPosts",
-                "display_name": "List Blog Posts",
+                "display_name": "List blog posts",
                 "short_desc": "List the blog posts on the site",
                 "desc": "Lists blog posts across the whole site, with the same filters as **List Pages**.",
                 "groups": (GroupBlogPosts,),
@@ -439,7 +439,7 @@ public class ConfluenceManifest {
                 "method": "POST",
                 "path": "/blogposts",
                 "operation_id": "createBlogPost",
-                "display_name": "Create Blog Post",
+                "display_name": "Create blog post",
                 "short_desc": "Create a blog post in a space",
                 "desc": "Creates a blog post. `spaceId` is required; a blog post has no parent.",
                 "groups": (GroupBlogPosts,),
@@ -458,7 +458,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/blogposts/{id}",
                 "operation_id": "getBlogPostById",
-                "display_name": "Get Blog Post",
+                "display_name": "Get blog post",
                 "short_desc": "Retrieve one blog post",
                 "desc": "Retrieves a blog post. As with a page, the body and the `include-*` extras are "
                     "returned only when asked for.",
@@ -473,7 +473,7 @@ public class ConfluenceManifest {
                 "method": "PUT",
                 "path": "/blogposts/{id}",
                 "operation_id": "updateBlogPost",
-                "display_name": "Update Blog Post",
+                "display_name": "Update blog post",
                 "short_desc": "Update a blog post's title, body or status",
                 "desc": "Updates a blog post.\n\n"
                     "As with a page this is a read-modify-write: `version.number` must be one greater "
@@ -494,7 +494,7 @@ public class ConfluenceManifest {
                 "method": "DELETE",
                 "path": "/blogposts/{id}",
                 "operation_id": "deleteBlogPost",
-                "display_name": "Delete Blog Post",
+                "display_name": "Delete blog post",
                 "short_desc": "Move a blog post to the trash, or purge it",
                 "desc": "Deletes a blog post. As with a page, it goes to the trash unless `purge` is set.",
                 "groups": (GroupBlogPosts,),
@@ -508,7 +508,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/spaces/{id}/blogposts",
                 "operation_id": "getBlogPostsInSpace",
-                "display_name": "List Blog Posts in Space",
+                "display_name": "List blog posts in space",
                 "short_desc": "List the blog posts in one space",
                 "desc": "Lists the blog posts in a space.",
                 "groups": (GroupBlogPosts,),
@@ -522,7 +522,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/labels/{id}/blogposts",
                 "operation_id": "getLabelBlogPosts",
-                "display_name": "List Blog Posts for Label",
+                "display_name": "List blog posts for label",
                 "short_desc": "List the blog posts carrying one label",
                 "desc": "Lists the blog posts a label is applied to.",
                 "groups": (GroupBlogPosts,),
@@ -539,7 +539,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/spaces",
                 "operation_id": "getSpaces",
-                "display_name": "List Spaces",
+                "display_name": "List spaces",
                 "short_desc": "List the spaces on the site",
                 "desc": "Lists spaces.\n\n"
                     "`type` separates a personal space from a global one, and `status` selects archived "
@@ -553,7 +553,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/spaces/{id}",
                 "operation_id": "getSpaceById",
-                "display_name": "Get Space",
+                "display_name": "Get space",
                 "short_desc": "Retrieve one space",
                 "desc": "Retrieves a space with its key, name, type and homepage.",
                 "groups": (GroupSpaces,),
@@ -569,7 +569,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/tasks",
                 "operation_id": "getTasks",
-                "display_name": "List Tasks",
+                "display_name": "List tasks",
                 "short_desc": "List the tasks on the site",
                 "desc": "Lists tasks - the checkboxes inside pages and blog posts.\n\n"
                     "`status` selects complete or incomplete ones, and the various `*-id` filters restrict "
@@ -583,7 +583,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/tasks/{id}",
                 "operation_id": "getTaskById",
-                "display_name": "Get Task",
+                "display_name": "Get task",
                 "short_desc": "Retrieve one task",
                 "desc": "Retrieves a task with its status, body and the content it lives in.",
                 "groups": (GroupTasks,),
@@ -602,7 +602,7 @@ public class ConfluenceManifest {
                 "method": "PUT",
                 "path": "/tasks/{id}",
                 "operation_id": "updateTask",
-                "display_name": "Update Task",
+                "display_name": "Update task",
                 "short_desc": "Complete or reopen a task",
                 "desc": "Updates a task, which in practice means marking it `complete` or `incomplete`.\n\n"
                     "Unlike a page, a task carries no version, so there is no read-modify-write here.",
@@ -630,7 +630,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/labels",
                 "operation_id": "getLabels",
-                "display_name": "List Labels",
+                "display_name": "List labels",
                 "short_desc": "List the labels on the site",
                 "desc": "Lists labels.\n\n"
                     "This is what backs the label dropdowns on the label listings; the application this "
@@ -645,7 +645,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/attachments",
                 "operation_id": "getAttachments",
-                "display_name": "List Attachments",
+                "display_name": "List attachments",
                 "short_desc": "List the attachments on the site",
                 "desc": "Lists attachments, with the content each is attached to and its media type.\n\n"
                     "This is exported so that the **New Attachment** event has something to read: the "

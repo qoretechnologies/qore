@@ -16,7 +16,7 @@
           "message": "存取伺服器檔案系統"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "複製檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
@@ -64,7 +64,7 @@
           "message": "是否應覆寫現有的目標檔案？"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
+          "source": "Follow symlinks",
           "message": "追蹤符號連結"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "是否應追蹤符號連結？"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
+          "source": "Create file",
           "message": "建立檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "新檔案的模式（預設為 `0664`）"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "刪除檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
@@ -148,7 +148,7 @@
           "message": "檔案路徑"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "取得檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
@@ -196,7 +196,7 @@
           "message": "若 `text` = `True` 時要使用的字串編碼（預設值：`UTF-8`）"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "編碼錯誤"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -208,7 +208,7 @@
           "message": "當 `text` = `True` 時，在其字元編碼中無效的文字的處理方式：`raise`（預設值）會引發 `INVALID-ENCODING` 錯誤，`latin1` 會將文字以 `ISO-8859-1` 傳回，`keep` 則不經檢查而以該編碼傳回"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
+          "source": "Max len",
           "message": "最大長度"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
@@ -220,7 +220,7 @@
           "message": "返回資料的最大長度（位元組）"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "列出檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
@@ -244,7 +244,7 @@
           "message": "檔案路徑"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
+          "source": "Create directory",
           "message": "建立目錄"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
@@ -280,7 +280,7 @@
           "message": "新檔案的模式（預設值為 `0775`）"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "移動檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
@@ -328,7 +328,7 @@
           "message": "是否應覆寫現有的目標檔案？"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
+          "source": "Get info",
           "message": "取得資訊"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {

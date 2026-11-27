@@ -55,6 +55,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSerializable.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -1068,6 +1069,49 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
         "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
+    return -1;
+}
+
+int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // the copy methods of the object's own class must run: a copy with the copy method of a base class (with
+    // Reflection) would skip the copy() methods of the subclasses, which reset what they guard
+    bool own_class = &copy_cls == qore_class_private::get(*theclass);
+    if (own_class && copy_cls.hasUserCopyMethod()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: copy of class '%s'\n", theclass->getName());
+    }
+    if (!own_class) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s' with the copy method of class '%s': the object is shared by every Program of "
+            "the process", theclass->getName(), copy_cls.name.c_str());
+    } else {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is "
+            "shared by every Program of the process", copy_cls.name.c_str());
+    }
+    return -1;
+}
+
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: serialize an object of class '%s'\n",
+            theclass->getName());
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "serialize an object of class '%s': the object is shared by every Program of the process",
+        theclass->getName());
     return -1;
 }
 
@@ -2634,7 +2678,8 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     if (!sml)
         return;
 
-    for (class_list_t::const_iterator i = sml->begin(), e = sml->end(); i != e; ++i) {
+    BCSMList::View v = sml->view();
+    for (BCSMList::const_iterator i = v.begin(), e = v.end(); i != e; ++i) {
         //printd(5, "qore_object_private::addVirtualPrivateData() this: %p i: %p '%s' key: %d virt: %s\n", this,
         //  i->first, i->first->getName(), i->first->getID(), i->second ? "true" : "false");
         if (i->second)
@@ -2908,15 +2953,32 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             return;
         }
 
-        // the deletion's reference is taken before the object is marked, under its lock, so that no other dereference
-        // finds it being destroyed before: references that remained when this dereference decided to collect the
-        // object can be released from now on; a reference that another thread has taken since the decision (through
-        // a weak reference: a call, or a value read from one) keeps the object: the deletion is abandoned, and that
-        // thread's last release decides again, so that a call that holds a reference never runs while the object is
-        // destroyed (qore#7509)
+        // the deletion's reference is taken in the critical section that marks the object, under its lock, so that no
+        // other dereference finds it being destroyed before: references that remained when this dereference decided
+        // to collect the object can be released from now on; a reference that another thread has taken since the
+        // decision (through a weak reference: a call, or a value read from one) keeps the object: the deletion is
+        // abandoned, and that thread's last release decides again, so that a call that holds a reference never runs
+        // while the object is destroyed (qore#7509)
+        //
+        // The object is marked before the reference is taken, and the marking is undone if the deletion is abandoned:
+        // the compare-and-swap that takes the reference releases the marking, and the increment of a thread that takes
+        // a reference after it acquires it (customRefIntern()), so that thread sees the object being destroyed when it
+        // reads the status, and a method call that it makes is refused (startCall(), checkFastCallEntry(), qore#7509);
+        // with the marking after the reference, it could read the status in between and enter the object while it is
+        // destroyed.  The marking is made and undone with the object's lock held exclusively, so the code that reads
+        // the status with the lock (or the rsection) held never sees one undone.  Code that reads it without the lock
+        // and acts on a marking reads it again with the lock (startCallSlow(), refClosureSelfForBackground(),
+        // QoreObject::isCurrent()); the collection's checks of the other objects of a set read it without, which
+        // defers their decision, as an object being destroyed does, and the reference that made this deletion abandon
+        // decides again when it is released
+        in_destructor = true;
+        // mark status as in destructor
+        status = getDestroyingStatus();
         bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases)
             : !takeLastDeleteReference();
         if (abandoned) [[unlikely]] {
+            status = OS_OK;
+            in_destructor = false;
             recursive_ref_found = prev_recursive_ref_found;
             sl.unlock();
             qodh.abandonDelete();
@@ -2930,10 +2992,6 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             }
             return;
         }
-
-        in_destructor = true;
-        // mark status as in destructor
-        status = q_gettid();
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -2976,15 +3034,64 @@ void qore_object_private::raiseDeletedCall(const qore_class_private* cls, const 
 
 int qore_object_private::startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
     // no lock: every method call on the object comes through here, and taking a reference needs none (see
-    // customRefIntern()); rlck never ordered this test against deletion anyway, since the status is changed
-    // under the object's rml write lock
-    if (status == OS_DELETED) {
-        raiseDeletedCall(cls, mname, xsink);
+    // customRefIntern()).  The reference is taken before the status is read: a thread that decides to delete the
+    // object marks it before it takes the deletion's reference, and abandons the deletion if a reference was taken
+    // before that (customDeref()); otherwise the increment, which acquires, reads the count that the deciding thread
+    // wrote after its marking, so the status read here is the marking or a later one (qore#7509).  One status read,
+    // as before, for an object that is not being destroyed
+    customRefIntern(true);
+    int st = status.load(std::memory_order_relaxed);
+    if (st != OS_OK) [[unlikely]] {
+        return startCallSlow(st, cls, mname, xsink);
+    }
+    return 0;
+}
+
+int qore_object_private::startCallSlow(int st, const qore_class_private* cls, const char* mname,
+        ExceptionSink* xsink) {
+    if (st != OS_DELETED) {
+        // the destructor's own calls on the object are made
+        if (st == getDestroyingStatus()) {
+            return 0;
+        }
+        // code that is not a method entered with the object (a background expression or a closure created in a
+        // method) checks the object where it uses it, as before (qore#7546)
+        if (mname && (!strcmp(mname, "background operator") || !strcmp(mname, "<anonymous closure>"))) {
+            return 0;
+        }
+        if (!refusesCallLocked()) {
+            return 0;
+        }
+    }
+    // the object has been deleted, or another thread destroys it after its last reference was released
+    customDeref(xsink, true);
+    raiseDeletedCall(cls, mname, xsink);
+    return -1;
+}
+
+bool qore_object_private::refusesCallLocked() const {
+    // read again with the object's lock held: a deletion that marks the object and abandons, because of a reference
+    // taken before its compare-and-swap (this call's, for one), undoes its marking with the lock held exclusively
+    // (customDeref()), so a marking read here is that of a deletion that goes on.  Not taken if this thread holds it
+    // for writing
+    QoreSafeVarRWReadLocker sl(rml, qore_var_rwlock_priv::get(rml)->write_tid != q_gettid());
+    int st = status.load(std::memory_order_relaxed);
+    if (st == OS_OK) {
+        return false;
+    }
+    // an explicit deletion (QoreObject::doDelete(), externalDelete()) marks the object with the deleting thread's
+    // status but does not set in_destructor: no last reference was released, and every holder of a strong reference
+    // can still call the object while its destructor runs, as before
+    return st == OS_DELETED || (in_destructor.load(std::memory_order_relaxed) && st != getDestroyingStatus());
+}
+
+int qore_object_private::checkFastCallEntrySlow(int st) {
+    if (st == OS_DELETED) {
         return -1;
     }
-
-    customRefIntern(true);
-    return 0;
+    // the calls of the thread that destroys the object are made on the fast paths, other threads' take the path of
+    // startCall(), which refuses them while the destructor runs after the last reference was released (qore#7509)
+    return st == getDestroyingStatus() ? 0 : 1;
 }
 
 int qore_object_private::checkClosureSelfValid(ExceptionSink* xsink) {
@@ -2999,6 +3106,10 @@ int qore_object_private::checkClosureSelfValid(ExceptionSink* xsink) {
 }
 
 int qore_object_private::refClosureSelfForBackground(ExceptionSink* xsink) {
+    // the object's lock is taken first (as a deletion takes it before rlck): a deletion that marks the object and
+    // abandons undoes its marking with it held exclusively (customDeref(), qore#7509), so a marking read here is that
+    // of a deletion that goes on
+    QoreSafeVarRWReadLocker sl(rml, qore_var_rwlock_priv::get(rml)->write_tid != q_gettid());
     AutoLocker al(rlck);
     if (status != OS_OK || in_destructor) {
         xsink->raiseException("BACKGROUND-CLOSURE-INVALID-CAPTURE", "background closure captured 'self' "
@@ -3039,7 +3150,7 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
         (void)pd;
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
 
     // run the destructor
@@ -3126,7 +3237,18 @@ bool QoreObject::isValid() const {
 }
 
 bool QoreObject::isCurrent() const {
-    return priv->status == OS_OK;
+    int st = priv->status.load(std::memory_order_acquire);
+    if (st == OS_OK || st == OS_DELETED) {
+        return st == OS_OK;
+    }
+    // a deletion that marks the object and abandons undoes its marking with the object's lock held exclusively
+    // (qore_object_private::customDeref(), qore#7509): the status is read again with the lock, unless this thread holds
+    // it for writing.
+    // Lock order: AsyncIoControllerPriv::registerQoreOp() calls this with its stripe's lock held, so that lock comes
+    // before the object's lock (rml): code that holds rml must never take a stripe's lock of the async I/O
+    // controller (registerQoreOp()/unregisterQoreOp()), or the two can deadlock
+    QoreSafeVarRWReadLocker sl(priv->rml, qore_var_rwlock_priv::get(priv->rml)->write_tid != q_gettid());
+    return priv->status.load(std::memory_order_relaxed) == OS_OK;
 }
 
 QoreProgram* QoreObject::getProgram() const {
@@ -3396,14 +3518,14 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
         if (priv->status == OS_DELETED)
             return;
 
-        if (priv->in_destructor || priv->status > 0) {
+        if (priv->in_destructor || priv->status != OS_OK) {
             xsink->raiseException("DOUBLE-DELETE-EXCEPTION", "destructor called from within destructor for class %s",
                 getClassName());
             return;
         }
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
     priv->doDeleteIntern(xsink);
 }
@@ -3420,9 +3542,12 @@ void qore_object_private::customRefIntern(bool real) {
     // decides to delete it, qore#7509) takes the weak reference that the dereference to zero that deletes the object
     // releases; a dereference that abandons the deletion because of this reference can release it first
     // (takeLastDeleteReference(), takeCollectDeleteReference()), which is safe, as the weak reference through which
-    // this thread reached the object keeps it allocated.  Relaxed, as for any reference count increment: the reference
-    // being copied already keeps the object alive.
-    if (!references.fetch_add(1, std::memory_order_relaxed)) {
+    // this thread reached the object keeps it allocated.  The increment acquires (an atomic increment of the same
+    // cost as a relaxed one on the platforms supported): a thread that decides to delete the object marks it before it
+    // takes the deletion's reference with a releasing compare-and-swap (customDeref()), so a reference taken after
+    // that, through a weak reference, sees the marking, and a method call made with it is refused instead of entering
+    // an object whose destructor runs (startCall(), checkFastCallEntry(), qore#7509)
+    if (!references.fetch_add(1, std::memory_order_acquire)) {
         tRef();
 #ifdef DEBUG
         ++dbg_zero_count_weak_refs;
@@ -3867,6 +3992,27 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     if (!h) {
         // object has been deleted
         return Nothing.getAsString(str, foff, xsink);
+    }
+    // the calling code is shown the members that serialization would give it: not the non-public members that a class
+    // declared by trusted code declares, unless the code is that of a class with private access to the declaring class
+    // or no sandboxed code is in the chain of its callers (qore#7146)
+    {
+        const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+        if (cls->hasSandboxSerialState() && h->size()) {
+            QoreSerializationCaller caller;
+            std::vector<std::string> hidden;
+            ConstHashIterator hi(*h);
+            while (hi.next()) {
+                bool internal = false;
+                const qore_class_private* decl = cls->sandboxSerialProtectedDecl(hi.getKey(), internal);
+                if (decl && caller.restricts(*decl, internal)) {
+                    hidden.push_back(hi.getKey());
+                }
+            }
+            for (const std::string& key : hidden) {
+                h->removeKey(key.c_str(), xsink);
+            }
+        }
     }
 
     if (foff == FMT_YAML_SHORT) {

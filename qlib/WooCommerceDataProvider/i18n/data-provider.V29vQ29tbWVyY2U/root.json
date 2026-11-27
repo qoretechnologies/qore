@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List and search orders",
@@ -648,8 +648,8 @@
           "message": "Exclude orders whose `parent_id` is in this list"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
-          "message": "Get Order"
+          "source": "Get order",
+          "message": "Get order"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get an order by ID",
@@ -672,8 +672,8 @@
           "message": "The unique identifier of the order to retrieve"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
-          "message": "Create Order"
+          "source": "Create order",
+          "message": "Create order"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -1612,8 +1612,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
-          "message": "Update Order"
+          "source": "Update order",
+          "message": "Update order"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
           "source": "Update an existing order",
@@ -2552,8 +2552,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
-          "message": "Delete Order"
+          "source": "Delete order",
+          "message": "Delete order"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.short_desc": {
           "source": "Delete an order",
@@ -2588,8 +2588,8 @@
           "message": "If `True`, permanently delete the order; otherwise move to trash"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Update Order Status",
-          "message": "Update Order Status"
+          "source": "Update order status",
+          "message": "Update order status"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.short_desc": {
           "source": "Update an order's status",
@@ -2688,8 +2688,8 @@
           "message": "Order status: trash"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Create Order Note",
-          "message": "Create Order Note"
+          "source": "Create order note",
+          "message": "Create order note"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.short_desc": {
           "source": "Add a note to an order",
@@ -2736,8 +2736,8 @@
           "message": "If `True`, the note is visible to the customer"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.display_name": {
-          "source": "List Order Notes",
-          "message": "List Order Notes"
+          "source": "List order notes",
+          "message": "List order notes"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.short_desc": {
           "source": "List notes for an order",
@@ -2784,8 +2784,8 @@
           "message": "Internal notes only"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Delete Order Note",
-          "message": "Delete Order Note"
+          "source": "Delete order note",
+          "message": "Delete order note"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.short_desc": {
           "source": "Delete a note from an order",
@@ -2832,8 +2832,8 @@
           "message": "If `True`, permanently delete the note"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
-          "message": "Create Refund"
+          "source": "Create refund",
+          "message": "Create refund"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
           "source": "Create a refund for an order",
@@ -3072,8 +3072,8 @@
           "message": "If `True`, the refund is processed through the payment gateway"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
-          "message": "List Refunds"
+          "source": "List refunds",
+          "message": "List refunds"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.short_desc": {
           "source": "List refunds for an order",
@@ -3120,8 +3120,8 @@
           "message": "Current page of the collection (starting at 1)"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List and search products",
@@ -3560,8 +3560,8 @@
           "message": "Exclude products whose `parent_id` is in this list"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a product by ID",
@@ -3584,8 +3584,8 @@
           "message": "The unique identifier of the product to retrieve"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
-          "message": "Create Product"
+          "source": "Create product",
+          "message": "Create product"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -4732,8 +4732,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -5892,8 +5892,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
-          "message": "Delete Product"
+          "source": "Delete product",
+          "message": "Delete product"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
           "source": "Delete a product",
@@ -5928,8 +5928,8 @@
           "message": "If `True`, permanently delete the product; otherwise move to trash"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.display_name": {
-          "source": "Update Stock Quantity",
-          "message": "Update Stock Quantity"
+          "source": "Update stock quantity",
+          "message": "Update stock quantity"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.short_desc": {
           "source": "Update a product's stock quantity",
@@ -5976,8 +5976,8 @@
           "message": "If `True`, stock management is enabled (defaults to `True`)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Create Variation",
-          "message": "Create Variation"
+          "source": "Create variation",
+          "message": "Create variation"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.short_desc": {
           "source": "Create a product variation",
@@ -6228,8 +6228,8 @@
           "message": "The URL of the image"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Update Variation",
-          "message": "Update Variation"
+          "source": "Update variation",
+          "message": "Update variation"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.short_desc": {
           "source": "Update a product variation",
@@ -6492,8 +6492,8 @@
           "message": "The URL of the image"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.display_name": {
-          "source": "List Variations",
-          "message": "List Variations"
+          "source": "List variations",
+          "message": "List variations"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.short_desc": {
           "source": "List variations for a product",
@@ -6552,8 +6552,8 @@
           "message": "Limit results to those matching a search string"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Create Category",
-          "message": "Create Category"
+          "source": "Create category",
+          "message": "Create category"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.short_desc": {
           "source": "Create a product category",
@@ -6672,8 +6672,8 @@
           "message": "The URL of the image"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Update Category",
-          "message": "Update Category"
+          "source": "Update category",
+          "message": "Update category"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.short_desc": {
           "source": "Update a product category",
@@ -6744,8 +6744,8 @@
           "message": "The category description"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.display_name": {
-          "source": "Delete Category",
-          "message": "Delete Category"
+          "source": "Delete category",
+          "message": "Delete category"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.short_desc": {
           "source": "Delete a product category",
@@ -6780,8 +6780,8 @@
           "message": "Required to be `True` since categories do not support trash"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Delete Variation",
-          "message": "Delete Variation"
+          "source": "Delete variation",
+          "message": "Delete variation"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.short_desc": {
           "source": "Delete a product variation",
@@ -6828,8 +6828,8 @@
           "message": "If `True`, permanently delete the variation; otherwise move to trash"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.display_name": {
-          "source": "Get Variation",
-          "message": "Get Variation"
+          "source": "Get variation",
+          "message": "Get variation"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.short_desc": {
           "source": "Get a single product variation",
@@ -6864,8 +6864,8 @@
           "message": "The unique identifier for the variation"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.display_name": {
-          "source": "List Categories",
-          "message": "List Categories"
+          "source": "List categories",
+          "message": "List categories"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.short_desc": {
           "source": "List and search product categories",
@@ -6996,8 +6996,8 @@
           "message": "Product count"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
-          "message": "Create Tag"
+          "source": "Create tag",
+          "message": "Create tag"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a product tag",
@@ -7044,8 +7044,8 @@
           "message": "The tag description"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
-          "message": "Update Tag"
+          "source": "Update tag",
+          "message": "Update tag"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.short_desc": {
           "source": "Update a product tag",
@@ -7104,8 +7104,8 @@
           "message": "The tag description"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
-          "message": "Delete Tag"
+          "source": "Delete tag",
+          "message": "Delete tag"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.short_desc": {
           "source": "Delete a product tag",
@@ -7140,8 +7140,8 @@
           "message": "Required to be `True` since tags do not support trash"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.short_desc": {
           "source": "List and search product tags",
@@ -7260,8 +7260,8 @@
           "message": "Product count"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
-          "message": "List Customers"
+          "source": "List customers",
+          "message": "List customers"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List and search customers",
@@ -7384,8 +7384,8 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a customer by ID",
@@ -7408,8 +7408,8 @@
           "message": "The unique identifier of the customer to retrieve"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -7792,8 +7792,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -8188,8 +8188,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -8236,8 +8236,8 @@
           "message": "User ID to reassign posts and links to"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.display_name": {
-          "source": "List Coupons",
-          "message": "List Coupons"
+          "source": "List coupons",
+          "message": "List coupons"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.short_desc": {
           "source": "List and search coupons",
@@ -8372,8 +8372,8 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
-          "message": "Get Coupon"
+          "source": "Get coupon",
+          "message": "Get coupon"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.short_desc": {
           "source": "Get a coupon by ID",
@@ -8396,8 +8396,8 @@
           "message": "The unique identifier of the coupon to retrieve"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
-          "message": "Create Coupon"
+          "source": "Create coupon",
+          "message": "Create coupon"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
           "source": "Create a new coupon",
@@ -8696,8 +8696,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
-          "message": "Update Coupon"
+          "source": "Update coupon",
+          "message": "Update coupon"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.short_desc": {
           "source": "Update an existing coupon",
@@ -9008,8 +9008,8 @@
           "message": "The meta value (any JSON-serializable type)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
-          "message": "Delete Coupon"
+          "source": "Delete coupon",
+          "message": "Delete coupon"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
           "source": "Delete a coupon",
@@ -9044,8 +9044,8 @@
           "message": "If `True`, permanently delete the coupon; otherwise move to trash"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
-          "message": "List Webhooks"
+          "source": "List webhooks",
+          "message": "List webhooks"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.short_desc": {
           "source": "List webhooks",
@@ -9220,8 +9220,8 @@
           "message": "Title"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
-          "message": "Create Webhook"
+          "source": "Create webhook",
+          "message": "Create webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
           "source": "Create a new webhook",
@@ -9436,8 +9436,8 @@
           "message": "Webhook status: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
-          "message": "Update Webhook"
+          "source": "Update webhook",
+          "message": "Update webhook"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",
@@ -9664,8 +9664,8 @@
           "message": "Webhook status: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
-          "message": "Delete Webhook"
+          "source": "Delete webhook",
+          "message": "Delete webhook"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
           "source": "Delete a webhook",
@@ -9700,8 +9700,8 @@
           "message": "If `True`, permanently delete the webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.display_name": {
-          "source": "Sales Report",
-          "message": "Sales Report"
+          "source": "Sales report",
+          "message": "Sales report"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.short_desc": {
           "source": "Get a sales report",
@@ -9764,8 +9764,8 @@
           "message": "This year"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.display_name": {
-          "source": "Top Sellers Report",
-          "message": "Top Sellers Report"
+          "source": "Top sellers report",
+          "message": "Top sellers report"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.short_desc": {
           "source": "Get a top sellers report",
@@ -9828,8 +9828,8 @@
           "message": "This year"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.display_name": {
-          "source": "Orders Totals",
-          "message": "Orders Totals"
+          "source": "Orders totals",
+          "message": "Orders totals"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.short_desc": {
           "source": "Get orders totals",
@@ -9840,8 +9840,8 @@
           "message": "Retrieve order count totals grouped by status from WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.display_name": {
-          "source": "Products Totals",
-          "message": "Products Totals"
+          "source": "Products totals",
+          "message": "Products totals"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.short_desc": {
           "source": "Get products totals",
@@ -9852,8 +9852,8 @@
           "message": "Retrieve product count totals grouped by type from WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.display_name": {
-          "source": "Customers Totals",
-          "message": "Customers Totals"
+          "source": "Customers totals",
+          "message": "Customers totals"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.short_desc": {
           "source": "Get customers totals",
@@ -9864,8 +9864,8 @@
           "message": "Retrieve customer count totals grouped by role from WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.display_name": {
-          "source": "List Shipping Zones",
-          "message": "List Shipping Zones"
+          "source": "List shipping zones",
+          "message": "List shipping zones"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.short_desc": {
           "source": "List shipping zones",
@@ -9876,8 +9876,8 @@
           "message": "Retrieve all shipping zones configured in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
-          "message": "List Shipping Methods"
+          "source": "List shipping methods",
+          "message": "List shipping methods"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
           "source": "List shipping methods",
@@ -9900,8 +9900,8 @@
           "message": "The unique identifier for the shipping zone"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
-          "message": "Create Tax Rate"
+          "source": "Create tax rate",
+          "message": "Create tax rate"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
           "source": "Create a new tax rate",
@@ -10068,8 +10068,8 @@
           "message": "The tax class this rate belongs to"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.display_name": {
-          "source": "Get Tax Rate",
-          "message": "Get Tax Rate"
+          "source": "Get tax rate",
+          "message": "Get tax rate"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.short_desc": {
           "source": "Get a tax rate by ID",
@@ -10092,8 +10092,8 @@
           "message": "The unique identifier for the tax rate"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.display_name": {
-          "source": "Update Tax Rate",
-          "message": "Update Tax Rate"
+          "source": "Update tax rate",
+          "message": "Update tax rate"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.short_desc": {
           "source": "Update a tax rate",
@@ -10272,8 +10272,8 @@
           "message": "The tax class this rate belongs to"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.display_name": {
-          "source": "Delete Tax Rate",
-          "message": "Delete Tax Rate"
+          "source": "Delete tax rate",
+          "message": "Delete tax rate"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.short_desc": {
           "source": "Delete a tax rate",
@@ -10308,8 +10308,8 @@
           "message": "Required to be `True` since tax rates do not support trash"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
-          "message": "List Tax Rates"
+          "source": "List tax rates",
+          "message": "List tax rates"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
           "source": "List tax rates",
@@ -10396,8 +10396,8 @@
           "message": "Display order"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.display_name": {
-          "source": "Get Setting",
-          "message": "Get Setting"
+          "source": "Get setting",
+          "message": "Get setting"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.short_desc": {
           "source": "Get a store setting",
@@ -10432,8 +10432,8 @@
           "message": "The setting identifier within the group"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.display_name": {
-          "source": "Update Setting",
-          "message": "Update Setting"
+          "source": "Update setting",
+          "message": "Update setting"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.short_desc": {
           "source": "Update a store setting",
@@ -10480,8 +10480,8 @@
           "message": "The new value for the setting"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.display_name": {
-          "source": "System Status",
-          "message": "System Status"
+          "source": "System status",
+          "message": "System status"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.short_desc": {
           "source": "Get system status",
@@ -10492,8 +10492,8 @@
           "message": "Retrieve WooCommerce system status information including environment, database, active plugins, theme, and settings."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
-          "message": "Order Created"
+          "source": "Order created",
+          "message": "Order created"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when an order is created",
@@ -10504,8 +10504,8 @@
           "message": "Fires when a new order is created in WooCommerce. The full order data is included in the payload. **Note:** This also fires for orders with failed payments."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
-          "message": "Order Updated"
+          "source": "Order updated",
+          "message": "Order updated"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when an order is updated",
@@ -10516,8 +10516,8 @@
           "message": "Fires when an order is updated in WooCommerce. **Note:** This may fire multiple times per user action; deduplicate on the receiver side."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Order Deleted",
-          "message": "Order Deleted"
+          "source": "Order deleted",
+          "message": "Order deleted"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.short_desc": {
           "source": "Trigger when an order is deleted",
@@ -10528,8 +10528,8 @@
           "message": "Fires when an order is deleted in WooCommerce. **Note:** The payload may only contain minimal data (order ID only), as the order data has been removed."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.display_name": {
-          "source": "Order Restored",
-          "message": "Order Restored"
+          "source": "Order restored",
+          "message": "Order restored"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.short_desc": {
           "source": "Trigger when an order is restored from trash",
@@ -10540,8 +10540,8 @@
           "message": "Fires when an order is restored from the trash in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
-          "message": "Product Created"
+          "source": "Product created",
+          "message": "Product created"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a product is created",
@@ -10552,8 +10552,8 @@
           "message": "Fires when a new product is created in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
-          "message": "Product Updated"
+          "source": "Product updated",
+          "message": "Product updated"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
           "source": "Trigger when a product is updated",
@@ -10564,8 +10564,8 @@
           "message": "Fires when a product is updated in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.display_name": {
-          "source": "Product Deleted",
-          "message": "Product Deleted"
+          "source": "Product deleted",
+          "message": "Product deleted"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.short_desc": {
           "source": "Trigger when a product is deleted",
@@ -10576,8 +10576,8 @@
           "message": "Fires when a product is deleted in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.display_name": {
-          "source": "Product Restored",
-          "message": "Product Restored"
+          "source": "Product restored",
+          "message": "Product restored"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.short_desc": {
           "source": "Trigger when a product is restored from trash",
@@ -10588,8 +10588,8 @@
           "message": "Fires when a product is restored from the trash in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
-          "message": "Customer Created"
+          "source": "Customer created",
+          "message": "Customer created"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a customer is created",
@@ -10600,8 +10600,8 @@
           "message": "Fires when a new customer is created in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
-          "message": "Customer Updated"
+          "source": "Customer updated",
+          "message": "Customer updated"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a customer is updated",
@@ -10612,8 +10612,8 @@
           "message": "Fires when a customer is updated in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.display_name": {
-          "source": "Customer Deleted",
-          "message": "Customer Deleted"
+          "source": "Customer deleted",
+          "message": "Customer deleted"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.short_desc": {
           "source": "Trigger when a customer is deleted",
@@ -10624,8 +10624,8 @@
           "message": "Fires when a customer is deleted in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.display_name": {
-          "source": "Coupon Created",
-          "message": "Coupon Created"
+          "source": "Coupon created",
+          "message": "Coupon created"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a coupon is created",
@@ -10636,8 +10636,8 @@
           "message": "Fires when a new coupon is created in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.display_name": {
-          "source": "Coupon Updated",
-          "message": "Coupon Updated"
+          "source": "Coupon updated",
+          "message": "Coupon updated"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a coupon is updated",
@@ -10648,8 +10648,8 @@
           "message": "Fires when a coupon is updated in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.display_name": {
-          "source": "Coupon Deleted",
-          "message": "Coupon Deleted"
+          "source": "Coupon deleted",
+          "message": "Coupon deleted"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.short_desc": {
           "source": "Trigger when a coupon is deleted",
@@ -10660,8 +10660,8 @@
           "message": "Fires when a coupon is deleted in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.display_name": {
-          "source": "Coupon Restored",
-          "message": "Coupon Restored"
+          "source": "Coupon restored",
+          "message": "Coupon restored"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.short_desc": {
           "source": "Trigger when a coupon is restored from trash",
@@ -10672,8 +10672,8 @@
           "message": "Fires when a coupon is restored from the trash in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.display_name": {
-          "source": "Payment Complete",
-          "message": "Payment Complete"
+          "source": "Payment complete",
+          "message": "Payment complete"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.short_desc": {
           "source": "Trigger when a payment is completed",
@@ -10684,8 +10684,8 @@
           "message": "Fires when an order payment is completed. Only fires for orders previously in `pending`, `on-hold`, `failed`, or `cancelled` status."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.display_name": {
-          "source": "Order Status: Pending",
-          "message": "Order Status: Pending"
+          "source": "Order status: pending",
+          "message": "Order status: pending"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.short_desc": {
           "source": "Trigger when order status changes to pending",
@@ -10696,8 +10696,8 @@
           "message": "Fires when an order status changes to `pending` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.display_name": {
-          "source": "Order Status: Processing",
-          "message": "Order Status: Processing"
+          "source": "Order status: processing",
+          "message": "Order status: processing"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.short_desc": {
           "source": "Trigger when order status changes to processing",
@@ -10708,8 +10708,8 @@
           "message": "Fires when an order status changes to `processing` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.display_name": {
-          "source": "Order Status: Completed",
-          "message": "Order Status: Completed"
+          "source": "Order status: completed",
+          "message": "Order status: completed"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.short_desc": {
           "source": "Trigger when order status changes to completed",
@@ -10720,8 +10720,8 @@
           "message": "Fires when an order status changes to `completed` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.display_name": {
-          "source": "Order Status: On Hold",
-          "message": "Order Status: On Hold"
+          "source": "Order status: on hold",
+          "message": "Order status: on hold"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.short_desc": {
           "source": "Trigger when order status changes to on-hold",
@@ -10732,8 +10732,8 @@
           "message": "Fires when an order status changes to `on-hold` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.display_name": {
-          "source": "Order Status: Refunded",
-          "message": "Order Status: Refunded"
+          "source": "Order status: refunded",
+          "message": "Order status: refunded"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.short_desc": {
           "source": "Trigger when order status changes to refunded",
@@ -10744,8 +10744,8 @@
           "message": "Fires when an order status changes to `refunded` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.display_name": {
-          "source": "Order Status: Failed",
-          "message": "Order Status: Failed"
+          "source": "Order status: failed",
+          "message": "Order status: failed"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.short_desc": {
           "source": "Trigger when order status changes to failed",
@@ -10756,8 +10756,8 @@
           "message": "Fires when an order status changes to `failed` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.display_name": {
-          "source": "Order Status: Cancelled",
-          "message": "Order Status: Cancelled"
+          "source": "Order status: cancelled",
+          "message": "Order status: cancelled"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.short_desc": {
           "source": "Trigger when order status changes to cancelled",
@@ -10768,8 +10768,8 @@
           "message": "Fires when an order status changes to `cancelled` in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.display_name": {
-          "source": "Product Added to Cart",
-          "message": "Product Added to Cart"
+          "source": "Product added to cart",
+          "message": "Product added to cart"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.short_desc": {
           "source": "Trigger when a product is added to cart",
@@ -10780,8 +10780,8 @@
           "message": "Fires when a product is added to a customer's cart. Payload only contains `action` and `arg` (cart item key)."
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.display_name": {
-          "source": "Product Low Stock",
-          "message": "Product Low Stock"
+          "source": "Product low stock",
+          "message": "Product low stock"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.short_desc": {
           "source": "Trigger when a product reaches low stock",
@@ -10792,8 +10792,8 @@
           "message": "Fires when a product's stock quantity reaches the low stock threshold configured in WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.display_name": {
-          "source": "Product Out of Stock",
-          "message": "Product Out of Stock"
+          "source": "Product out of stock",
+          "message": "Product out of stock"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.short_desc": {
           "source": "Trigger when a product goes out of stock",

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "Список публікацій"
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
@@ -396,7 +396,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get a Post",
+          "source": "Get a post",
           "message": "Отримати допис"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
@@ -416,7 +416,7 @@
           "message": "Ідентифікатор допису"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
-          "source": "Create a Post",
+          "source": "Create a post",
           "message": "Створити публікацію"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
@@ -548,7 +548,7 @@
           "message": "Якщо `True`, учасникам не надсилатимуться сповіщення про цю публікацію"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update a Post",
+          "source": "Update a post",
           "message": "Оновити допис"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Якщо `True`, сповіщення про це оновлення надсилатися не будуть"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete a Post",
+          "source": "Delete a post",
           "message": "Видалити допис"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Унікальний ідентифікатор допису для видалення"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "Список коментарів"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
-          "source": "Get a Comment",
+          "source": "Get a comment",
           "message": "Отримати коментар"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "Ідентифікатор коментаря"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create a Comment",
+          "source": "Create a comment",
           "message": "Створити коментар"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Тіло коментаря у форматі HTML. Приклад: `<p>Great post!</p>`"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
-          "source": "Delete a Comment",
+          "source": "Delete a comment",
           "message": "Видалити коментар"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Унікальний ідентифікатор коментаря для видалення"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
-          "source": "List Members",
+          "source": "List members",
           "message": "Список учасників"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
-          "source": "Invite a Member",
+          "source": "Invite a member",
           "message": "Запросити учасника"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
@@ -956,7 +956,7 @@
           "message": "Список ID просторів, до яких потрібно додати учасника після запрошення"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
-          "source": "Remove a Member",
+          "source": "Remove a member",
           "message": "Видалити учасника"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Унікальний ідентифікатор учасника спільноти, якого потрібно видалити"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
-          "source": "Tag a Member",
+          "source": "Tag a member",
           "message": "Додати тег учаснику"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Тег, який слід застосувати до учасника"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
-          "source": "Untag a Member",
+          "source": "Untag a member",
           "message": "Видалити тег в учасника"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Ідентифікатор тегу, який слід видалити в учасника"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Список просторів"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get a Space",
+          "source": "Get a space",
           "message": "Отримати простір"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "Ідентифікатор простору"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create a Space",
+          "source": "Create a space",
           "message": "Створити простір"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "Чи вимкнено можливість публікації дописів учасниками в цьому просторі"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update a Space",
+          "source": "Update a space",
           "message": "Оновити простір"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Чи приховувати цей простір із рекомендованих розділів спільноти"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete a Space",
+          "source": "Delete a space",
           "message": "Видалити простір"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Унікальний ідентифікатор простору для видалення"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
-          "source": "Add a Member to a Space",
+          "source": "Add a member to a space",
           "message": "Додати учасника до простору"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Електронна адреса учасника, якого потрібно додати до простору"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
-          "source": "Remove a Member from a Space",
+          "source": "Remove a member from a space",
           "message": "Видалити учасника з простору"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Ідентифікатор учасника спільноти, якого потрібно видалити з простору"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
-          "source": "Add a Member to a Space Group",
+          "source": "Add a member to a space group",
           "message": "Додати учасника до групи просторів"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Електронна адреса учасника, якого потрібно додати до групи просторів"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
-          "source": "Remove a Member from a Space Group",
+          "source": "Remove a member from a space group",
           "message": "Видалити учасника з групи просторів"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "Ідентифікатор учасника спільноти, якого потрібно видалити з групи просторів"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "Список спільнот"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
-          "source": "Get a Community",
+          "source": "Get a community",
           "message": "Отримати спільноту"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "Ідентифікатор спільноти"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Надіслати повідомлення"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Тіло повідомлення"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
-          "source": "New Comment",
+          "source": "New comment",
           "message": "Новий коментар"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Спрацьовує, коли в спільноті Circle публікуються нові коментарі"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
-          "source": "New Community",
+          "source": "New community",
           "message": "Нова спільнота"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Спрацьовує під час створення нових спільнот у Circle"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
-          "source": "Member Accepted an Invitation",
+          "source": "Member accepted an invitation",
           "message": "Учасник прийняв запрошення"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "Спрацьовує, коли учасник приймає запрошення до спільноти Circle"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "Новий допис"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Спрацьовує, коли в спільноті Circle створюються нові дописи"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
-          "source": "New Space",
+          "source": "New space",
           "message": "Новий простір"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Спрацьовує, коли в спільноті Circle створюються нові простори"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
-          "source": "Member Tagged",
+          "source": "Member tagged",
           "message": "Учасника позначено тегом"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {

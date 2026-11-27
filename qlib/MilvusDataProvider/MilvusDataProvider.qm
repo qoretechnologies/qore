@@ -64,7 +64,7 @@ module MilvusDataProvider {
             "app": MilvusDataProvider::AppName,
             "path": "/list-collections",
             "action": "list-collections",
-            "display_name": "List Collections",
+            "display_name": "List collections",
             "short_desc": "List Milvus collections",
             "desc": "Calls Milvus REST v2 `POST /v2/vectordb/collections/list` to "
                 "enumerate available collections.",

@@ -39,7 +39,7 @@ public class AssemblyAiDictationManifest {
                 "mutates_state": False,
                 "path": "/v1/transcribe/live",
                 "operation_id": "transcribeDictation",
-                "display_name": "Transcribe Dictation",
+                "display_name": "Transcribe dictation",
                 "short_desc": "Turn a short spoken utterance into text ready to send",
                 "desc": "Submit up to 120 seconds of WAV or PCM audio. Returns verbatim `text` and cleaned-up `llm_response`. If cleanup fails, use `text` and inspect `llm_error`. Configuration is sent before audio.",
                 "groups": ("Dictation",),

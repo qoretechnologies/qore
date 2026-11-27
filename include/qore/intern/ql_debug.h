@@ -134,6 +134,13 @@ DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_
 typedef void (*qore_dbg_container_free_hook_t)(const char* type_name);
 DLLLOCAL extern std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook;
 
+class qore_hash_private;
+//! called by qore_hash_private::dbgReleaseStep() at each step of the release of a hash (at the start of
+//! qore_hash_private::freeMembers() and of each qore_hash_private::freeNextMember() call), while the hash is marked as
+//! being released; set by dbg_hash_access_during_release() (qore#7569)
+typedef void (*qore_dbg_hash_release_step_hook_t)(qore_hash_private* h);
+DLLLOCAL extern std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -181,6 +188,8 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+//! returns true if the stream held with dbg_quic_hold_stream_data() is held also after its body has ended (qore#7653)
+DLLLOCAL bool qore_dbg_quic_stream_end_held();
 
 //! releases the stream held with dbg_quic_hold_stream_data(..., True) if it is a stream of the session
 /** Called by Socket::flushQuicPendingData() on the I/O thread of the session's socket before it writes, so that the
@@ -466,6 +475,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full and is about to wait
     //! for it to drain (the sending thread; qore#7465)
     SendDrainWait,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() was called to acquire a connection for a request, before
+    //! it checks whether the manager is shut down or retired (qore#7741)
+    AcquireStart,
     //! the number of hold points
     Count,
 };

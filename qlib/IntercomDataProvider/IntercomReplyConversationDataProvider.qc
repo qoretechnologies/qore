@@ -176,7 +176,7 @@ public class IntercomReplyConversationDataProvider inherits DataProvider::Abstra
         const RequestPath = "/conversations/%s/reply";
 
         #! The action display name
-        const DisplayName = "Reply to Conversation";
+        const DisplayName = "Reply to conversation";
 
         #! The action short description
         const ShortDesc = "Reply to a conversation as a teammate";

@@ -55,7 +55,7 @@ public class GroqActions {
         #! Immutable operation definitions
         const hash<string, hash<GroqActionInfo>> Operations = {
             "get-model": <GroqActionInfo>{
-                "display_name": "Get Model",
+                "display_name": "Get model",
                 "short_desc": "Inspect a model before selecting it for inference",
                 "desc": "Inspect a model before selecting it for inference.",
                 "group": "Models",
@@ -66,7 +66,7 @@ public class GroqActions {
                 "fields": GroqModelRequestDataType::Fields,
             },
             "create-response": <GroqActionInfo>{
-                "display_name": "Create Response",
+                "display_name": "Create response",
                 "short_desc": "Generate a response with structured output and tool calls",
                 "desc": "Generate a response with structured output and tool calls.\n\nUses the beta Responses API. Select a compatible model. Returns a completed response; streaming and stored response continuation are not supported by this action.",
                 "group": "Responses",
@@ -77,7 +77,7 @@ public class GroqActions {
                 "fields": GroqCreateResponseRequestDataType::Fields,
             },
             "transcribe-audio": <GroqActionInfo>{
-                "display_name": "Transcribe Audio",
+                "display_name": "Transcribe audio",
                 "short_desc": "Turn a recording into text in its original language",
                 "desc": "Turn a recording into text in its original language.\n\nSupply exactly one of `file` or `url`. `json` and `verbose_json` return typed transcript data; `text` returns a string.",
                 "group": "Audio",
@@ -88,7 +88,7 @@ public class GroqActions {
                 "fields": GroqTranscriptionRequestDataType::Fields,
             },
             "translate-audio": <GroqActionInfo>{
-                "display_name": "Translate Audio",
+                "display_name": "Translate audio",
                 "short_desc": "Translate a recording into English text",
                 "desc": "Translate a recording into English text.\n\nSupply exactly one of `file` or `url`. `json` and `verbose_json` return typed transcript data; `text` returns a string.",
                 "group": "Audio",
@@ -99,7 +99,7 @@ public class GroqActions {
                 "fields": GroqTranslationRequestDataType::Fields,
             },
             "generate-speech": <GroqActionInfo>{
-                "display_name": "Generate Speech",
+                "display_name": "Generate speech",
                 "short_desc": "Turn text into spoken audio for customers and audiences",
                 "desc": "Turn text into spoken audio for customers and audiences.\n\nReturns raw audio bytes. Select a voice for the chosen model; Orpheus supports `wav` output.",
                 "group": "Audio",
@@ -110,7 +110,7 @@ public class GroqActions {
                 "fields": GroqSpeechRequestDataType::Fields,
             },
             "upload-file": <GroqActionInfo>{
-                "display_name": "Upload File",
+                "display_name": "Upload file",
                 "short_desc": "Upload batch requests or a pre-trained LoRA adapter",
                 "desc": "Upload batch requests or a pre-trained LoRA adapter.",
                 "group": "Files",
@@ -121,7 +121,7 @@ public class GroqActions {
                 "fields": GroqUploadFileRequestDataType::Fields,
             },
             "list-files": <GroqActionInfo>{
-                "display_name": "List Files",
+                "display_name": "List files",
                 "short_desc": "Find uploaded files and batch result files",
                 "desc": "Find uploaded files and batch result files.\n\nReturns the resources made available by the authenticated listing endpoint.",
                 "group": "Files",
@@ -133,7 +133,7 @@ public class GroqActions {
                 },
             },
             "get-file": <GroqActionInfo>{
-                "display_name": "Get File",
+                "display_name": "Get file",
                 "short_desc": "Inspect the size and purpose of an uploaded file",
                 "desc": "Inspect the size and purpose of an uploaded file.",
                 "group": "Files",
@@ -144,7 +144,7 @@ public class GroqActions {
                 "fields": GroqFileRequestDataType::Fields,
             },
             "download-file": <GroqActionInfo>{
-                "display_name": "Download File",
+                "display_name": "Download file",
                 "short_desc": "Download original input or completed batch results",
                 "desc": "Download original input or completed batch results.\n\nReturns the file contents as binary data, including JSONL batch results.",
                 "group": "Files",
@@ -155,7 +155,7 @@ public class GroqActions {
                 "fields": GroqFileRequestDataType::Fields,
             },
             "delete-file": <GroqActionInfo>{
-                "display_name": "Delete File",
+                "display_name": "Delete file",
                 "short_desc": "Remove a file that is no longer needed",
                 "desc": "Remove a file that is no longer needed.",
                 "group": "Files",
@@ -166,7 +166,7 @@ public class GroqActions {
                 "fields": GroqFileRequestDataType::Fields,
             },
             "create-batch": <GroqActionInfo>{
-                "display_name": "Create Batch",
+                "display_name": "Create batch",
                 "short_desc": "Submit a file of inference requests for batch processing",
                 "desc": "Submit a file of inference requests for batch processing.\n\nReturns the batch immediately. Use `Get Batch` later to inspect progress and download its `output_file_id` with `Download File`. Inference usage is billed by Groq.",
                 "group": "Batches",
@@ -177,7 +177,7 @@ public class GroqActions {
                 "fields": GroqCreateBatchRequestDataType::Fields,
             },
             "list-batches": <GroqActionInfo>{
-                "display_name": "List Batches",
+                "display_name": "List batches",
                 "short_desc": "Find batches and inspect their current processing state",
                 "desc": "Find batches and inspect their current processing state.\n\nReturns the resources made available by the authenticated listing endpoint.",
                 "group": "Batches",
@@ -189,7 +189,7 @@ public class GroqActions {
                 },
             },
             "get-batch": <GroqActionInfo>{
-                "display_name": "Get Batch",
+                "display_name": "Get batch",
                 "short_desc": "Inspect progress and locate output files for a batch",
                 "desc": "Inspect progress and locate output files for a batch.",
                 "group": "Batches",
@@ -200,7 +200,7 @@ public class GroqActions {
                 "fields": GroqBatchRequestDataType::Fields,
             },
             "cancel-batch": <GroqActionInfo>{
-                "display_name": "Cancel Batch",
+                "display_name": "Cancel batch",
                 "short_desc": "Cancel outstanding requests in a batch",
                 "desc": "Cancel outstanding requests in a batch.",
                 "group": "Batches",
@@ -211,7 +211,7 @@ public class GroqActions {
                 "fields": GroqBatchRequestDataType::Fields,
             },
             "create-fine-tuning": <GroqActionInfo>{
-                "display_name": "Register LoRA Adapter",
+                "display_name": "Register LoRA adapter",
                 "short_desc": "Register a pre-trained adapter for specialized inference",
                 "desc": "Register a pre-trained adapter for specialized inference.\n\n**Enterprise access required.** Upload an externally trained LoRA adapter with `purpose` set to `fine_tuning`. Groq hosts adapters and does not train models. See the [LoRA guide](https://console.groq.com/docs/lora).",
                 "group": "LoRA Adapters",
@@ -222,7 +222,7 @@ public class GroqActions {
                 "fields": GroqCreateFineTuningRequestDataType::Fields,
             },
             "list-fine-tunings": <GroqActionInfo>{
-                "display_name": "List LoRA Adapters",
+                "display_name": "List LoRA adapters",
                 "short_desc": "Find adapters available to your organization",
                 "desc": "Find adapters available to your organization.\n\n**Enterprise access required.** Upload an externally trained LoRA adapter with `purpose` set to `fine_tuning`. Groq hosts adapters and does not train models. See the [LoRA guide](https://console.groq.com/docs/lora).\n\nReturns the resources made available by the authenticated listing endpoint.",
                 "group": "LoRA Adapters",
@@ -234,7 +234,7 @@ public class GroqActions {
                 },
             },
             "get-fine-tuning": <GroqActionInfo>{
-                "display_name": "Get LoRA Adapter",
+                "display_name": "Get LoRA adapter",
                 "short_desc": "Inspect a registered adapter and its model identifier",
                 "desc": "Inspect a registered adapter and its model identifier.\n\n**Enterprise access required.** Upload an externally trained LoRA adapter with `purpose` set to `fine_tuning`. Groq hosts adapters and does not train models. See the [LoRA guide](https://console.groq.com/docs/lora).",
                 "group": "LoRA Adapters",
@@ -245,7 +245,7 @@ public class GroqActions {
                 "fields": GroqFineTuningRequestDataType::Fields,
             },
             "delete-fine-tuning": <GroqActionInfo>{
-                "display_name": "Delete LoRA Adapter",
+                "display_name": "Delete LoRA adapter",
                 "short_desc": "Remove a registered adapter from your organization",
                 "desc": "Remove a registered adapter from your organization.\n\n**Enterprise access required.** Upload an externally trained LoRA adapter with `purpose` set to `fine_tuning`. Groq hosts adapters and does not train models. See the [LoRA guide](https://console.groq.com/docs/lora).",
                 "group": "LoRA Adapters",

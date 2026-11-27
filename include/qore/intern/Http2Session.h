@@ -844,6 +844,15 @@ public:
         finished; see QoreSocketObject::dbgGetStreamRecordCounts()
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts() const;
+
+    //! Debug-only: holds the session's writes to the socket, as when its client stops reading (qore#7653)
+    /** The output stays in the send buffer, which the session reports as nothing to write, so that its operation
+        waits for other events; tests use it to keep the end of a response in the send buffer.  A release does not
+        wake the session's operation: the held output is written with its next event
+    */
+    DLLLOCAL void dbgHoldWrites(bool hold) {
+        dbg_hold_writes.store(hold, std::memory_order_release);
+    }
 #endif
 
     //! Drains the stream IDs reset by the peer since the last call (one-shot)
@@ -1083,7 +1092,15 @@ public:
     /** This is separate from wantWrite() because nghttp2_session_want_write()
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
-    DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
+    DLLLOCAL bool hasPendingData() const {
+#ifdef DEBUG
+        // held output waits for no event (dbgHoldWrites())
+        if (dbg_hold_writes.load(std::memory_order_acquire)) {
+            return false;
+        }
+#endif
+        return send_offset < send_buffer.size();
+    }
 
     //! Returns true if nghttp2 has frames to produce and no earlier output waits for the socket
     /** Output in the send buffer that the socket refused can only progress once the socket becomes writable, which
@@ -1472,10 +1489,6 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
-        //! the stream's taken bytes when its body last made progress, and the time of it on the monotonic clock in ms,
-        //! for the no-progress bound of the body (qore#7280)
-        int64_t bound_taken = -1;
-        int64_t bound_progress_ms = 0;
         //! true while the InputStream itself has no data ready (a non-blocking read would block): the body then waits
         //! for its source, not for the client (qore#7280)
         bool source_waiting = false;
@@ -1528,12 +1541,105 @@ private:
     int64_t pump_stall_ms = 30 * 60 * 1000;
     //! true once the bounds of the pumped bodies have been set
     bool pump_bound_set = false;
+    //! true once the minimum rate of the connection has been set, by its bounds or by a check of a handler thread
+    bool pump_rate_set = false;
+    //! the streams whose sends on handler threads wait for the client, which the connection's minimum rate covers
+    std::unordered_set<int32_t> send_rate_waiters;
+    //! the streams whose sends on handler threads waited when the connection was found below its minimum rate, and
+    //! which have not been told yet
+    std::unordered_set<int32_t> send_rate_ended;
+    //! the bodies that a check of a handler thread found below the connection's minimum rate, which the I/O thread
+    //! ends (ending one can end the connection)
+    std::vector<int32_t> rate_ended_bodies;
+#ifdef DEBUG
+    //! Debug-only: true while the session's writes to the socket are held (dbgHoldWrites())
+    std::atomic<bool> dbg_hold_writes{false};
+#endif
 
-    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
-    DLLLOCAL void checkInputStreamSendBound();
+    //! A response body that the bounds charge to its client until the client has taken it (qore#7653)
+    struct BoundBody {
+        //! the body's progress when it last advanced and the time of it on the monotonic clock in ms (0: not seen
+        //! waiting yet): the bytes of the stream that nghttp2 has taken, or once the body's END_STREAM frame has been
+        //! serialized, the bytes that the connection has written to the socket (bound_written)
+        uint64_t bound_progress = 0;
+        int64_t bound_progress_ms = 0;
+        bool bound_written = false;
+        //! true once the frame that ends the body (its END_STREAM, or the RST_STREAM of a reset) has been serialized;
+        //! end_pos is then set by sendPendingData()
+        bool end_serialized = false;
+        //! true once the body's stream has been reset before its END_STREAM frame was serialized: it stays bounded on
+        //! the connection's writes until the RST_STREAM frame has been written
+        bool reset_pending = false;
+        bool end_pos_set = false;
+        //! the absolute position in the outgoing byte stream after the END_STREAM frame
+        uint64_t end_pos = 0;
+    };
+    //! the response bodies charged to their clients by stream ID, registered while the bounds are set; a body is
+    //! removed when its END_STREAM frame has been written to the socket, when its stream is reset or closes without
+    //! it, and when a bound ends it (qore#7653)
+    std::unordered_map<int32_t, BoundBody> bound_bodies;
+    //! the body bytes that the client has taken from the connection, which never decreases: the bytes that nghttp2
+    //! has taken less those still unwritten in the send buffer (qore#7653)
+    uint64_t conn_client_taken = 0;
 
-    //! Returns true if a pumped body waits for its client: it has not ended, and its source is not what it waits for
-    DLLLOCAL bool isInputStreamWaiting(const StreamInputStreamInfo& info) const;
+    //! Sets the minimum rate of the connection once; the caller holds the lock
+    DLLLOCAL void setSendRateUnlocked(int64_t min_rate, int64_t window_ms);
+
+    //! Updates the count of the body bytes that the client has taken; the caller holds the lock (qore#7653)
+    DLLLOCAL void refreshClientTakenUnlocked();
+
+    //! Returns true if a send of a handler thread other than @p except, or a bounded body, waits for the client
+    DLLLOCAL bool isConnectionWaitingUnlocked(int32_t except) const;
+
+    //! Updates the connection's minimum rate; the caller holds the lock
+    /** When the connection is below the rate while a body waits, every waiting bounded body is added to
+        @p ended_bodies, for the I/O thread to end, every waiting send of a handler thread is recorded in
+        send_rate_ended, and a new measurement starts
+
+        @param now_ms the time of the update
+        @param ended_bodies the bounded bodies that a verdict ends
+        @param leaving a waiting send that ends its wait with this update, or -1: the time until now is charged as
+        waiting time for it, and the time from now on only if another body waits
+
+        @return true if the connection was found below the rate
+    */
+    DLLLOCAL bool updateSendRateUnlocked(int64_t now_ms, std::vector<int32_t>& ended_bodies, int32_t leaving = -1);
+
+    //! Ends the wait of a send of a handler thread whose stream closes or is reset; the caller holds the lock
+    /** The state of the connection's measurement is recorded without a verdict (which is not reached inside an
+        nghttp2 callback): the low credit of a connection that was below the rate is found by the next check
+    */
+    DLLLOCAL void endSendRateWaitUnlocked(int32_t stream_id);
+
+    //! Registers a response body for the bounds if they are set (qore#7653)
+    DLLLOCAL void addBoundBody(int32_t stream_id);
+    //! Removes a body from the bounds (qore#7653)
+    DLLLOCAL void eraseBoundBody(int32_t stream_id);
+    //! Marks a bounded body whose stream is reset: unless its END_STREAM frame has been serialized, it stays bounded
+    //! until its RST_STREAM frame has been written (qore#7653)
+    DLLLOCAL void resetBoundBody(int32_t stream_id);
+    //! Removes the bodies whose END_STREAM frame has been written to the socket; called under m (qore#7653)
+    DLLLOCAL void updateBoundBodiesWritten();
+    //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under m
+    DLLLOCAL void updateActiveInputStreams();
+    //! Ends a body that a bound ended (qore#7653)
+    /** A body whose END_STREAM frame has not been serialized has its stream reset and its buffered data released; it
+        stays bounded until the RST_STREAM frame has been written.  The frame that ends a body whose END_STREAM or
+        RST_STREAM frame has been serialized is in the connection's send buffer, which only ending the connection
+        frees: an HTTP2-SEND-BOUND-ERROR exception is raised, which ends the connection's operation; so it is when the
+        RST_STREAM frame cannot be submitted, as the body's data is not released without it
+    */
+    DLLLOCAL void endBoundBody(int32_t stream_id, const char* reason, ExceptionSink* xsink);
+
+    //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
+    DLLLOCAL void checkInputStreamSendBound(ExceptionSink* xsink);
+
+    //! Returns true if a bounded body waits for its client (qore#7653)
+    /** A body whose source sends on waits for its client unless its source has no data ready; a body whose data is
+        all buffered or sent (its source ended, or a buffered body) waits for its client until its END_STREAM frame
+        has been written to the socket
+    */
+    DLLLOCAL bool isBoundBodyWaiting(int32_t stream_id) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
@@ -1580,9 +1686,27 @@ public:
         @param window_ms the window of the minimum rate in milliseconds
         @param stall_ms the time in milliseconds after which a body that the client takes nothing of is ended
 
-        The bounds of a connection are set once, with its first such body; later calls are ignored.
+        The bounds of a connection are set once; later calls are ignored.  They replace a minimum rate that a
+        checkStreamSendRate() set on the connection without them, with a new measurement.
     */
     DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
+    //! Checks the connection's minimum rate for a send on a handler thread that waits for the client (qore#7280)
+    /** The connection's rate is measured across all its streams while one of them waits for the client, the bodies
+        that the I/O thread pumps and the sends of handler threads alike, so that many streams that share a fast
+        connection are not ended because each takes only a share of it.
+
+        @param stream_id the stream of the send
+        @param waiting true while the send waits for the client; false once it is done, which ends its wait
+        @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet
+        @param window_ms the window of the minimum rate in milliseconds, if the connection's rate is not set yet
+        @param verdict set to true if this call found the connection below the rate, which ends the other waiting
+        bodies as well: the caller must then wake the I/O thread, so that their RST_STREAM frames are sent
+
+        @return true if the connection was found below the minimum rate while the send waited: the send must end
+    */
+    DLLLOCAL bool checkStreamSendRate(int32_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict);
 
     //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
     /** A connection with a body waiting for its client is checked without a socket event (qore#7280)

@@ -52,6 +52,12 @@
 
 #define OS_OK            0
 #define OS_DELETED      -1
+//! the status of an object that the thread with TID 0 destroys
+/** q_gettid() is 0 in the signal handler thread (get_signal_thread_entry()) and in code that runs once its thread's
+    data is destroyed, which is OS_OK: such a deletion marks the object with this value instead, so that it is seen
+    being destroyed (qore_object_private::getDestroyingStatus())
+*/
+#define OS_DESTROYING_TID0 -2
 
 // object access constants
 #define QOA_OK           0
@@ -242,7 +248,7 @@ class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    //! OS_OK, the status of the thread running the destructor (getDestroyingStatus()), or OS_DELETED
     /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
         the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
         whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
@@ -349,7 +355,15 @@ public:
 
     //! Returns true if the calling thread is running the destructor of the object
     DLLLOCAL bool inDestructorOfThisThread() const {
-        return status.load(std::memory_order_acquire) == q_gettid();
+        return status.load(std::memory_order_acquire) == getDestroyingStatus();
+    }
+
+    //! Returns the status with which the calling thread marks an object that it destroys: its TID, or
+    //! OS_DESTROYING_TID0 for TID 0 (the signal handler thread), which would be OS_OK
+    DLLLOCAL static int getDestroyingStatus() {
+        int tid = q_gettid();
+        assert(tid >= 0);
+        return tid ? tid : OS_DESTROYING_TID0;
     }
 
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
@@ -392,6 +406,32 @@ public:
         @param xsink for the exception
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
+    //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)
+    /** Called only for an object marked as shared, before the copy is made.  It decides as checkSharedMethodChange()
+        does (code that is sandboxed or acts for sandboxed code; fails closed), with no update-scope exemption: such
+        code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
+        (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
+        of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
+        copy method is where a class resets them.  Such code is also refused a copy with the copy method of another
+        class than the object's (Reflection's CopyMethod of a base class), which would not run the copy methods of
+        the object's subclasses.  The copy is never marked as shared here.
+
+        @param copy_cls the class whose copy runs
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
+    //! (qore#7673)
+    /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
+
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
 
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
@@ -1202,9 +1242,46 @@ public:
 
     //! starts a call of the method @a mname of the class @a cls on the object
     /** raises "cannot call <class>::<method>() on an object that has already been deleted" if the object has been
-        deleted (issue #5824), naming @a cls, or the object's class if there is none
+        deleted (issue #5824), naming @a cls, or the object's class if there is none; also for a method call that
+        another thread makes once the object's last reference has been released and its destructor runs, or its
+        members are deleted (qore#7509; see refusesCallLocked()): the destructor's own calls are made
+
+        @return 0 if the call was started, -1 if it was refused (an exception was raised)
     */
     DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
+
+    //! the part of startCall() for an object that is being destroyed or has been deleted: \a st is its status
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD int startCallSlow(int st, const qore_class_private* cls,
+            const char* mname, ExceptionSink* xsink);
+
+    //! returns true if a method call of the current thread on the object is refused (qore#7509)
+    /** The object has been deleted, or another thread destroys it after its last reference was released (its
+        destructor runs, or its members are deleted when the destructor has returned): a call that reached it through
+        a weak reference would use the members while they are deleted.  The destructor's own calls are not refused,
+        nor are calls while an explicit \c delete runs, which every holder of a strong reference can make (the status
+        is then the deleting thread's, but no last reference was released).  Reads the status with the object's lock
+        held, as a deletion abandoned because of a reference taken before it undoes its marking with the lock held.
+    */
+    DLLLOCAL bool refusesCallLocked() const;
+
+    //! Returns 0 if a fast call path may enter the object, -1 if it has been deleted, 1 if the call must take the
+    //! path of startCall() (the object is being destroyed by another thread, qore#7509)
+    /** For the call paths that enter an object without startCall() (the IR interpreter's inline calls, the runtime's
+        fast method calls, native method entries and AOT member method paths), which hold a reference to the object
+        while the call runs: the reference was taken before (customRefIntern(), whose increment acquires the marking of
+        a deletion that decided before it: see customDeref()), or another thread keeps the object for the call.  The
+        status is read once, and no atomic operation is added for an object that is not being destroyed.
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static int checkFastCallEntry(const QoreObject* obj) {
+        int st = obj->priv->status.load(std::memory_order_relaxed);
+        if (st == OS_OK) [[likely]] {
+            return 0;
+        }
+        return checkFastCallEntrySlow(st);
+    }
+
+    //! the part of checkFastCallEntry() for an object that is not OS_OK
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static int checkFastCallEntrySlow(int st);
 
     //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
     /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself

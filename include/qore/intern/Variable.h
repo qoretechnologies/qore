@@ -198,6 +198,10 @@ DLLLOCAL bool qore_weak_local_container_store(const LocalVar* lv, const Abstract
         int64 index, const QoreValue& val, ExceptionSink* xsink);
 
 // structure for global variables
+class QoreTypeDeclRefs;
+//! Deletes the references of Var::refTypeDecls() (qore#7680)
+DLLLOCAL void qore_delete_type_decl_refs(QoreTypeDeclRefs* refs);
+
 class Var : protected QoreReferenceCounter {
 private:
     const QoreProgramLocation* loc;      // location of the initial definition
@@ -263,6 +267,9 @@ private:
         checkModuleVarWrite().  Reads never look at it.
     */
     std::unique_ptr<ModuleVarImport> module_import;
+    //! the mortal declarations that the type of a variable imported from another Program names (refTypeDecls()), or
+    //! nullptr (qore#7680)
+    QoreTypeDeclRefs* type_decl_refs = nullptr;
 
     DLLLOCAL void del(ExceptionSink* xsink);
 
@@ -294,6 +301,9 @@ protected:
     DLLLOCAL ~Var() {
         aot_init_expr.discard(nullptr);
         delete parseTypeInfo;
+        if (type_decl_refs) {
+            qore_delete_type_decl_refs(type_decl_refs);
+        }
     }
 
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {
@@ -349,6 +359,12 @@ public:
 
     //! Used when importing variables from another QoreProgram container
     DLLLOCAL Var(Var* ref, bool ro = false, bool is_thread_local = false, const char* import_as = nullptr);
+
+    //! References the mortal declarations that the type of a variable imported from another Program names, which are
+    //! freed with that Program otherwise, while the code of this Program is parsed and type-checked with the type
+    //! (qore#7680); all or nothing: throws std::bad_alloc with nothing referenced; called before the variable is
+    //! published
+    DLLLOCAL void refTypeDecls();
 
     DLLLOCAL const char* getName() const;
 

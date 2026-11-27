@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.display_name": {
-          "source": "Get Fine-Tune Details",
-          "message": "Get Fine-Tune Details"
+          "source": "Get fine-tune details",
+          "message": "Get fine-tune details"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.short_desc": {
           "source": "Read the settings of an existing fine-tune.",
@@ -364,8 +364,8 @@
           "message": "Choose an owned model or enter `org-id/lora-name` for a shared LoRA. Match its base model and precision."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.display_name": {
-          "source": "List Fine-Tunes",
-          "message": "List Fine-Tunes"
+          "source": "List fine-tunes",
+          "message": "List fine-tunes"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.short_desc": {
           "source": "List fine-tunes owned by the selected account.",
@@ -376,8 +376,8 @@
           "message": "List fine-tunes owned by the selected account.\n\n**Availability:** the current schema retains this operation, but older fine-tune workflows were deprecated. Account support must be verified."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.display_name": {
-          "source": "Delete Fine-Tune",
-          "message": "Delete Fine-Tune"
+          "source": "Delete fine-tune",
+          "message": "Delete fine-tune"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.short_desc": {
           "source": "Permanently delete a selected fine-tune.",
@@ -400,8 +400,8 @@
           "message": "Choose an owned model or enter `org-id/lora-name` for a shared LoRA. Match its base model and precision."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.display_name": {
-          "source": "Get Credit Balance",
-          "message": "Get Credit Balance"
+          "source": "Get credit balance",
+          "message": "Get credit balance"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.short_desc": {
           "source": "Check the available balance before generating media.",
@@ -412,8 +412,8 @@
           "message": "Check the available balance before generating media."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.display_name": {
-          "source": "Get Result on This Region",
-          "message": "Get Result on This Region"
+          "source": "Get result on this region",
+          "message": "Get result on this region"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.short_desc": {
           "source": "Read a job known to belong to the connection's region.",
@@ -436,8 +436,8 @@
           "message": "Job ID returned by a start action."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.display_name": {
-          "source": "Start FLUX Pro 1.1 Image",
-          "message": "Start FLUX Pro 1.1 Image"
+          "source": "Start FLUX Pro 1.1 image",
+          "message": "Start FLUX Pro 1.1 image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.short_desc": {
           "source": "Create an image with FLUX Pro 1.1.",
@@ -712,8 +712,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.display_name": {
-          "source": "Start FLUX Dev Image",
-          "message": "Start FLUX Dev Image"
+          "source": "Start FLUX Dev image",
+          "message": "Start FLUX Dev image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.short_desc": {
           "source": "Create a concept image with FLUX Dev.",
@@ -1012,8 +1012,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.display_name": {
-          "source": "Start FLUX Pro 1.1 Ultra Image",
-          "message": "Start FLUX Pro 1.1 Ultra Image"
+          "source": "Start FLUX Pro 1.1 Ultra image",
+          "message": "Start FLUX Pro 1.1 Ultra image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.short_desc": {
           "source": "Create a high-resolution image with FLUX Ultra.",
@@ -1300,8 +1300,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.display_name": {
-          "source": "Start Image Fill",
-          "message": "Start Image Fill"
+          "source": "Start image fill",
+          "message": "Start image fill"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.short_desc": {
           "source": "Replace a masked or transparent region using a prompt.",
@@ -1708,8 +1708,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.display_name": {
-          "source": "Start Image Expansion",
-          "message": "Start Image Expansion"
+          "source": "Start image expansion",
+          "message": "Start image expansion"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.short_desc": {
           "source": "Extend an image by a specified number of pixels.",
@@ -2032,8 +2032,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.display_name": {
-          "source": "Start Legacy Fine-Tuned Fill",
-          "message": "Start Legacy Fine-Tuned Fill"
+          "source": "Start legacy fine-tuned fill",
+          "message": "Start legacy fine-tuned fill"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.short_desc": {
           "source": "Fill an image with an existing legacy fine-tune.",
@@ -2464,8 +2464,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.display_name": {
-          "source": "Start Legacy Fine-Tuned Ultra",
-          "message": "Start Legacy Fine-Tuned Ultra"
+          "source": "Start legacy fine-tuned Ultra",
+          "message": "Start legacy fine-tuned Ultra"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.short_desc": {
           "source": "Create an image with a legacy Ultra fine-tune.",
@@ -2752,8 +2752,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.display_name": {
-          "source": "Start FLUX.2 Flex Image",
-          "message": "Start FLUX.2 Flex Image"
+          "source": "Start FLUX.2 Flex image",
+          "message": "Start FLUX.2 Flex image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.short_desc": {
           "source": "Control sampling steps and guidance for detailed image work.",
@@ -3988,8 +3988,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.display_name": {
-          "source": "Start FLUX.2 Klein 9B Image",
-          "message": "Start FLUX.2 Klein 9B Image"
+          "source": "Start FLUX.2 Klein 9B image",
+          "message": "Start FLUX.2 Klein 9B image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.short_desc": {
           "source": "Generate or edit images with up to four references.",
@@ -4648,8 +4648,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.display_name": {
-          "source": "Start FLUX.2 Klein 9B Preview",
-          "message": "Start FLUX.2 Klein 9B Preview"
+          "source": "Start FLUX.2 Klein 9B preview",
+          "message": "Start FLUX.2 Klein 9B preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.short_desc": {
           "source": "Try the preview Klein model for image generation or editing.",
@@ -5308,8 +5308,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.display_name": {
-          "source": "Start FLUX.2 Klein 4B Image",
-          "message": "Start FLUX.2 Klein 4B Image"
+          "source": "Start FLUX.2 Klein 4B image",
+          "message": "Start FLUX.2 Klein 4B image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.short_desc": {
           "source": "Generate or edit images with the smaller Klein model.",
@@ -5968,8 +5968,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.display_name": {
-          "source": "Start FLUX.2 Max Image",
-          "message": "Start FLUX.2 Max Image"
+          "source": "Start FLUX.2 Max image",
+          "message": "Start FLUX.2 Max image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.short_desc": {
           "source": "Create detailed images with up to eight references.",
@@ -7168,8 +7168,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.display_name": {
-          "source": "Start FLUX.2 Pro Preview",
-          "message": "Start FLUX.2 Pro Preview"
+          "source": "Start FLUX.2 Pro preview",
+          "message": "Start FLUX.2 Pro preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.short_desc": {
           "source": "Try the preview Pro model for image generation or editing.",
@@ -8368,8 +8368,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.display_name": {
-          "source": "Start FLUX.2 Pro Image",
-          "message": "Start FLUX.2 Pro Image"
+          "source": "Start FLUX.2 Pro image",
+          "message": "Start FLUX.2 Pro image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.short_desc": {
           "source": "Generate or edit images with the production Pro model.",
@@ -9568,8 +9568,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.display_name": {
-          "source": "Start FLUX 3 Video",
-          "message": "Start FLUX 3 Video"
+          "source": "Start FLUX 3 video",
+          "message": "Start FLUX 3 video"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.short_desc": {
           "source": "Create, continue, or enhance a video with optional audio.",
@@ -10048,8 +10048,8 @@
           "message": "The filename"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.display_name": {
-          "source": "Start Video Upscale",
-          "message": "Start Video Upscale"
+          "source": "Start video upscale",
+          "message": "Start video upscale"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.short_desc": {
           "source": "Enlarge a short video while preserving its composition.",
@@ -10284,8 +10284,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.display_name": {
-          "source": "Start Video Edit",
-          "message": "Start Video Edit"
+          "source": "Start video edit",
+          "message": "Start video edit"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.short_desc": {
           "source": "Transform a short video using an editing instruction.",
@@ -10464,8 +10464,8 @@
           "message": "Lower values apply stricter content moderation. The service may enforce additional limits."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.display_name": {
-          "source": "Start Image Outpainting",
-          "message": "Start Image Outpainting"
+          "source": "Start image outpainting",
+          "message": "Start image outpainting"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.short_desc": {
           "source": "Fit an image to a new canvas with generated borders.",
@@ -10760,8 +10760,8 @@
           "message": "Use the prompt exactly as written instead of expanding it automatically."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.display_name": {
-          "source": "Start Virtual Try-On v1",
-          "message": "Start Virtual Try-On v1"
+          "source": "Start virtual try-on v1",
+          "message": "Start virtual try-on v1"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.short_desc": {
           "source": "Show how a garment looks on a person.",
@@ -11132,8 +11132,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.display_name": {
-          "source": "Start Virtual Try-On v2",
-          "message": "Start Virtual Try-On v2"
+          "source": "Start virtual try-on v2",
+          "message": "Start virtual try-on v2"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.short_desc": {
           "source": "Create a higher-resolution garment try-on image.",
@@ -11504,8 +11504,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.display_name": {
-          "source": "Start Object Erasure",
-          "message": "Start Object Erasure"
+          "source": "Start object erasure",
+          "message": "Start object erasure"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.short_desc": {
           "source": "Remove unwanted objects selected by an image mask.",
@@ -11876,8 +11876,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.display_name": {
-          "source": "Start Image Deblurring",
-          "message": "Start Image Deblurring"
+          "source": "Start image deblurring",
+          "message": "Start image deblurring"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.short_desc": {
           "source": "Restore details in a blurred image.",
@@ -12104,8 +12104,8 @@
           "message": "Secret used to verify callback signatures. Requires a webhook URL."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.display_name": {
-          "source": "Start FLUX Kontext Max Image",
-          "message": "Start FLUX Kontext Max Image"
+          "source": "Start FLUX Kontext Max image",
+          "message": "Start FLUX Kontext Max image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.short_desc": {
           "source": "Generate or edit an image with Kontext Max.",
@@ -12764,8 +12764,8 @@
           "message": "Lower values apply stricter content moderation. The service may enforce additional limits."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.display_name": {
-          "source": "Start FLUX Kontext Pro Image",
-          "message": "Start FLUX Kontext Pro Image"
+          "source": "Start FLUX Kontext Pro image",
+          "message": "Start FLUX Kontext Pro image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.short_desc": {
           "source": "Generate or edit an image with Kontext Pro.",
@@ -13424,8 +13424,8 @@
           "message": "Lower values apply stricter content moderation. The service may enforce additional limits."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.display_name": {
-          "source": "Report Licensed Model Usage",
-          "message": "Report Licensed Model Usage"
+          "source": "Report licensed model usage",
+          "message": "Report licensed model usage"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.short_desc": {
           "source": "Submit a billing-affecting report for a licensed model.",
@@ -13460,8 +13460,8 @@
           "message": "Actual number of licensed generations to report. This report affects billing."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.display_name": {
-          "source": "Start FLUX Pro Image",
-          "message": "Start FLUX Pro Image"
+          "source": "Start FLUX Pro image",
+          "message": "Start FLUX Pro image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.short_desc": {
           "source": "Use the documented original FLUX Pro compatibility endpoint.",
@@ -13712,8 +13712,8 @@
           "message": "The filename"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.display_name": {
-          "source": "Start Klein 4B LoRA Image",
-          "message": "Start Klein 4B LoRA Image"
+          "source": "Start Klein 4B LoRA image",
+          "message": "Start Klein 4B LoRA image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.short_desc": {
           "source": "Generate with a matching Klein 4B fine-tune in public beta.",
@@ -14396,8 +14396,8 @@
           "message": "Control the selected model's influence. Include its trigger phrase in the prompt when required."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.display_name": {
-          "source": "Start Klein 9B LoRA Image",
-          "message": "Start Klein 9B LoRA Image"
+          "source": "Start Klein 9B LoRA image",
+          "message": "Start Klein 9B LoRA image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.short_desc": {
           "source": "Generate with a matching Klein 9B fine-tune in public beta.",
@@ -15080,8 +15080,8 @@
           "message": "Control the selected model's influence. Include its trigger phrase in the prompt when required."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.display_name": {
-          "source": "Start Klein 9B KV LoRA Image",
-          "message": "Start Klein 9B KV LoRA Image"
+          "source": "Start Klein 9B KV LoRA image",
+          "message": "Start Klein 9B KV LoRA image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.short_desc": {
           "source": "Generate with a matching cached Klein fine-tune in public beta.",
@@ -16448,8 +16448,8 @@
           "message": "Control the selected model's influence. Include its trigger phrase in the prompt when required."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.display_name": {
-          "source": "Start Klein Base 4B LoRA Image",
-          "message": "Start Klein Base 4B LoRA Image"
+          "source": "Start Klein Base 4B LoRA image",
+          "message": "Start Klein Base 4B LoRA image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.short_desc": {
           "source": "Use the documented common fields for a Base 4B fine-tune.",
@@ -17084,8 +17084,8 @@
           "message": "Control the selected model's influence. Include its trigger phrase in the prompt when required."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.display_name": {
-          "source": "Start Klein Base 9B LoRA Image",
-          "message": "Start Klein Base 9B LoRA Image"
+          "source": "Start Klein Base 9B LoRA image",
+          "message": "Start Klein Base 9B LoRA image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.short_desc": {
           "source": "Use the documented common fields for a Base 9B fine-tune.",
@@ -17720,8 +17720,8 @@
           "message": "Control the selected model's influence. Include its trigger phrase in the prompt when required."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.display_name": {
-          "source": "Get Routed Result",
-          "message": "Get Routed Result"
+          "source": "Get routed result",
+          "message": "Get routed result"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.short_desc": {
           "source": "Read a job through its original regional polling URL.",
@@ -17792,8 +17792,8 @@
           "message": "Maximum downloaded bytes; the default is 100 MiB and the limit is 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.display_name": {
-          "source": "Wait for Result",
-          "message": "Wait for Result"
+          "source": "Wait for result",
+          "message": "Wait for result"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.short_desc": {
           "source": "Wait for an existing job without resubmitting it.",
@@ -17864,8 +17864,8 @@
           "message": "Maximum downloaded bytes; the default is 100 MiB and the limit is 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.display_name": {
-          "source": "Download Result",
-          "message": "Download Result"
+          "source": "Download result",
+          "message": "Download result"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.short_desc": {
           "source": "Retrieve and download a completed job's media before expiry.",
@@ -17956,8 +17956,8 @@
           "message": "Draft Cache"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.display_name": {
-          "source": "Generate Video",
-          "message": "Generate Video"
+          "source": "Generate video",
+          "message": "Generate video"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.short_desc": {
           "source": "Generate and download a FLUX 3 video within one deadline.",
@@ -18472,8 +18472,8 @@
           "message": "Maximum downloaded bytes; the default is 100 MiB and the limit is 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
-          "message": "Generate Image"
+          "source": "Generate image",
+          "message": "Generate image"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
           "source": "Generate an image from a text prompt (async)",
@@ -18536,8 +18536,8 @@
           "message": "FLUX.2 Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1wcm8tcHJldmlldw.display_name": {
-          "source": "FLUX.2 Pro Preview",
-          "message": "FLUX.2 Pro Preview"
+          "source": "FLUX.2 Pro preview",
+          "message": "FLUX.2 Pro preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1tYXg.display_name": {
           "source": "FLUX.2 Max",
@@ -18556,8 +18556,8 @@
           "message": "FLUX.2 Klein 9B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1rbGVpbi05Yi1wcmV2aWV3.display_name": {
-          "source": "FLUX.2 Klein 9B Preview",
-          "message": "FLUX.2 Klein 9B Preview"
+          "source": "FLUX.2 Klein 9B preview",
+          "message": "FLUX.2 Klein 9B preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
           "source": "Aspect Ratio",

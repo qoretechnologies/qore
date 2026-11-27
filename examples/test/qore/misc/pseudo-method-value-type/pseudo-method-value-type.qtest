@@ -87,6 +87,7 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
                 "script": "PseudoMethodValueTypeReflection",
                 "expected": "PseudoMethodValueTypeReflection",
             },
+            # debug-builtin-guard: a debug_only fixture, which script() skips without library debugging
             "accessors": <PseudoMethodValueTypeFixture>{
                 "script": "PseudoMethodValueTypeAccessors",
                 "expected": "PseudoMethodValueTypeAccessors",

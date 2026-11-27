@@ -271,7 +271,7 @@ public class GitLabNewCommitDataProvider inherits GitLabWatchDataProviderBase {
         const EventName = "new_commit";
 
         #! The event display name
-        const DisplayName = "New Commit";
+        const DisplayName = "New commit";
 
         #! The event short description
         const ShortDesc = "Fires when a commit is pushed to the watched project";
@@ -402,7 +402,7 @@ public class GitLabNewCommitCommentDataProvider inherits GitLabWatchDataProvider
         const EventName = "new_commit_comment";
 
         #! The event display name
-        const DisplayName = "New Commit Comment";
+        const DisplayName = "New commit comment";
 
         #! The event short description
         const ShortDesc = "Fires when a comment is added to the watched commit";
@@ -526,7 +526,7 @@ public class GitLabNewIssueDataProvider inherits GitLabWatchDataProviderBase {
         const EventName = "new_issue";
 
         #! The event display name
-        const DisplayName = "New Issue";
+        const DisplayName = "New issue";
 
         #! The event short description
         const ShortDesc = "Fires when an issue is raised in the watched project";
@@ -596,7 +596,7 @@ public class GitLabNewMergeRequestDataProvider inherits GitLabWatchDataProviderB
         const EventName = "new_merge_request";
 
         #! The event display name
-        const DisplayName = "New Merge Request";
+        const DisplayName = "New merge request";
 
         #! The event short description
         const ShortDesc = "Fires when a merge request is opened in the watched project";

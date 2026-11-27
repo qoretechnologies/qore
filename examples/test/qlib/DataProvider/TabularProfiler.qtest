@@ -66,6 +66,11 @@ public class TabularProfilerTest inherits QUnit::Test {
     constructor() : Test("TabularProfilerTest", "1.0") {
         addTestCase("clean header in row 1", \cleanHeader());
         addTestCase("title rows and a merged banner above the header", \titleRows());
+        addTestCase("a header of two rows with merged group names", \twoRowHeaderMerged());
+        addTestCase("a header of two rows with sparse group names", \twoRowHeaderSparse());
+        addTestCase("rows above the header that are not group names", \twoRowHeaderNegative());
+        addTestCase("years as group names", \twoRowHeaderYears());
+        addTestCase("a header of two rows with most names merged down", \twoRowHeaderMergedDown());
         addTestCase("totals rows and blank-row gaps", \totalsAndGaps());
         addTestCase("totals formulas and line totals", \totalsFormulas());
         addTestCase("the totals row rule", \totalsRule());
@@ -77,6 +82,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("duplicate and empty headers", \headers());
         addTestCase("wide period columns", \widePeriods());
         addTestCase("sheets without a header, empty sheets, and partial reads", \noHeader());
+        addTestCase("the header row the caller gives, or none", \givenHeaderRow());
         addTestCase("hidden sheets, formulas, named ranges, and text formats", \workbook());
         addTestCase("text-only and single-column sheets", \textOnly());
         addTestCase("redaction", \redaction());
@@ -140,6 +146,436 @@ public class TabularProfilerTest inherits QUnit::Test {
         hash<TabularProfileFinding> merged = finding(sheet, "merged_cells_in_data");
         assertEq("A5:A6", merged.detail);
         assertEq(5, merged.row);
+    }
+
+    #! a group name merged over two columns, and names merged down from the row of the group names (qore#7751)
+    twoRowHeaderMerged() {
+        hash<TabularSheetGrid> grid({
+            "name": "Bestellungen",
+            "rows": (
+                ("Bestellungen KW 41",),
+                (),
+                ("Artikel", "Menge", NOTHING, "Lieferdatum"),
+                (NOTHING, "bestätigt", "offen", NOTHING),
+                ("A-1", 5, 2, 2026-10-10),
+                ("A-2", 7, 0, 2026-10-12),
+            ),
+            "merged": (
+                # a banner over the table
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 3},
+                # names merged down from the row of the group names
+                <TabularCellRange>{"first_row": 2, "last_row": 3, "first_col": 0, "last_col": 0},
+                <TabularCellRange>{"first_row": 2, "last_row": 3, "first_col": 3, "last_col": 3},
+                # a group name over two columns
+                <TabularCellRange>{"first_row": 2, "last_row": 2, "first_col": 1, "last_col": 2},
+            ),
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq(4, sheet.header_row, "the header row is the row of the column names");
+        assertEq(<TabularRowRange>{"first": 3, "last": 4}, sheet.header_rows);
+        assertEq((1,), sheet.title_rows, "the row of the group names is no title row");
+        assertEq(5, sheet.data_region.first_row);
+        assertEq(("Artikel", "Menge bestätigt", "Menge offen", "Lieferdatum"), (map $1.header, sheet.columns),
+            "a merged group name counts for each column, a name merged down appears once");
+        assertEq(("string", "int", "int", "date"), (map $1.type, sheet.columns));
+        assertEq({"first": 3, "last": 4}, finding(sheet, "multi_row_header").detail);
+        assertEq(3, finding(sheet, "multi_row_header").row);
+        # the merged ranges of the header, 1-based, without the banner
+        assertEq((
+            <TabularCellRange>{"first_row": 3, "last_row": 4, "first_col": 1, "last_col": 1},
+            <TabularCellRange>{"first_row": 3, "last_row": 4, "first_col": 4, "last_col": 4},
+            <TabularCellRange>{"first_row": 3, "last_row": 3, "first_col": 2, "last_col": 3},
+        ), sheet.header_merged);
+        assertNothing(finding(sheet, "merged_cells_in_data"), "the merges of the header are no data");
+        assertNothing(finding(sheet, "empty_header"));
+        assertNothing(finding(sheet, "duplicate_header"));
+
+        # a group name merged over two columns, without names merged down: the first column's name has no group
+        grid.rows = (
+            ("Artikel", "Menge", NOTHING),
+            ("Nr", "bestätigt", "offen"),
+            ("A-1", 5, 2),
+        );
+        grid.merged = (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 1, "last_col": 2},);
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(2, sheet.header_row);
+        assertEq(("Artikel Nr", "Menge bestätigt", "Menge offen"), (map $1.header, sheet.columns));
+        assertEq((), sheet.title_rows);
+
+        # the profile matches its data type, with the new finding code
+        hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        });
+        hash<auto> value = TabularWorkbookProfileDataType.acceptsValue(profile);
+        assertEq({"first": 1, "last": 2}, value.sheets[0].header_rows);
+        assertEq(1, value.sheets[0].header_merged.size());
+        hash<string, bool> codes = map {$1.value: True}, TabularFindingCodeValues;
+        assertTrue(codes."multi_row_header");
+    }
+
+    #! group names that are not merged, as in a CSV file: each applies only to its own column (qore#7751)
+    twoRowHeaderSparse() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("", "Menge", "", "Preis", ""),
+            ("Artikel", "bestätigt", "offen", "netto", "brutto"),
+            ("A-1", "5", "2", "1.50", "1.80"),
+            ("A-2", "7", "0", "2.50", "3.00"),
+        ));
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(2, sheet.header_row);
+        assertEq(("Artikel", "Menge bestätigt", "offen", "Preis netto", "brutto"), (map $1.header, sheet.columns));
+        assertEq((), sheet.header_merged);
+        assertEq((), sheet.title_rows);
+        assertEq({"first": 1, "last": 2}, finding(sheet, "multi_row_header").detail);
+
+        # a title and an empty row above the two rows
+        sheet = profileOne((
+            ("Report",),
+            (),
+            ("", "Menge", "", "Preis", ""),
+            ("Artikel", "bestätigt", "offen", "netto", "brutto"),
+            ("A-1", "5", "2", "1.50", "1.80"),
+        ));
+        assertEq(<TabularRowRange>{"first": 3, "last": 4}, sheet.header_rows);
+        assertEq((1,), sheet.title_rows);
+
+        # the issue's layout: the last group is over one column
+        sheet = profileOne((
+            ("", "Menge", "", "Preis"),
+            ("Artikel", "bestätigt", "offen", "netto"),
+            ("A-1", "5", "2", "1.50"),
+        ));
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Artikel", "Menge bestätigt", "offen", "Preis netto"), (map $1.header, sheet.columns));
+    }
+
+    #! years over months, merged or not (qore#7751)
+    twoRowHeaderYears() {
+        hash<TabularSheetGrid> grid({
+            "name": "s",
+            "rows": ((NOTHING, 2025, NOTHING, 2026, NOTHING), ("Region", "Jan", "Feb", "Jan", "Feb"),
+                ("North", 1, 2, 3, 4)),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 1, "last_col": 2},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 3, "last_col": 4},
+            ),
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Region", "2025 Jan", "2025 Feb", "2026 Jan", "2026 Feb"), (map $1.header, sheet.columns));
+        assertNothing(finding(sheet, "duplicate_header"), "the years tell the months apart");
+
+        # not merged, as in a CSV file: a year applies only to its own column
+        sheet = profileOne((("", "2025", "", "2026", ""), ("Region", "Jan", "Feb", "Jan", "Feb"),
+            ("North", "1", "2", "3", "4")));
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Region", "2025 Jan", "Feb", "2026 Jan", "Feb"), (map $1.header, sheet.columns));
+        assertEq("Feb", finding(sheet, "duplicate_header").detail);
+    }
+
+    #! the names of most columns merged down from the row of the group names, as in an ERP export, and a name merged
+    #! down from above the group row (qore#7751)
+    twoRowHeaderMergedDown() {
+        hash<TabularSheetGrid> grid({
+            "name": "s",
+            "rows": (
+                ("Pos", "Artikel", "Bezeichnung", "Lieferant", "Menge", NOTHING, "Preis"),
+                (NOTHING, NOTHING, NOTHING, NOTHING, "bestätigt", "offen", NOTHING),
+                (1, "A-1", "Schraube", "ACME", 5, 2, 1.5),
+                (2, "A-2", "Mutter", "ACME", 7, 0, 0.5),
+            ),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 0, "last_col": 0},
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 1, "last_col": 1},
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 2, "last_col": 2},
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 3, "last_col": 3},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 4, "last_col": 5},
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 6, "last_col": 6},
+            ),
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq(2, sheet.header_row, "the row of the column names, with the names merged down into it");
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Pos", "Artikel", "Bezeichnung", "Lieferant", "Menge bestätigt", "Menge offen", "Preis"),
+            (map $1.header, sheet.columns));
+        # a header row that the caller gives is one row
+        hash<TabularSheetProfile> given = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }, <TabularProfileOptions>{"header_row": 2}).sheets[0];
+        assertEq(2, given.header_row);
+        assertNothing(given.header_rows, "a header row given by the caller");
+        assertNothing(finding(given, "multi_row_header"));
+        assertEq((1,), given.title_rows);
+        assertEq(("bestätigt", "offen"), (map $1.header, given.columns)[4..5]);
+        assertEq(5, given.header_merged.size(), "the merged ranges that cover the given header row");
+        assertEq((1, 2, 3, 4, 7), (map $1.col, select given.findings, $1.code == "empty_header"),
+            "the names merged down into a given header row give no name");
+        assertNothing(finding(sheet, "merged_cells_in_data"));
+        assertNothing(finding(sheet, "no_header_row"));
+        assertEq(6, sheet.header_merged.size());
+
+        # a name merged down from a row above the group row appears once
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (
+                ("Pos", "Bestellung", NOTHING, NOTHING),
+                (NOTHING, "Menge", NOTHING, "Preis"),
+                (NOTHING, "bestätigt", "offen", "netto"),
+                (1, 5, 2, 1.5),
+            ),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 2, "first_col": 0, "last_col": 0},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 1, "last_col": 3},
+                <TabularCellRange>{"first_row": 1, "last_row": 1, "first_col": 1, "last_col": 2},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq(<TabularRowRange>{"first": 2, "last": 3}, sheet.header_rows);
+        assertEq(("Pos", "Menge bestätigt", "Menge offen", "Preis netto"), (map $1.header, sheet.columns));
+        assertEq((1,), sheet.title_rows, "the row above the group row is a title row");
+
+        # a name in the first column merged down into the row of the column names
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Pos", NOTHING, NOTHING), (NOTHING, "Qty", "Price"), (1, 5, 1.5)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 0, "last_col": 0},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Pos", "Qty", "Price"), (map $1.header, sheet.columns));
+        assertNothing(finding(sheet, "empty_header"));
+
+        # a group merged over the first columns whose next name is merged down
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Kunde", NOTHING, "Betrag"), ("Name", "Ort", NOTHING), ("ACME", "Wien", 5)),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 2, "last_col": 2},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows,
+            "a group over the first columns beside a name merged down covers every column");
+        assertEq(("Kunde Name", "Kunde Ort", "Betrag"), (map $1.header, sheet.columns));
+
+        # two merged groups, the first over the first columns
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Kunde", NOTHING, "Menge", NOTHING), ("Name", "Ort", "bestätigt", "offen"),
+                ("ACME", "Wien", 5, 2)),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 2, "last_col": 3},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("Kunde Name", "Kunde Ort", "Menge bestätigt", "Menge offen"), (map $1.header, sheet.columns));
+
+        # a title merged over the first columns beside another merged label: a column of the header has no group
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Bestellübersicht", NOTHING, NOTHING, NOTHING, "Seite 1", NOTHING),
+                ("PO", "SKU", "Qty", "Preis", "Lager", "Ort"), ("PO-1", "A", 5, 1.5, "L1", "Wien")),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 2},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 4, "last_col": 5},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "a title and a merged label");
+        assertEq((1,), sheet.title_rows);
+        assertEq(("PO", "SKU", "Qty", "Preis", "Lager", "Ort"), (map $1.header, sheet.columns));
+
+        # an empty merge over the first columns beside a merged group
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": ((NOTHING, NOTHING, "Menge", NOTHING), ("PO", "SKU", "bestätigt", "offen"), ("PO-1", "A", 5, 2)),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},
+                <TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 2, "last_col": 3},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
+        assertEq(("PO", "SKU", "Menge bestätigt", "Menge offen"), (map $1.header, sheet.columns));
+
+        # a banner that ends in the group row is no part of the headers
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Report", NOTHING, NOTHING, NOTHING), (NOTHING, NOTHING, "Menge", NOTHING),
+                ("PO", "SKU", "bestätigt", "offen"), ("PO-1", "A", 5, 2)),
+            "merged": (
+                <TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 0, "last_col": 1},
+                <TabularCellRange>{"first_row": 1, "last_row": 1, "first_col": 2, "last_col": 3},
+            ),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(<TabularRowRange>{"first": 2, "last": 3}, sheet.header_rows);
+        assertEq(("PO", "SKU", "Menge bestätigt", "Menge offen"), (map $1.header, sheet.columns));
+    }
+
+    #! rows directly above the header that are titles or key/value lines, not group names (qore#7751)
+    twoRowHeaderNegative() {
+        # a key/value line: its first label is in the first column
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Supplier:", "ACME Components"),
+            ("PO", "SKU", "Qty"),
+            ("PO-1", "A", 5),
+        ));
+        assertEq(2, sheet.header_row);
+        assertNothing(sheet.header_rows);
+        assertEq((1,), sheet.title_rows);
+        assertNothing(finding(sheet, "multi_row_header"));
+
+        # a single label in the first column
+        sheet = profileOne((("2026",), ("Jan", "Feb", "Mar"), (1, 2, 3)));
+        assertNothing(sheet.header_rows);
+        assertEq((1,), sheet.title_rows);
+        assertEq(("Jan", "Feb", "Mar"), (map $1.header, sheet.columns));
+
+        # a banner merged over every column of the header
+        hash<TabularSheetGrid> grid({
+            "name": "s",
+            "rows": (("Sales 2026",), ("Region", "Q1", "Q2"), ("North", 1, 2)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 2},),
+        });
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(2, sheet.header_row);
+        assertNothing(sheet.header_rows, "a banner over every column is a title");
+        assertEq((1,), sheet.title_rows);
+        assertEq(("Region", "Q1", "Q2"), (map $1.header, sheet.columns));
+        assertEq((), sheet.header_merged, "the banner does not cover the header's row");
+
+        # a label over a column without a name
+        sheet = profileOne((("", "", "Note"), ("Artikel", "Menge", ""), ("A-1", 5, "x")));
+        assertNothing(sheet.header_rows, "a label over an empty header cell");
+
+        # a label outside the columns of the header
+        sheet = profileOne((("", "", "", "Note"), ("Artikel", "Menge", "Preis"), ("A-1", 5, 1.5)));
+        assertNothing(sheet.header_rows, "a label right of the header");
+
+        # a row above the header with a value that is no group name
+        sheet = profileOne((("", "Menge", 1.5), ("Artikel", "bestätigt", "offen"), ("A-1", 5, 2)));
+        assertNothing(sheet.header_rows, "a decimal number above the header");
+
+        # a title merged over the first columns of the header
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Bestellungen KW 41",), ("PO", "SKU", "Qty", "Price", "Date"),
+                ("PO-1", "A", 5, 1.5, 2026-10-10)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 2},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "a single merged label in the first column is a title");
+        assertEq((1,), sheet.title_rows);
+        assertEq(("PO", "SKU", "Qty", "Price", "Date"), (map $1.header, sheet.columns));
+
+        # notes and key/value labels right of the first column
+        sheet = profileOne(((NOTHING, NOTHING, NOTHING, "Printed by: admin"), ("PO", "SKU", "Qty", "Price"),
+            ("PO-1", "A", 5, 1.5)));
+        assertNothing(sheet.header_rows, "a note");
+        assertEq((1,), sheet.title_rows);
+        sheet = profileOne(((NOTHING, NOTHING, "Supplier:", "ACME"), ("PO", "SKU", "Qty", "Price"),
+            ("PO-1", "A", 5, 1.5)));
+        assertNothing(sheet.header_rows, "a key/value label");
+
+        # a title merged over the first columns, with another label in its row
+        foreach auto other in (("Seite 1", 2026-10-10)) {
+            grid = <TabularSheetGrid>{
+                "name": "s",
+                "rows": (("Bestellungen KW 41", NOTHING, NOTHING, NOTHING, other),
+                    ("PO", "SKU", "Qty", "Price", "Date"), ("PO-1", "A", 5, 1.5, 2026-10-10)),
+                "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 2},),
+            };
+            sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+            assertNothing(sheet.header_rows, sprintf("a title and %y", other));
+            assertEq(("PO", "SKU", "Qty", "Price", "Date"), (map $1.header, sheet.columns));
+        }
+
+        # a group merged over the first columns beside a column without a group is a title
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Kunde", NOTHING, NOTHING), ("Name", "Ort", "Betrag"), ("ACME", "Wien", 5)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "a group over the first column");
+        assertEq(("Name", "Ort", "Betrag"), (map $1.header, sheet.columns));
+
+        # column numbers, and a report date over the last column
+        sheet = profileOne(((NOTHING, 1, 2, 3), ("Name", "A", "B", "C"), ("x", "a", "b", "c")));
+        assertNothing(sheet.header_rows, "column numbers");
+        assertEq(("Name", "A", "B", "C"), (map $1.header, sheet.columns));
+        sheet = profileOne(((NOTHING, NOTHING, NOTHING, 2026-11-26), ("PO", "SKU", "Qty", "Price"),
+            ("PO-1", "A", 5, 1.5)));
+        assertNothing(sheet.header_rows, "a report date");
+        sheet = profileOne(((NOTHING, NOTHING, "Report"), ("PO", "SKU", "Qty"), ("PO-1", "A", 5)));
+        assertNothing(sheet.header_rows, "a label over the last column only");
+
+        # merged ranges without a value are formatting only
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": ((NOTHING, NOTHING, "Seite 1"), (NOTHING, "Plan", "Ist"), ("North", 1, 2)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 0, "last_col": 0},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "an empty corner merged down");
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": ((NOTHING, NOTHING, NOTHING, "Bericht"), ("Region", "P", "Q", "R"), ("North", 1, 2, 3)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 1, "last_col": 2},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "an empty merge beside a label over the last column");
+
+        # dates are no group names
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": ((NOTHING, 2026-01-01, NOTHING), ("Region", "Plan", "Ist"), ("North", 1, 2)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 1, "last_col": 2},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertNothing(sheet.header_rows, "a date over the columns");
+        assertEq(("Region", "Plan", "Ist"), (map $1.header, sheet.columns));
+
+        # a banner merged over several rows takes no header's place
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Bericht",), (), (), ("PO", "SKU", "Qty", "Price"), ("PO-1", "A", 5, 1.5)),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 2, "first_col": 0, "last_col": 9},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(4, sheet.header_row, "the rows that the banner covers are no header");
+        assertEq(("PO", "SKU", "Qty", "Price"), (map $1.header, sheet.columns));
+        grid = <TabularSheetGrid>{
+            "name": "s",
+            "rows": (("Bericht",), (), ("Name", "Ort", "Land"), ("ACME", "Wien", "AT")),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 1, "first_col": 0, "last_col": 2},),
+        };
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq(3, sheet.header_row, "a sheet of text columns under a banner of two rows");
+        assertEq(("Name", "Ort", "Land"), (map $1.header, sheet.columns));
+
+        # a header of one row in the first row
+        sheet = profileOne((("PO", "Qty"), ("PO-1", 5)));
+        assertEq(1, sheet.header_row);
+        assertNothing(sheet.header_rows);
+        assertEq((), sheet.header_merged);
     }
 
     totalsAndGaps() {
@@ -646,6 +1082,95 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq({"Rates": "Data!$A$1:$B$4"}, grid.named_ranges);
         assertNothing(grid.text_format);
         assertEq(4, TabularProfiler::profile(grid).sheets[0].data_region.last_row);
+    }
+
+    givenHeaderRow() {
+        # a plan whose column names are on row 3 under a note, and whose first data row is all text
+        hash<TabularWorkbookGrid> grid({
+            "format": "xlsx",
+            "sheets": (<TabularSheetGrid>{
+                "name": "Plan",
+                "rows": (
+                    ("Plan 2026",),
+                    ("Article", "Store", "Week"),
+                    ("Code", "Location", "Qty"),
+                    ("A-1", "Plzeň", 480),
+                    ("A-2", "Brno", 12),
+                ),
+            },),
+        });
+        # found: the label row with data under it is the header
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(grid).sheets[0];
+        assertEq(3, sheet.header_row, "the profiler's own guess");
+
+        # given: the rows above are title rows, the data starts on the next row, the columns are named from it
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 2}).sheets[0];
+        assertEq(2, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq(3, sheet.data_region.first_row);
+        assertEq(("Article", "Store", "Week"), (map $1.header, sheet.columns));
+        assertEq(3, sheet.samples.size(), "row 3 is data now");
+        assertNothing(finding(sheet, "no_header_row"));
+
+        # none: every row from the first with content is data, and no finding says none was found
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 0}).sheets[0];
+        assertNothing(sheet.header_row);
+        assertEq((), sheet.title_rows);
+        assertEq(1, sheet.data_region.first_row);
+        assertEq((NOTHING, NOTHING, NOTHING), (map $1.header, sheet.columns));
+        assertNothing(finding(sheet, "no_header_row"), "the caller said the sheet has none");
+
+        # on the last row with content: the columns are named from it, and there is no data
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 5}).sheets[0];
+        assertEq(5, sheet.header_row);
+        assertEq((1, 2, 3, 4), sheet.title_rows);
+        assertNothing(sheet.data_region);
+        assertEq(("A-2", "Brno", "12"), (map $1.header, sheet.columns));
+        assertEq((), sheet.samples);
+
+        # below every row with content: no data, and no column; the rows with content above it are title rows
+        foreach int row in ((6, 9)) {
+            sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": row}).sheets[0];
+            assertEq(row, sheet.header_row);
+            assertNothing(sheet.data_region);
+            assertEq((), sheet.columns);
+            assertEq((), sheet.samples);
+            assertEq((1, 2, 3, 4, 5), sheet.title_rows, "row " + row);
+            assertEq((1, 2, 3, 4, 5), finding(sheet, "title_rows").detail, "row " + row);
+            assertNothing(finding(sheet, "no_header_row"));
+        }
+
+        # leading and inner empty rows above the given header are not title rows
+        hash<TabularWorkbookGrid> gaps({
+            "format": "xlsx",
+            "sheets": (<TabularSheetGrid>{
+                "name": "Gaps",
+                "rows": ((), ("Report",), (), ("a", "b"), (1, 2)),
+            },),
+        });
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 4}).sheets[0];
+        assertEq((2,), sheet.title_rows);
+        assertEq(5, sheet.data_region.first_row);
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 7}).sheets[0];
+        assertEq((2, 4, 5), sheet.title_rows);
+        assertNothing(sheet.data_region);
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 0}).sheets[0];
+        assertEq(2, sheet.data_region.first_row, "none: the data starts on the first row with content");
+        assertEq((), sheet.title_rows);
+
+        assertThrows("TABULAR-PROFILE-ERROR", "header_row", \TabularProfiler::profile(), (grid,
+            <TabularProfileOptions>{"header_row": -1}));
+
+        # the profile action takes it too
+        PipeProfileDataProvider prov();
+        binary data = binary("Stock list\nSKU|Qty\nA|5\nB|6");
+        assertEq(2, prov.doRequest({"data": data}).sheets[0].header_row);
+        hash<auto> profile = prov.doRequest({"data": data, "header_row": 0});
+        assertNothing(profile.sheets[0].header_row);
+        assertEq(1, profile.sheets[0].data_region.first_row);
+        assertEq(3, prov.doRequest({"data": data, "header_row": "3"}).sheets[0].header_row,
+            "a soft integer, as a JSON caller may send it");
+        assertTrue(prov.getRequestType().getFields().hasKey("header_row"));
     }
 
     profileProvider() {

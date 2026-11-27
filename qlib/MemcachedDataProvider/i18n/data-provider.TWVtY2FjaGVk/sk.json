@@ -16,7 +16,7 @@
           "message": "Distribuovaný systém ukladania objektov do vyrovnávacej pamäte Memcached"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
+          "source": "Set value",
           "message": "Nastaviť hodnotu"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Uložiť pár kľúč-hodnota v memcached a prepísať akúkoľvek existujúcu hodnotu"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
+          "source": "Add value",
           "message": "Pridať hodnotu"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Uložiť pár kľúč-hodnota v memcached, iba ak kľúč ešte neexistuje"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
+          "source": "Replace value",
           "message": "Nahradiť hodnotu"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Nahradiť hodnotu v memcached, iba ak kľúč už existuje"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
+          "source": "Compare and swap",
           "message": "Compare and Swap"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Aktualizovať hodnotu iba v prípade, že sa jej token CAS zhoduje (optimistické zamykanie)"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
+          "source": "Get value",
           "message": "Získať hodnotu"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Získať hodnotu z vyrovnávacej pamäte spolu s jej tokenom CAS pre optimistické zamykanie"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
+          "source": "Multi-get",
           "message": "Multi-Get"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Získať verziu servera memcached"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
+          "source": "Flush all",
           "message": "Vyprázdniť všetko"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {

@@ -1996,7 +1996,7 @@ public class McpClient {
 
                 # Flush pending writes on the connection to ensure QUIC
                 # packets are sent before closeAll() cancels operations
-                HttpClientIo::HttpClientConnection conn = result.stream.getConnection();
+                HttpClientIo::HttpClientConnectionView conn = result.stream.getConnectionView();
                 string conn_key = conn.getConnectionId().toString();
                 if (!flushed_connections{conn_key}) {
                     conn.flushPendingWrites();

@@ -60,7 +60,7 @@ module GeneratorDataProvider {
             "app": GeneratorDataProvider::AppName,
             "path": "/",
             "action": "generate-records",
-            "display_name": "Generate Records",
+            "display_name": "Generate records",
             "short_desc": "Generate a stream of records with a configurable schema",
             "desc": "Generate a stream of records with configurable count, field types, and data generation "
                 "strategy for testing data pipelines",
@@ -84,7 +84,7 @@ module GeneratorDataProvider {
             "app": GeneratorDataProvider::AppName,
             "path": "/",
             "action": "generate-from-template",
-            "display_name": "Generate From Template",
+            "display_name": "Generate from template",
             "short_desc": "Generate records based on a template record",
             "desc": "Generate a stream of records by repeating and varying a template record with optional "
                 "randomization for testing data pipelines",

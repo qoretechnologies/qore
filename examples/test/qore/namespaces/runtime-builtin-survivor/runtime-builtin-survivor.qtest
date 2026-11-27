@@ -38,6 +38,9 @@ class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
         addTestCase("a Program with a class that names a class of the module kept beyond the module", \staticTest());
         addTestCase("a Program with a class added one at a time that names a class of the module kept beyond the module",
             \oneTest());
+        addTestCase("two Programs whose classes name each other are freed at library cleanup", \cycleTest());
+        addTestCase("a refused variant of the static system namespace leaves nothing at library cleanup",
+            \sharedTest());
         set_return_value(main());
     }
 
@@ -82,6 +85,27 @@ class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
         string out = checked(prefix + "QORE_MODULE_DIR=" + quote(mods) + " " + quote(qore_bin) + " -b --enable-debug "
             + quote(get_script_dir() + DirSep + "RuntimeBuiltinSurvivor.q") + " " + which);
         assertEq("ok\n", out, which);
+    }
+
+    #! runs a case and checks that every declaration of a Program is freed at library cleanup (qore#7680)
+    private runTeardown(string which) {
+        string dir = build();
+        string mods = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string command = prefix + "QORE_TEARDOWN_REPORT=1 QORE_MODULE_DIR=" + quote(mods) + " " + quote(qore_bin)
+            + " -b --enable-debug " + quote(get_script_dir() + DirSep + "RuntimeBuiltinSurvivor.q") + " " + which;
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        assertEq("ok\n", result.stdout, which);
+        assertRegex("declarations of Programs left after qore_cleanup\\(\\): 0\n", result.stderr,
+            which + ": every declaration is freed");
+    }
+
+    cycleTest() {
+        runTeardown("cycle");
+    }
+
+    sharedTest() {
+        runTeardown("shared");
     }
 
     objectTest() {

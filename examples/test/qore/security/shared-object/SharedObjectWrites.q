@@ -125,10 +125,10 @@ string sub own_class_code(SharedTarget t) {
     return try_change(sub () { t.cacheValue(\"cached\"); });
 }
 
-# a copy of a shared object is not shared
+# a copy of a shared object whose class declares no copy() method is refused (qore#7667; see
+# shared-object-copy.qtest)
 string sub change_copy(SharedTarget t) {
-    SharedTarget c = t.copy();
-    return try_change(sub () { c.s = \"copy\"; });
+    return try_change(sub () { SharedTarget c = t.copy(); c.s = \"copy\"; });
 }
 ";
 
@@ -171,7 +171,7 @@ foreach string name in (p.callFunction("change_names")) {
 SharedTarget shared = shared_target();
 printf("reads: %s\n", p.callFunction("reads", shared));
 printf("the object's own class code for the tenant: %s, s: %y\n", p.callFunction("own_class_code", shared), shared.s);
-printf("the tenant changes its copy: %s, s: %y\n", p.callFunction("change_copy", shared), shared.s);
+printf("the tenant copies it: %s, s: %y\n", p.callFunction("change_copy", shared), shared.s);
 printf("a trusted caller: %s\n", (string sub () {
     try {
         shared.s = "trusted";

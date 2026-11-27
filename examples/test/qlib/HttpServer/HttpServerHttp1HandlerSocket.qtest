@@ -444,6 +444,14 @@ class RegisteringSseHandler inherits ServerSentEventHandler::ServerSentEventHand
     }
 }
 
+#! A trusted event stream handler that asks for the socket of its requests: the server sends the header of its HTTP/1.x
+#! streams itself (qore#7551)
+class ViewSseHandler inherits RegisteringSseHandler {
+    constructor() {
+        setHandlerSocketView();
+    }
+}
+
 #! Reports the sockets that the application code of a WebSocket connection gets
 class ScanWebSocketHandler inherits WebSocketHandler {
     public {
@@ -1291,6 +1299,8 @@ nothing sub run_code(code c) {
         addTestCase("a REST stream with a timeout", \restTimeoutTest());
         addTestCase("the socket ends when the request is answered early", \earlyAnswerTest());
         addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
+        addTestCase("the header of an event stream of a trusted handler with a socket view is sent once",
+            \viewSseTest());
         addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
         addTestCase("a trusted RestHandler asks for the socket of its requests only when told", \baseClassesTest());
         addTestCase("a kept socket does not keep the server", \keptSocketTest());
@@ -1937,6 +1947,14 @@ nothing sub run_code(code c) {
         assertThrows("HTTP-HANDLER-SOCKET-ERROR", \reader.read(), 1s, "the reader of an answered request");
     }
 
+    #! checks that the data of an event stream after its header is no second header: no status line or header field
+    private checkNoSecondHeader(string stream) {
+        assertEq(-1, stream.find("HTTP/1."), "no second status line: " + stream);
+        # the fields of an event (event, data, id, retry) are no header fields
+        assertFalse(stream =~ /^(Cache-Control|Content-Type|Connection|Date|Server|Transfer-Encoding):/mi,
+            "no header field: " + stream);
+    }
+
     #! an HTTP/1.1 event stream, which its handler gets the connection's socket for, ends with its connection: the
     #! connection serves no other request, as a WebSocket connection
     sseTest() {
@@ -1978,6 +1996,37 @@ nothing sub run_code(code c) {
         }
         assertTrue(stream.find("event: end") >= 0, "the event: " + stream);
         assertEq(-1, stream.find("served after"), "no response to the next request: " + stream);
+        checkNoSecondHeader(stream);
+    }
+
+    #! a trusted handler that asked for the socket of its requests: the server sends the header of the stream itself,
+    #! and the stream after it starts with the events (qore#7551)
+    viewSseTest() {
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        ViewSseHandler sse();
+        assertTrue(sse.needsHandlerSocketView(), "the handler asked for the socket of its requests");
+        srv.setHandler("sse", "^events", NOTHING, sse);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket c();
+        c.connect("localhost:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> hdr = c.readHTTPHeader(HangGuard);
+        assertEq(200, hdr.status_code);
+        assertEq("text/event-stream", hdr."content-type");
+        assertEq("close", hdr.connection, "the stream ends with the connection");
+        ServerSentEventConnection conn = sse.registered.get(HangGuard);
+        on_exit conn.stop();
+        conn.send(<SseMessageInfo>{"event": "end", "data": "done"});
+        string stream = "";
+        while (stream.find("event: end") < 0) {
+            stream += c.recv(-1, HangGuard);
+        }
+        checkNoSecondHeader(stream);
+        assertRegex("^(data|event|id|retry): ", stream, "the stream starts with a field of the event: " + stream);
     }
 
     #! a handler declared by sandboxed code gets the socket of its request without asking for it, a trusted handler
@@ -2532,6 +2581,8 @@ class NoView inherits AbstractHttpRequestHandler {
             }
             # the handler serializes the data as JSON
             assertTrue(stream.find("data: \"done\"") >= 0, "the event reaches the client: " + stream);
+            # the stream after the server's header starts with the events, not with a second header (qore#7551)
+            checkNoSecondHeader(stream);
             conn.stop();
         }
 
@@ -2552,6 +2603,8 @@ class NoView inherits AbstractHttpRequestHandler {
                 stream += c.recv(-1, HangGuard);
             }
             assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+            # the stream after the server's header starts with the events, not with a second header (qore#7551)
+            checkNoSecondHeader(stream);
             sse.conns.get(HangGuard).stop();
         }
         assertEq(0, sse.results.size(), "nothing else was recorded");
@@ -2603,6 +2656,8 @@ class NoView inherits AbstractHttpRequestHandler {
                 stream += c.recv(-1, HangGuard);
             }
             assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+            # the stream after the server's header starts with the events, not with a second header (qore#7551)
+            checkNoSecondHeader(stream);
         }
 
         # code of a subclass cannot take the poll operation from a stream that gives none

@@ -403,19 +403,34 @@ public class AbstractDataField inherits Qore::Serializable {
     #! AbstractDataProviderType::freeze()
     /** Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()")
         also marks the field as a shared object (see
-        @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()").
+        @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()").  A field frozen by code that may
+        not share objects is marked then, with its type, when code that may share objects freezes it again
+        (qore#7735).
 
         @since DataProvider 3.12
     */
     freeze() {
         # a field that is a shared object was frozen when it was marked
         if (SandboxManager::isSharedObject(self)) {
+            # the process-wide type cache gets the field's type: what it holds must be shared objects (qore#7740)
+            if (Priv::_freeze_requires_marking) {
+                getType().freeze();
+            }
             return;
         }
         shared_object = True;
-        getType().freeze();
-        if (SandboxManager::canShareObjects()) {
+        # marked before its type, so that a type that holds the field is not frozen again through it; a field frozen
+        # where it could not be marked is marked, with its type, when code that may share objects freezes it again
+        # (qore#7735)
+        bool can_share = SandboxManager::canShareObjects();
+        if (can_share) {
             SandboxManager::shareObject(self);
+        }
+        AbstractDataProviderType type = getType();
+        type.freeze();
+        # a field that is a shared object has a type that is a shared object (qore#7740)
+        if (can_share && !SandboxManager::isSharedObject(type)) {
+            Priv::refuse_unmarked_member("data type", type.getName());
         }
     }
 
@@ -1101,32 +1116,33 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! Converts a technical name into a display name
-    /** Word breaks are taken from dashes, underscores, dots, spaces, and case transitions, and each word is
-        capitalized; acronyms are preserved (ex: \c "getUserURL" -> \c "Get User URL", \c "createTPSReports" ->
-        \c "Create TPS Reports")
+    /** Word breaks are taken from dashes, underscores, dots, spaces, and case transitions, and the display name
+        is a label in sentence case: its first word is capitalized and the others are written in lower case;
+        acronyms are preserved (ex: \c "getUserURL" -> \c "Get user URL", \c "createTPSReports" ->
+        \c "Create TPS reports")
 
         Words in all upper case are case-folded to an initial capital followed by lower case, so that technical
         names in upper case produce readable display names (ex: \c "PAYMENT-DISPUTE-28" ->
-        \c "Payment Dispute 28"); acronyms are excluded from case folding and are recognized as follows, in
+        \c "Payment dispute 28"); acronyms are excluded from case folding and are recognized as follows, in
         order of precedence:
         - words classified explicitly with the \c extra_acronyms argument
-        - words listed in @ref Acronyms (ex: \c "HTTP_SERVER" -> \c "HTTP Server")
+        - words listed in @ref Acronyms (ex: \c "HTTP_SERVER" -> \c "HTTP server")
         - words no longer than @ref AcronymMaxLength characters that are neither listed in @ref NonAcronyms
           nor in @ref FunctionWords (ex: \c "CUSTOMER_ID" -> \c "Customer ID", but \c "MAX_RETRIES" ->
-          \c "Max Retries" and \c "CREATED_AT" -> \c "Created At")
+          \c "Max retries" and \c "CREATED_AT" -> \c "Created at")
 
         Each resulting word is then rendered as follows, in order of precedence:
         - a word classified explicitly with the \c extra_acronyms argument keeps the case it was given by
           the rules above
-        - a word listed in @ref FunctionWords is written in lower case unless it begins or ends the display
-          name (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards", but \c "created_at" ->
-          \c "Created At")
+        - a word listed in @ref FunctionWords is written in lower case unless it begins the display name
+          (ex: \c "wait_for_active_shards" -> \c "Wait for active shards")
         - a word listed in @ref WordRenderings is written in its canonical form, whatever case it is written
           in in the technical name, so that lower-case, upper-case, and camel-case technical names all
           produce the same display name (ex: \c "api_key", \c "API_KEY", and \c "apiKey" all yield
-          \c "API Key", and \c "saas_provider" yields \c "SaaS Provider")
-        - any other word has its initial letter capitalized and the rest of the word left unchanged, so that
-          acronyms preserved by the case-folding rules above keep their case (ex: \c "TPS", \c "URLs")
+          \c "API key", and \c "saas_provider" yields \c "SaaS provider")
+        - the first word has its initial letter capitalized and the rest of the word left unchanged; any other
+          word is written in lower case unless it keeps a capital after its first letter, so that acronyms
+          preserved by the case-folding rules above keep their case (ex: \c "TPS", \c "URLs")
 
         Words in caseless scripts (ex: Chinese, Japanese, Korean, Arabic, Hebrew, Thai, Devanagari) are
         always left unchanged
@@ -1140,7 +1156,8 @@ public class AbstractDataField inherits Qore::Serializable {
         a @ref False "False" value marks it as an ordinary word to be case-folded
 
         @param locale optional BCP 47 language whose capitalization convention and case mappings are
-        applied; without it the display name is rendered in English, exactly as before.  Note that a
+        applied; without it the display name is rendered in English.  A language whose title convention is
+        title case (English) still renders a label in sentence case, as labels are not titles.  Note that a
         provider's presentation source locale, not the locale of whoever is reading, is the one that
         applies to metadata: readers are served translations from the presentation catalogs
 
@@ -1150,8 +1167,8 @@ public class AbstractDataField inherits Qore::Serializable {
         exception that the final form of the Greek sigma is used at the end of a word; language-specific
         mappings (ex: the Turkish dotted and dotless \c i) are applied only when \a locale is given
 
-        @note Without \a locale the @ref FunctionWords rule and the English title-case convention it
-        implements are applied whatever language the technical name is in; give \a locale to render with
+        @note Without \a locale the English @ref FunctionWords and sentence case are applied whatever language
+        the technical name is in; give \a locale to render with
         that language's own capitalization convention and function words.  The \c extra_acronyms argument
         overrides the classification of any word in either case
 
@@ -1165,15 +1182,23 @@ public class AbstractDataField inherits Qore::Serializable {
 
         @since DataProvider 3.8 \a locale renders the display name according to a language's own
         conventions
+
+        @since DataProvider 3.13 a display name is in sentence case in English and without a locale, and a word
+        written with a capital after its first letter keeps its case in sentence case
     */
     static string getDisplayName(string name, *hash<string, bool> extra_acronyms, *string locale) {
         # the capitalization convention and the function words are properties of the language, so they are
-        # resolved once per call rather than per word; without a locale the English rules are used, which
-        # keeps the result and the cost identical for callers that do not ask for a language
-        string style = TitleCaseStyle;
+        # resolved once per call rather than per word; without a locale the English rules are used
+        # a display name is a label, not a title: labels are written in sentence case, so a language whose
+        # title convention is title case (English, and the default without a locale) renders a label in
+        # sentence case; a language that preserves case (ex: Japanese) keeps its own convention
+        string style = SentenceCaseStyle;
         *hash<string, bool> function_words;
         if (locale.val()) {
             style = I18n::get_capitalization_style(locale);
+            if (style == TitleCaseStyle) {
+                style = SentenceCaseStyle;
+            }
             function_words = map {$1: True}, I18n::get_function_words(locale);
         }
         # convert dashes and underscores to spaces
@@ -1275,9 +1300,10 @@ public class AbstractDataField inherits Qore::Serializable {
         if (exists canonical) {
             return canonical;
         }
-        # sentence case capitalizes the first word of the display name only
+        # sentence case capitalizes the first word of the display name only; a word that keeps a capital after its
+        # first letter (an acronym preserved when upper-case words were folded, ex: "TPS", "URLs") keeps its case
         if (style == SentenceCaseStyle && !first) {
-            return key;
+            return (word.length() > 1 && word.substr(1) =~ /\p{Lu}/) ? word : key;
         }
         return AbstractDataField::capitalizeWord(word, locale);
     }

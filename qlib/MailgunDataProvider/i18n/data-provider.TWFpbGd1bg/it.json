@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "Invia email"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Indirizzo email per le risposte"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "Convalida email"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "L'indirizzo email da convalidare"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
+          "source": "Add mailing list member",
           "message": "Aggiungi membro alla mailing list"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Se `True`, aggiorna il membro se esiste già (predefinito: `False`)"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
+          "source": "Get mailing list member",
           "message": "Recupera membro della mailing list"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -640,7 +640,7 @@
           "message": "L'indirizzo email del membro da recuperare"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
+          "source": "Delete mailing list member",
           "message": "Elimina membro della mailing list"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -676,7 +676,7 @@
           "message": "L'indirizzo email del membro da rimuovere"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
+          "source": "List mailing list members",
           "message": "Elenca membri della mailing list"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Numero massimo di membri da restituire"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
+          "source": "Create route",
           "message": "Crea route"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Una descrizione di cosa fa questa route"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
+          "source": "List routes",
           "message": "Elenca route"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Numero massimo di route da restituire"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
+          "source": "List mailing lists",
           "message": "Elenca mailing list"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Numero massimo di mailing list da restituire"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "Elenca domini"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Numero massimo di domini da restituire"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "Link dell'email selezionato"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Seleziona il dominio da monitorare per gli eventi di clic"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
+          "source": "Email delivered",
           "message": "Email recapitata"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Seleziona il dominio da monitorare per gli eventi di recapito"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "Email aperta"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Seleziona il dominio da monitorare per gli eventi di apertura"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
+          "source": "Permanent failure",
           "message": "Errore permanente"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Seleziona il dominio da monitorare per gli eventi di errore permanente"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
+          "source": "Temporary failure",
           "message": "Errore temporaneo"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Seleziona il dominio da monitorare per gli eventi di errore temporaneo"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
+          "source": "Spam complaint",
           "message": "Reclamo spam"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {

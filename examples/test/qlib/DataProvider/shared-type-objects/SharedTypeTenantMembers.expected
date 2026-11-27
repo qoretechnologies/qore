@@ -1,0 +1,20 @@
+register a type holding a tenant's field: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+register a type holding a tenant's type: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+add a tenant's field to a registered type: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: registered, fields: ["own"]
+set a tenant's type as the default type of a registered type: DATA-PROVIDER-REGISTRATION-DENIED
+  cached default type: "auto"
+register a type holding a tenant's field: DATA-PROVIDER-REGISTRATION-DENIED
+  again: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+freeze a type holding a tenant's field: DATA-PROVIDER-REGISTRATION-DENIED
+  register it: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+register a type holding a tenant's field that does not freeze itself: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+register a type holding a union with a tenant's alternative: DATA-PROVIDER-REGISTRATION-DENIED
+  cached: not registered
+register a type of trusted code: done
+  cached: trusted-only, fields: ["own"]

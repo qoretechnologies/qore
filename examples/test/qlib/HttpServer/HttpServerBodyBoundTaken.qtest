@@ -1,0 +1,332 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerBodyBoundTaken.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/2 and HTTP/3 connections, the I/O-thread pump of response bodies and connection teardown
+# An HTTP/2 or HTTP/3 response body is charged to its client until the client has taken it: a body that the I/O thread
+# sends from an InputStream after its source has ended, and a buffered body, are ended (RST_STREAM, RESET_STREAM)
+# when their client takes less than the listener's minimum rate; the rest of an HTTP/2 body whose END_STREAM frame has
+# been serialized is in the connection's send buffer, so the connection is ended (qoretechnologies/qore#7653).  The
+# client's withheld flow-control credit is simulated by holding the stream's data, and a client that does not read
+# the connection by holding the session's writes.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+
+%exec-class HttpServerBodyBoundTakenTest
+
+#! the client's own timeout, far longer than the bound
+const ClientTimeout = 20s;
+
+#! a body that its source sends at once: it reaches its end in the first pass of the pump
+const SmallBodySize = 64 * 1024;
+
+#! a body far larger than the client's flow-control windows and the socket buffers
+const LargeBodySize = 8 * 1024 * 1024;
+
+#! a minimum rate at which the largest progress step that the bound allows for lasts one window (1 s in startServer())
+/** The bound credits a client with one step of its progress at the minimum rate (the data taken within one second,
+    up to 8 MiB: SendRateWindow::MaxProgressStep), so that the time that it allows a client that stops reading
+    depends on how much the socket buffers took, unless the step at this rate lasts no longer than the window.
+
+    The bound charges the whole time of the body to the client, also while the server fills the socket buffers: a
+    server that sends far slower than this rate (such as under valgrind) is ended before the buffers are full, and the
+    RST_STREAM of the body is then written
+*/
+const StepBoundMinRate = 8 * 1024 * 1024;
+
+#! responds by the path of the request
+/** - \c /pumped-held: a small body sent from an InputStream on a stream whose data is held
+    - \c /buffered-held: a small buffered body on a stream whose data is held
+    - \c /tail: a small buffered body on an HTTP/2 connection whose writes are held, so that its END_STREAM frame is
+      serialized into the send buffer and never written
+    - \c /healthy-buffered, \c /healthy-pumped: a large body
+*/
+class BoundBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the server's sockets of the connections by request path, recorded by BoundListener
+        hash<string, Socket> socks;
+        #! the server's socket of the last request
+        *Socket sock;
+        Mutex m();
+        #! reports each request
+        Queue received();
+        #! the monotonic time in microseconds when the last held response was returned
+        int response_us;
+        #! the large body, made in advance (making it in the handler is slow under valgrind)
+        binary large_body = binary(strmul("x", LargeBodySize));
+        #! a body far larger than the socket buffers, for \c /huge-buffered, set by the test that uses it
+        *binary huge_body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> hi = cx."header-info";
+        {
+            AutoLock al(m);
+            sock = socks{cx.raw_path};
+        }
+        # debug-builtin-guard: only testHeld() and testTailNotWritten() request these paths, which skip without library
+        # debugging
+        switch (cx.raw_path) {
+            case "/pumped-held":
+            case "/buffered-held":
+                if (hi.http3) {
+                    # also after the body has ended: a pumped body ends in its first pass
+                    call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id, False, True);
+                } else {
+                    call_function("dbg_http2_hold_stream_data", hi.stream_id);
+                }
+                break;
+            case "/tail":
+                call_function("dbg_socket_hold_h2_writes", sock, True);
+                break;
+        }
+        response_us = clock_get_monotonic_us();
+        received.push(cx.raw_path);
+        switch (cx.raw_path) {
+            case "/pumped-held":
+                return makeResponse(200, new BinaryInputStream(binary(strmul("x", SmallBodySize))),
+                    {"Content-Type": "application/octet-stream"});
+            case "/healthy-pumped":
+                return makeResponse(200, new BinaryInputStream(large_body),
+                    {"Content-Type": "application/octet-stream"});
+            case "/healthy-buffered":
+                return makeResponse(200, large_body, {"Content-Type": "application/octet-stream"});
+            case "/huge-buffered":
+                return makeResponse(200, huge_body, {"Content-Type": "application/octet-stream"});
+        }
+        return makeResponse(200, binary(strmul("x", SmallBodySize)), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+#! records the server's socket of each request for the handler; the handler gets only a view of it
+class BoundListener inherits HttpListener {
+    private {
+        BoundBodyHandler h;
+    }
+
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts, BoundBodyHandler h) : HttpListener(server, handleRequest, id, ss, opts) {
+        self.h = h;
+    }
+
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> processNativeRequest(Socket s, hash<auto> cx, hash<auto> hdr,
+            hash<auto> header_info) {
+        {
+            AutoLock al(h.m);
+            h.socks{hdr.path} = s;
+        }
+        return HttpListener::processNativeRequest(s, cx, hdr, header_info);
+    }
+}
+
+#! a server whose listeners are BoundListener objects
+class BoundServer inherits HttpServer {
+    private {
+        BoundBodyHandler h;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts, BoundBodyHandler h) : HttpServer(opts) {
+        self.h = h;
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new BoundListener(server, \handleRequest(), id, seqSessions, info, h);
+    }
+}
+
+class HttpServerBodyBoundTakenTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerBodyBoundTaken", "1.0") {
+        foreach bool http3 in ((False, True)) {
+            string v = http3 ? "HTTP/3" : "HTTP/2";
+            addTestCase(v + ": a pumped body whose source has ended is reset when its client takes too little",
+                \testHeld(), (http3, "/pumped-held"));
+            addTestCase(v + ": a buffered body is reset when its client takes too little", \testHeld(),
+                (http3, "/buffered-held"));
+            addTestCase(v + ": a buffered body whose client takes the data arrives complete", \testHealthy(),
+                (http3, "/healthy-buffered"));
+            addTestCase(v + ": a pumped body whose client takes the data arrives complete", \testHealthy(),
+                (http3, "/healthy-pumped"));
+        }
+        addTestCase("HTTP/2: the connection of a body whose END_STREAM frame is never written is ended",
+            \testTailNotWritten());
+        addTestCase("HTTP/2: a client that stops reading a buffered body has it ended", \testStopsReadingBuffered());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_socket_hold_h2_writes")) {
+            testSkip("requires a debug build");
+        }
+    }
+
+    #! starts the server; @p min_rate is the listener's minimum send rate
+    private hash<auto> startServer(BoundBodyHandler h, int min_rate = 65536) {
+        BoundServer hs(<HttpServerOptionInfo>{}, h);
+        hs.setDefaultHandler("bound", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+            "stream_send_min_rate": min_rate,
+            "stream_send_min_rate_window": 1s,
+        }).port;
+        hs.waitForAsyncIo();
+        return {"server": hs, "port": port};
+    }
+
+    #! returns an HTTP/2 client of the server
+    private HTTPClient getH2Client(int port) {
+        return new HTTPClient({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+            "timeout": ClientTimeout});
+    }
+
+    #! sends the request; returns the response or raises the client's error
+    private hash<auto> get(int port, bool http3, string path) {
+        if (http3) {
+            HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": ClientTimeout,
+                "connect_timeout": 15s,
+            });
+            on_exit delete mgr;
+            hash<auto> r = mgr.request("https://127.0.0.1:" + port, "GET", path, NOTHING, NOTHING);
+            return {"status_code": r.status_code, "body": r.body};
+        }
+        HTTPClient c = getH2Client(port);
+        on_exit c.disconnect();
+        return c.send(NOTHING, "GET", path, NOTHING, False);
+    }
+
+    #! a body all of whose data is buffered or staged is reset when its client takes nothing of it
+    testHeld(bool http3, string path) {
+        skipIfNoDebugging();
+        BoundBodyHandler h();
+        hash<auto> setup = startServer(h);
+        # at the end: the release of the data, then the stop of the server
+        on_exit setup.server.stop();
+        on_exit call_function(http3 ? "dbg_quic_release_stream_data" : "dbg_http2_release_stream_data");
+        *string err;
+        try {
+            get(setup.port, http3, path);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err + ": " + ex.desc;
+        }
+        assertEq(path, h.received.get(5s), "the request was received");
+        # from the response, when the bound's measurement of the body starts
+        int ms = (clock_get_monotonic_us() - h.response_us) / 1000;
+        assertRegex("RESET|CANCEL", err ?? "no error", "the body was reset");
+        assertGe(900, ms, "after a whole window");
+        assertLt(ClientTimeout.durationMilliseconds(), ms, "before the client's own timeout");
+    }
+
+    #! a client that takes the data gets the whole body; the body leaves the bounds once it has been taken
+    testHealthy(bool http3, string path) {
+        BoundBodyHandler h();
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+        if (http3) {
+            hash<auto> resp = get(setup.port, True, path);
+            assertEq(200, resp.status_code);
+            assertEq(LargeBodySize, resp.body.size(), "the whole body arrived");
+            return;
+        }
+        # the connection is kept, so that the server's records of it can be read
+        HTTPClient c = getH2Client(setup.port);
+        on_exit c.disconnect();
+        for (int i = 0; i < 2; ++i) {
+            hash<auto> resp = c.send(NOTHING, "GET", path, NOTHING, False);
+            assertEq(200, resp.status_code);
+            assertEq(LargeBodySize, resp.body.size(), sprintf("the whole body %d arrived", i + 1));
+        }
+        if (Option::HAVE_LIBRARY_DEBUGGING && exists_function("dbg_socket_stream_records")) {
+            # the server wrote each body's END_STREAM frame before the client could read it, and the body left the
+            # bounds when the frame was written
+            hash<string, int> counts = call_function("dbg_socket_stream_records", h.sock, 0);
+            assertEq(0, counts.bound_bodies, "no body is left in the bounds");
+        }
+    }
+
+    #! the rest of a body whose END_STREAM frame has been serialized is in the connection's send buffer: a client that
+    #! does not take it has its connection ended; another connection is not affected
+    testTailNotWritten() {
+        skipIfNoDebugging();
+        BoundBodyHandler h();
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+
+        # a healthy client on another connection at the same time
+        Queue healthy();
+        background sub () {
+            try {
+                HTTPClient c = getH2Client(setup.port);
+                on_exit c.disconnect();
+                # the tail's request first, so that both run together
+                h.received.get(10s);
+                hash<auto> resp = c.send(NOTHING, "GET", "/healthy-buffered", NOTHING, False);
+                healthy.push(resp.body.size());
+            } catch (hash<ExceptionInfo> ex) {
+                healthy.push(get_exception_string(ex));
+            }
+        }();
+
+        RawHttp2Client c(setup.port);
+        on_exit c.close();
+        int stream_id = c.get("/tail");
+        # the response is never written: the connection is ended by the bound, or the read times out
+        *hash<RawHttp2StreamResult> r;
+        *string err;
+        try {
+            r = c.readStream(stream_id, ClientTimeout);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err + ": " + ex.desc;
+        }
+        int ms = (clock_get_monotonic_us() - h.response_us) / 1000;
+        assertEq(NOTHING, err, "the server ended the connection");
+        assertTrue(r.closed, "the connection was closed");
+        assertFalse(r.ended, "the body did not end");
+        assertEq(0, r.data_bytes, "no data of the body was written");
+        assertGe(900, ms, "after a whole window");
+
+        auto size = healthy.get(ClientTimeout);
+        assertEq(LargeBodySize, size, "the other connection got its whole body");
+    }
+
+    #! a client that grants the largest windows and then does not read the connection: the RST_STREAM of the body
+    #! waits behind the data in the connection's send buffer, which the server collects no frames into until it is
+    #! written, so the connection is ended after the next window
+    testStopsReadingBuffered() {
+        BoundBodyHandler h();
+        # far larger than the socket buffers of both ends, also on a host with large TCP buffer limits
+        h.huge_body = binary(strmul("x", 128 * 1024 * 1024));
+        # the data that the socket buffers of both ends take at once is a step of the client's progress, which the
+        # bound allows for at the minimum rate, up to the largest step: at the default rate of this test, the host's
+        # buffers decide whether the body is ended within the wait below (two minutes for the largest step); at this
+        # rate, any step lasts at most a window
+        hash<auto> setup = startServer(h, StepBoundMinRate);
+        on_exit setup.server.stop();
+        RawHttp2Client c(setup.port);
+        on_exit c.close();
+        int stream_id = c.get("/huge-buffered");
+        assertEq("/huge-buffered", h.received.get(30s), "the request was received");
+        # far longer than the two windows of the bound (the body's end, then the connection's), each with its step
+        usleep(8s);
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
+        assertTrue(r.closed, sprintf("the connection was ended (%d bytes taken, ended: %y)", r.data_bytes, r.ended));
+        assertEq(NOTHING, r.reset_code, "no RST_STREAM was written");
+        assertFalse(r.ended, "the body did not end");
+        assertLt(h.huge_body.size(), r.data_bytes, "the client did not get the whole body");
+    }
+}

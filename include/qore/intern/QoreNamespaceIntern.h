@@ -67,6 +67,7 @@ class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
 class QoreModuleContext;
+class BuiltinFunctionVariantBase;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -722,6 +723,11 @@ public:
         module or of the static system namespace, which share their private data, are not.
     */
     DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
+
+    //! Throws a QoreStandardException (\c RUNTIME-DECLARATION-ERROR) if the signature of a builtin variant that is
+    //! added to a namespace that no Program owns names a mortal declaration
+    //! (qore#7680)
+    DLLLOCAL void checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1556,6 +1562,14 @@ protected:
     //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
     //! every marking event then refreshes every variant
     bool unmarked_index_incomplete = false;
+    //! the number of declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be
+    //! taken (QoreTypeOwner::type_owner_refs_pending), which the completion of a marking event takes (qore#7680)
+    /** A count, not a list, so that recording a failure allocates nothing: the completion finds them in the namespace
+        tree and in the caches of its generic hashdecls (retryPendingRuntimeRefs()); one that is freed before (with a
+        namespace whose attach failed) is not found.  Atomic, as an instance of a generic hashdecl is recorded without
+        the runtime namespace lock (addPendingRuntimeRefs())
+    */
+    std::atomic<size_t> pending_runtime_refs{0};
     //! true from the start of a marking event until its upgrade of the derived types and its refresh of
     //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
     //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
@@ -2763,6 +2777,8 @@ public:
     //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
     //! write lock
     DLLLOCAL bool beginRuntimeMarking() {
+        // before a declaration is marked (qore_runtime_mortal_decls_exist(), qore#7680)
+        qore_set_runtime_mortal_decls_exist();
         bool incomplete = runtime_refresh_pending;
         runtime_refresh_pending = true;
         return incomplete;
@@ -2778,6 +2794,26 @@ public:
         if (runtime_refresh_pending) {
             completeRuntimeMarking(type_vec_t(), 0, true);
         }
+    }
+
+    //! Gives declarations of the Program that became mortal the references of qore_type_owner_take_runtime_refs(), or,
+    //! if an allocation fails, records them for the next marking event (retryPendingRuntimeRefs(); qore#7680); does
+    //! not throw; called under the runtime namespace write lock
+    DLLLOCAL void takeRuntimeRefs(const std::vector<QoreTypeOwner*>& owners);
+
+    //! Takes the references that takeRuntimeRefs() could not take; throws std::bad_alloc if an allocation fails, in
+    //! which case they stay pending; called under the runtime namespace write lock
+    DLLLOCAL void retryPendingRuntimeRefs();
+
+    //! Records declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be taken,
+    //! for retryPendingRuntimeRefs(); does not allocate or throw, and needs no lock (qore#7680)
+    DLLLOCAL void addPendingRuntimeRefs(const std::vector<QoreTypeOwner*>& owners) {
+        pending_runtime_refs.fetch_add(qore_type_owner_set_refs_pending(owners), std::memory_order_release);
+    }
+
+    //! Returns the number of declarations whose references are pending (pending_runtime_refs; qore#7680)
+    DLLLOCAL size_t pendingRuntimeRefs() const {
+        return pending_runtime_refs.load(std::memory_order_acquire);
     }
 
     //! Returns true if a marking event did not complete (runtime_refresh_pending)
@@ -2915,7 +2951,14 @@ public:
 
         for (unsigned j = 0; j < qmc.mcfl.size(); ++j) {
             ModuleContextFunctionCommit& mc = qmc.mcfl[j];
-            mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            // a variant that is refused (one that names a declaration that a namespace committed above marked) is
+            // freed and its exception raised in the module's sink; the others are committed, and the indexes rebuilt
+            // (qore#7680)
+            try {
+                mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            } catch (AbstractException& e) {
+                e.convert(&qmc.getXSink());
+            }
         }
 
         // issue #3461: must rebuild all indexes here or symbols will appear missing

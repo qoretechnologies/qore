@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Utwórz rekord"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Nazwa tabeli Business Central, np.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Znajdź pojedynczy rekord"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Nazwa tabeli Business Central, np.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Znajdź rekordy"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Nazwa tabeli Business Central, np.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Zaktualizuj rekordy"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Nazwa tabeli Business Central, np.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Usuń rekordy"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

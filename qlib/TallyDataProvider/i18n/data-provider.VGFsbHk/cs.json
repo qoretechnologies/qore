@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create Form",
+          "source": "Create form",
           "message": "Vytvořit formulář"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "Klíč pole pro zajištění jedinečných odeslání"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Získat formulář"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
@@ -1068,7 +1068,7 @@
           "message": "Jedinečný identifikátor formuláře k načtení"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update Form",
+          "source": "Update form",
           "message": "Aktualizovat formulář"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Klíč pole pro zajištění jedinečných odeslání"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete Form",
+          "source": "Delete form",
           "message": "Smazat formulář"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Jedinečný identifikátor formuláře ke smazání (přesune se do koše)"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
-          "source": "Search Forms",
+          "source": "Search forms",
           "message": "Vyhledat formuláře"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Seznam ID pracovních prostorů pro filtrování výsledků"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Získat odeslání"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Jedinečný identifikátor odeslání k načtení"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Smazat odeslání"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Jedinečný identifikátor odeslání ke smazání"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
-          "source": "Search Submissions",
+          "source": "Search submissions",
           "message": "Vyhledat odeslání"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Získat odeslání po konkrétním ID odeslání"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
-          "source": "Search Questions",
+          "source": "Search questions",
           "message": "Vyhledat otázky"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "ID formuláře, ze kterého se mají načíst otázky"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Vytvořit webhook"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Volitelný identifikátor externího odběratele"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Aktualizovat webhook"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Hodnota vlastního hlavičkového záhlaví HTTP"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Smazat webhook"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "Jedinečný identifikátor webhooku ke smazání"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
-          "source": "Search Webhooks",
+          "source": "Search webhooks",
           "message": "Vyhledat webhooky"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Počet webhooků na stránku (1–100, výchozí `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search Webhook Events",
+          "source": "Search webhook events",
           "message": "Vyhledat události webhooku"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Číslo stránky pro stránkování (výchozí `1`)"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
-          "source": "Retry Webhook Event",
+          "source": "Retry webhook event",
           "message": "Znovu zkusit událost webhooku"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "ID neúspěšné události webhooku k opakování"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create Workspace",
+          "source": "Create workspace",
           "message": "Vytvořit pracovní prostor"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "Zobrazovaný název nového pracovního prostoru"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Získat pracovní prostor"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Jedinečný identifikátor pracovního prostoru k načtení"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace",
+          "source": "Update workspace",
           "message": "Aktualizovat pracovní prostor"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Nový zobrazovaný název pracovního prostoru"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete Workspace",
+          "source": "Delete workspace",
           "message": "Smazat pracovní prostor"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Jedinečný identifikátor pracovního prostoru ke smazání; tímto se smažou také všechny formuláře v pracovním prostoru"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
-          "source": "Search Workspaces",
+          "source": "Search workspaces",
           "message": "Vyhledat pracovní prostory"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Číslo stránky pro stránkování (výchozí `1`)"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Získat aktuálního uživatele"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Získat informace o aktuálně ověřeném uživateli"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
-          "source": "New Form Submission",
+          "source": "New form submission",
           "message": "Nové odeslání formuláře"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {

@@ -24,7 +24,8 @@
     and the Table and Database constructors that take one are in the DATABASE domain, so a direct call is refused
     when it is parsed and a call made at run time with INVALID-FUNCTION-ACCESS.  Code without the restriction can,
     also when a sandbox governs it (a trusted Qorus interface), and so can a function of the trusted host that the
-    restricted code calls, as the host's code decides.
+    restricted code calls, as the host's code decides.  Sandboxed code cannot deserialize a table or a connection at
+    all, as their classes have non-public members (qore#7146).
 
     The worker opens a datasource of a driver that does not exist, so an allowed call fails with LOAD-MODULE-ERROR when
     the connection is used.  It runs in every execution mode, and its case Programs in the same mode; as a
@@ -102,8 +103,14 @@ class SqlUtilCallerDatabaseTest inherits QUnit::Test {
                 : (restricted ? "PERMISSION-DENIED" : Allowed);
             rv{caller + ".runtime.getDatabase"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
             foreach string call in (("dbdataprovider", "deserialize", "connection", "deserialize-connection")) {
-                rv{sprintf("%s.module.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
-                rv{sprintf("%s.callback.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
+                # sandboxed code cannot deserialize the classes of the modules, whose non-public members it would set,
+                # and the host's function that serializes its connection for sandboxed code cannot give it the
+                # connection's non-public state (qore#7146)
+                string err = (sandboxed && call == "deserialize-connection") ? "SERIALIZATION-ERROR"
+                    : ((sandboxed && call == "deserialize") ? "DESERIALIZATION-ERROR"
+                        : (restricted ? "PERMISSION-DENIED" : Allowed));
+                rv{sprintf("%s.module.%s", caller, call)} = err;
+                rv{sprintf("%s.callback.%s", caller, call)} = err;
             }
             # another module that opens a table for the caller calls a variant in the DATABASE domain: it is refused
             # when it is entered, as the calling code is restricted from the domain (qore#6337)

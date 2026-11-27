@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Vytvoriť embeddingy"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Veľkosť výstupného vektora. Podporovaný rozsah určuje vybraný `model`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "Typ embeddingu"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Ak je `true`, skráti vstup presahujúci maximálny limit tokenov modelu namiesto vrátenia chyby."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "Late Chunking"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Hodnota `True` spracuje vstupy ako jednu sekvenciu pred rozdelením a zachová kontext medzi časťami."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "Vrátiť multivektor"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Ak je `true`, vráti jeden embedding na token. Nemožno použiť s `dimensions`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "Vrátiť tokenizovaný vstup"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Ak je `true`, vráti tokeny spolu s viacvektorovými embeddingmi. Vyžaduje `return_multivector=true`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Typ vstupu"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "dokument"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Preusporiadať dokumenty"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Obrázok ako URL alebo reťazec zakódovaný v base64."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Top N"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Počet najlepších výsledkov. Ak nie je zadaný, vrátia sa všetky dokumenty."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "Vrátiť dokumenty"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Hodnota `True` (predvolená) zahrnie obsah dokumentu do každého výsledku."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "Max. dĺžka dokumentu"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Maximálny počet tokenov na dokument (1-8192). Vynechajte pre použitie predvolených hodnôt modelu (2048 pre jina-reranker-v3, 8192 pre jina-reranker-v3.5)."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "Vrátiť embeddingy"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Ak je `true`, vráti embedding dokumentu spolu so skóre relevantnosti."
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "Klasifikovať obsah"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Kandidátske štítky: zoznam až 512 štítkov, alebo slovník až 8 skupín s maximálne 64 štítkami v každej."
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "Trénovať alebo aktualizovať klasifikátor"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Verejné"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "Počet iterácií"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Počet iterácií pre tréningový proces."
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "Zoznam klasifikátorov"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Nájsť uložené klasifikátory na opätovné použitie alebo odstránenie. **Dostupnosť služby:** Jina vrátila HTTP 500 pre tento koncový bod počas overovania 7. septembra 2026; ID klasifikátorov je stále možné zadať priamo."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Odstrániť klasifikátor"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Uložený klasifikátor na odstránenie."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Zoznam modelov"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Porovnajte možnosti modelov pred výberom modelu na tvorbu embeddingov alebo zmenu poradia výsledkov. Katalóg je verejný; použite ping pripojenia na overenie vášho API kľúča."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Model, ktorého možnosti a ceny sa majú získať."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "Vytvoriť dávkové embeddingy"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Ak je `true` (predvolené), embeddingy sú L2-normalizované na jednotkovú dĺžku."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "Získať stav dávky"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Dávka embeddingov, ktorú chcete skontrolovať alebo zrušiť."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Zrušiť dávku"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Dávka embeddingov, ktorú chcete skontrolovať alebo zrušiť."
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Vypísať dávky"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Maximálny počet nedávnych dávok na vrátenie."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Prečítať webovú stránku alebo dokument"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Skratka"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Hľadať na webe"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Zahrnúť ikony stránok s výsledkami."
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "Segmentovať text"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Vrátiť len tento počet koncových tokenov."
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "Chat s vizuálnym modelom"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Teplota vzorkovania riadiaca variácie odpovede."
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "Hĺbkové vyhľadávanie (Deep Search)"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Čítať zdroje iba z týchto domén."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "Stiahnuť dávkový výstup"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Dokončená dávka, ktorej JSONL výsledky alebo chyby sa majú stiahnuť."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "Stiahnuť dávkové chyby"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

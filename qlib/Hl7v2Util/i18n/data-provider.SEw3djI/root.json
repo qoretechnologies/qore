@@ -16,8 +16,8 @@
           "message": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) delimited healthcare messages for integration and transformation workflows.\n\n**Capabilities**:\n- Preserve message structure and custom `Z` segments without requiring a fixed schema\n- Read custom delimiters from `MSH` and handle HL7 escape sequences\n- Expose one parsed segment per record through the DataProvider API\n- Serialize parsed messages or simple segment records back to HL7 v2 text"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
-          "message": "Read HL7 v2 Message"
+          "source": "Read HL7 v2 message",
+          "message": "Read HL7 v2 message"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
           "source": "Read HL7 v2 message data from a file",
@@ -76,8 +76,8 @@
           "message": "Keep the text in the input encoding as read, without a check"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
-          "message": "Read HL7 v2 Inline Data"
+          "source": "Read HL7 v2 inline data",
+          "message": "Read HL7 v2 inline data"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
           "source": "Read HL7 v2 message data from an inline string",
@@ -100,8 +100,8 @@
           "message": "Inline HL7 v2 message data. Use this option when the message is already in memory."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
-          "message": "Write HL7 v2 Message"
+          "source": "Write HL7 v2 message",
+          "message": "Write HL7 v2 message"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
           "source": "Write HL7 v2 message data to a file",
@@ -124,8 +124,8 @@
           "message": "Path to write the serialized HL7 v2 message."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
-          "message": "Load HL7 v2 Schema"
+          "source": "Load HL7 v2 schema",
+          "message": "Load HL7 v2 schema"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
           "source": "Load generated HL7 v2 schema metadata",
@@ -196,8 +196,8 @@
           "message": "If `True`, ignore the in-memory schema cache and reload the schema artifact."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
-          "message": "HL7 v2 Schema Summary"
+          "source": "HL7 v2 schema summary",
+          "message": "HL7 v2 schema summary"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
           "source": "Load a generated HL7 v2 schema summary",

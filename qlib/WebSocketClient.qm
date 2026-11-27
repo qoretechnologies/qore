@@ -80,7 +80,7 @@ module WebSocketClient {
             "app": WebSocketClient::AppName,
             "path": "/",
             "action": "msg-received",
-            "display_name": "WebSocket Message Received",
+            "display_name": "WebSocket message received",
             "short_desc": "A WebSocket message is received",
             "desc": "Receive a WebSocket message from a WebSocket server; react to a WebSocket message",
             "action_code": DPAT_EVENT,
@@ -92,7 +92,7 @@ module WebSocketClient {
             "app": WebSocketClient::AppName,
             "path": "/",
             "action": "send-msg-data",
-            "display_name": "Send WebSocket Message",
+            "display_name": "Send WebSocket message",
             "short_desc": "Send a WebSocket data message",
             "desc": "Send a WebSocket data message to a WebSocket server; the message is serialized for sending",
             "action_code": DPAT_SEND_MESSAGE,
@@ -109,7 +109,7 @@ module WebSocketClient {
             "app": WebSocketClient::AppName,
             "path": "/",
             "action": "send-msg-raw",
-            "display_name": "Send Raw WebSocket Message",
+            "display_name": "Send raw WebSocket message",
             "short_desc": "Send a raw WebSocket message",
             "desc": "Send a raw WebSocket message to a WebSocket server",
             "action_code": DPAT_SEND_MESSAGE,
@@ -1755,7 +1755,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
             @since WebSocketClient 2.5
         */
-        *HttpClientIo::HttpClientConnection async_wake_conn;
+        *HttpClientIo::HttpClientConnectionView async_wake_conn;
 
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
@@ -2543,7 +2543,7 @@ ws.connect();
         }
         if (hcio_stream) {
             try {
-                return hcio_stream.getConnection().isReady();
+                return hcio_stream.getConnectionView().isReady();
             } catch () {
                 return False;
             }
@@ -2562,7 +2562,7 @@ ws.connect();
     private shutdownAndCloseUnlocked() {
         if (hcio_stream) {
             try {
-                hcio_stream.getConnection().close();
+                hcio_stream.getConnectionView().close();
             } catch () {
             }
         } else if (async_wake_socket) {
@@ -2598,7 +2598,7 @@ ws.connect();
                 # the public accessor of the poll operation, which applies the rules of the connection for code that a
                 # sandbox restricts: the socket of a shared connection is refused, and an idle HTTP/1.1 connection is
                 # taken out of the pool (qore#7544); a refusal gives no socket here
-                return stream.getConnection().getPollOperation().getSocket();
+                return stream.getConnectionView().getPollSocket();
             } catch () {
             }
         }
@@ -4503,7 +4503,7 @@ ws.setEventQueue();
             if (transport == "http1") {
                 # H1 after 101 Upgrade: extract socket from the H1 connection
                 # and use the C++ WebSocket codec directly (full-duplex, proven)
-                HttpClientIo::HttpClientConnection conn = hcio_stream.getConnection();
+                HttpClientIo::HttpClientConnectionView conn = hcio_stream.getConnectionView();
                 Socket ws_sock = conn.getSocket();
                 # Cancel the HCIO poll operation for this socket before submitting
                 # the WebSocket one — without this, the old HCIO poll op and the new
@@ -4548,7 +4548,7 @@ ws.setEventQueue();
             async_owner = "wsc-hcio-" + get_random_string(12);
             async_close_sent = False;
             # the connection wakes its I/O controller (qore#7544)
-            async_wake_conn = hcio_stream.getConnection();
+            async_wake_conn = hcio_stream.getConnectionView();
             # Mark as started — enables on_poll_complete delivery from notifyIo.
             # The data already in the Channel is drained by runInitialDrain(),
             # which schedules a delivery only when it drained something.
@@ -4699,7 +4699,7 @@ ws.setEventQueue();
             if (async_wake_socket) {
                 # the static API: no controller wrapper per message (issue #6836)
                 Qore::AsyncIoController::wakeSocket(io_object: async_wake_socket);
-            } else if (*HttpClientIo::HttpClientConnection wc = async_wake_conn) {
+            } else if (*HttpClientIo::HttpClientConnectionView wc = async_wake_conn) {
                 wc.notifyPendingData();
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -6198,11 +6198,8 @@ ws.setEventQueue();
         # an HTTP/2 stream's queue is registered before the frame state is installed, as the poll operation did:
         # installFrameState() marks the registration for the queue as owned by the frame state, so that the
         # connection does not read the stream's data itself; see WebSocketClientHcioPollOp::constructor()
-        HttpClientIo::HttpClientConnection frame_conn = stream.getConnection();
-        if (frame_conn instanceof HttpClientIo::Http2ClientConnection) {
-            cast<HttpClientIo::Http2ClientConnection>(frame_conn).registerStreamQueue(stream.getStreamId(),
-                frame_queue);
-        }
+        # (the registration is made on an HTTP/2 connection only)
+        stream.getConnectionView().registerStreamQueue(stream.getStreamId(), frame_queue);
         try {
             stream.installFrameState(frame_queue);
         } catch (hash<ExceptionInfo> ex) {
@@ -8466,7 +8463,7 @@ public class WebSocketClientHcioPollOp {
         HttpClientIo::HttpClientStreamHandle stream;
 
         #! Connection object (for sendStreamData); typed as generic base
-        HttpClientIo::HttpClientConnection conn;
+        HttpClientIo::HttpClientConnectionView conn;
 
         #! Queue fed by the C++ frame-state decoder with typed frame hashes
         #! (\c {type: text|binary|ping|pong|close|error, data?, code?, reason?, rsv1?, rsv2?, rsv3?})
@@ -8630,7 +8627,7 @@ public class WebSocketClientHcioPollOp {
         last_recv_activity_ms = clock_get_monotonic_us() / 1000;
 
         # Get connection and stream ID (protocol-agnostic)
-        conn = stream.getConnection();
+        conn = stream.getConnectionView();
         stream_id = stream.getStreamId();
         @assert(stream_id >= 0, "stream_id must be non-negative after startStreaming");
 
@@ -8641,16 +8638,15 @@ public class WebSocketClientHcioPollOp {
         #     a listener mapping.
         # H1: uses WebSocketClientPollOperation (C++ codec) with the extracted
         #     socket, not WebSocketClientHcioPollOp.
-        if (conn instanceof HttpClientIo::Http2ClientConnection) {
-            auto h2conn = cast<HttpClientIo::Http2ClientConnection>(conn);
+        # (each registration is made on a connection of its protocol only)
+        if (conn.getProtocol() == "h2") {
             # the handshake registered the queue before it installed the frame state
             if (!frame_queue) {
-                h2conn.registerStreamQueue(stream_id, msg_queue);
+                conn.registerStreamQueue(stream_id, msg_queue);
             }
-            h2conn.registerStreamListener(stream_id, self);
-        } else if (conn instanceof HttpClientIo::Http3ClientConnection) {
-            auto h3conn = cast<HttpClientIo::Http3ClientConnection>(conn);
-            h3conn.registerStreamNotifyAndListener(stream_id, self);
+            conn.registerStreamListener(stream_id, self);
+        } else if (conn.getProtocol() == "h3") {
+            conn.registerStreamNotifyAndListener(stream_id, self);
         }
 
         # Swap the stream's default ChannelAction for a FrameStateAction so

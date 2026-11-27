@@ -16,7 +16,7 @@
           "message": "Lire et écrire des données de fichiers à longueur fixe"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "Lire des données à longueur fixe"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "La région de fuseau horaire à utiliser lors de l'analyse des dates (ex. : `Europe/Prague`) ; consultez [TZ identifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) pour connaître les valeurs valides"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "Écrire des données à longueur fixe"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

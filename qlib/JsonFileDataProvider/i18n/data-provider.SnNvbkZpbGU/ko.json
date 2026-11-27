@@ -16,7 +16,7 @@
           "message": "표준 JSON 파일(NDJSON/JSON Lines 제외)을 읽고 씁니다. 객체 배열(개별 레코드로 반복됨) 또는 단일 객체(하나의 레코드로 반환됨)를 포함하는 JSON 파일을 지원합니다. 쓰기용으로 설정 가능한 프리티 프린트(pretty-print) 출력을 제공합니다."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "JSON 파일 읽기"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "텍스트를 읽은 그대로 검사 없이 입력 인코딩으로 유지합니다"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "JSON 인라인 데이터 읽기"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "US-ASCII 인코딩"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "JSON 파일 쓰기"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "공백 없이 압축된 JSON 형태로 출력 작성"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "JSON 데이터 쓰기"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

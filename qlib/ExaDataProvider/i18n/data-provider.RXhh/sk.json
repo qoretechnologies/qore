@@ -472,7 +472,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Ďalšie parametre, ktoré sa majú odovzdať."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Bloky kódu"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Počet blokov kódu, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Počet URL, ktoré sa majú vrátiť z každej webovej stránky."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Bohaté odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Počet odkazov na bohaté obrázky, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Bohaté odkazy"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Zastarané a bude odstránené v budúcej verzii. Aktuálne ignorované. Pre prednastavené zvýraznenia zadajte highlights: true, alebo { query } pre vedenie výberu vlastným dotazom."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Maximálny počet znakov na vrátenie pre zvýraznenia. Riadi celkovú dĺžku textu zvýraznenia vráteného pre URL. Maximálna podporovaná hodnota je 10000. Nie je kompatibilné s highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Počet viet"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -680,7 +680,7 @@
           "message": "preferované"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Časový limit Livecrawl"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Časový limit živého prehľadávania v milisekundách."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Maximálny vek v hodinách"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Najvyšší vek obsahu vo vyrovnávacej pamäti v hodinách. Kladné hodnoty použijú obsah z vyrovnávacej pamäte, ak je mladší ako tento počet hodín; 0 načíta čerstvý obsah a je podporovaným spôsobom, ako na novo načítané stránky uplatniť možnosti vykreslenia textu; -1 vždy použije vyrovnávaciu pamäť; ak je hodnota vynechaná, použije sa náhradné načítanie, keď obsah vo vyrovnávacej pamäti nie je k dispozícii. Najvyššia podporovaná hodnota je 720 hodín."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Cieľ podstránok"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -776,7 +776,7 @@
           "message": "Možnosti extrakcie textu pri každom výsledku."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Vylúčiť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Vylúčiť obsah klasifikovaný do týchto sémantických sekcií stránok. Klasifikácia sekcií je najlepšie odhadovaná. Použite maxAgeHours: 0, ak chcete, aby sa aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "Zahrnúť HTML značky"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Ak je true, vráti sa text s ľahkými HTML značkami namiesto čistého markdownového textu. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Zahrnúť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Odhadom. Zahrňte iba obsah klasifikovaný do týchto sekcií sématických stránok. Klasifikácia sekcií môže byť pre niektoré stránky nedostupná alebo neúplná; overte výstup, ak je potrebné striktné filtrovanie. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve načítaný obsah."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "text"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Ďalšie vlastnosti"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.cHJvcGVydGllcw.display_name": {
@@ -1068,7 +1068,7 @@
           "message": "Vráti odpoveď ako prúd udalostí odosielaných serverom.  Ponechajte vypnuté, ak volajúci SSE nespracúva: akcia vracia celú odpoveď."
         },
         "app.RXhh.action.YW5zd2Vy.display_name": {
-          "source": "Answer a Question",
+          "source": "Answer a question",
           "message": "Odpovedať na otázku"
         },
         "app.RXhh.action.YW5zd2Vy.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Opis požadovanej odpovede podľa [JSON Schema Draft 7](https://json-schema.org/draft-07), vďaka ktorému sú výsledkom štruktúrované údaje namiesto súvislého textu."
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Ďalšie vlastnosti"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "Dvojpísmenový kód krajiny podľa ISO pre používateľa, napríklad US."
         },
         "app.RXhh.action.Y29udGVudHM.display_name": {
-          "source": "Get Contents",
+          "source": "Get contents",
           "message": "Získať obsah"
         },
         "app.RXhh.action.Y29udGVudHM.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Možnosti extrakcie textu pri každom výsledku."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Vylúčiť sekcie"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Vylúčiť obsah klasifikovaný do týchto sémantických sekcií stránok. Klasifikácia sekcií je najlepšie odhadovaná. Použite maxAgeHours: 0, ak chcete, aby sa aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "Zahrnúť HTML značky"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Ak je true, vráti sa text s ľahkými HTML značkami namiesto čistého markdownového textu. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Zahrnúť sekcie"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Odhadom. Zahrňte iba obsah klasifikovaný do týchto sekcií sématických stránok. Klasifikácia sekcií môže byť pre niektoré stránky nedostupná alebo neúplná; overte výstup, ak je potrebné striktné filtrovanie. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve načítaný obsah."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "Zastarané a bude odstránené v budúcej verzii. Aktuálne ignorované. Pre prednastavené zvýraznenia zadajte highlights: true, alebo { query } pre vedenie výberu vlastným dotazom."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Maximálny počet znakov na vrátenie pre zvýraznenia. Riadi celkovú dĺžku textu zvýraznenia vráteného pre URL. Maximálna podporovaná hodnota je 10000. Nie je kompatibilné s highlights.dynamic."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Počet viet"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Ďalšie parametre, ktoré sa majú odovzdať."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Bloky kódu"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Počet blokov kódu, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Odkazy na obrázky"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Počet URL, ktoré sa majú vrátiť z každej webovej stránky."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Bohaté odkazy na obrázky"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Počet odkazov na bohaté obrázky, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Bohaté odkazy"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "Výraz na nájdenie konkrétnych podstránok výsledkov hľadania. Môže to byť jeden reťazec alebo pole reťazcov."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
-          "source": "Find Similar Links",
+          "source": "Find similar links",
           "message": "Nájsť podobné odkazy"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "Ďalšie parametre, ktoré sa majú odovzdať."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Bloky kódu"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Počet blokov kódu, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "Počet URL, ktoré sa majú vrátiť z každej webovej stránky."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Bohaté odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Počet odkazov na bohaté obrázky, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Bohaté odkazy"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Zastarané a bude odstránené v budúcej verzii. Aktuálne ignorované. Pre prednastavené zvýraznenia zadajte highlights: true, alebo { query } pre vedenie výberu vlastným dotazom."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Maximálny počet znakov na vrátenie pre zvýraznenia. Riadi celkovú dĺžku textu zvýraznenia vráteného pre URL. Maximálna podporovaná hodnota je 10000. Nie je kompatibilné s highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Počet viet"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "preferované"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Časový limit Livecrawl"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Časový limit živého prehľadávania v milisekundách."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Maximálny vek v hodinách"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Najvyšší vek obsahu vo vyrovnávacej pamäti v hodinách. Kladné hodnoty použijú obsah z vyrovnávacej pamäte, ak je mladší ako tento počet hodín; 0 načíta čerstvý obsah a je podporovaným spôsobom, ako na novo načítané stránky uplatniť možnosti vykreslenia textu; -1 vždy použije vyrovnávaciu pamäť; ak je hodnota vynechaná, použije sa náhradné načítanie, keď obsah vo vyrovnávacej pamäti nie je k dispozícii. Najvyššia podporovaná hodnota je 720 hodín."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Cieľ podstránok"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Možnosti extrakcie textu pri každom výsledku."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Vylúčiť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "Vylúčiť obsah klasifikovaný do týchto sémantických sekcií stránok. Klasifikácia sekcií je najlepšie odhadovaná. Použite maxAgeHours: 0, ak chcete, aby sa aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "Zahrnúť HTML značky"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "Ak je true, vráti sa text s ľahkými HTML značkami namiesto čistého markdownového textu. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Zahrnúť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "Odhadom. Zahrňte iba obsah klasifikovaný do týchto sekcií sématických stránok. Klasifikácia sekcií môže byť pre niektoré stránky nedostupná alebo neúplná; overte výstup, ak je potrebné striktné filtrovanie. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve načítaný obsah."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "Vrátia sa iba odkazy so skorším dátumom publikovania. Musí byť zadané vo formáte ISO 8601."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Start a Research Run",
+          "source": "Start a research run",
           "message": "Spustiť výskumný beh"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Voliteľný limit útraty na beh pre merané miery úsilia `auto` a `max`. Behy, ktoré skončia skôr, môžu stáť menej než limit."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.display_name": {
-          "source": "Max Cost Dollars",
+          "source": "Max cost dollars",
           "message": "Maximálny náklad v dolároch"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.short_desc": {
@@ -2484,7 +2484,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Tokeny beta funkcií oddelené čiarkami na zapnutie experimentálnych funkcií."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.display_name": {
-          "source": "List Research Runs",
+          "source": "List research runs",
           "message": "Vypísať výskumné behy"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.short_desc": {
@@ -2532,7 +2532,7 @@
           "message": "Hodnota `nextCursor` z predchádzajúcej odpovede.  Všetky kolekcie v tomto API stránkujú rovnako: prečítajte `hasMore` a sem odovzdajte `nextCursor`, ak chcete získať ďalšiu stranu."
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.display_name": {
-          "source": "Get a Research Run",
+          "source": "Get a research run",
           "message": "Získať výskumný beh"
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.display_name": {
-          "source": "List Research Run Events",
+          "source": "List research run events",
           "message": "Vypísať udalosti výskumného behu"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.display_name": {
-          "source": "Last Event ID",
+          "source": "Last event ID",
           "message": "ID poslednej udalosti"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Pri prehraní SSE vrátiť iba udalosti po tomto ID udalosti."
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.display_name": {
-          "source": "Cancel a Research Run",
+          "source": "Cancel a research run",
           "message": "Zrušiť výskumný beh"
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.display_name": {
-          "source": "Stop a Research Run",
+          "source": "Stop a research run",
           "message": "Ukončiť výskumný beh"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.short_desc": {
@@ -2696,7 +2696,7 @@
           "message": "Tokeny beta funkcií oddelené čiarkami na zapnutie experimentálnych funkcií."
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Delete a Research Run",
+          "source": "Delete a research run",
           "message": "Odstrániť výskumný beh"
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create a Batch",
+          "source": "Create a batch",
           "message": "Vytvoriť dávku"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "Metaúdaje poskytnuté volajúcim, uložené spolu s dávkou."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Vypísať dávky"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Dokončené"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get a Batch",
+          "source": "Get a batch",
           "message": "Získať dávku"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "ID dávky."
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel a Batch",
+          "source": "Cancel a batch",
           "message": "Zrušiť dávku"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "ID dávky."
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete a Batch",
+          "source": "Delete a batch",
           "message": "Odstrániť dávku"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -3004,7 +3004,7 @@
           "message": "ID dávky."
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.display_name": {
-          "source": "Create a Search Monitor",
+          "source": "Create a search monitor",
           "message": "Vytvoriť monitor hľadania"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Ďalšie parametre, ktoré sa majú odovzdať."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Bloky kódu"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Počet blokov kódu, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Počet URL, ktoré sa majú vrátiť z každej webovej stránky."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Bohaté odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "Počet odkazov na bohaté obrázky, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Bohaté odkazy"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "Počet odkazov na bohaté odkazy, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "Vylúčiť prázdne výsledky"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "Zastarané a bude odstránené v budúcej verzii. Aktuálne ignorované. Pre prednastavené zvýraznenia zadajte highlights: true, alebo { query } pre vedenie výberu vlastným dotazom."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3224,7 +3224,7 @@
           "message": "Maximálny počet znakov na vrátenie pre zvýraznenia. Riadi celkovú dĺžku textu zvýraznenia vráteného pre URL. Maximálna podporovaná hodnota je 10000. Nie je kompatibilné s highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Počet viet"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Stratégia pre prehľadávanie obsahu stránky"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Časový limit Livecrawl"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "Časový limit živého prehľadávania v milisekundách."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Maximálny vek v hodinách"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -3308,7 +3308,7 @@
           "message": "Najvyšší vek obsahu vo vyrovnávacej pamäti v hodinách. Kladné hodnoty použijú obsah z vyrovnávacej pamäte, ak je mladší ako tento počet hodín; 0 načíta čerstvý obsah a je podporovaným spôsobom, ako na novo načítané stránky uplatniť možnosti vykreslenia textu; -1 vždy použije vyrovnávaciu pamäť; ak je hodnota vynechaná, použije sa náhradné načítanie, keď obsah vo vyrovnávacej pamäti nie je k dispozícii. Najvyššia podporovaná hodnota je 720 hodín."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Cieľ podstránok"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -3344,7 +3344,7 @@
           "message": "Vrátiť súhrn generovaný LLM. Pre predvolené hodnoty použite `true`, alebo objekt s `query` a `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Maximálny počet tokenov"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -3380,7 +3380,7 @@
           "message": "Možnosti extrakcie textu pri každom výsledku."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Vylúčiť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "Vylúčiť obsah klasifikovaný do týchto sémantických sekcií stránok. Klasifikácia sekcií je najlepšie odhadovaná. Použite maxAgeHours: 0, ak chcete, aby sa aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "Zahrnúť HTML značky"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "Ak je true, vráti sa text s ľahkými HTML značkami namiesto čistého markdownového textu. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Zahrnúť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -3416,7 +3416,7 @@
           "message": "Odhadom. Zahrňte iba obsah klasifikovaný do týchto sekcií sématických stránok. Klasifikácia sekcií môže byť pre niektoré stránky nedostupná alebo neúplná; overte výstup, ak je potrebné striktné filtrovanie. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve načítaný obsah."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "úplné"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "Vylúčiť domény"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -3464,7 +3464,7 @@
           "message": "Vylúčiť tieto domény z výsledkov vyhľadávania."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "Zahrnúť domény"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Obmedziť výsledky vyhľadávania na tieto domény."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "Počet výsledkov"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -3608,7 +3608,7 @@
           "message": "text"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Ďalšie vlastnosti"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -3636,7 +3636,7 @@
           "message": "Dvojice kľúč-hodnota vracané pri každom doručení webhooku, aby príjemca mohol aktualizácie smerovať bez toho, aby musel monitor dohľadávať."
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.display_name": {
-          "source": "List Search Monitors",
+          "source": "List search monitors",
           "message": "Vypísať monitory hľadania"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Filtrovať monitory podľa dvojíc kľúč-hodnota v metaúdajoch (presná zhoda, sémantika AND). Použite hranatú notáciu: `metadata[key]=value`."
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.display_name": {
-          "source": "Get a Search Monitor",
+          "source": "Get a search monitor",
           "message": "Získať monitor hľadania"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.short_desc": {
@@ -3744,7 +3744,7 @@
           "message": "ID monitora"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.display_name": {
-          "source": "Update a Search Monitor",
+          "source": "Update a search monitor",
           "message": "Aktualizovať monitor hľadania"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "Zastarané: použite namiesto toho zvýraznené pasáže alebo text. Vracia obsah stránok ako jeden súhrnný kontextový reťazec."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Ďalšie parametre, ktoré sa majú odovzdať."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Bloky kódu"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Počet blokov kódu, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Počet URL, ktoré sa majú vrátiť z každej webovej stránky."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Bohaté odkazy na obrázky"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Počet odkazov na bohaté obrázky, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Bohaté odkazy"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "Počet odkazov na bohaté odkazy, ktoré sa majú vrátiť pre každý výsledok."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "Vylúčiť prázdne výsledky"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Zastarané a bude odstránené v budúcej verzii. Aktuálne ignorované. Pre prednastavené zvýraznenia zadajte highlights: true, alebo { query } pre vedenie výberu vlastným dotazom."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "Maximálny počet znakov na vrátenie pre zvýraznenia. Riadi celkovú dĺžku textu zvýraznenia vráteného pre URL. Maximálna podporovaná hodnota je 10000. Nie je kompatibilné s highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Počet viet"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "Stratégia pre prehľadávanie obsahu stránky"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Časový limit Livecrawl"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Časový limit živého prehľadávania v milisekundách."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Maximálny vek v hodinách"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "Najvyšší vek obsahu vo vyrovnávacej pamäti v hodinách. Kladné hodnoty použijú obsah z vyrovnávacej pamäte, ak je mladší ako tento počet hodín; 0 načíta čerstvý obsah a je podporovaným spôsobom, ako na novo načítané stránky uplatniť možnosti vykreslenia textu; -1 vždy použije vyrovnávaciu pamäť; ak je hodnota vynechaná, použije sa náhradné načítanie, keď obsah vo vyrovnávacej pamäti nie je k dispozícii. Najvyššia podporovaná hodnota je 720 hodín."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Cieľ podstránok"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Vrátiť súhrn generovaný LLM. Pre predvolené hodnoty použite `true`, alebo objekt s `query` a `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Maximálny počet tokenov"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "Možnosti extrakcie textu pri každom výsledku."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Vylúčiť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Vylúčiť obsah klasifikovaný do týchto sémantických sekcií stránok. Klasifikácia sekcií je najlepšie odhadovaná. Použite maxAgeHours: 0, ak chcete, aby sa aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "Zahrnúť HTML značky"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -4160,7 +4160,7 @@
           "message": "Ak je true, vráti sa text s ľahkými HTML značkami namiesto čistého markdownového textu. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve stiahnutý obsah."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Zahrnúť sekcie"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Odhadom. Zahrňte iba obsah klasifikovaný do týchto sekcií sématických stránok. Klasifikácia sekcií môže byť pre niektoré stránky nedostupná alebo neúplná; overte výstup, ak je potrebné striktné filtrovanie. Použite maxAgeHours: 0, ak chcete, aby sa to aplikovalo na práve načítaný obsah."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Maximálny počet znakov"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -4208,7 +4208,7 @@
           "message": "úplné"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "Vylúčiť domény"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "Vylúčiť tieto domény z výsledkov vyhľadávania."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "Zahrnúť domény"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -4232,7 +4232,7 @@
           "message": "Obmedziť výsledky vyhľadávania na tieto domény."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "Počet výsledkov"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "text"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Ďalšie vlastnosti"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -4392,7 +4392,7 @@
           "message": "HTTPS URL pre prijímanie udalostí webhooku. Nesmie ukazovať na localhost alebo súkromné IP rozsahy."
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.display_name": {
-          "source": "Delete a Search Monitor",
+          "source": "Delete a search monitor",
           "message": "Odstrániť monitor hľadania"
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "ID monitora"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.display_name": {
-          "source": "Act on Several Monitors",
+          "source": "Act on several monitors",
           "message": "Vykonať akciu s viacerými monitormi"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Najvyšší počet monitorov spracovaných v jednej požiadavke. Predvolená hodnota je 50, maximum 500."
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.display_name": {
-          "source": "Run a Search Monitor Now",
+          "source": "Run a search monitor now",
           "message": "Spustiť monitor hľadania ihneď"
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "ID monitora"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.display_name": {
-          "source": "List Search Monitor Runs",
+          "source": "List search monitor runs",
           "message": "Vypísať behy monitora hľadania"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.short_desc": {
@@ -4608,7 +4608,7 @@
           "message": "Počet výsledkov na stranu"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.display_name": {
-          "source": "Get a Search Monitor Run",
+          "source": "Get a search monitor run",
           "message": "Získať beh monitora hľadania"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.short_desc": {

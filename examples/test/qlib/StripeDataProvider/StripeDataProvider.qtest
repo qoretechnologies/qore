@@ -378,7 +378,7 @@ public class StripeDataProviderTest inherits QUnit::Test {
 
         AbstractDataProvider child = root.getChildProviderEx("get-customer");
         assertTrue(child.getInfo().supports_request);
-        assertEq("Get Customer", child.getDisplayName());
+        assertEq("Get customer", child.getDisplayName());
     }
 
     referenceDataTest() {

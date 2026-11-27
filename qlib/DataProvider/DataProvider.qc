@@ -1097,9 +1097,15 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @param type the new data provider type
 
         @throw PROVIDER-ERROR the given provider has already been registered
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the type holds a type or field that code a sandbox governs created,
+        which cannot be marked as a shared object (qore#7740)
 
-        @note types are stored based on the path provided which may differ from their type names (which may be generic
-        and therefore not suitable for indexing)
+        @note
+        - types are stored based on the path provided which may differ from their type names (which may be generic
+          and therefore not suitable for indexing)
+        - every caller of the process-wide cache gets the type, so a type that code no sandbox governs registers is
+          frozen (see AbstractDataProviderType::freeze()): sandboxed code cannot change or delete it, or the types
+          and fields that it holds, also those added to it later (qore#7728)
     */
     static registerType(string path, AbstractDataProviderType type) [dom=PROCESS_CONTROL] {
         # a type path taken by sandboxed code would be denied to the module that owns it

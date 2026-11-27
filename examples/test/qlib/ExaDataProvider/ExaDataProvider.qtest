@@ -144,7 +144,7 @@ public class ExaDataProviderTest inherits QUnit::Test {
         assertEq(("Fast", "Standard", "Pro", "Research"),
             (map $1.display_name, by_id.answer.options.model.allowed_values));
 
-        # "Get Contents" takes the pages one way or the other, never both
+        # "Get contents" takes the pages one way or the other, never both
         assertEq(("ids",), by_id.contents.options.urls.exclusive_with);
         assertEq(("urls",), by_id.contents.options.ids.exclusive_with);
 

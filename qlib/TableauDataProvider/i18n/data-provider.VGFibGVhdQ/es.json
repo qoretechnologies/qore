@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.display_name": {
-          "source": "Search Datasources",
+          "source": "Search datasources",
           "message": "Buscar fuentes de datos"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.display_name": {
-          "source": "Get a Datasource",
+          "source": "Get a datasource",
           "message": "Obtener una fuente de datos"
         },
         "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.short_desc": {
@@ -408,7 +408,7 @@
           "message": "El ID de la fuente de datos"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.display_name": {
-          "source": "Update a Datasource",
+          "source": "Update a datasource",
           "message": "Actualizar una fuente de datos"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.short_desc": {
@@ -480,7 +480,7 @@
           "message": "Una nota sobre la certificación de la fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.display_name": {
-          "source": "Delete a Datasource",
+          "source": "Delete a datasource",
           "message": "Eliminar una fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.short_desc": {
@@ -504,7 +504,7 @@
           "message": "El identificador único de la fuente de datos que se va a eliminar"
         },
         "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.display_name": {
-          "source": "Download a Datasource",
+          "source": "Download a datasource",
           "message": "Descargar una fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.short_desc": {
@@ -528,7 +528,7 @@
           "message": "El identificador único de la fuente de datos a descargar"
         },
         "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.display_name": {
-          "source": "Add Tag to Datasource",
+          "source": "Add tag to datasource",
           "message": "Agregar etiqueta a fuente de datos"
         },
         "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.short_desc": {
@@ -564,7 +564,7 @@
           "message": "El nombre de la etiqueta a agregar a la fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.display_name": {
-          "source": "Delete Tag from Datasource",
+          "source": "Delete tag from datasource",
           "message": "Eliminar etiqueta de fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.short_desc": {
@@ -600,7 +600,7 @@
           "message": "El nombre de la etiqueta que se va a eliminar de la fuente de datos"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "Buscar proyectos"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get a Project",
+          "source": "Get a project",
           "message": "Obtener un proyecto"
         },
         "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -668,7 +668,7 @@
           "message": "El ID del proyecto"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create a Project",
+          "source": "Create a project",
           "message": "Crear un proyecto"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -740,7 +740,7 @@
           "message": "Bloqueado para el proyecto sin anidados"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update a Project",
+          "source": "Update a project",
           "message": "Actualizar un proyecto"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Bloqueado para el proyecto sin anidados"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete a Project",
+          "source": "Delete a project",
           "message": "Eliminar un proyecto"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -848,7 +848,7 @@
           "message": "El identificador único del proyecto a eliminar"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.display_name": {
-          "source": "Search Users",
+          "source": "Search users",
           "message": "Buscar usuarios"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.VGFibGVhdQ.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
+          "source": "Get a user",
           "message": "Obtener un usuario"
         },
         "app.VGFibGVhdQ.action.Z2V0LXVzZXI.short_desc": {
@@ -956,7 +956,7 @@
           "message": "El ID de usuario"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Create a User",
+          "source": "Create a user",
           "message": "Crear un usuario"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Tableau ID con autenticación multifactor"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
+          "source": "Update a user",
           "message": "Actualizar un usuario"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Tableau ID con autenticación multifactor"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete a User",
+          "source": "Delete a user",
           "message": "Eliminar un usuario"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "El identificador único del usuario que se va a eliminar"
         },
         "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.display_name": {
-          "source": "List Extract Refresh Tasks",
+          "source": "List extract refresh tasks",
           "message": "Listar tareas de actualización de extracciones"
         },
         "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
-          "source": "Get an Extract Refresh Task",
+          "source": "Get an extract refresh task",
           "message": "Obtener una tarea de actualización de extracto"
         },
         "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "El ID de la tarea"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
-          "source": "Delete an Extract Refresh Task",
+          "source": "Delete an extract refresh task",
           "message": "Eliminar una tarea de actualización de extracción"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
@@ -1268,7 +1268,7 @@
           "message": "El identificador único de la tarea de actualización de extracción que se va a eliminar"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.display_name": {
-          "source": "Datasource Created",
+          "source": "Datasource created",
           "message": "Fuente de datos creada"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.display_name": {
-          "source": "Datasource Deleted",
+          "source": "Datasource deleted",
           "message": "Fuente de datos eliminada"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.short_desc": {
@@ -1316,7 +1316,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.display_name": {
-          "source": "Datasource Updated",
+          "source": "Datasource updated",
           "message": "Fuente de datos actualizada"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.display_name": {
-          "source": "Datasource Refresh Started",
+          "source": "Datasource refresh started",
           "message": "Actualización de fuente de datos iniciada"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.display_name": {
-          "source": "Datasource Refresh Succeeded",
+          "source": "Datasource refresh succeeded",
           "message": "Actualización de fuente de datos correcta"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.display_name": {
-          "source": "Datasource Refresh Failed",
+          "source": "Datasource refresh failed",
           "message": "Error en la actualización de la fuente de datos"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos eventos (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.display_name": {
-          "source": "New Datasource",
+          "source": "New datasource",
           "message": "Nueva fuente de datos"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Nuevo proyecto"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.short_desc": {

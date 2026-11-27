@@ -124,8 +124,11 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
 
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
-    // only the Qore builtins, never a user or module function with the same name
-    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+    // only the Qore builtins, never a user or module function with the same name; a callee without builtin variants is
+    // rejected here, without the call to the full check: the interpreter checks every call with one argument, and
+    // almost no callee is a builtin (qore#7691)
+    const FunctionEntry* fe = call ? call->getFunctionEntry() : nullptr;
+    if (!fe || !fe->hasBuiltin() || !qore_rt_is_qore_builtin_function(fe)) {
         return false;
     }
     const char* name = call->getName();
@@ -7207,7 +7210,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return false;
     }
 
-    if (!self->isValid()) {
+    if (int entry = qore_object_private::checkFastCallEntry(self)) [[unlikely]] {
+        if (entry > 0) {
+            // another thread destroys the object: the regular call path refuses the call while the destructor runs,
+            // as the AST interpreter does (qore_object_private::startCall(), qore#7509)
+            return false;
+        }
         // as the AST interpreter raises it (issue #5784)
         qore_raise_deleted_method_call(xsink, self, method_name, inst->qc, inst->method, inst->variant);
         result = QoreValue();

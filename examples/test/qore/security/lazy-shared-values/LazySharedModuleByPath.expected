@@ -1,0 +1,2 @@
+a sandboxed Program that loads the module from the module path by its path: schema shared: True, operations: True
+a sandboxed Program that loads its own copy of the module by its path: DATA-PROVIDER-REGISTRATION-DENIED

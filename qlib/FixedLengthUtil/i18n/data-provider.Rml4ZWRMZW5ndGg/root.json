@@ -16,8 +16,8 @@
           "message": "Read and write fixed-length file data"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
-          "message": "Read Fixed-Length Data"
+          "source": "Read fixed-length data",
+          "message": "Read fixed-length data"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
           "source": "Read fixed-length file data from a specific file location",
@@ -172,8 +172,8 @@
           "message": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
-          "message": "Write Fixed-Length Data"
+          "source": "Write fixed-length data",
+          "message": "Write fixed-length data"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
           "source": "Write fixed-length file data to a specific file location",

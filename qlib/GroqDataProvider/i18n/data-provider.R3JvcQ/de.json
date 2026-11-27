@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Modell abrufen"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Wählen Sie eine vorhandene Ressource zum Überprüfen oder Verwalten aus."
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Antwort erstellen"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Nicht speichern"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Audio transkribieren"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Segment"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.display_name": {
-          "source": "Translate Audio",
+          "source": "Translate audio",
           "message": "Audio übersetzen"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Sampling-Temperatur zwischen `0` und `1`."
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.display_name": {
-          "source": "Generate Speech",
+          "source": "Generate speech",
           "message": "Sprache generieren"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Sprachgeschwindigkeit von `0.5` bis `5`, sofern vom Modell unterstützt."
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Datei hochladen"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "LoRA-Adapter"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Dateien auflisten"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Finden Sie hochgeladene Dateien und Batch-Ergebnisdateien.\n\nGibt die Ressourcen zurück, die durch den authentifizierten Listen-Endpunkt verfügbar gemacht wurden."
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Datei abrufen"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Wählen Sie die vorhandene Ressource zum Überprüfen oder Verwalten aus."
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Datei herunterladen"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Wählen Sie die vorhandene Ressource zum Überprüfen oder Verwalten aus."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Datei löschen"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Wählen Sie die vorhandene Ressource aus, um sie zu überprüfen oder zu verwalten."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Batch erstellen"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Benutzerdefinierte Schlüssel/Wert-Metadaten zum Nachverfolgen dieses Batches."
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Batches auflisten"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "Batches finden und ihren aktuellen Verarbeitungsstatus überprüfen.\n\nGibt die Ressourcen zurück, die durch den authentifizierten Auflistungsendpunkt verfügbar gemacht wurden."
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Batch abrufen"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Wählen Sie die vorhandene Ressource aus, um sie zu überprüfen oder zu verwalten."
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Batch abbrechen"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Wählen Sie die vorhandene Ressource aus, um sie zu überprüfen oder zu verwalten."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Register LoRA Adapter",
+          "source": "Register LoRA adapter",
           "message": "LoRA-Adapter registrieren"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.display_name": {
-          "source": "List LoRA Adapters",
+          "source": "List LoRA adapters",
           "message": "LoRA-Adapter auflisten"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Adapter finden, die Ihrer Organisation zur Verfügung stehen.\n\n**Enterprise-Zugang erforderlich.** Laden Sie einen extern trainierten LoRA-Adapter mit `purpose` auf `fine_tuning` hoch. Groq hostet Adapter und trainiert keine Modelle. Siehe die [LoRA-Anleitung](https://console.groq.com/docs/lora).\n\nGibt die Ressourcen zurück, die durch den authentifizierten Listen-Endpunkt verfügbar gemacht wurden."
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.display_name": {
-          "source": "Get LoRA Adapter",
+          "source": "Get LoRA adapter",
           "message": "LoRA-Adapter abrufen"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Wählen Sie die vorhandene Ressource aus, um sie zu überprüfen oder zu verwalten."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Delete LoRA Adapter",
+          "source": "Delete LoRA adapter",
           "message": "LoRA-Adapter löschen"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Wählen Sie die vorhandene Ressource zum Überprüfen oder Verwalten aus."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Chat-Vervollständigung"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Opake Kennung, die den Endbenutzer darstellt. Wird serverseitig für Missbrauchsverfolgung und Nutzungszuordnung protokolliert; hat keinen Einfluss auf die Generierung."
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {

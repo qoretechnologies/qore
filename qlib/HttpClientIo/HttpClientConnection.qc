@@ -244,6 +244,32 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return True;
     }
 
+    #! Returns @ref True if the calling code is restricted by a sandbox and does not own the connection (qore#7570)
+    /** The code that the connection's caller checks refuse (see callerOwnsConnection()): it gets the connection of its
+        request only as a view (@ref HttpClientStreamHandle::getConnectionView()).  Reserved for the code of this
+        module (see HttpClientIoSocketAccess::callerIsRestrictedNonOwner())
+
+        @param access the token of the module
+
+        @since HttpClientIo 1.0
+    */
+    final bool callerIsRestrictedNonOwnerFor(object access) {
+        HttpClientIoSocketAccess::check(access);
+        return !callerOwnsConnection();
+    }
+
+    #! Returns @ref True if the restricted code of the given %Program took the connection out of the pool (qore#7570)
+    /** @param access the token of the module (see HttpClientIoSocketAccess)
+        @param pgm_id the ID of the %Program
+
+        @since HttpClientIo 1.0
+    */
+    final bool isTakenByFor(object access, int pgm_id) {
+        HttpClientIoSocketAccess::check(access);
+        AutoLock al(lock);
+        return exists taker_pgm_id && taker_pgm_id == pgm_id;
+    }
+
     #! Returns @ref True if code that a sandbox restricts took the connection out of the pool (qore#7544)
     /** @since HttpClientIo 1.0
     */
@@ -879,6 +905,199 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             call_function_args(\logger.log(),
                 (level, sprintf("HttpClientConnection[%d/%s]: ", connection_id, getProtocol()) + fmt) + argv);
         }
+    }
+}
+
+#! A view of the connection of a request, for code that a sandbox restricts and that does not own the connection manager
+#! (qore#7570)
+/** A connection manager that other code lends to restricted code serves the requests of both from one pool, so the
+    connection of a request of the restricted code is given to the host's later requests.  The restricted code must act
+    on it only for its own request: @ref HttpClientStreamHandle::getConnection() and
+    @ref HttpClientConnectionManager::leaseConnection() refuse restricted code that does not own the manager, and
+    @ref HttpClientStreamHandle::getConnectionView() gives it this view instead.  Each call checks that the request that
+    gave the view its connection is active (or that the code took the connection out of the pool for good, which
+    @ref HttpClientConnection::getSocket() does for the socket of its own upgrade request), and then does what the
+    connection does; the view of code that is not restricted, or that owns the manager, is never ended.
+
+    @note the view offers what the client modules that run for restricted code need: the state and identity of the
+    connection, closing it, cancelling a stream, waking its I/O, its socket, and the registration of the stream's
+    queue and listener on HTTP/2 and HTTP/3.  The calls of the connection that reach its socket keep their own rules
+    for restricted code (see @ref HttpClientConnection::getSocket())
+
+    @since HttpClientIo 1.0
+*/
+public class HttpClientConnectionView {
+    private:internal {
+        #! the connection
+        HttpClientConnection conn;
+
+        #! the stream of the request that gave the view its connection
+        HttpClientStreamHandle stream;
+
+        #! True if the code that got the view is restricted and does not own the connection manager
+        bool restricted;
+
+        #! the ID of the %Program of the code that got the view, if known
+        *int caller_pgm_id;
+    }
+
+    #! Creates the view; reserved for the code of this module (HttpClientStreamHandle::getConnectionView())
+    constructor(object access, HttpClientConnection conn, HttpClientStreamHandle stream, bool restricted,
+            *int caller_pgm_id) {
+        HttpClientIoSocketAccess::check(access);
+        self.conn = conn;
+        self.stream = stream;
+        self.restricted = restricted;
+        self.caller_pgm_id = caller_pgm_id;
+    }
+
+    #! Returns @ref True if the view can still be used
+    /** @return @ref False if the view is the one of restricted code and its request has ended, so that the connection
+        may be serving other requests
+    */
+    bool isActive() {
+        if (!restricted || !HttpClientIoSocketAccess::streamEnded(stream)) {
+            return True;
+        }
+        return exists caller_pgm_id && HttpClientIoSocketAccess::isTakenBy(conn, caller_pgm_id);
+    }
+
+    #! Throws an exception if the view cannot be used any more
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    private checkActive() {
+        if (!isActive()) {
+            throw "PERMISSION-DENIED", "the request that gave this view of a HTTP connection its connection has "
+                "ended: code that a sandbox restricts acts on the pooled connection of a connection manager that it "
+                "does not own only for its own request";
+        }
+    }
+
+    #! Returns the ID of the connection
+    int getConnectionId() {
+        return conn.getConnectionId();
+    }
+
+    #! Returns the protocol identifier: \c "h1", \c "h2" or \c "h3"
+    string getProtocol() {
+        return conn.getProtocol();
+    }
+
+    #! Returns @ref True if the connection is ready for requests
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    bool isReady() {
+        checkActive();
+        return conn.isReady();
+    }
+
+    #! Waits for the connection to become ready; see @ref HttpClientConnection::waitForReady()
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    bool waitForReady(timeout timeout_ms = 30s) {
+        checkActive();
+        return conn.waitForReady(timeout_ms);
+    }
+
+    #! Closes the connection
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    close() {
+        checkActive();
+        conn.close();
+    }
+
+    #! Cancels a stream of the connection; see @ref HttpClientConnection::cancelRequest()
+    /** @param stream_id the ID of the stream; restricted code can cancel only the stream of its own request
+
+        @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended, or it names another
+        request's stream
+    */
+    cancelRequest(int stream_id) {
+        checkActive();
+        if (restricted && stream_id != stream.getStreamId()) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cancels only the stream of its own request on "
+                "the pooled connection of a connection manager that it does not own";
+        }
+        conn.cancelRequest(stream_id);
+    }
+
+    #! Flushes the data that the connection has not sent yet; see @ref HttpClientConnection::flushPendingWrites()
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    flushPendingWrites() {
+        checkActive();
+        conn.flushPendingWrites();
+    }
+
+    #! Wakes the I/O of the connection to send pending data; see @ref HttpClientConnection::notifyPendingData()
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    notifyPendingData() {
+        checkActive();
+        conn.notifyPendingData();
+    }
+
+    #! Returns the socket of the connection, with the rules of @ref HttpClientConnection::getSocket()
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, its request has ended, or the connection's
+        rules refuse the socket to it
+    */
+    Socket getSocket() {
+        return conn.getSocket();
+    }
+
+    #! Returns the socket of the connection's poll operation, with the rules of that operation's public accessor
+    /** @throw PERMISSION-DENIED the view is the one of restricted code, its request has ended, or the rules of the
+        poll operation refuse the socket to it
+    */
+    Socket getPollSocket() {
+        return conn.getPollOperation().getSocket();
+    }
+
+    #! Registers the queue of a stream of an HTTP/2 connection; returns @ref False for another protocol
+    /** @param stream_id the ID of the stream
+        @param queue the queue that receives the stream's data
+
+        @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    bool registerStreamQueue(int stream_id, Queue queue) {
+        checkActive();
+        if (!(conn instanceof Http2ClientConnection)) {
+            return False;
+        }
+        cast<Http2ClientConnection>(conn).registerStreamQueue(stream_id, queue);
+        return True;
+    }
+
+    #! Registers the listener of a stream of an HTTP/2 connection; returns @ref False for another protocol
+    /** @param stream_id the ID of the stream
+        @param listener the object that is notified when the stream's data arrives
+
+        @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    bool registerStreamListener(int stream_id, object listener) {
+        checkActive();
+        if (!(conn instanceof Http2ClientConnection)) {
+            return False;
+        }
+        cast<Http2ClientConnection>(conn).registerStreamListener(stream_id, listener);
+        return True;
+    }
+
+    #! Registers the notification and the listener of a stream of an HTTP/3 connection; returns @ref False for another
+    #! protocol
+    /** @param stream_id the ID of the stream
+        @param listener the object that is notified when the stream's data arrives
+
+        @throw PERMISSION-DENIED the view is the one of restricted code, and its request has ended
+    */
+    bool registerStreamNotifyAndListener(int stream_id, object listener) {
+        checkActive();
+        if (!(conn instanceof Http3ClientConnection)) {
+            return False;
+        }
+        cast<Http3ClientConnection>(conn).registerStreamNotifyAndListener(stream_id, listener);
+        return True;
     }
 }
 
