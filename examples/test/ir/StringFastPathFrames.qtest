@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - JIT code generation and AOT code generation and linking of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%exec-class StringFastPathFramesTest
+
+#! The exceptions of the string fast paths have the builtin's frame (qore#7711)
+/** The IR interpreter and JIT and AOT code call <string>::lwr(), upr(), substr(), find(), rfind(), startsWith(),
+    endsWith(), contains() and length(), and tolower(), toupper() and length(), through fast paths without the call, and
+    fuse some of them with each other and with a concatenation; an exception that one of these builtins raises has the
+    builtin's frame at the top of its call stack, as in the AST interpreter, so each exception and its whole call stack
+    are the same in every execution mode and in AOT executables, also without prelinked calls.
+*/
+class StringFastPathFramesTest inherits QUnit::Test {
+    private {
+        string qore = realpath(TestInterpreter::qore_interpreter());
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/StringFastPathFrames.qr";
+        *string expected;
+        # every child process is ended after this time, so a hang fails the test instead of outliving it
+        string timeout_prefix;
+    }
+
+    constructor() : Test("String fast path exception frames", "1.0", \ARGV) {
+        string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        timeout_prefix = timeout_cmd.val() ? quote(timeout_cmd) + " -k 10s 240s " : "";
+        addTestCase("interpreter results", \interpreter());
+        addTestCase("execution modes match the interpreter", \modes());
+        addTestCase("AOT executables match the interpreter", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir) + " " + timeout_prefix
+            + (map StringFastPathFramesTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+    }
+
+    interpreter() {
+        string out = getExpected();
+        # checked by hand: the builtin's frame is at the top of the call stack, at the line of the call
+        assertFrame(out, "lwr", "INVALID-ENCODING", "<string>::lwr", 13);
+        assertFrame(out, "tolower", "INVALID-ENCODING", "tolower", 11);
+        assertFrame(out, "length", "INVALID-ENCODING", "<string>::length", 22);
+        assertFrame(out, "flength", "INVALID-ENCODING", "length", 23);
+        # a fusion raises in the frame of the builtin that raised: the conversion, then the search
+        assertFrame(out, "lwr-contains", "INVALID-ENCODING", "<string>::lwr", 25);
+        assertFrame(out, "lwr-contains-p", "ENCODING-CONVERSION-ERROR", "<string>::contains", 25);
+        assertFrame(out, "pipe", "INVALID-ENCODING", "<string>::lwr", 37);
+        assertFrame(out, "lwr-lt", "INVALID-ENCODING", "<string>::lwr", 41);
+        # negative: the concatenation is an operator, whose exception has no frame of its own
+        assertFrame(out, "cat-substr", "ENCODING-CONVERSION-ERROR", "f_cat_substr", 119, "user");
+        # the functions that the lowering makes as calls of pseudo-methods have the frames of the functions
+        assertFrame(out, "fsubstr", "INVALID-ENCODING", "substr", 43);
+        assertFrame(out, "findex", "ENCODING-CONVERSION-ERROR", "index", 44);
+        assertFrame(out, "frindex", "ENCODING-CONVERSION-ERROR", "rindex", 45);
+        assertFrame(out, "findex-lwr", "INVALID-ENCODING", "tolower", 49);
+        # a case conversion consumer and a loop-invariant call of index() have the function's frame
+        assertFrame(out, "findex-dot-lwr-p", "ENCODING-CONVERSION-ERROR", "index", 58);
+        assertFrame(out, "findex-loop", "ENCODING-CONVERSION-ERROR", "index", 59);
+        # closures and nested closures
+        assertFrame(out, "cl-findex", "ENCODING-CONVERSION-ERROR", "index", 156);
+        assertFrame(out, "cl-find", "ENCODING-CONVERSION-ERROR", "<string>::find", 157);
+        assertFrame(out, "cl-lwr", "INVALID-ENCODING", "<string>::lwr", 158);
+        assertFrame(out, "cl-nested-findex", "ENCODING-CONVERSION-ERROR", "index", 160);
+        assertFrame(out, "cl-nested-lwr", "INVALID-ENCODING", "<string>::lwr", 164);
+        # the result "INVALID-ENCODING index 169", printed as its bytes
+        assertRegex("(?m)^cl-try: !!binary " + make_base64_string("INVALID-ENCODING index 169") + "$", out);
+        # an integer argument outside the inline range
+        assertFrame(out, "substr-big", "INVALID-ENCODING", "<string>::substr", 51);
+        # an exception of a fast path while another is pending is chained to it, with the builtin's frame
+        assertRegex("(?m)^pending: \\{.*err: \"PENDING\".*(\n  [0-9]: .*)+\n  next: \\{.*err: \"INVALID-ENCODING\".*\n"
+            + "  0: \\{function: \"<string>::lwr\", line: 68,", out);
+        # a builtin that does not raise for this text
+        assertRegex("(?m)^strlen: 5$", out);
+    }
+
+    #! checks the exception of a case and the top frame of its call stack
+    private assertFrame(string out, string name, string err, string function, int line, string type = "builtin") {
+        assertRegex("(?m)^" + name + ": \\{.*err: \"" + err + "\".*\n  0: \\{function: \"" + function + "\", line: "
+            + line + ",.*type: \"" + type + "\"", out, name);
+    }
+
+    modes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        # tiered execution on the IR tier: the IR interpreter's fast paths
+        assertEq(ast, run((qore, "--exec-mode=tiered", fixture),
+            "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1000000000 "), "tiered-ir");
+    }
+
+    aot() {
+        string ast = getExpected();
+        TmpDir dir("qore-string-fast-path-frames-");
+        string executable = dir.path + "/fixture";
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string out = run((qcc, level, "-o", executable, fixture), prefix);
+                # negative: the compile does not refuse any function
+                assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
+                assertEq(ast, run((executable,), prefix), label);
+                assertEq(ast, run((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
+                    label + " without prelinked calls");
+            }
+        }
+    }
+}

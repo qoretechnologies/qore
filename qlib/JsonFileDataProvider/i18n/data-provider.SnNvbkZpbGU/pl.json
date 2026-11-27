@@ -16,7 +16,7 @@
           "message": "Odczyt i zapis standardowych plików JSON (nie NDJSON/JSON Lines). Obsługuje pliki JSON zawierające tablicę obiektów (przetwarzane jako pojedyncze rekordy) lub pojedynczy obiekt (zwracany jako jeden rekord). Zapewnia konfigurowalny format czytelnego zapisu (pretty-print)."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "Odczytaj plik JSON"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "Zachowaj tekst w kodowaniu wejściowym tak, jak został odczytany, bez sprawdzania"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "Odczytaj bezpośrednie dane JSON"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "Kodowanie US-ASCII"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "Zapisz plik JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Zapisz zwarta postać danych JSON bez dodatkowych białych znaków"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "Zapisz dane JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

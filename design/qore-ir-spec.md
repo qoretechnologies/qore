@@ -145,6 +145,64 @@ value operand are released before the mutation (`DiscardTempsKeep`).
 See `design/lvalue-loads-in-ir.md` for the precise invariant and current
 handler rules.
 
+### In-place integer list element compound assignment
+
+Native code makes `local[index] += value` and `local[index] -= value`
+(`LValuePathCompound` with a `LocalVar` step and a `ListIndex` step,
+`qore_ir_is_int_list_compound_shape()`) on a local declared `list<int>` that is
+neither read-only nor a closure variable, whose index operand is a native integer
+(a constant index is one too), with `qore_rt_lv_path_int_list_compound()` (`_aot` in
+compiled code) instead of the generic `qore_rt_lv_path_compound()`: the index is
+given as it is, and no array of boxed dynamic operands is built.  The helper
+changes the element in place only where the generic path would change the same
+element of the same list and store the same value: the variable is on the
+current thread's local variable stack and holds the list itself (not a
+reference, a weak reference or a value assigned without a reference of its own),
+the list is valid, of type `list<int>` and held by the variable alone (the
+generic path would copy a shared list first), the index is that of an existing
+element holding an inline integer, and the operand is an inline integer whose
+sum or difference with the element is inline too.  The sum or difference of two
+inline integers fits in an `int64`, an inline value replaced by another changes
+no reference count and no count of values that the garbage collector scans, and
+the element type takes it, so the change raises nothing.  Every other case
+(a shared list, an index past the end or negative, a wide value or result, an
+operand of another type) is made by the generic path with the same operand
+handover rules (a consumed operand passes to the helper in every case).  The
+code around the call is unchanged: the root's caches are cleared before it and
+the root is reloaded after it.  `QORE_DISABLE_IR_IN_PLACE_INT_LIST_COMPOUND`
+disables it.  `IRInPlaceIntListCompound.qtest` checks the hits and every kind of
+miss in every execution mode and compiled code, with the compiled code's calls of
+the helper.
+
+### The store of a push to a list<int> local on the runtime stack
+
+`push local, value` is lowered as a load of the local, the push and a store of
+its result to the local (`list_push_local_cow` on the push and the store); a
+local on the runtime stack (one that is not IR-only, for example because an
+lvalue path such as `local[i] += 1` changes it) is pushed to with the
+copy-on-write helper, which changes a list that only the variable holds in place
+and returns it, and the store then coerces the result to the local's type and
+assigns it to the variable.  For a local declared `list<int>` (a `Normal` store
+that is not the store of a foreach variable, of a reference or of a closure
+variable) native code makes that store with `qore_rt_coerce_int_list_value()`
+and `qore_rt_assign_int_list_local()` (`_aot` in compiled code): the coercion
+keeps a plain list of the local's type as it is, which
+`QoreTypeInfo::acceptAssignment()` would accept unchanged (an `int` element is
+accepted without a check, and the type is not one that a no-narrow lvalue
+strips), and the assignment does nothing when the variable on the current
+thread's local variable stack holds that list already with a reference of its
+own, no weak reference designates the list (the store of a weakly designated
+container can copy it) and the store is given no reference to take
+(`qore_rt_take_store_value()`); the assignment of the same list would only take
+and release a reference.  Any other value (the copy that the push made of a
+shared list, a replaced variable) is coerced and assigned as with
+`qore_rt_coerce_value()` and `qore_rt_assign_local_no_coerce_eval_weak()`.  The
+cleanup of the coerced value and the reload of the local after the store are
+unchanged.  `QORE_DISABLE_IR_INT_LIST_PUSH_STORE` disables it.
+`IRIntListPushStore.qtest` checks pushes to unique, shared, weakly designated,
+replaced and passed lists, wide values and a rejected value in every execution
+mode and compiled code, with the compiled code's calls of the helpers.
+
 ## Lowering Coverage
 
 The current implementation supports the language constructs needed by the
@@ -321,3 +379,49 @@ with the optimizer's statistics and the compiled code's calls to build hashes an
 keys.
 `IRWeakAssignedNativeRead.qtest` checks the reads of weak-assigned locals in
 the same way.
+
+### Native float accumulation
+
+`local += value` on a local declared exactly `float` (not `*float`,
+`softfloat`, an enum or a union type) of the current frame (not a closure
+variable, and not one that `delete` or `remove` can leave without a value or
+whose reference is taken, `LocalVar::everDeleted()`; nor a shared, foreach,
+weakly assigned or weakly designated variable, which
+`QoreIRLowering::changesThroughLValue()` sends to the lvalue path) is lowered
+as a load of the local, `AddAssignFloat` and a store of the sum
+(`QoreIRLowering::lowerPlusEquals()`), instead of the generic
+`LValuePathCompound` (`qore_rt_lv_path_compound()`), when its right operand is
+proven to be a float, an int or a bool whatever the code executed
+(`QoreIRLowering::isExactFloatAddOperand()`):
+
+- the facts that the builder gave the lowered operand say `float`, `int` or
+  `bool` exactly, assigned and never `NOTHING`: a constant, the result of a
+  typed arithmetic, comparison or conversion opcode, or the read of a variable
+  of that type whose facts say so (a local that the parse knows to be
+  assigned; the read of a global or thread-local variable normally has no such
+  facts), which holds no other value (a `float` or `int` variable refuses a
+  char, and a `bool` variable converts it);
+- or the operand is the call of a user function or static method of the same
+  Program whose variant is fixed at parse time (not chosen at runtime, not
+  generic, no receiver type) and returns `float`: the variant converts or
+  rejects its return value in every execution mode, so the call gives a float.
+
+The AST operator adds `qore_plus_equals_float_operand()` of the operand to the
+value of the lvalue (`LValueHelper::plusEqualsFloat()`); for any value but a
+char that is `QoreValue::getAsFloat()`, which `AddAssignFloat` applies, so the
+sum is the same IEEE 754 double add of the same two values (signed zeros,
+infinities, NaN and overflow included; an int is rounded to the nearest double
+in both).  The operand is lowered before the local is read, as the AST operator
+evaluates it first.  A local that the parse does not know to be assigned where
+it is read gets its type's default value `0.0` first (the `NOTHING` to default
+coercion of `lowerPlusEquals()`), as the AST operator assigns it.  The add is a
+plain `fadd`: the IR has no fast-math or contraction flags, so a product in the
+operand is rounded before the add, as the AST operators compute it.  A
+call reference's result is not proven by its signature: a `code<float()>`
+value can return an int, a string, `NOTHING`, an object or a char, and
+`getAsFloat()` converts a char to its code point where `+=` converts it as its
+one-character string; such an operand, an untyped one, and any other float
+lvalue keep the lvalue path.  `QORE_DISABLE_IR_FLOAT_LOCAL_ADD` disables it.
+`IRFloatLocalAdd.qtest` checks the native and the generic cases, with edge
+values, in every execution mode and compiled code (`qcc -O0` and `-O3`), with
+the compiled code's calls of the lvalue helper.

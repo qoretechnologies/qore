@@ -776,9 +776,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @return the leased connection
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7570):
+        the session of a lease is pinned (see pinConnection()), which such code cannot do
+
         @since HttpClientIo 1.0
     */
     HttpClientConnection leaseConnection(string url, *bool non_blocking) {
+        checkLeaseCaller();
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -816,6 +820,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @since HttpClientIo 1.0
     */
     releaseConnection(HttpClientConnection conn, *bool discard) {
+        checkLeaseCaller();
         if (discard) {
             log(LoggerLevel::DEBUG, "discarding leased %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
@@ -869,6 +874,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         checkPinCaller();
         AutoLock al(pin_lock);
         remove pinned_conn;
+    }
+
+    #! Raises an exception if restricted code that does not own the manager leases or releases a connection (qore#7570)
+    /** A leased connection is the manager's: the session that uses it is pinned (see pinConnection()), which restricted
+        code that does not own the manager cannot do, and releasing it closes it or gives it back to the pool, which the
+        host's requests use, so the code gets no connection to lease and may release none
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkLeaseCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot lease or release a connection of a "
+                "connection manager that it does not own";
+        }
     }
 
     #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
@@ -1214,7 +1243,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         && retries < max_retries && canRetryRequest(method, stream)) {
                     timeout_retried = True;
                     ++retries;
-                    HttpClientConnection timed_out_conn = stream.getConnection();
+                    HttpClientConnection timed_out_conn = HttpClientIoSocketAccess::connectionOf(stream);
                     log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
                         "evicting stale connection and retrying (%d/%d)",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
@@ -1661,7 +1690,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     }
                 }
                 try {
-                    sh.getConnection().cancelRequest(sh.getStreamId());
+                    HttpClientConnection sh_conn = HttpClientIoSocketAccess::connectionOf(sh);
+                    sh_conn.cancelRequest(sh.getStreamId());
                 } catch (hash<ExceptionInfo> ex) {
                     # the connection is already closed
                 }
@@ -2093,7 +2123,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                             && resend.retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
                         ++resend.retries;
-                        HttpClientConnection timed_out_conn = stream.getConnection();
+                        HttpClientConnection timed_out_conn = HttpClientIoSocketAccess::connectionOf(stream);
                         log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d (%s), "
                             "evicting stale connection and retrying within the remaining %s (%d/%d)",
                             timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(), ex.desc,
@@ -5960,7 +5990,13 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Sets the logger for this connection manager
+    /** @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the logger
+        of a connection manager that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+    */
     setLogger(*LoggerInterface logger) {
+        # the manager can be shared by the clients of several owners (issue 6842)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         self.logger = logger;
     }
 

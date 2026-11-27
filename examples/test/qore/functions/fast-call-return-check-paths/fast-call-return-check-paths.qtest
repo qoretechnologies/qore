@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation, qcc executables and AOT modules compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class FastCallReturnCheckPathsTest
+
+#! The return value of a callee is checked in its frame and before its given parameters are released, in each fast call
+/** The runtime's fast calls of a closure, of a self-recursive function, of a method (plain, dispatched and static),
+    and the direct AOT call between the functions of compiled modules, and the IR interpreter's calls of a closure and
+    a method, checked the return value of the callee against its declared type after its frame had been popped, or
+    after the parameters that the call gave it had been released: the exception lost the callee from its call stack,
+    or an exception of a parameter's destructor replaced it (qoretechnologies/qore#7762).
+
+    FastCallReturnCheckPaths.q makes each such call with a callee whose return value fails its type, also with a
+    temporary argument whose destructor raises; its exceptions and their call stacks must be those of the AST
+    interpreter (FastCallReturnCheckPaths.expected) in every execution mode, on the IR tier, and as a qcc executable
+    (with and without its prelinked calls).  The modules in aot/ make the direct AOT calls: compiled, with their
+    cross-module fast calls disabled, their output must be that of the modules loaded from source.
+*/
+class FastCallReturnCheckPathsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string qcc_bin;
+        string fixture = get_script_dir() + "/FastCallReturnCheckPaths.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/FastCallReturnCheckPaths.expected");
+        string aot_dir = get_script_dir() + "/aot";
+        string aot_expected = ReadOnlyFile::readTextFile(get_script_dir() + "/aot/calls.expected");
+    }
+
+    constructor() : QUnit::Test("fast call return check paths", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        foreach int opt in ((0, 3)) {
+            int opt_level = opt;
+            addTestCase("qcc -O" + opt, sub () { testQcc(opt_level); });
+            addTestCase("direct AOT calls between modules compiled at -O" + opt, sub () { testAot(opt_level); });
+        }
+
+        set_return_value(main());
+    }
+
+    #! a qcc executable, with and without its prelinked calls
+    testQcc(int opt_level) {
+        TmpDir tmp("qore-fast-call-return-check-paths-");
+        string exe = tmp.path + DirSep + "fixture";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", env(), shellQuote(libqore_dir),
+            shellQuote(qcc_bin), opt_level, shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(expected, backquote(sprintf("%s %s 2>&1", env(), shellQuote(exe))), "executable");
+        assertEq(expected, backquote(sprintf("%s QORE_AOT_DISABLE_PRELINKED_CALLS=1 %s 2>&1", env(),
+            shellQuote(exe))), "executable without its prelinked calls");
+    }
+
+    #! compiled modules that call each other through the runtime's direct AOT call
+    testAot(int opt_level) {
+        TmpDir tmp("qore-fast-call-return-check-paths-aot-");
+        foreach string m in (("FcrProvider", "FcrConsumer")) {
+            copy_file(aot_dir + "/" + m + ".qm", tmp.path + "/" + m + ".qm");
+        }
+        foreach string m in (("FcrProvider", "FcrConsumer")) {
+            string out = backquote(sprintf("%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module "
+                "--strip-source --opt-level=%d --output %s/%s.qmod %s/%s.qm 2>&1", env(), shellQuote(libqore_dir),
+                shellQuote(tmp.path), shellQuote(qore_bin), opt_level, tmp.path, m, tmp.path, m));
+            assertTrue(is_file(tmp.path + "/" + m + ".qmod"), "compiled " + m + ": " + out);
+        }
+        # only the compiled modules can be loaded
+        foreach string m in (("FcrProvider", "FcrConsumer")) {
+            unlink(tmp.path + "/" + m + ".qm");
+        }
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1 "
+            "QORE_AOT_TRACE_LINK_RELOCS=1 %s -b %s/calls.qr 2>&1", env(), shellQuote(tmp.path), shellQuote(qore_bin),
+            shellQuote(aot_dir)));
+        list<string> lines = out.split("\n");
+        int direct_calls = (select lines, $1.find("helper=qore_rt_call_direct_aot ") >= 0).size();
+        assertGt(0, direct_calls, "the calls are made through the runtime's direct AOT call");
+        string calls = (select lines, $1 !~ /helper=|^\s*$/).join("\n") + "\n";
+        assertEq(aot_expected, calls, "the direct AOT calls");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1", shellQuote(libqore_dir),
+            shellQuote(libqore_dir));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

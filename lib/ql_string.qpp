@@ -313,7 +313,12 @@ static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStr
 // string, used for the alignment check; returns nullptr if there is no such match
 static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len,
         const qore_char_boundary& b = qore_char_boundary(), size_t base = 0) {
-    if (b.charlen && pl) {
+    // an empty pattern matches nowhere: searching for its terminating NUL would find a NUL character of the string as
+    // a zero-length match, at which a caller that advances by the pattern's length would stop forever (qore#7710)
+    if (!pl) {
+        return nullptr;
+    }
+    if (b.charlen) {
         return qore_string_private::memmem_boundary(str, len, pattern, pl, b.charlen);
     }
     const unsigned align = b.align;

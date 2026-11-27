@@ -25,3 +25,4 @@ tenant serializes a shared object in a static class variable: SHARED-OBJECT-ERRO
 tenant serializes one that is not shared in a static class variable: serialized (binary)
 trusted code serializes it: deserialized shared: False, secret: secret
 trusted code serializes it in an object: secret
+order: tenant serializes a shared object of its own: SHARED-OBJECT-ERROR; one of the host that is not shared: SERIALIZATION-ERROR; one of its own that is not shared: serialized (binary)

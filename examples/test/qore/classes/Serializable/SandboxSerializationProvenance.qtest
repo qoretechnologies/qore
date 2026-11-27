@@ -204,6 +204,7 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         addTestCase("shared object", \sharedObjectTest());
         addTestCase("nested serialization of the same object", \nestedTest());
         addTestCase("a class of another trusted Program", \otherProgramClassTest());
+        addTestCase("a sandbox that trusts its code", \trustedPolicyTest());
         addTestCase("calls that sandboxed code sets up", \sandboxSetupTest());
         set_return_value(main());
     }
@@ -397,5 +398,40 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
             "}\n", "importing");
         object c = createUnderSandbox(object sub () { return g.callFunction("make"); });
         assertEq("STATE", g.callFunction("ser_method", c));
+    }
+
+    #! the code that a sandbox governs that trusts its code (one that allows uncontrolled APIs) is trusted code: it
+    #! gets the state of the classes declared by trusted code with both forms and in %y; a sandbox that restricts its
+    #! code does not (qore#7737)
+    trustedPolicyTest() {
+        foreach bool trusting in ((True, False)) {
+            SandboxManager sm();
+            if (trusting) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            Program g(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            g.setSandboxManager(sm);
+            g.importClass("SspTrusted");
+            g.parse("hash<auto> sub ser(SspTrusted o) {\n"
+                "    hash<auto> rv;\n"
+                "    try {\n"
+                "        rv.method = sprintf(\"%N\", o.serializeToData()) =~ /PRIV-STATE/ ? \"STATE\" : \"NO-STATE\";\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        rv.method = ex.err;\n"
+                "    }\n"
+                "    try {\n"
+                "        rv.static = sprintf(\"%N\", Serializable::serializeToData(o)) =~ /PRIV-STATE/ ? \"STATE\" : "
+                "\"NO-STATE\";\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        rv.static = ex.err;\n"
+                "    }\n"
+                "    rv.format = sprintf(\"%y\", o) =~ /PRIV-STATE/ ? \"STATE\" : \"NO-STATE\";\n"
+                "    return rv;\n"
+                "}\n", "governed");
+            hash<auto> expected = trusting
+                ? {"method": "STATE", "static": "STATE", "format": "STATE"}
+                : {"method": "SERIALIZATION-ERROR", "static": "SERIALIZATION-ERROR", "format": "NO-STATE"};
+            assertEq(expected, g.callFunction("ser", new SspTrusted()), trusting ? "trusting" : "restricting");
+        }
     }
 }

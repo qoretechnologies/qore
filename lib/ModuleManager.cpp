@@ -1954,6 +1954,14 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
             l->push(new QoreStringNode(*i), nullptr);
         ph->setKeyValueIntern("reexported-modules", l);
     }
+    if (!reqmod.empty()) {
+        // the direct requirements of the module (#7796)
+        QoreListNode* l = new QoreListNode(stringTypeInfo);
+        for (const std::string& r : reqmod) {
+            l->push(new QoreStringNode(r), nullptr);
+        }
+        ph->setKeyValueIntern("required-modules", l);
+    }
     if (!children.empty()) {
         // child modules declared with %try-child-module, keyed by feature name in declaration order
         QoreHashNode* ch = new QoreHashNode(autoTypeInfo);
@@ -2083,6 +2091,10 @@ int QoreModuleDefContext::addChild(const QoreProgramLocation* loc, const char* s
 }
 
 int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, QoreValue val) {
+    // the keys of a duplicate module declaration are not the module's; the duplicate is already a parse error
+    if (ignore_keys) {
+        return -1;
+    }
     int err = 0;
     // special handling for "init" and "del"
     if (!strcmp(key, "init")) {
@@ -2303,11 +2315,63 @@ QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name,
         } else {
             QMM.getUserModuleRegistrationLocked(name, saved_reg);
         }
+        // a module that is compiled has its name reserved while it is parsed, as one that is loaded (#7808); last, as
+        // the destructor, which releases it, does not run if the constructor throws
+        if (rlock == QMRL_LOCK) {
+            name_reserved = QMM.reserveCompiledModuleName(name, xs);
+        }
     } catch (...) {
         // the destructor does not run: restore the module context here
         set_module_context_name(old_name);
         set_module_context_path(old_path);
         throw;
+    }
+}
+
+bool QoreModuleManager::reserveCompiledModuleName(const char* name, ExceptionSink& xsink) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    if (i != module_load_map.end()) {
+        ModuleLoadEntry& e = i->second;
+        if (e.state == MLS_INITIALIZING) {
+            if (e.owner_tid == q_gettid()) {
+                // this thread is loading the module: its load reserves the name
+                return false;
+            }
+            xsink.raiseException("LOAD-MODULE-ERROR", "cannot compile module '%s': a module of the same name is "
+                "being loaded in another thread", name);
+            return false;
+        }
+        // a terminal entry kept for the threads waiting on it: reopened in place, as ModuleLoadMapHelper does, so
+        // that their count is kept
+        e.owner_tid = q_gettid();
+        e.state = MLS_INITIALIZING;
+        e.err.clear();
+        e.desc.clear();
+        e.err_sandboxed = false;
+        e.err_pgm_id = 0;
+        return true;
+    }
+    module_load_map.insert(module_load_map_t::value_type(name, ModuleLoadEntry(q_gettid())));
+    return true;
+}
+
+void QoreModuleManager::releaseCompiledModuleName(const char* name) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    assert(i != module_load_map.end());
+    if (i == module_load_map.end()) {
+        return;
+    }
+    assert(i->second.owner_tid == q_gettid() && i->second.state == MLS_INITIALIZING);
+    // the module was compiled, not loaded: a thread waiting for it finds no module registered and loads it, as after
+    // a load that registered nothing
+    i->second.state = MLS_LOADED;
+    if (module_load_waiting) {
+        module_load_cond.broadcast();
+    }
+    if (!i->second.waiters) {
+        module_load_map.erase(i);
     }
 }
 
@@ -2404,9 +2468,23 @@ void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi)
     trySetUserModule(mi->getName());
 }
 
-void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
-    assert(vmap.find("name") == vmap.end());
+void QoreUserModuleDefContextHelper::setNameInit(const QoreProgramLocation* loc, const char* name) {
+    assert(loc);
+    // the scanner declares the module each time that it reads a module declaration in the parse of the module,
+    // including its other files (those of a separated module, included files); a module is declared once (qore#7794)
+    strmap_t::const_iterator i = vmap.find("name");
+    if (i != vmap.end()) {
+        assert(name_loc);
+        parse_error(*loc, "duplicate module declaration '%s': module '%s' was already declared at %s:%d", name,
+            i->second.c_str(), name_loc->getFile() ? name_loc->getFile() : "<unknown>", name_loc->start_line);
+        // the keys parsed from now on are in this or another duplicate declaration, as the module was declared
+        // already: they are ignored, so that a duplicate cannot add a closure or lift the module's restrictions with
+        // its domains; this is not reset when a declaration closes, as the parser can read the next token first
+        ignore_keys = true;
+        return;
+    }
     vmap["name"] = name;
+    name_loc = loc;
 
     assert(!header_frame.isLinked());
 
@@ -2492,6 +2570,10 @@ static QoreStringNode* loadModuleError(const char* name, ExceptionSink& xsink) {
 
 QoreProgram* QoreBuiltinModule::getModuleProgram() const {
     return qore_is_aot_user_module(name.c_str()) ? qore_aot_get_module_pgm(name.c_str()) : nullptr;
+}
+
+bool QoreBuiltinModule::reexportsInNamespaceInit() const {
+    return qore_is_aot_user_module(name.c_str());
 }
 
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
@@ -2633,13 +2715,13 @@ thread_local const QoreModuleLoadFrame* untrusted_aot_init_frame = nullptr;
 //! Marks the initialization of a compiled module whose own load is not library code while it runs, also when it raises
 class QoreUntrustedAOTInitHelper {
 public:
-    DLLLOCAL QoreUntrustedAOTInitHelper(bool active) : prev(untrusted_aot_init_frame) {
+    QoreUntrustedAOTInitHelper(bool active) : prev(untrusted_aot_init_frame) {
         if (active) {
             untrusted_aot_init_frame = module_load_frame;
         }
     }
 
-    DLLLOCAL ~QoreUntrustedAOTInitHelper() {
+    ~QoreUntrustedAOTInitHelper() {
         untrusted_aot_init_frame = prev;
     }
 
@@ -2782,6 +2864,13 @@ void QoreModuleManager::addModule(QoreAbstractModule* m) {
     // so calls into its code from other Programs need no reference to it (see qore_program_set_module_lifetime())
     if (QoreProgram* mpgm = m->getModuleProgram()) {
         qore_program_set_module_lifetime(*mpgm);
+        // the name that identifies the module's code to the library code that it calls (qore#7302); a Program keeps
+        // the name of the first module registered with it
+        qore_program_private* mpp = qore_program_private::get(*mpgm);
+        if (!mpp->module_name_set.load(std::memory_order_acquire)) {
+            mpp->module_name = m->getName();
+            mpp->module_name_set.store(true, std::memory_order_release);
+        }
     }
     //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
 }
@@ -3014,11 +3103,8 @@ private:
     code created with no sandbox of its own stays sandboxed, as no governing sandbox trusts it.
 */
 static bool qore_command_issuer_is_sandboxed() {
-    if (!qore_caller_is_sandboxed()) {
-        return false;
-    }
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    return !governing || !governing->getUncontrolledApiPolicy();
+    // the restricted classification of every rule that restricts what code may do (qore#7737)
+    return qore_caller_is_restricted();
 }
 
 //! returns the restrictions that a command issued by the code running on this thread has, for a module command
@@ -3186,7 +3272,8 @@ void QoreModuleManager::setTrustedModuleDirs() {
 }
 
 void QoreModuleManager::addModuleDir(const char* dir) {
-    if (qore_caller_is_untrusted()) {
+    // code that a trusted (governed) sandbox governs is trusted (qore#7737)
+    if (qore_caller_is_restricted_or_untrusted()) {
         printd(0, "QoreModuleManager::addModuleDir() '%s': ignored: the caller is sandboxed or restricted\n", dir);
         return;
     }
@@ -3195,7 +3282,8 @@ void QoreModuleManager::addModuleDir(const char* dir) {
 }
 
 void QoreModuleManager::addModuleDirList(const char* strlist) {
-    if (qore_caller_is_untrusted()) {
+    // code that a trusted (governed) sandbox governs is trusted (qore#7737)
+    if (qore_caller_is_restricted_or_untrusted()) {
         printd(0, "QoreModuleManager::addModuleDirList() '%s': ignored: the caller is sandboxed or restricted\n",
             strlist);
         return;
@@ -3210,7 +3298,8 @@ bool QoreModuleManager::mayChangeModulePath(const QoreProgram* pgm) {
     if (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module) {
         return true;
     }
-    if (qore_caller_is_untrusted()) {
+    // code that a trusted (governed) sandbox governs is trusted (qore#7737)
+    if (qore_caller_is_restricted_or_untrusted()) {
         return false;
     }
     if (!pgm) {
@@ -3221,8 +3310,9 @@ bool QoreModuleManager::mayChangeModulePath(const QoreProgram* pgm) {
     if (!!(pgm->getParseOptions() & restricting)) {
         return false;
     }
-    // also a Program that sandboxed code created, which has no manager of its own
-    return !qore_program_is_sandboxed(pgm);
+    // also a Program that restricted code created, which has no manager of its own; not a Program that a trusted
+    // (governed) sandbox governs (qore#7737)
+    return !qore_program_is_restricted(pgm);
 }
 
 /* this internal helper function solves an issue with modules
@@ -4907,6 +4997,9 @@ int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path
     tenant_chosen = false;
     owner = nullptr;
     owner_pgm_id = QORE_NO_PROGRAM_ID;
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
     if (trusted || !qore_caller_is_untrusted()) {
         return 0;
     }
@@ -4940,6 +5033,7 @@ bool QoreModuleManager::mayUseTenantModule(const QoreAbstractModule& mi, const Q
     assert(mi.isTenantChosen());
     // library code does not bind to a module that a tenant chose, whoever loaded it, when it is initialized or later
     // (a module loaded into a library module's Program at run time is used by every caller)
+    // the same classification as checkShadowingLoad(), which decides whether a module is tenant-chosen
     if (!qore_caller_is_untrusted() || qore_module_init_library()
         || (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module)) {
         return false;
@@ -5252,6 +5346,9 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     // a library module that code that is not trusted loads into a Program container of its own is parsed and
     // initialized with the container's code and parse defines: it is not library code
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
@@ -5282,6 +5379,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
+    // as checkShadowingLoad() (qore#7737)
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
@@ -5893,9 +5991,19 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
         OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
         mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, mo == MOD_OP_NONE ? nullptr : &iv);
-        // If reexport directive is present, register module for reexport (module context is correct here)
-        if (reexport && mod && !xsink) {
-            ModuleReExportHelper mrh(mod, true);
+        if (mod && !xsink) {
+            // a directive parsed into the Program of the module that this thread is loading is a direct requirement
+            // of that module (#7796); not one of another Program that the module's code parses while it is loaded,
+            // nor one of a module that does not have its own Program (the module context of a binary module is
+            // set only after its initialization)
+            QoreAbstractModule* reqmi = get_reexport_module();
+            if (reqmi && reqmi != mod && reqmi->getModuleProgram() == pgm) {
+                reqmi->addModuleRequirement(mod->getName());
+            }
+            // If reexport directive is present, register module for reexport (module context is correct here)
+            if (reexport) {
+                ModuleReExportHelper mrh(mod, true);
+            }
         }
     }
 
@@ -6590,6 +6698,9 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     // a library module that code that is not trusted loads into a Program container of its own is parsed and
     // initialized with the container's code and parse defines: it is not library code
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
@@ -6626,6 +6737,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
+    // as checkShadowingLoad() (qore#7737)
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
@@ -6990,6 +7102,189 @@ static bool qore_verify_module_signatures() {
     return rv;
 }
 
+#ifdef __linux__
+// the parts of the ELF headers that the check of a module file reads; <elf.h> is not included, as its macros clash with
+// the declarations of the LLVM headers in the single compilation unit
+namespace {
+constexpr unsigned QORE_MODFILE_EI_NIDENT = 16;
+constexpr unsigned QORE_MODFILE_EI_CLASS = 4;
+constexpr unsigned QORE_MODFILE_EI_DATA = 5;
+constexpr unsigned char QORE_MODFILE_ELFCLASS32 = 1;
+constexpr unsigned char QORE_MODFILE_ELFCLASS64 = 2;
+constexpr unsigned char QORE_MODFILE_ELFDATA2LSB = 1;
+constexpr unsigned char QORE_MODFILE_ELFDATA2MSB = 2;
+constexpr uint32_t QORE_MODFILE_PT_LOAD = 1;
+
+struct QoreModFileElf64Ehdr {
+    unsigned char e_ident[QORE_MODFILE_EI_NIDENT];
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint64_t e_entry;
+    uint64_t e_phoff;
+    uint64_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+};
+
+struct QoreModFileElf64Phdr {
+    uint32_t p_type;
+    uint32_t p_flags;
+    uint64_t p_offset;
+    uint64_t p_vaddr;
+    uint64_t p_paddr;
+    uint64_t p_filesz;
+    uint64_t p_memsz;
+    uint64_t p_align;
+};
+
+struct QoreModFileElf32Ehdr {
+    unsigned char e_ident[QORE_MODFILE_EI_NIDENT];
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint32_t e_entry;
+    uint32_t e_phoff;
+    uint32_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+};
+
+struct QoreModFileElf32Phdr {
+    uint32_t p_type;
+    uint32_t p_offset;
+    uint32_t p_vaddr;
+    uint32_t p_paddr;
+    uint32_t p_filesz;
+    uint32_t p_memsz;
+    uint32_t p_flags;
+    uint32_t p_align;
+};
+
+static_assert(sizeof(QoreModFileElf64Ehdr) == 64 && sizeof(QoreModFileElf64Phdr) == 56, "the ELF64 headers have the sizes of the format");
+static_assert(sizeof(QoreModFileElf32Ehdr) == 52 && sizeof(QoreModFileElf32Phdr) == 32, "the ELF32 headers have the sizes of the format");
+}
+
+//! Checks the program headers of an ELF file of the native class against the size of the file
+/** \a Ehdr and \a Phdr are the header types of the class of the file.  Reads from \a fd with pread() into objects on
+    the stack, so nothing is allocated and nothing throws.
+
+    @return 0 if the headers fit in the file, -1 with \a err set if not, and -2 if they cannot be read
+*/
+template <typename Ehdr, typename Phdr>
+static int qore_check_elf_headers(int fd, uint64_t size, QoreString& err) {
+    Ehdr eh;
+    if (size < sizeof(eh)) {
+        err.sprintf("the file is shorter (%llu bytes) than its ELF header (%llu bytes)", (unsigned long long)size,
+            (unsigned long long)sizeof(eh));
+        return -1;
+    }
+    ssize_t rc = pread(fd, &eh, sizeof(eh), 0);
+    if (rc != (ssize_t)sizeof(eh)) {
+        return -2;
+    }
+    // a file that is not of this machine's byte order or with other sizes of the entries is for dlopen() to refuse
+    if (eh.e_phnum == 0 || eh.e_phentsize != sizeof(Phdr)) {
+        return 0;
+    }
+    uint64_t ph_end = (uint64_t)eh.e_phoff + (uint64_t)eh.e_phnum * sizeof(Phdr);
+    if ((uint64_t)eh.e_phoff > size || ph_end > size) {
+        err.sprintf("the program headers of the ELF file (offset %llu, %u entries) do not fit in the file (%llu bytes)",
+            (unsigned long long)eh.e_phoff, (unsigned)eh.e_phnum, (unsigned long long)size);
+        return -1;
+    }
+    for (unsigned i = 0; i < eh.e_phnum; ++i) {
+        Phdr ph;
+        rc = pread(fd, &ph, sizeof(ph), (off_t)((uint64_t)eh.e_phoff + (uint64_t)i * sizeof(Phdr)));
+        if (rc != (ssize_t)sizeof(ph)) {
+            return -2;
+        }
+        // dlopen() maps the file contents of a loadable segment; a page beyond the end of the file is a SIGBUS when
+        // the code or data on it is read
+        if (ph.p_type == QORE_MODFILE_PT_LOAD && ph.p_filesz) {
+            uint64_t off = (uint64_t)ph.p_offset;
+            uint64_t filesz = (uint64_t)ph.p_filesz;
+            if (off > size || filesz > size - off) {
+                err.sprintf("the file is truncated: loadable segment %u of the ELF file covers bytes %llu to %llu, "
+                    "and the file has %llu bytes", i, (unsigned long long)off,
+                    (unsigned long long)(off + filesz), (unsigned long long)size);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+//! Checks that the loadable segments of a binary module file are in the file, before dlopen() maps it (qore#7804)
+/** dlopen() maps the segments of a shared object from their offsets and sizes in its program headers: for a file that
+    was cut short (a partial write, a bad copy, a build interrupted) the pages beyond the end of the file are mapped
+    all the same, and the process dies with SIGBUS inside dlopen() or the first time that code of the module runs,
+    without a diagnostic.  The headers are checked against the size of the file first, on one open descriptor of a
+    regular file (the size and the headers are of the same file), so that the module is refused with an exception, or
+    replaced by its source when one can be loaded, as for any other module that cannot be loaded.
+
+    A file that is not an ELF file, or one of another class or byte order, is not checked: dlopen() refuses it.  A
+    file that is changed in place between this check and dlopen() is not protected: that takes write access to the
+    module's directory.
+
+    @param path the module file about to be opened
+    @param err receives a description when the file is damaged
+
+    @return 0 if the file is intact or cannot be checked, -1 with \a err set if it is damaged
+*/
+static int qore_check_module_file_segments(const char* path, QoreString& err) {
+    std::unique_ptr<FILE, int (*)(FILE*)> fp(qore_open_regular_file(path), fclose);
+    if (!fp) {
+        // not a regular file, or it cannot be opened: for the later steps to report
+        return 0;
+    }
+    int fd = fileno(fp.get());
+    struct stat sb;
+    if (fstat(fd, &sb) || !S_ISREG(sb.st_mode) || sb.st_size < 0) {
+        return 0;
+    }
+    uint64_t size = (uint64_t)sb.st_size;
+    unsigned char ident[QORE_MODFILE_EI_NIDENT];
+    if (size < sizeof(ident) || pread(fd, ident, sizeof(ident), 0) != (ssize_t)sizeof(ident)
+        || memcmp(ident, "\177ELF", 4)) {
+        // too short to tell, or not an ELF file: dlopen() reports it
+        return 0;
+    }
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    const unsigned char native_data = QORE_MODFILE_ELFDATA2LSB;
+#else
+    const unsigned char native_data = QORE_MODFILE_ELFDATA2MSB;
+#endif
+    if (ident[QORE_MODFILE_EI_DATA] != native_data) {
+        return 0;
+    }
+    int rc;
+    if (ident[QORE_MODFILE_EI_CLASS] == QORE_MODFILE_ELFCLASS64) {
+        rc = qore_check_elf_headers<QoreModFileElf64Ehdr, QoreModFileElf64Phdr>(fd, size, err);
+    } else if (ident[QORE_MODFILE_EI_CLASS] == QORE_MODFILE_ELFCLASS32) {
+        rc = qore_check_elf_headers<QoreModFileElf32Ehdr, QoreModFileElf32Phdr>(fd, size, err);
+    } else {
+        return 0;
+    }
+    if (rc == -2) {
+        // a read of a regular file failed: it cannot be told that the file is intact, so it is not loaded
+        err.sprintf("the file cannot be read: %s", strerror(errno));
+        return -1;
+    }
+    return rc;
+}
+#endif
+
 //! Checks that a binary module file is intact before dlopen() maps it.
 /** macOS signs every dylib -- the linker attaches an ad-hoc signature -- and on Apple
     Silicon the kernel SIGKILLs a process that maps a page whose signature no longer
@@ -7110,7 +7405,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner_holder.release(), owner_pgm_id);
     // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
     // that code; checked before the barrier is set
-    if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module && qore_caller_is_untrusted()) {
+    // as checkShadowingLoad() (qore#7737)
+    if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module
+            && qore_caller_is_untrusted()) {
         path_pgm = nullptr;
     }
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
@@ -7159,6 +7456,21 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         return nullptr;
     }
     bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
+
+#ifdef __linux__
+    // before the module is mapped (or its dependencies are loaded for it): a file that was cut short is refused here,
+    // as dlopen() would map pages that are not in it and the process would die with SIGBUS (qore#7804).  The reader
+    // of the AOT metadata above, which reads the file and does not map it, names a truncated section more exactly
+    {
+        QoreString segments_err;
+        if (qore_check_module_file_segments(open_path, segments_err)) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+                "cannot load qore module '%s': %s", qore_msg_path(path).c_str(),
+                qore_msg_detail(segments_err.c_str()));
+            return nullptr;
+        }
+    }
+#endif
 
     // an AOT module compiled against other builtin API metadata (a builtin class, function or constant whose
     // functional domains, flags or signature have changed since) can have the old metadata built into its code, so it
@@ -7619,6 +7931,36 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // embedded source is parsed (see design/qore-module-structure.md "Child Modules")
     if (!mod_info.child_modules.empty()) {
         bmi->setChildModules(mod_info.child_modules);
+    }
+    // the direct requirements and the reexports of the module (#7796): an AOT user module has those of the
+    // directives of its source, which its image records, and which it loads in its initialization, not in a module
+    // context of its own; a binary module has the dependencies that it declares
+    if (qore_is_aot_user_module(name)) {
+        name_vec_t required, reexported;
+        qore_aot_get_module_requirements(name, required, reexported);
+        // a module compiled before its image recorded its direct requirements has its recorded dependencies, which
+        // can name the "qore" feature and features that are builtin
+        for (const std::string& dep : required) {
+            if (dep != "qore" && qoreFeatureList.find(dep) == qoreFeatureList.end()) {
+                bmi->addModuleRequirement(dep.c_str());
+            }
+        }
+        for (const std::string& dep : reexported) {
+            bool dup = false;
+            for (const std::string& r : bmi->rmod) {
+                if (r == dep) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                bmi->addModuleReExport(dep.c_str());
+            }
+        }
+    } else {
+        for (const std::string& dep : mod_info.dependencies) {
+            bmi->addModuleRequirement(dep.c_str());
+        }
     }
     mi = bmi.get();
     QMM.addModule(bmi.release());
@@ -8573,8 +8915,11 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     if (pgm && pgm != getProgram() && origin != QoreModuleCommandContext::MC_REPLAY) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
-        // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
-        if (qore_calling_code_is_sandboxed()) {
+        // restricted code, also through the code of a trusted (governed) sandbox that acts for it (a thread, task or
+        // callback started or created for it); the code of a trusted sandbox issues commands as trusted code
+        // otherwise (qore#7737); code compiled in another Program than the one it runs in is that Program's code
+        // (qore#7202)
+        if (qore_calling_code_is_restricted() || qore_caller_is_restricted()) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
                 "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
                 mname));
@@ -8946,6 +9291,31 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
 }
 
 #ifdef DEBUG
+bool QoreModuleManager::dbgHoldLoad(const char* name) {
+    AutoLocker al(mutex);
+    if (module_load_map.find(name) != module_load_map.end()) {
+        return false;
+    }
+    module_load_map.insert(module_load_map_t::value_type(name, ModuleLoadEntry(q_gettid())));
+    return true;
+}
+
+bool QoreModuleManager::dbgReleaseLoad(const char* name) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    if (i == module_load_map.end() || i->second.state != MLS_INITIALIZING) {
+        return false;
+    }
+    i->second.state = MLS_LOADED;
+    if (module_load_waiting) {
+        module_load_cond.broadcast();
+    }
+    if (!i->second.waiters) {
+        module_load_map.erase(i);
+    }
+    return true;
+}
+
 bool QoreModuleManager::dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms) {
     AutoLocker al(mutex);
     while (true) {

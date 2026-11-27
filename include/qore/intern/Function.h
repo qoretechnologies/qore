@@ -52,6 +52,7 @@
 class qore_class_private;
 class QoreIRFunction;
 struct QoreAOTContext;
+struct QoreAOTCallRefEntry;
 struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
@@ -1363,9 +1364,10 @@ protected:
             const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx,
             LexicalSemanticPolicy invocation_policy);
 
+    //! \a self is the object of the call, if any (see qore_class_private::runtimeTakeSandboxSuperCall())
     template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL int findVariantImpl(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
-            const qore_class_private* cctx, LexicalSemanticPolicy invocation_policy);
+            const qore_class_private* cctx, LexicalSemanticPolicy invocation_policy, const QoreObject* self);
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
@@ -1375,7 +1377,7 @@ protected:
     template <bool LexicalInvocation>
     DLLLOCAL QORE_INTERN_NOINLINE int findVariantRetry(const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-            LexicalSemanticPolicy invocation_policy, bool explicit_type_args);
+            LexicalSemanticPolicy invocation_policy, bool explicit_type_args, const QoreObject* self);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
@@ -1906,6 +1908,10 @@ protected:
     mutable std::mutex aot_lazy_closure_ir_mutex;
     //! Lock-free closure-call guard; publishes aot_lazy_closure_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_closure_ir{false};
+    //! The serialized IR of a closure with a native body, compiled with debugging (qcc -g), which runs in the IR
+    //! interpreter while a debugger is attached (materializeAOTClosureDebugIR(); qore#7752); protected by
+    //! aot_lazy_closure_ir_mutex
+    mutable std::shared_ptr<const QoreAOTLazyClosureIR> aot_closure_debug_ir;
     //! Serialized source-stripped function IR installed for qcc parse-time execution.
     mutable std::shared_ptr<const QoreAOTLazyFunctionIR> aot_lazy_function_ir;
     //! Entry in the shared lazy-function descriptor table.
@@ -1915,6 +1921,15 @@ protected:
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
     //! Initialized before cached_aot_ctx is published. cached_aot_fn remains the native symbol for lookup.
     mutable AotFunctionPtr aot_body_entry = nullptr;
+    //! The call-reference entry of the AOT function (qore#5578; see getAOTCallRefEntry()): published once, with a
+    //! release store, and never changed after
+    mutable std::atomic<const QoreAOTCallRefEntry*> aot_callref_entry{nullptr};
+    //! The generation of the registrations of call-reference entries (qore_aot_callref_registration_generation()) for
+    //! which the last lookup found no entry, or 0 if none was made
+    mutable std::atomic<uint32_t> aot_callref_miss_generation{0};
+
+    //! looks up the call-reference entry in the registry; see getAOTCallRefEntry()
+    DLLLOCAL const QoreAOTCallRefEntry* lookupAOTCallRefEntry() const;
 
     template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -1956,6 +1971,12 @@ protected:
 
     //! Materialize source-stripped closure fallback IR if one is installed.
     DLLLOCAL bool materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const;
+
+    //! Materializes the debug IR of a closure with a native body when a debugger is attached (qore#7752)
+    /** @return true if the closure has its IR now, false if it has no debug IR (it was not compiled with debugging,
+        or has no native body) or the IR could not be materialized (with an exception raised)
+    */
+    DLLLOCAL bool materializeAOTClosureDebugIR(const char* name, ExceptionSink* xsink) const;
 
     //! Materialize source-stripped function fallback IR if one is installed.
     DLLLOCAL bool materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const;
@@ -2001,6 +2022,13 @@ public:
     DLLLOCAL void setLazyAOTClosureIR(std::shared_ptr<const QoreAOTLazyClosureIR> lazy_ir) const {
         aot_lazy_closure_ir = std::move(lazy_ir);
         has_aot_lazy_closure_ir.store(true, std::memory_order_release);
+    }
+
+    //! Installs the serialized IR of a closure with a native body compiled with debugging (qore#7752)
+    /** During single-threaded AOT registration, before publication; the IR runs only while a debugger is attached
+    */
+    DLLLOCAL void setAOTClosureDebugIR(std::shared_ptr<const QoreAOTLazyClosureIR> debug_ir) const {
+        aot_closure_debug_ir = std::move(debug_ir);
     }
 
     //! @return true when this closure has deferred fallback IR to materialize
@@ -2273,6 +2301,19 @@ public:
     //! native fast entry in the registry of a module's fast entries (qore_aot_find_cross_module_fast_entry())
     DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
         return cached_aot_fn;
+    }
+
+    //! Returns the call-reference entry of the AOT-compiled function, or nullptr if its image registered none
+    /** The entry that its image registered for the standard native entry of the function (getCachedAOTFunction();
+        qore_aot_register_callref_entries_v1()), with which a call through a reference to the function calls its native
+        code with native arguments (qore#5578).  It serves every reference to the function, also the ones that AST or IR
+        code or another image made.  It is published on the variant by the first lookup that finds it, with a release
+        store, and read with an acquire load; a lookup that finds none is made again only once more entries have been
+        registered (a module's image loaded later, for example).
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreAOTCallRefEntry* getAOTCallRefEntry() const {
+        const QoreAOTCallRefEntry* entry = aot_callref_entry.load(std::memory_order_acquire);
+        return entry ? entry : lookupAOTCallRefEntry();
     }
 
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
@@ -4035,10 +4076,27 @@ public:
 
 class UserClosureVariant : public UserFunctionVariant {
 protected:
+    //! the location of the block of a closure read from an AOT image, which has no block; see getAOTBlockLocation()
+    const QoreProgramLocation* aot_block_loc = nullptr;
+
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
         is_closure = true;
         signature.closure = true;
+    }
+
+    //! Sets the location of the block of a closure read from an AOT image (see getAOTBlockLocation())
+    DLLLOCAL void setAOTBlockLocation(const QoreProgramLocation* loc) {
+        aot_block_loc = loc;
+    }
+
+    //! Returns the location of the block of a closure read from an AOT image, or nullptr
+    /** The debugger's events of the closure's code are given with a block at this location
+        (getAOTClosureDebugBlock()), as the AST interpreter gives them with the closure's block, while its signature has
+        the location of its declaration, as a parsed closure's has (qore#7787)
+    */
+    DLLLOCAL const QoreProgramLocation* getAOTBlockLocation() const {
+        return aot_block_loc;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

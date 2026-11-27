@@ -42,6 +42,11 @@ public class Values {
         static Mutex m();
     }
 
+    #! Returns a lazy value of this module: only the code of the module that registered a value can read it
+    static auto getValue(int id) {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
     #! Reads an app's actions; restricted code calls the catalog through this trusted module
     static list<string> readApp(string app) {
         return map $1.action, DataProviderActionCatalog::getActions(app, False);

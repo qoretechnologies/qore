@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# mutation-observer-weak-capture.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A mutation observer that runs statements on the object that it observes holds that object: captured strongly, the
+# object, its observer and the closure keep each other alive after the last outside reference is gone, and its
+# connections stay open; captured weakly (:=), the object is destroyed when the last outside reference goes, and the
+# observer can still use it in its callback, which runs while the object is in use (qore#7766).
+
+%modern
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class MutationObserverWeakCaptureTest
+
+#! An object captured by the observer: its destructor runs when the observer's closure is freed
+class Sentinel {
+    public {
+        #! the number of objects destroyed
+        static int destroyed;
+    }
+
+    destructor() {
+        ++Sentinel::destroyed;
+    }
+}
+
+#! A weak reference to the observed object, kept by the caller
+class Holder {
+    public {
+        #! a weak reference to the observed object
+        *AbstractDatasource ds;
+        #! what the observer's statements on the observed object returned
+        list<auto> results = ();
+    }
+}
+
+class MutationObserverWeakCaptureTest inherits QUnit::Test {
+    public {
+        const DsStr = "dbitest:u/p@db";
+        const PoolStr = "dbitest:u/p@db{min=1,max=2}";
+    }
+
+    constructor() : QUnit::Test("MutationObserverWeakCapture", "1.0") {
+        addTestCase("Datasource: a strong capture keeps the object alive", \strongTest(), False);
+        addTestCase("Datasource: a weak capture releases the object", \weakTest(), False);
+        addTestCase("DatasourcePool: a strong capture keeps the object alive", \strongTest(), True);
+        addTestCase("DatasourcePool: a weak capture releases the object", \weakTest(), True);
+        set_return_value(main());
+    }
+
+    #! creates the object, opened
+    private AbstractDatasource create(bool pool) {
+        try {
+            AbstractDatasource ds = pool ? new DatasourcePool(PoolStr) : new Datasource(DsStr);
+            ds.getServerVersion();
+            return ds;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+    }
+
+    #! creates an object whose observer runs a statement on it, captured strongly or weakly, and uses it; the caller
+    #! gets only a weak reference to it
+    private observe(bool pool, bool weak, Holder holder) {
+        AbstractDatasource ds = create(pool);
+        Sentinel sentinel();
+        if (weak) {
+            AbstractDatasource wds := ds;
+            ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+                if (!sentinel) {
+                    throw "TEST-ERROR", "no sentinel";
+                }
+                if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC) {
+                    holder.results += wds.select("select 1");
+                }
+            });
+        } else {
+            ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+                if (!sentinel) {
+                    throw "TEST-ERROR", "no sentinel";
+                }
+                if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC) {
+                    holder.results += ds.select("select 1");
+                }
+            });
+        }
+        ds.exec("insert into t values (1)");
+        ds.rollback();
+        holder.ds := ds;
+    }
+
+    strongTest(bool pool) {
+        Sentinel::destroyed = 0;
+        Holder holder();
+        observe(pool, False, holder);
+        assertEq(1, holder.results.size(), "the observer ran its statement on the object");
+        assertEq(0, Sentinel::destroyed, "the object, its observer and the closure keep each other alive");
+        # the object is still usable through the weak reference
+        assertEq("dbitest", holder.ds.getDriverName());
+        # removing the observer breaks the cycle: the object goes with it
+        holder.ds.clearMutationObserver();
+        assertEq(1, Sentinel::destroyed, "the observer's closure is freed");
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { holder.ds.getDriverName(); }, NOTHING, "the object is destroyed");
+    }
+
+    weakTest(bool pool) {
+        Sentinel::destroyed = 0;
+        Holder holder();
+        observe(pool, True, holder);
+        assertEq(1, holder.results.size(), "the observer ran its statement on the object through the weak reference");
+        assertEq(1, Sentinel::destroyed, "the observer's closure is freed with the object");
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { holder.ds.getDriverName(); }, NOTHING,
+            "the object is destroyed when the last outside reference goes");
+    }
+}

@@ -284,6 +284,24 @@ public:
     }
 };
 
+//! Ends a child process created with fork() by a thread that is not the process's main thread, when its last thread
+//! that runs Qore code has ended (qore#7613)
+/** No main thread exists in such a child to end it when it returns, as the parent's does: the child ends with status 0
+    as with exit() in a process whose only thread runs Qore code (qore_exit_process(): the process-end callbacks run,
+    the library's helper threads (the signal thread, the reaper and others) are stopped, and the standard I/O streams
+    are flushed), and these helper threads do not keep it alive
+*/
+DLLLOCAL void qore_fork_child_threads_ended();
+
+//! Returns true if a child that the calling thread creates with fork() has no main thread (qore#7613)
+/** The calling thread runs Qore code with a TID of its own and is not the thread that initialized the library, or the
+    process itself has no main thread (a child of such a child); a thread of an embedding application (a foreign
+    thread) goes on with that application's code, and the code of a signal handler (TID 0) is not a thread of its own
+
+    @param process_without_main true if the calling process is a child without a main thread
+*/
+DLLLOCAL bool qore_fork_thread_is_not_main(bool process_without_main);
+
 class QoreThreadList {
 friend class QoreThreadListIterator;
 friend class QoreThreadDataHelper;
@@ -370,11 +388,25 @@ public:
     }
 
     DLLLOCAL void release(int tid) {
+        bool last;
         {
             AutoLocker al(lck);
-            releaseIntern(tid);
+            last = releaseIntern(tid);
         }
         notifyJoiners();
+        if (last) {
+            afterLastRelease();
+        }
+    }
+
+    //! called without the lock after the release of the last TID in a child without a main thread (see releaseIntern())
+    /** Such a child ends when its last thread that runs Qore code has ended (qore#7613); it is ended once, by the
+        thread whose release left no TID in use, also if a TID is used and released again meanwhile (a foreign thread)
+    */
+    DLLLOCAL void afterLastRelease() {
+        if (!fork_child_ending.exchange(true)) {
+            qore_fork_child_threads_ended();
+        }
     }
 
     //! wakes the threads in joinThread(); lck must not be held
@@ -384,15 +416,21 @@ public:
     }
 
     DLLLOCAL int releaseReserved(int tid) {
+        bool last;
         {
             AutoLocker al(lck);
             if (entry[tid].status != QTS_RESERVED) {
                 return -1;
             }
 
-            releaseIntern(tid);
+            // a TID reserved for a foreign thread: the end of a foreign thread does not end the child, whose
+            // application goes on with its code
+            last = releaseIntern(tid, false);
         }
         notifyJoiners();
+        if (last) {
+            afterLastRelease();
+        }
         return 0;
     }
 
@@ -417,7 +455,12 @@ public:
 
     DLLLOCAL void deleteData(int tid);
 
-    DLLLOCAL void deleteDataRelease(int tid);
+    //! deletes the calling thread's data and releases its TID
+    /** @param tid the calling thread's TID
+        @param foreign true for a foreign thread, whose end does not end a child without a main thread (see
+        releaseIntern())
+    */
+    DLLLOCAL void deleteDataRelease(int tid, bool foreign = false);
 
     //! waits until the thread with the given TID has left the thread list
     /** @param tid the TID of the thread to wait for
@@ -458,6 +501,9 @@ public:
     //! acquires the lock before fork() (see QoreForkHandlers.h)
     DLLLOCAL void forkPrepare() {
         lck.lock();
+        // decided in the forking thread before fork(): its child has no main thread if it is not the main thread, or if
+        // this process has none
+        fork_thread_not_main = qore_fork_thread_is_not_main(fork_child_without_main);
     }
 
     //! releases the lock in the parent after fork()
@@ -507,6 +553,15 @@ public:
     DLLLOCAL unsigned getCancelBits(int tid) const {
         return (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_requested.load(std::memory_order_seq_cst)
             : 0;
+    }
+
+    //! Returns the word of the cancellation request bits of the given thread that getCancelBits() reads, or nullptr
+    //! for an invalid TID
+    /** For the inline cancellation poll of native code (see QoreCancelPollWords); the entry is never freed, so the
+        address is always valid, and it is the thread's own while the thread has the TID
+    */
+    DLLLOCAL const std::atomic<unsigned>* getCancelWord(int tid) const {
+        return (tid >= 0 && tid < MAX_QORE_THREADS) ? &entry[tid].cancel_requested : nullptr;
     }
 
     //! Sets the sandbox limit bit of the given threads and wakes them if they are blocked; acquires lck
@@ -748,6 +803,12 @@ protected:
 
     // last TID issued to avoid reusing the same TID over and over again
     int last_tid = 0;
+    //! set by forkPrepare(): the thread that calls fork() is not the process's main thread (qore#7613)
+    bool fork_thread_not_main = false;
+    //! true in a child process that a thread other than the main thread created with fork() (qore#7613)
+    bool fork_child_without_main = false;
+    //! set when such a child ends (see afterLastRelease())
+    std::atomic<bool> fork_child_ending{false};
 
 #ifdef DEBUG
     //! guards waits for a thread's registered cancellable wait (debug builds; see dbgWaitForWait())
@@ -756,14 +817,23 @@ protected:
     QoreCondition dbg_wait_cond;
 #endif
 
-    DLLLOCAL void releaseIntern(int tid) {
+    //! releases the TID; returns true if it was the last TID in use in a child without a main thread (qore#7613)
+    /** Decided with the lock held, so that only the thread whose release left no TID in use ends the child (see
+        afterLastRelease())
+
+        @param tid the TID to release
+        @param may_end false for the TID of a foreign thread: its end does not end the child, whose application goes
+        on with its code (the thread can end in that application's own cleanup)
+    */
+    DLLLOCAL bool releaseIntern(int tid, bool may_end = true) {
         // NOTE: cannot safely call printd here, because normally the thread_data has been deleted
         //printf("DEBUG: ThreadList.releaseIntern() TID %d terminated\n", tid);
         entry[tid].cleanup();
         ++entry[tid].release_count;
         if (tid) {
-            --num_threads;
+            return !--num_threads && fork_child_without_main && may_end;
         }
+        return false;
     }
 };
 

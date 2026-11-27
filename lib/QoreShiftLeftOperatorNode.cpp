@@ -35,7 +35,7 @@
 QoreString QoreShiftLeftOperatorNode::op_str("<< (shift left) operator expression");
 
 QoreValue QoreShiftLeftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();

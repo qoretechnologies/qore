@@ -34,6 +34,7 @@
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
@@ -103,12 +104,27 @@ struct QoreSandboxMembers {
 static constexpr unsigned long QORE_PROC_SUPER_MAGIC = 0x9fa0;
 #endif
 
+//! true if the messages of a file-system policy are for code that is not given the paths of the policy's configuration
+/** The sandbox root is a directory of the host that the host configured: it is named neither to code restricted from
+    external information (qore#7507) nor to sandboxed code, the code whose access the policy decides, also where the
+    library checks for it on the async I/O thread (qore_code_origin_sandboxed(), which fails closed as
+    qore_caller_is_sandboxed()); the unrestricted host, which configured it, gets it for its diagnostics
+*/
+static bool qore_fs_policy_msg_restricted() {
+    return qore_msg_restricted() || qore_caller_no_external_info() || qore_code_origin_sandboxed(nullptr);
+}
+
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
     //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
     //! state of the whole manager, kept here as the composition is, so that the layout of QoreSandboxManager, which is
     //! part of the C++ API, does not change
     std::atomic<bool> uncontrolled_api_allowed{false};
+    //! the enforcement level of the QoreSandboxManager (see QoreSandboxManager::setEnforcementLevel()); kept here for
+    //! the same reason
+    std::atomic<int> enforcement_level{QSEL_TENANT_ISOLATION};
+    //! true once the enforcement level was raised explicitly: it can no longer be lowered
+    std::atomic<bool> enforcement_level_fixed{false};
     //! the isolation domain (tenant) of the QoreSandboxManager, or empty; written only before the manager governs
     //! code (see QoreSandboxManager::setIsolationDomain(); manager state, kept here for the same reason; qore#6536)
     std::string isolation_domain;
@@ -368,9 +384,13 @@ struct qore_fs_security_private {
 
         // Check sandbox root containment
         if (!isInSandboxRoot(canon)) {
-            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-                "Access to '%s' denied: path is outside sandbox root '%s'",
-                qore_msg_path(path).c_str(), qore_msg_path(sandbox_root.c_str()).c_str());
+            if (qore_fs_policy_msg_restricted()) {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                    "Access to '%s' denied: path is outside the sandbox root", qore_msg_path(path).c_str());
+            } else {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                    "Access to '%s' denied: path is outside sandbox root '%s'", path, sandbox_root.c_str());
+            }
             return false;
         }
 
@@ -418,9 +438,15 @@ int QoreFilesystemSecurityManager::addAllowedPath(const char* path, int mode, Ex
 
     // If sandbox root is set, verify path is within it
     if (!priv->sandbox_root.empty() && !priv->isInSandboxRoot(canon)) {
-        xsink->raiseException("SANDBOX-CONFIG-ERROR",
-            "Allowed path '%s' is outside sandbox root '%s'",
-            canon.c_str(), priv->sandbox_root.c_str());
+        // the canonical form of the path can name directories of the host (the current directory of a relative path,
+        // the targets of links), so restricted code gets the path as it gave it
+        if (qore_fs_policy_msg_restricted()) {
+            xsink->raiseException("SANDBOX-CONFIG-ERROR", "Allowed path '%s' is outside the sandbox root",
+                qore_msg_path(path).c_str());
+        } else {
+            xsink->raiseException("SANDBOX-CONFIG-ERROR", "Allowed path '%s' is outside sandbox root '%s'",
+                canon.c_str(), priv->sandbox_root.c_str());
+        }
         return -1;
     }
 
@@ -1560,6 +1586,79 @@ bool QoreSandboxManager::trustsUncontrolledApis() const {
     return getUncontrolledApiPolicy();
 }
 
+namespace {
+//! serializes the changes of the enforcement level of the managers, which are rare, so that a lowering that found the
+//! level not fixed cannot be stored after a concurrent raise fixed it
+std::mutex enforcement_level_lock;
+}
+
+int QoreSandboxManager::setEnforcementLevel(QoreSandboxEnforcementLevel level, ExceptionSink* xsink) {
+    assert(xsink);
+    if (level != QSEL_CODE_SAFETY && level != QSEL_TENANT_ISOLATION) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "invalid sandbox enforcement level %d; expecting "
+            "QSEL_CODE_SAFETY (%d) or QSEL_TENANT_ISOLATION (%d)", static_cast<int>(level), QSEL_CODE_SAFETY,
+            QSEL_TENANT_ISOLATION);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(this)) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "the enforcement level of a composition of "
+            "sandboxes cannot be set: it is the strictest level of its members");
+        return -1;
+    }
+    qore_fs_security_private* p = fs_mgr.priv;
+    if (level == QSEL_TENANT_ISOLATION) {
+        // raising the level only adds restrictions, and fixes it
+        std::lock_guard<std::mutex> lck(enforcement_level_lock);
+        p->enforcement_level.store(QSEL_TENANT_ISOLATION, std::memory_order_release);
+        p->enforcement_level_fixed.store(true, std::memory_order_release);
+        return 0;
+    }
+    // lowering the level lifts the owner rules: never by the code that the manager governs, which is decided from the
+    // thread's sandboxes (without the lock: the walk can take the locks of Programs)
+    if (qore_thread_sandbox_governed_by(this)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setEnforcementLevel(): code that a sandbox "
+            "governs cannot lower its enforcement level");
+        return -1;
+    }
+    // only by the creator of the manager: trusted code, or the code of the Program that created it
+    if (qore_sandbox_manager_check_change(this, "SandboxManager::setEnforcementLevel()", xsink)) {
+        return -1;
+    }
+    std::lock_guard<std::mutex> lck(enforcement_level_lock);
+    if (p->enforcement_level_fixed.load(std::memory_order_acquire)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setEnforcementLevel(): the enforcement level "
+            "of the sandbox was raised to tenant isolation and can no longer be lowered");
+        return -1;
+    }
+    p->enforcement_level.store(QSEL_CODE_SAFETY, std::memory_order_release);
+    return 0;
+}
+
+QoreSandboxEnforcementLevel QoreSandboxManager::getEnforcementLevel() const {
+    // a composition: the strictest level of its members
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (member->getEnforcementLevel() == QSEL_TENANT_ISOLATION) {
+                return QSEL_TENANT_ISOLATION;
+            }
+        }
+        return members->empty() ? QSEL_TENANT_ISOLATION : QSEL_CODE_SAFETY;
+    }
+    return static_cast<QoreSandboxEnforcementLevel>(fs_mgr.priv->enforcement_level.load(std::memory_order_acquire));
+}
+
+bool QoreSandboxManager::isEnforcementLevelFixed() const {
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (member->isEnforcementLevelFixed()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return fs_mgr.priv->enforcement_level_fixed.load(std::memory_order_acquire);
+}
+
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
@@ -1909,7 +2008,10 @@ void qore_sandbox_manager_ops::notifyThreadSlotReleasedImpl(QoreSandboxManager* 
 }
 
 void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b) {
-    if (const auto* managers = QoreSandboxComposition::members(b)) {
+    // the caller counted a thread of the manager, so it exists: the null test of members(const QoreSandboxManager*)
+    // would give the compiler a path releasing the count of a null manager after inlining (#7757)
+    assert(b);
+    if (const auto* managers = QoreSandboxComposition::members(*b)) {
         for (auto* manager : *managers) {
             qore_sandbox_manager_ops(manager).releaseThreadSlotQuiet();
         }
@@ -1921,6 +2023,9 @@ void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b)
 }
 
 std::atomic<int> qore_sandbox_interrupt_count{0};
+
+// see QoreClassIntern.h (qore#6842)
+std::atomic<bool> qore_sandboxed_code_present{false};
 
 #ifdef DEBUG
 thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm) = nullptr;
@@ -2048,6 +2153,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
     config->setKeyValue("uncontrolled_api_policy", getUncontrolledApiPolicy(), xsink);
+    config->setKeyValue("enforcement_level", static_cast<int64>(getEnforcementLevel()), xsink);
 
     return config.release();
 }
@@ -2159,6 +2265,9 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->mem_account->limit.store(mem_account->limit.load());
     // the effective policy: a copy of a composition allows them only if every member does
     result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
+    // the effective enforcement level, fixed if this manager's is: a copy is never looser
+    result->fs_mgr.priv->enforcement_level.store(getEnforcementLevel(), std::memory_order_release);
+    result->fs_mgr.priv->enforcement_level_fixed.store(isEnforcementLevelFixed(), std::memory_order_release);
     // the copy belongs to the same tenant
     result->fs_mgr.priv->isolation_domain = getIsolationDomain();
     // Don't copy interrupt state
@@ -2283,7 +2392,7 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
             // the manager flag first: a reader that sees the Program sandboxed also sees that it has a manager
             any_sandbox_manager.store(true, std::memory_order_release);
-            sandboxed.store(true, std::memory_order_release);
+            setSandboxedFlag();
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -2410,9 +2519,29 @@ bool qore_object_program_is_restricted(const QoreObject* obj) {
     return qore_program_is_restricted(obj->getProgram());
 }
 
+bool qore_calling_class_is_restricted() {
+    const qore_class_private* cls = qore_innermost_frame_is_builtin() ? runtime_get_caller_class()
+        : runtime_get_class();
+    // a builtin class is trusted; sandbox_ctx is the permanent mark of a class that restricted code committed
+    // (qore#7635)
+    return cls && !cls->sys && (cls->sandbox_ctx || cls->isRestrictedCode());
+}
+
 bool qore_program_is_restricted(const QoreProgram* pgm) {
-    if (!pgm) {
-        return false;
+    // fails closed: true if the sandboxes cannot be resolved
+    return qore_program_restricted_state(pgm) != 0;
+}
+
+int qore_program_restricted_state(const QoreProgram* pgm) {
+    // every restricted Program is sandboxed (a Program with a manager is); checked first, as it is cheap
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
+        return 0;
+    }
+    // restricted code created the Program or committed code in it with no restricting sandbox that the Program could
+    // keep (qore#7737): restricted for good
+    if (qore_program_private::get(*const_cast<QoreProgram*>(pgm))->restricted_marked.load(
+            std::memory_order_acquire)) {
+        return 1;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
@@ -2422,12 +2551,13 @@ bool qore_program_is_restricted(const QoreProgram* pgm) {
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
-            return qore_program_is_sandboxed(pgm);
+            return 1;
         }
-        return !sm->trustsUncontrolledApis();
+        return sm->trustsUncontrolledApis() ? 0 : 1;
     } catch (std::bad_alloc&) {
-        // the composition of the Program's sandboxes could not be made: fails closed
-        return true;
+        // the composition of the Program's sandboxes could not be made: not known (each caller fails closed in its
+        // own direction)
+        return -1;
     }
 }
 
@@ -2543,7 +2673,7 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     }
     pcs.sandboxed = true;
     pcs.restricted = qore_caller_has_restricted_code();
-    sandboxed.store(true, std::memory_order_release);
+    setSandboxedFlag();
     try {
         qore_caller_sandbox_refs(pcs.sm, pcs.policy);
     } catch (std::bad_alloc&) {
@@ -2551,6 +2681,10 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
         xsink->outOfMemory();
         return -1;
     }
+    // restricted code with no restricting sandbox that the Program could keep (a Program restricted by its flag
+    // alone): the Program is marked restricted for good when the code is committed, as the sandbox that it keeps would
+    // not tell (qore#7737; see pendCreatorSandbox() and commitPendingCreatorSandbox())
+    pcs.mark_restricted = pcs.restricted && !(pcs.sm && !pcs.sm->trustsUncontrolledApis());
     return 0;
 }
 
@@ -2594,6 +2728,10 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
     if (pcs.sandboxed && pcs.restricted) {
         pending_restricted_caller = true;
     }
+    // the mark of a Program restricted by its flag alone, set if the code is committed (qore#7737)
+    if (pcs.mark_restricted) {
+        pending_restricted_mark = true;
+    }
     return 0;
 }
 
@@ -2625,6 +2763,7 @@ bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
 
 void qore_program_private::dropPendingCreatorSandbox() {
     pending_restricted_caller = false;
+    pending_restricted_mark = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2639,6 +2778,7 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
     // goes ahead, cleared when it ends
     const bool restricted = pending_restricted_caller;
+    const bool mark = pending_restricted_mark;
     if (pending_creator_sandbox || pending_creator_policy) {
         try {
             addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
@@ -2649,6 +2789,11 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     }
     dropPendingCreatorSandbox();
     commit_restricted_caller = restricted;
+    // restricted code commits code with no restricting sandbox that the Program keeps: restricted for good
+    // (qore#7737); set only when the code is committed, so a parse that fails or is rolled back does not mark it
+    if (mark) {
+        restricted_marked.store(true, std::memory_order_release);
+    }
     return 0;
 }
 
@@ -2663,7 +2808,7 @@ bool qore_program_is_sandboxed(const QoreProgram* pgm) {
 }
 
 void qore_program_mark_sandboxed(QoreProgram& pgm) {
-    qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+    qore_program_private::get(pgm)->setSandboxedFlag();
 }
 
 namespace {
@@ -2735,8 +2880,11 @@ void qore_release_module_program_pins() {
 //------------------------------------------------------------------------------
 
 const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager* manager) {
-    return manager && manager->fs_mgr.priv->composition
-        ? &manager->fs_mgr.priv->composition->managers : nullptr;
+    return manager ? members(*manager) : nullptr;
+}
+
+const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager& manager) {
+    return manager.fs_mgr.priv->composition ? &manager.fs_mgr.priv->composition->managers : nullptr;
 }
 
 bool QoreSandboxComposition::same(const QoreSandboxManager* a, const QoreSandboxManager* b) {
@@ -2819,6 +2967,74 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
     // every member does
     assert(purpose == QoreSandboxManagerHelper::Policy || purpose == QoreSandboxManagerHelper::All);
     return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
+}
+
+bool qore_caller_owns_object(const QoreObject& obj) {
+    return qore_caller_created_object(obj);
+}
+
+int qore_check_caller_owns_object(const QoreObject& obj, const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    if (qore_caller_created_object(obj)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "%s an object of class '%s' that its sandbox did not create", what, obj.getClassName());
+    return -1;
+}
+
+int qore_check_caller_deletes_object(const QoreObject& obj, ExceptionSink* xsink) {
+    assert(xsink);
+    // the order of the delete operator: system object, shared object (qore#6843), owner (qore#6842)
+    if (obj.isSystemObject()) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
+            obj.getClassName());
+        return -1;
+    }
+    if (qore_object_private::get(obj)->checkSharedChange(nullptr, xsink, true)) {
+        return -1;
+    }
+    return qore_check_caller_owns_object(obj, "delete", xsink);
+}
+
+int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
+    assert(xsink);
+    // the code that transfers: never sandboxed code itself
+    const QoreProgram* pgm = getProgram();
+    const qore_class_private* class_ctx = runtime_get_class();
+    if ((pgm && qore_program_is_sandboxed(pgm)) || (class_ctx && class_ctx->isSandboxedCode())) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code cannot transfer an object to its caller");
+        return -1;
+    }
+    qore_object_private* priv = qore_object_private::get(obj);
+    if (priv->getSandboxOwner()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that a sandbox owns already cannot be "
+            "transferred", obj.getClassName());
+        return -1;
+    }
+    if (!qore_caller_is_sandboxed()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' can only be transferred to the "
+            "sandboxed code that the calling code serves", obj.getClassName());
+        return -1;
+    }
+    // the caller must be governed by a sandbox at the enforcement level of tenant isolation, and the object must have
+    // been created for it: its provenance names the caller's sandbox; the caller's context then owns the object
+    QoreSandboxContext* owner = qore_sandbox_transfer_owner_context(priv->sandbox_provenance);
+    if (!owner) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' can only be transferred to sandboxed "
+            "code at the enforcement level of tenant isolation, and only while the code that it was created for is "
+            "served", obj.getClassName());
+        return -1;
+    }
+    QoreSandboxContext* expected = nullptr;
+    if (!priv->sandbox_owner.compare_exchange_strong(expected, owner, std::memory_order_acq_rel)) {
+        owner->deref();
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that a sandbox owns already cannot be "
+            "transferred", obj.getClassName());
+        return -1;
+    }
+    return 0;
 }
 
 int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {

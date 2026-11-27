@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The file-system policy's denials do not name the sandbox root, a directory of the host, to the code whose access
+# was denied (qoretechnologies/qore#7507)
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SandboxRootInMessagesTest
+
+#! Sandboxed code, and code restricted from external information, get policy errors without the sandbox root
+/** Each check runs in top-level code of a %modern Program in each execution mode, so that the JIT compiles it.  The
+    root is a directory whose name is unique; the paths that the code gives are outside of it and so never contain
+    that name, and every string in the exceptions that the code gets (keys and values at any depth) is checked for
+    it.  The host, which configured the policy, gets the root in the error of a configuration that it makes (the
+    denials of the code that a policy governs are tested with an unsandboxed receiver in
+    module-cpp-api/sandbox-capture/sandbox-capture.qtest)
+*/
+class SandboxRootInMessagesTest inherits QUnit::Test {
+    private {
+        #! the execution modes
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the top-level code of the sandboxed Programs; %y: a file and a directory outside the root
+        const Code = "our list<hash<ExceptionInfo>> errs = ();
+string outside = %y;
+string outside_dir = %y;
+try {
+    File f();
+    f.open2(outside);
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+try {
+    ReadOnlyFile f(outside);
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+try {
+    stat(outside);
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+try {
+    is_file(outside + \"-missing/a/b\");
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+try {
+    Dir d();
+    d.chdir(outside_dir);
+    d.list();
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+try {
+    File f();
+    f.open2(outside_dir + \"/new.txt\", O_CREAT | O_WRONLY | O_TRUNC);
+} catch (hash<ExceptionInfo> ex) {
+    errs += ex;
+}
+list<hash<ExceptionInfo>> sub get() {
+    return errs;
+}
+";
+
+        #! the top-level code of a Program restricted from external information that configures a policy of its own
+        #! (a relative path is canonicalized against the current directory, a directory of the host); %y: the root
+        const ConfigCode = "our *hash<ExceptionInfo> err;
+SandboxManager sm();
+sm.setFilesystemSandboxRoot(%y);
+try {
+    sm.addFilesystemAllowedPath(\"relative-7507-path\", QSEC_READ);
+} catch (hash<ExceptionInfo> ex) {
+    err = ex;
+}
+*hash<ExceptionInfo> sub get() {
+    return err;
+}
+";
+
+        #! the number of denials that the sandboxed code gets
+        const Denials = 6;
+    }
+
+    public {
+        #! the directory of the test
+        TmpDir dir;
+        #! the sandbox root
+        string root;
+        #! the name of the root, which no path that the code gives contains
+        string root_name;
+        #! a file outside the root
+        string outside;
+        #! a directory outside the root
+        string outside_dir;
+    }
+
+    constructor() : QUnit::Test("SandboxRootInMessagesTest", "1.0", \ARGV) {
+        dir = new TmpDir("sandbox-root-msg-");
+        root_name = sprintf("sbx-root-7507-%d-%d", getpid(), now_us().getEpochSeconds());
+        root = realpath(dir.path) + DirSep + root_name;
+        mkdir(root);
+        outside_dir = realpath(dir.path) + DirSep + "outside";
+        mkdir(outside_dir);
+        outside = outside_dir + DirSep + "file.txt";
+        {
+            File f();
+            f.open2(outside, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("x");
+        }
+
+        addTestCase("sandboxed code gets the denials without the sandbox root", \testSandboxed());
+        addTestCase("sandboxed code restricted from external information gets them without the root",
+            \testSandboxedNoExternalInfo());
+        addTestCase("the host gets the denials of a sandboxed Program as that code did", \testHostCatches());
+        addTestCase("code restricted from external information configuring a policy gets no host directory",
+            \testConfigNoExternalInfo());
+        addTestCase("the host configuring a policy gets the root", \testConfigHost());
+        set_return_value(main());
+    }
+
+    testSandboxed() {
+        map checkMode($1.key, $1.value, 0), Modes.pairIterator();
+    }
+
+    testSandboxedNoExternalInfo() {
+        map checkMode($1.key, $1.value, PO_NO_EXTERNAL_INFO), Modes.pairIterator();
+    }
+
+    #! the host catching a denial in a call of a sandboxed Program gets the message built for that code
+    testHostCatches() {
+        Program p = newProgram(EM_IR, 0);
+        p.parse("sub open(string path) { File f(); f.open2(path); }", "host-catches");
+        try {
+            p.callFunction("open", outside);
+            assertTrue(False, "the access was denied");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+            assertRegex("outside the sandbox root$", ex.desc);
+            assertEq(True, ex.desc.find(outside) >= 0, "the path that the code gave is named: " + ex.desc);
+            checkNoRoot(ex, "host catches");
+        }
+    }
+
+    testConfigNoExternalInfo() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+            p.setExecMode(m.value);
+            p.parse(sprintf(ConfigCode, root), "config-" + m.key);
+            p.run();
+            *hash<ExceptionInfo> ex = p.callFunction("get");
+            assertEq("SANDBOX-CONFIG-ERROR", ex.err, m.key);
+            assertEq("Allowed path 'relative-7507-path' is outside the sandbox root", ex.desc, m.key);
+            # the canonical form of the path would name the current directory
+            checkNoRoot(ex, "config " + m.key, realpath(getcwd()));
+        }
+    }
+
+    testConfigHost() {
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root);
+        assertThrows("SANDBOX-CONFIG-ERROR", sprintf("Allowed path '%s' is outside sandbox root '%s'", outside, root),
+            \sm.addFilesystemAllowedPath(), (outside, QSEC_READ));
+    }
+
+    private checkMode(string mode, ExecMode em, int po) {
+        string label = mode + (po ? " no-external-info" : "");
+        Program p = newProgram(em, po);
+        p.parse(sprintf(Code, outside, outside_dir), "sandbox-root-" + mode);
+        p.run();
+        list<hash<ExceptionInfo>> errs = p.callFunction("get");
+        assertEq(Denials, errs.size(), label + ": the denials");
+        foreach hash<ExceptionInfo> ex in (errs) {
+            string l = sprintf("%s [%d]", label, $#);
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, l);
+            assertRegex("^Access to '.*' denied: path is outside the sandbox root$", ex.desc, l);
+            checkNoRoot(ex, l);
+        }
+    }
+
+    #! returns a sandboxed Program whose policy confines it to the root
+    private Program newProgram(ExecMode em, int po) {
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root);
+        Program p(PO_MODERN | po);
+        p.setSandboxManager(sm);
+        p.setExecMode(em);
+        return p;
+    }
+
+    #! checks that no string in the value, in keys or values at any depth, names the root (or \a other)
+    private checkNoRoot(auto v, string label, *string other) {
+        list<string> found = ();
+        list<string> needles = (root_name,);
+        if (other) {
+            needles += other;
+        }
+        int strings = findStrings(v, label, needles, \found);
+        assertGt(5, strings, label + ": the strings checked");
+        assertEq((), found, label + ": the root is not named");
+    }
+
+    #! adds each string in the value that contains a needle to \a found; returns the strings checked
+    private int findStrings(auto v, string label, list<string> needles, reference<list<string>> found) {
+        switch (v.typeCode()) {
+            case NT_STRING: {
+                foreach string needle in (needles) {
+                    if (v.find(needle) >= 0) {
+                        found += sprintf("%s: %y names %y", label, v, needle);
+                    }
+                }
+                return 1;
+            }
+            case NT_HASH: {
+                int rv = 0;
+                foreach hash<auto> i in (v.pairIterator()) {
+                    rv += findStrings(i.key, label + " key", needles, \found);
+                    rv += findStrings(i.value, label + "." + i.key, needles, \found);
+                }
+                return rv;
+            }
+            case NT_LIST: {
+                int rv = 0;
+                int n = 0;
+                foreach auto e in (v) {
+                    rv += findStrings(e, sprintf("%s[%d]", label, n++), needles, \found);
+                }
+                return rv;
+            }
+        }
+        return 0;
+    }
+}

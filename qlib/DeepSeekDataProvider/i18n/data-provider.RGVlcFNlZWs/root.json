@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
-          "message": "Chat Completion"
+          "source": "Chat completion",
+          "message": "Chat completion"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a DeepSeek model",
@@ -948,8 +948,8 @@
           "message": "Pseudonymous identifier for cache and scheduling isolation. Use letters, digits, underscores, or dashes; at most 512 characters. Exclude personal information."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "Find available models for your workflows",
@@ -960,8 +960,8 @@
           "message": "Find available models for your workflows."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
-          "message": "Get Balance"
+          "source": "Get balance",
+          "message": "Get balance"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
           "source": "Check available credit before running AI workflows",
@@ -972,8 +972,8 @@
           "message": "Check available credit before running AI workflows.\n\nReturns credit availability and balances without generating tokens."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
-          "message": "Fill in the Middle"
+          "source": "Fill in the middle",
+          "message": "Fill in the middle"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
           "source": "Complete text or code between a prompt and suffix",
@@ -1092,8 +1092,8 @@
           "message": "Number of alternative token probabilities from `0` to `20`."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
-          "message": "Create Response"
+          "source": "Create response",
+          "message": "Create response"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Generate a response with tools, images, or structured output",
@@ -1740,8 +1740,8 @@
           "message": "Pseudonymous identifier for cache and scheduling isolation. Use letters, digits, underscores, or dashes; at most 512 characters. Exclude personal information."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
-          "message": "Upload Image File"
+          "source": "Upload image file",
+          "message": "Upload image file"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload an image for reuse in model requests",
@@ -1912,8 +1912,8 @@
           "message": "Delete the file automatically after `3600` to `2592000` seconds. Omit to retain it."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
-          "message": "List Image Files"
+          "source": "List image files",
+          "message": "List image files"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
           "source": "Browse uploaded images with pagination",
@@ -1984,8 +1984,8 @@
           "message": "User Data"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
-          "message": "Get Image File"
+          "source": "Get image file",
+          "message": "Get image file"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
           "source": "Inspect an uploaded image and its expiration",
@@ -2008,8 +2008,8 @@
           "message": "Select an uploaded image file."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
-          "message": "Delete Image File"
+          "source": "Delete image file",
+          "message": "Delete image file"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Remove an uploaded image from your account",

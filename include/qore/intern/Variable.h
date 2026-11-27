@@ -2280,15 +2280,17 @@ public:
         retry.  With no lvalue lock held, the references are bound inline.
 
         @param weak_source the container that a weak or opaque assignment assigns (see assignImpl()), or no value:
-        a conversion of it to a copy is refused before the store is deferred (\a weak: a weak assignment), as the
-        retry assigns the converted value (qore#7572)
+        a conversion of it to a copy is refused before the store is deferred, as the retry assigns the converted value
+        (qore#7572)
+        @param mode the mode of the assignment: the conversion of a weak or opaque assignment refuses to wrap the value
+        in a new list (QoreTypeInfo::acceptAssignmentWeak(); qore#7619)
 
         @return -1 if the value was not stored (an exception was raised, or the store is made again), 0 if the
         assignment continues
     */
     template <bool Lexical, bool Native>
     DLLLOCAL int checkTypesMayBind(QoreValue& n, const char* desc, LexicalSemanticPolicy policy,
-            const QoreValue& weak_source, bool weak);
+            const QoreValue& weak_source, AssignmentMode mode);
 
     //! drops the member notifications of a store that is made again; the next round adds them again (qore#7391)
     DLLLOCAL void dropMemberNotifications();
@@ -2780,6 +2782,12 @@ public:
         released here, after the lvalue's lock (qore#5675)
     */
     DLLLOCAL ~LValueRemoveHelper() {
+        releaseRemoved();
+    }
+
+    //! Releases what the removal removed and was not taken; also when memory that the removal needed could not be
+    //! allocated (std::bad_alloc) in the constructor, whose exception skips the destructor (qore#7763)
+    DLLLOCAL void releaseRemoved() {
         bool static_assignment = false;
         QoreValue v = rv.remove(static_assignment);
         if (!static_assignment) {
@@ -2871,6 +2879,46 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
     @param target_type the type of the lvalue
 */
 DLLLOCAL QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_type, const char* target_type);
+
+//! What a softlist lvalue would make of the value of a weak or opaque assignment (qore#7619)
+enum class QoreWeakWrapKind {
+    Value,      //!< a value that is not a list, which it wraps in a new list
+    NoValue,    //!< no value (NOTHING or NULL), which it converts to a new empty list
+    Either,     //!< a value whose type allows both (ex: \c *int at parse time)
+};
+
+//! Returns the description of the error of a weak (:=) or opaque (@=) assignment of a value that the lvalue's type
+//! would wrap in a new list (qore#7619)
+/** A softlist lvalue (softlist, *softlist, softlist<T>) wraps a value that is not a list in a new list, and a softlist
+    lvalue that does not take NOTHING converts no value (NOTHING or NULL) to a new empty list; the weak or opaque
+    reference would designate that list, a temporary, instead of the value assigned, so the assignment is refused at
+    parse time where the types are known, and at run time by the conversion (QoreTypeInfo::acceptAssignmentWeak())
+
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param value_type the type of the value assigned
+    @param target_type the type of the lvalue
+    @param kind what the lvalue makes of the value: it wraps it in a new list, converts no value (NOTHING or NULL) to
+    a new empty list, or either (a value whose type allows both)
+*/
+DLLLOCAL QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_type, const char* target_type,
+        QoreWeakWrapKind kind);
+
+//! Returns the description of the error of a weak (:=) or opaque (@=) assignment of an iterator that the lvalue's
+//! list type would materialize to a new list (qore#7619)
+/** The reference would designate the new list, a temporary, instead of the value assigned
+
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param value_type the type of the iterator
+    @param target_type the type of the lvalue
+*/
+DLLLOCAL QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type);
+
+//! Returns true if a list that the conversion of a value of the given type gives is a new list that wraps it, or that
+//! it made of no value (qore#7619)
+/** A list, or a weak reference to one, is the list assigned (or its copy, which qore_weak_assignment_conversion()
+    checks), and a reference assigns the value of the lvalue that it designates
+*/
+DLLLOCAL bool qore_weak_value_may_wrap(qore_type_t value_type);
 //! Returns true if an lvalue of the given declared type that has no value is vivified as an untyped list
 /** As the AST interpreter vivifies it (LValueHelper::doListLValue(), LValueHelper::navigatePath()): an untyped
     declaration (none, any, list, *list, softlist, *softlist) takes an untyped list (issue #3429, qore#7573), which the

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List products with filters and pagination",
@@ -548,8 +548,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -568,8 +568,8 @@
           "message": "The product ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
-          "message": "Create Product"
+          "source": "Create product",
+          "message": "Create product"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -988,8 +988,8 @@
           "message": "If `True`, the product is auto-assembled on sales orders"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -1240,8 +1240,8 @@
           "message": "If `True`, the product is archived (hidden from active lists)"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
-          "message": "Delete Product"
+          "source": "Delete product",
+          "message": "Delete product"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
           "source": "Delete a product",
@@ -1264,8 +1264,8 @@
           "message": "ID of the product to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.display_name": {
-          "source": "List Materials",
-          "message": "List Materials"
+          "source": "List materials",
+          "message": "List materials"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.short_desc": {
           "source": "List materials with filters and pagination",
@@ -1412,8 +1412,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.display_name": {
-          "source": "Get Material",
-          "message": "Get Material"
+          "source": "Get material",
+          "message": "Get material"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.short_desc": {
           "source": "Get a single material by ID",
@@ -1432,8 +1432,8 @@
           "message": "The material ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Create Material",
-          "message": "Create Material"
+          "source": "Create material",
+          "message": "Create material"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.short_desc": {
           "source": "Create a new material",
@@ -1792,8 +1792,8 @@
           "message": "Custom field collection ID"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Update Material",
-          "message": "Update Material"
+          "source": "Update material",
+          "message": "Update material"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.short_desc": {
           "source": "Update an existing material",
@@ -1984,8 +1984,8 @@
           "message": "If `True`, the material is archived (hidden from active lists)"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.display_name": {
-          "source": "Delete Material",
-          "message": "Delete Material"
+          "source": "Delete material",
+          "message": "Delete material"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.short_desc": {
           "source": "Delete a material",
@@ -2008,8 +2008,8 @@
           "message": "ID of the material to delete"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.display_name": {
-          "source": "List Variants",
-          "message": "List Variants"
+          "source": "List variants",
+          "message": "List variants"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.short_desc": {
           "source": "List variants with filters and pagination",
@@ -2148,8 +2148,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.display_name": {
-          "source": "Get Variant",
-          "message": "Get Variant"
+          "source": "Get variant",
+          "message": "Get variant"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.short_desc": {
           "source": "Get a single variant by ID",
@@ -2168,8 +2168,8 @@
           "message": "The variant ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Create Variant",
-          "message": "Create Variant"
+          "source": "Create variant",
+          "message": "Create variant"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.short_desc": {
           "source": "Create a new variant",
@@ -2348,8 +2348,8 @@
           "message": "Value of the custom field"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Update Variant",
-          "message": "Update Variant"
+          "source": "Update variant",
+          "message": "Update variant"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.short_desc": {
           "source": "Update an existing variant",
@@ -2540,8 +2540,8 @@
           "message": "Value of the custom field"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.display_name": {
-          "source": "Delete Variant",
-          "message": "Delete Variant"
+          "source": "Delete variant",
+          "message": "Delete variant"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.short_desc": {
           "source": "Delete a variant",
@@ -2564,8 +2564,8 @@
           "message": "ID of the variant to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "List Manufacturing Orders",
-          "message": "List Manufacturing Orders"
+          "source": "List manufacturing orders",
+          "message": "List manufacturing orders"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
           "source": "List manufacturing orders with filters",
@@ -2732,8 +2732,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Get Manufacturing Order",
-          "message": "Get Manufacturing Order"
+          "source": "Get manufacturing order",
+          "message": "Get manufacturing order"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
           "source": "Get a single manufacturing order by ID",
@@ -2752,8 +2752,8 @@
           "message": "The manufacturing order ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Create Manufacturing Order",
-          "message": "Create Manufacturing Order"
+          "source": "Create manufacturing order",
+          "message": "Create manufacturing order"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
           "source": "Create a new manufacturing order",
@@ -2912,8 +2912,8 @@
           "message": "Quantity moved in/out of the batch"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Update Manufacturing Order",
-          "message": "Update Manufacturing Order"
+          "source": "Update manufacturing order",
+          "message": "Update manufacturing order"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
           "source": "Update an existing manufacturing order",
@@ -3108,8 +3108,8 @@
           "message": "Date the manufacturing order was completed"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Delete Manufacturing Order",
-          "message": "Delete Manufacturing Order"
+          "source": "Delete manufacturing order",
+          "message": "Delete manufacturing order"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
           "source": "Delete a manufacturing order",
@@ -3132,8 +3132,8 @@
           "message": "ID of the MO to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
-          "message": "List Sales Orders"
+          "source": "List sales orders",
+          "message": "List sales orders"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
           "source": "List sales orders with filters",
@@ -3440,8 +3440,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
-          "message": "Get Sales Order"
+          "source": "Get sales order",
+          "message": "Get sales order"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
           "source": "Get a single sales order by ID",
@@ -3460,8 +3460,8 @@
           "message": "The sales order ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
-          "message": "Create Sales Order"
+          "source": "Create sales order",
+          "message": "Create sales order"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Create a new sales order",
@@ -3992,8 +3992,8 @@
           "message": "Free-form hash of custom field values (keys depend on the custom field collection configured for the sales order in Katana)"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
-          "message": "Update Sales Order"
+          "source": "Update sales order",
+          "message": "Update sales order"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Update an existing sales order",
@@ -4212,8 +4212,8 @@
           "message": "Date the conversion rate applies to"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
-          "message": "Delete Sales Order"
+          "source": "Delete sales order",
+          "message": "Delete sales order"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Delete a sales order",
@@ -4236,8 +4236,8 @@
           "message": "ID of the sales order to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.display_name": {
-          "source": "List Sales Order Rows",
-          "message": "List Sales Order Rows"
+          "source": "List sales order rows",
+          "message": "List sales order rows"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.short_desc": {
           "source": "List sales order rows with filters",
@@ -4368,8 +4368,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Sales Order Row",
-          "message": "Get Sales Order Row"
+          "source": "Get sales order row",
+          "message": "Get sales order row"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.short_desc": {
           "source": "Get a single sales order row by ID",
@@ -4388,8 +4388,8 @@
           "message": "The sales order row ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Sales Order Row",
-          "message": "Create Sales Order Row"
+          "source": "Create sales order row",
+          "message": "Create sales order row"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
           "source": "Create a new sales order row",
@@ -4532,8 +4532,8 @@
           "message": "Free-form hash of custom field values"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Sales Order Row",
-          "message": "Update Sales Order Row"
+          "source": "Update sales order row",
+          "message": "Update sales order row"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
           "source": "Update an existing sales order row",
@@ -4676,8 +4676,8 @@
           "message": "Free-form hash of custom field values"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Sales Order Row",
-          "message": "Delete Sales Order Row"
+          "source": "Delete sales order row",
+          "message": "Delete sales order row"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
           "source": "Delete a sales order row",
@@ -4700,8 +4700,8 @@
           "message": "ID of the row to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.display_name": {
-          "source": "List Sales Order Addresses",
-          "message": "List Sales Order Addresses"
+          "source": "List sales order addresses",
+          "message": "List sales order addresses"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.short_desc": {
           "source": "List sales order addresses",
@@ -4840,8 +4840,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Get Sales Order Address",
-          "message": "Get Sales Order Address"
+          "source": "Get sales order address",
+          "message": "Get sales order address"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
           "source": "Get a single sales order address by ID",
@@ -4860,8 +4860,8 @@
           "message": "The address ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Create Sales Order Address",
-          "message": "Create Sales Order Address"
+          "source": "Create sales order address",
+          "message": "Create sales order address"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
           "source": "Create a new sales order address",
@@ -5024,8 +5024,8 @@
           "message": "Country"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Update Sales Order Address",
-          "message": "Update Sales Order Address"
+          "source": "Update sales order address",
+          "message": "Update sales order address"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
           "source": "Update an existing sales order address",
@@ -5168,8 +5168,8 @@
           "message": "Country"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Sales Order Address",
-          "message": "Delete Sales Order Address"
+          "source": "Delete sales order address",
+          "message": "Delete sales order address"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
           "source": "Delete a sales order address",
@@ -5192,8 +5192,8 @@
           "message": "ID of the address to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
-          "message": "List Purchase Orders"
+          "source": "List purchase orders",
+          "message": "List purchase orders"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
           "source": "List purchase orders with filters",
@@ -5368,8 +5368,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
-          "message": "Get Purchase Order"
+          "source": "Get purchase order",
+          "message": "Get purchase order"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Get a single purchase order by ID",
@@ -5388,8 +5388,8 @@
           "message": "The purchase order ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
-          "message": "Create Purchase Order"
+          "source": "Create purchase order",
+          "message": "Create purchase order"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Create a new purchase order",
@@ -5676,8 +5676,8 @@
           "message": "The ID of the variant being purchased"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
-          "message": "Update Purchase Order"
+          "source": "Update purchase order",
+          "message": "Update purchase order"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Update an existing purchase order",
@@ -5840,8 +5840,8 @@
           "message": "ID of the tracking location"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
-          "message": "Delete Purchase Order"
+          "source": "Delete purchase order",
+          "message": "Delete purchase order"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Delete a purchase order",
@@ -5864,8 +5864,8 @@
           "message": "ID of the purchase order to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.display_name": {
-          "source": "List Purchase Order Rows",
-          "message": "List Purchase Order Rows"
+          "source": "List purchase order rows",
+          "message": "List purchase order rows"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.short_desc": {
           "source": "List purchase order rows with filters",
@@ -5996,8 +5996,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Purchase Order Row",
-          "message": "Get Purchase Order Row"
+          "source": "Get purchase order row",
+          "message": "Get purchase order row"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
           "source": "Get a single purchase order row by ID",
@@ -6016,8 +6016,8 @@
           "message": "The purchase order row ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Purchase Order Row",
-          "message": "Create Purchase Order Row"
+          "source": "Create purchase order row",
+          "message": "Create purchase order row"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
           "source": "Create a new purchase order row",
@@ -6160,8 +6160,8 @@
           "message": "ISO 4217 currency code for this row (overrides PO currency)"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Purchase Order Row",
-          "message": "Update Purchase Order Row"
+          "source": "Update purchase order row",
+          "message": "Update purchase order row"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
           "source": "Update an existing purchase order row",
@@ -6304,8 +6304,8 @@
           "message": "Date and time when the row was received"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Purchase Order Row",
-          "message": "Delete Purchase Order Row"
+          "source": "Delete purchase order row",
+          "message": "Delete purchase order row"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
           "source": "Delete a purchase order row",
@@ -6328,8 +6328,8 @@
           "message": "ID of the row to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
-          "message": "List Customers"
+          "source": "List customers",
+          "message": "List customers"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List customers with filters",
@@ -6520,8 +6520,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a single customer by ID",
@@ -6540,8 +6540,8 @@
           "message": "The customer ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -6872,8 +6872,8 @@
           "message": "Postal or ZIP code"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -7040,8 +7040,8 @@
           "message": "ID of the default shipping address"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -7064,8 +7064,8 @@
           "message": "ID of the customer to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.display_name": {
-          "source": "List Customer Addresses",
-          "message": "List Customer Addresses"
+          "source": "List customer addresses",
+          "message": "List customer addresses"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.short_desc": {
           "source": "List customer addresses",
@@ -7204,8 +7204,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Get Customer Address",
-          "message": "Get Customer Address"
+          "source": "Get customer address",
+          "message": "Get customer address"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Get a single customer address by ID",
@@ -7224,8 +7224,8 @@
           "message": "The address ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create Customer Address",
-          "message": "Create Customer Address"
+          "source": "Create customer address",
+          "message": "Create customer address"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Create a new customer address",
@@ -7388,8 +7388,8 @@
           "message": "Country"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update Customer Address",
-          "message": "Update Customer Address"
+          "source": "Update customer address",
+          "message": "Update customer address"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Update an existing customer address",
@@ -7532,8 +7532,8 @@
           "message": "Country"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Customer Address",
-          "message": "Delete Customer Address"
+          "source": "Delete customer address",
+          "message": "Delete customer address"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Delete a customer address",
@@ -7556,8 +7556,8 @@
           "message": "ID of the address to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.display_name": {
-          "source": "List Suppliers",
-          "message": "List Suppliers"
+          "source": "List suppliers",
+          "message": "List suppliers"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.short_desc": {
           "source": "List suppliers with filters",
@@ -7688,8 +7688,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
-          "message": "Get Supplier"
+          "source": "Get supplier",
+          "message": "Get supplier"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.short_desc": {
           "source": "Get a single supplier by ID",
@@ -7708,8 +7708,8 @@
           "message": "The supplier ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
-          "message": "Create Supplier"
+          "source": "Create supplier",
+          "message": "Create supplier"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
           "source": "Create a new supplier",
@@ -7912,8 +7912,8 @@
           "message": "Postal or ZIP code"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
-          "message": "Update Supplier"
+          "source": "Update supplier",
+          "message": "Update supplier"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
           "source": "Update an existing supplier",
@@ -7996,8 +7996,8 @@
           "message": "Default currency"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.display_name": {
-          "source": "Delete Supplier",
-          "message": "Delete Supplier"
+          "source": "Delete supplier",
+          "message": "Delete supplier"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.short_desc": {
           "source": "Delete a supplier",
@@ -8020,8 +8020,8 @@
           "message": "ID of the supplier to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
-          "message": "List Locations"
+          "source": "List locations",
+          "message": "List locations"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
           "source": "List locations with filters",
@@ -8144,8 +8144,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
-          "message": "Get Location"
+          "source": "Get location",
+          "message": "Get location"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.short_desc": {
           "source": "Get a single location by ID",
@@ -8164,8 +8164,8 @@
           "message": "The location ID"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
-          "message": "List Inventory"
+          "source": "List inventory",
+          "message": "List inventory"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
           "source": "List inventory levels with filters",
@@ -8296,8 +8296,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.display_name": {
-          "source": "Set Inventory Safety Stock Level",
-          "message": "Set Inventory Safety Stock Level"
+          "source": "Set inventory safety stock level",
+          "message": "Set inventory safety stock level"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.short_desc": {
           "source": "Set safety stock level for a variant at a location",
@@ -8344,8 +8344,8 @@
           "message": "Threshold value to set (safety stock level or reorder point quantity)"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.display_name": {
-          "source": "Set Inventory Reorder Point",
-          "message": "Set Inventory Reorder Point"
+          "source": "Set inventory reorder point",
+          "message": "Set inventory reorder point"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.short_desc": {
           "source": "Set reorder point for a variant at a location",
@@ -8392,8 +8392,8 @@
           "message": "Threshold value to set (safety stock level or reorder point quantity)"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.display_name": {
-          "source": "List Stock Adjustments",
-          "message": "List Stock Adjustments"
+          "source": "List stock adjustments",
+          "message": "List stock adjustments"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.short_desc": {
           "source": "List stock adjustments with filters",
@@ -8524,8 +8524,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
-          "message": "Get Stock Adjustment"
+          "source": "Get stock adjustment",
+          "message": "Get stock adjustment"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Get a single stock adjustment by ID",
@@ -8544,8 +8544,8 @@
           "message": "The stock adjustment ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
-          "message": "Create Stock Adjustment"
+          "source": "Create stock adjustment",
+          "message": "Create stock adjustment"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Create a new stock adjustment",
@@ -8700,8 +8700,8 @@
           "message": "The ID of the variant being adjusted"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
-          "message": "Update Stock Adjustment"
+          "source": "Update stock adjustment",
+          "message": "Update stock adjustment"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Update an existing stock adjustment",
@@ -8784,8 +8784,8 @@
           "message": "Free-form additional information"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
-          "message": "Delete Stock Adjustment"
+          "source": "Delete stock adjustment",
+          "message": "Delete stock adjustment"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Delete a stock adjustment",
@@ -8808,8 +8808,8 @@
           "message": "ID of the stock adjustment to delete"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.display_name": {
-          "source": "List Batch Stocks",
-          "message": "List Batch Stocks"
+          "source": "List batch stocks",
+          "message": "List batch stocks"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.short_desc": {
           "source": "List batch stocks with filters",
@@ -8948,8 +8948,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
-          "message": "List Tax Rates"
+          "source": "List tax rates",
+          "message": "List tax rates"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
           "source": "List tax rates",
@@ -9072,8 +9072,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
-          "message": "Create Tax Rate"
+          "source": "Create tax rate",
+          "message": "Create tax rate"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
           "source": "Create a new tax rate",
@@ -9108,8 +9108,8 @@
           "message": "Tax rate as a percentage (required, 0-999.999)"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
-          "message": "List Webhooks"
+          "source": "List webhooks",
+          "message": "List webhooks"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.short_desc": {
           "source": "List webhooks",
@@ -9232,8 +9232,8 @@
           "message": "If `True`, includes soft-deleted records in the response"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
-          "message": "Get Webhook"
+          "source": "Get webhook",
+          "message": "Get webhook"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.short_desc": {
           "source": "Get a single webhook by ID",
@@ -9252,8 +9252,8 @@
           "message": "The webhook ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
-          "message": "Create Webhook"
+          "source": "Create webhook",
+          "message": "Create webhook"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
           "source": "Create a new webhook",
@@ -9536,8 +9536,8 @@
           "message": "Description of the webhook"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
-          "message": "Update Webhook"
+          "source": "Update webhook",
+          "message": "Update webhook"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",
@@ -9844,8 +9844,8 @@
           "message": "If `True`, the webhook is active"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
-          "message": "Delete Webhook"
+          "source": "Delete webhook",
+          "message": "Delete webhook"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
           "source": "Delete a webhook",
@@ -9868,8 +9868,8 @@
           "message": "ID of the webhook to delete"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Sales Order Created",
-          "message": "Sales Order Created"
+          "source": "Sales order created",
+          "message": "Sales order created"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a sales order is created",
@@ -9880,8 +9880,8 @@
           "message": "Fires when a new sales order is created in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Sales Order Updated",
-          "message": "Sales Order Updated"
+          "source": "Sales order updated",
+          "message": "Sales order updated"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a sales order is updated",
@@ -9892,8 +9892,8 @@
           "message": "Fires when a sales order is updated in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Sales Order Deleted",
-          "message": "Sales Order Deleted"
+          "source": "Sales order deleted",
+          "message": "Sales order deleted"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.short_desc": {
           "source": "Trigger when a sales order is deleted",
@@ -9904,8 +9904,8 @@
           "message": "Fires when a sales order is deleted in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.display_name": {
-          "source": "Sales Order Packed",
-          "message": "Sales Order Packed"
+          "source": "Sales order packed",
+          "message": "Sales order packed"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.short_desc": {
           "source": "Trigger when a sales order is packed",
@@ -9916,8 +9916,8 @@
           "message": "Fires when a sales order is packed in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.display_name": {
-          "source": "Sales Order Delivered",
-          "message": "Sales Order Delivered"
+          "source": "Sales order delivered",
+          "message": "Sales order delivered"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.short_desc": {
           "source": "Trigger when a sales order is delivered",
@@ -9928,8 +9928,8 @@
           "message": "Fires when a sales order is delivered in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Purchase Order Created",
-          "message": "Purchase Order Created"
+          "source": "Purchase order created",
+          "message": "Purchase order created"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a purchase order is created",
@@ -9940,8 +9940,8 @@
           "message": "Fires when a new purchase order is created in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Purchase Order Updated",
-          "message": "Purchase Order Updated"
+          "source": "Purchase order updated",
+          "message": "Purchase order updated"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a purchase order is updated",
@@ -9952,8 +9952,8 @@
           "message": "Fires when a purchase order is updated in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Purchase Order Deleted",
-          "message": "Purchase Order Deleted"
+          "source": "Purchase order deleted",
+          "message": "Purchase order deleted"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.short_desc": {
           "source": "Trigger when a purchase order is deleted",
@@ -9964,8 +9964,8 @@
           "message": "Fires when a purchase order is deleted in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Partially Received",
-          "message": "Purchase Order Partially Received"
+          "source": "Purchase order partially received",
+          "message": "Purchase order partially received"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.short_desc": {
           "source": "Trigger when a purchase order is partially received",
@@ -9976,8 +9976,8 @@
           "message": "Fires when a purchase order is partially received in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.display_name": {
-          "source": "Purchase Order Received",
-          "message": "Purchase Order Received"
+          "source": "Purchase order received",
+          "message": "Purchase order received"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.short_desc": {
           "source": "Trigger when a purchase order is received",
@@ -9988,8 +9988,8 @@
           "message": "Fires when a purchase order is fully received in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.display_name": {
-          "source": "Purchase Order Row Created",
-          "message": "Purchase Order Row Created"
+          "source": "Purchase order row created",
+          "message": "Purchase order row created"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a purchase order row is created",
@@ -10000,8 +10000,8 @@
           "message": "Fires when a purchase order row is created in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.display_name": {
-          "source": "Purchase Order Row Updated",
-          "message": "Purchase Order Row Updated"
+          "source": "Purchase order row updated",
+          "message": "Purchase order row updated"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a purchase order row is updated",
@@ -10012,8 +10012,8 @@
           "message": "Fires when a purchase order row is updated in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.display_name": {
-          "source": "Purchase Order Row Deleted",
-          "message": "Purchase Order Row Deleted"
+          "source": "Purchase order row deleted",
+          "message": "Purchase order row deleted"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.short_desc": {
           "source": "Trigger when a purchase order row is deleted",
@@ -10024,8 +10024,8 @@
           "message": "Fires when a purchase order row is deleted in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Row Received",
-          "message": "Purchase Order Row Received"
+          "source": "Purchase order row received",
+          "message": "Purchase order row received"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.short_desc": {
           "source": "Trigger when a purchase order row is received",
@@ -10036,8 +10036,8 @@
           "message": "Fires when a purchase order row is received in Katana (native webhook)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.display_name": {
-          "source": "New Products",
-          "message": "New Products"
+          "source": "New products",
+          "message": "New products"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.short_desc": {
           "source": "Trigger when new products are created",
@@ -10048,8 +10048,8 @@
           "message": "Fires when a new product is detected in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.display_name": {
-          "source": "Updated Products",
-          "message": "Updated Products"
+          "source": "Updated products",
+          "message": "Updated products"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.short_desc": {
           "source": "Trigger when products are updated",
@@ -10060,8 +10060,8 @@
           "message": "Fires when a product is updated in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.display_name": {
-          "source": "New Materials",
-          "message": "New Materials"
+          "source": "New materials",
+          "message": "New materials"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.short_desc": {
           "source": "Trigger when new materials are created",
@@ -10072,8 +10072,8 @@
           "message": "Fires when a new material is detected in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.display_name": {
-          "source": "Updated Materials",
-          "message": "Updated Materials"
+          "source": "Updated materials",
+          "message": "Updated materials"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.short_desc": {
           "source": "Trigger when materials are updated",
@@ -10084,8 +10084,8 @@
           "message": "Fires when a material is updated in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.display_name": {
-          "source": "New Manufacturing Orders",
-          "message": "New Manufacturing Orders"
+          "source": "New manufacturing orders",
+          "message": "New manufacturing orders"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.short_desc": {
           "source": "Trigger when new manufacturing orders are created",
@@ -10096,8 +10096,8 @@
           "message": "Fires when a new manufacturing order is detected in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "Updated Manufacturing Orders",
-          "message": "Updated Manufacturing Orders"
+          "source": "Updated manufacturing orders",
+          "message": "Updated manufacturing orders"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
           "source": "Trigger when manufacturing orders are updated",
@@ -10108,8 +10108,8 @@
           "message": "Fires when a manufacturing order is updated in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.display_name": {
-          "source": "New Sales Orders (Polling)",
-          "message": "New Sales Orders (Polling)"
+          "source": "New sales orders (polling)",
+          "message": "New sales orders (polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.short_desc": {
           "source": "Trigger when new sales orders are created (via polling)",
@@ -10120,8 +10120,8 @@
           "message": "Fires when a new sales order is detected in Katana (via polling); complements the `sales-order-created` webhook event"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "Updated Sales Orders (Polling)",
-          "message": "Updated Sales Orders (Polling)"
+          "source": "Updated sales orders (polling)",
+          "message": "Updated sales orders (polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.short_desc": {
           "source": "Trigger when sales orders are updated (via polling)",
@@ -10132,8 +10132,8 @@
           "message": "Fires when a sales order is updated in Katana (via polling); complements the `sales-order-updated` webhook event"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.display_name": {
-          "source": "New Purchase Orders (Polling)",
-          "message": "New Purchase Orders (Polling)"
+          "source": "New purchase orders (polling)",
+          "message": "New purchase orders (polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.short_desc": {
           "source": "Trigger when new purchase orders are created (via polling)",
@@ -10144,8 +10144,8 @@
           "message": "Fires when a new purchase order is detected in Katana (via polling); complements the `purchase-order-created` webhook event"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "Updated Purchase Orders (Polling)",
-          "message": "Updated Purchase Orders (Polling)"
+          "source": "Updated purchase orders (polling)",
+          "message": "Updated purchase orders (polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
           "source": "Trigger when purchase orders are updated (via polling)",
@@ -10156,8 +10156,8 @@
           "message": "Fires when a purchase order is updated in Katana (via polling); complements the `purchase-order-updated` webhook event"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.display_name": {
-          "source": "New Customers",
-          "message": "New Customers"
+          "source": "New customers",
+          "message": "New customers"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.short_desc": {
           "source": "Trigger when new customers are created",
@@ -10168,8 +10168,8 @@
           "message": "Fires when a new customer is detected in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.display_name": {
-          "source": "Updated Customers",
-          "message": "Updated Customers"
+          "source": "Updated customers",
+          "message": "Updated customers"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.short_desc": {
           "source": "Trigger when customers are updated",
@@ -10180,8 +10180,8 @@
           "message": "Fires when a customer is updated in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.display_name": {
-          "source": "New Suppliers",
-          "message": "New Suppliers"
+          "source": "New suppliers",
+          "message": "New suppliers"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.short_desc": {
           "source": "Trigger when new suppliers are created",
@@ -10192,8 +10192,8 @@
           "message": "Fires when a new supplier is detected in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.display_name": {
-          "source": "Updated Suppliers",
-          "message": "Updated Suppliers"
+          "source": "Updated suppliers",
+          "message": "Updated suppliers"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.short_desc": {
           "source": "Trigger when suppliers are updated",
@@ -10204,8 +10204,8 @@
           "message": "Fires when a supplier is updated in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.display_name": {
-          "source": "Inventory Updated",
-          "message": "Inventory Updated"
+          "source": "Inventory updated",
+          "message": "Inventory updated"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when inventory levels change",
@@ -10216,8 +10216,8 @@
           "message": "Fires when an inventory entry's stock level changes in Katana (via polling)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "New Stock Adjustments",
-          "message": "New Stock Adjustments"
+          "source": "New stock adjustments",
+          "message": "New stock adjustments"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
           "source": "Trigger when stock adjustments are created",

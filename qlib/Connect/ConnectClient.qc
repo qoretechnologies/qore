@@ -423,7 +423,7 @@ if (exists reply) {
     #! Ensure the HTTP connection is ready for streaming
     private ensureStreamReady(HttpClientIo::HttpClientStreamHandle stream,
             timeout timeout_ms = 30s) {
-        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        HttpClientIo::HttpClientConnectionView conn = stream.getConnectionView();
         if (!conn.isReady() && !conn.waitForReady(timeout_ms)) {
             throw "CONNECT-ERROR", "HTTP connection establishment timed out";
         }

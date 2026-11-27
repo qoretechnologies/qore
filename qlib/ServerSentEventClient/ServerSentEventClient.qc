@@ -59,6 +59,46 @@ public const EVENT_SSE_CONNECTED = "sse-connected-event";
       in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
       @ref ServerSentEventClient::ServerSentEventClient::constructor() "ServerSentEventClient::constructor()"
 */
+#! The record of the event threads of a client that ended without being able to call the client
+/** The event thread holds the client only by a weak reference, and cannot call it once the client's destructor runs in
+    another thread (a method call on an object whose destructor runs in another thread is refused, qore#7509); the
+    destructor waits for the thread to end, so the thread records its end here, under the client's lock, and wakes the
+    waiting thread
+*/
+class SseClientThreadEnd {
+    public {
+        #! the client's lock
+        Mutex m;
+        #! the client's condition for the end of its event thread
+        Condition tid_cond;
+        #! the TIDs of the event threads that ended without calling the client
+        hash<string, bool> ended;
+    }
+
+    constructor(Mutex m, Condition tid_cond) {
+        self.m = m;
+        self.tid_cond = tid_cond;
+    }
+
+    #! records the end of the current thread, which could not call the client
+    threadEnded() {
+        AutoLock al(m);
+        ended{gettid()} = True;
+        tid_cond.broadcast();
+    }
+
+    #! returns True and forgets the record if the thread with \a tid ended without calling the client; the client's
+    #! lock is held
+    bool takeEnded(int tid) {
+        string key = tid.toString();
+        if (ended{key}) {
+            remove ended{key};
+            return True;
+        }
+        return False;
+    }
+}
+
 public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper,
         DataProvider::DelayedObservable {
     public {
@@ -114,6 +154,12 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
 
         #! Event thread condition variable
         Condition tid_cond();
+
+        #! The record of the event threads that ended without being able to call this object (qore#7509)
+        SseClientThreadEnd thread_end;
+
+        #! the test hook that the event thread calls before each iteration of its loop (see dbgSetLoopHook())
+        static *code<nothing()> dbg_loop_hook;
 
         #! Unique sse connection ID; -1 when not connected
         int cid = -1;
@@ -194,6 +240,31 @@ ServerSentEventClient sse(\event(), {
     constructor(hash<auto> opts) {
         constructorInit(opts);
     }
+
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that the event thread calls before each iteration of its loop; a debug build of the library only
+    /** For tests: the event thread holds its client only by a weak reference there, so a test can release the last
+        reference to the client meanwhile (qore#7509).  The hook is process-wide (it is called by the event threads of
+        every client in the process), so only trusted code with process control can set it, and the method exists only
+        in a debug build of the library
+
+        @param hook the hook, called in the event thread, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetLoopHook(*code<nothing()> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the loop hook of server-sent event clients");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the loop hook of server-sent event clients from a context with "
+                "restricted process control";
+        }
+        dbg_loop_hook = hook;
+    }
+    #! @endcond
+%endif
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
@@ -460,7 +531,7 @@ sse.connect();
             # return from @ref start until the strong→weak conversion is
             # complete.
             Counter started(1);
-            code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started, connected);
+            code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started, connected, thread_end);
             updateTid(start_thread ? start_thread(fn) : background fn());
             started.waitForZero();
         }
@@ -631,6 +702,7 @@ sse.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        thread_end = new SseClientThreadEnd(m, tid_cond);
         saved_opts = opts;
         if (parse_boolean(opts.reconnect)) {
             reconnect = True;
@@ -877,6 +949,11 @@ sse.setEventQueue();
     */
     private waitTidCleared(int old_tid) {
         while (tid == old_tid) {
+            # the thread ended without calling this object, which is being destroyed: its state is cleared here
+            if (thread_end.takeEnded(old_tid)) {
+                clearTid();
+                break;
+            }
             ++tid_waiting;
             tid_cond.wait(m);
             --tid_waiting;
@@ -940,9 +1017,9 @@ sse.setEventQueue();
         @since ServerSentEventClient 1.1
     */
     private static code<nothing()> makeEventLoopClosure(ServerSentEventClient w,
-            Counter started, Counter connected) {
+            Counter started, Counter connected, SseClientThreadEnd thread_end) {
         return sub () {
-            ServerSentEventClient::runEventLoop(remove w, started, connected);
+            ServerSentEventClient::runEventLoop(remove w, started, connected, thread_end);
         };
     }
 
@@ -977,7 +1054,8 @@ sse.setEventQueue();
 
         @since ServerSentEventClient 1.1
     */
-    private static runEventLoop(ServerSentEventClient client0, Counter started, Counter connected) {
+    private static runEventLoop(ServerSentEventClient client0, Counter started, Counter connected,
+            SseClientThreadEnd thread_end) {
         ServerSentEventClient client := remove client0;
         # Background thread now holds only a weak reference; signal the
         # caller that it is safe to return from start().
@@ -989,7 +1067,13 @@ sse.setEventQueue();
         # that lets the destructor fire between iterations.
         bool done = False;
         while (!done) {
+            # test hook (a debug build of the library only): the thread holds the client only by its weak reference
+            # here (see dbgSetLoopHook())
+            if (Option::HAVE_LIBRARY_DEBUGGING && dbg_loop_hook) {
+                call_function(dbg_loop_hook);
+            }
             if (!client) {
+                thread_end.threadEnded();
                 return;
             }
             int rv;
@@ -997,6 +1081,8 @@ sse.setEventQueue();
                 rv = client.eventLoopOnce();
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "OBJECT-ALREADY-DELETED") {
+                    # the client is being destroyed, and its destructor waits for this thread
+                    thread_end.threadEnded();
                     return;
                 }
                 # Any other exception: log if possible, then exit.
@@ -1006,6 +1092,7 @@ sse.setEventQueue();
                     }
                 } catch (hash<ExceptionInfo> ex2) {
                     if (ex2.err == "OBJECT-ALREADY-DELETED") {
+                        thread_end.threadEnded();
                         return;
                     }
                 }
@@ -1025,9 +1112,12 @@ sse.setEventQueue();
         try {
             if (client) {
                 client.eventLoopShutdown();
+            } else {
+                thread_end.threadEnded();
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OBJECT-ALREADY-DELETED") {
+                thread_end.threadEnded();
                 return;
             }
             rethrow;

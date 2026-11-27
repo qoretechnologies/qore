@@ -4599,7 +4599,7 @@ printf(\"%d\\n\", sum);
                     sprintf("call in loop stack safety %s", mode));
         }
 
-        # Test closure calls in loops (CallIndirect)
+        # Test closure calls in loops (CallClosureDirect)
         code = "%modern
 code adder = int sub(int x) { return x + 1; };
 int sum = 0;

@@ -16,7 +16,7 @@
           "message": "Generuj konfigurowalne strumienie rekordów do testowania potoków danych bez połączeń z zewnętrznymi usługami"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Generuj rekordy"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Stała wartość daty/godziny używana jako punkt odniesienia do generowania pól daty; po podaniu wraz z ziarnem zapewnia pełną powtarzalność pól daty między uruchomieniami; jeśli nie zostanie podana, używana jest bieżąca data/godzina w momencie rozpoczęcia generowania"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Generuj z szablonu"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

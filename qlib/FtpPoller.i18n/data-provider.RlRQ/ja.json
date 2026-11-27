@@ -16,7 +16,7 @@
           "message": "FTP および FTPS でファイルを交換するための汎用 FTP サーバー"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "FTPファイルを受信"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

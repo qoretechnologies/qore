@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
-          "message": "List Classifiers"
+          "source": "List classifiers",
+          "message": "List classifiers"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
           "source": "List classifiers available in this Azure resource",
@@ -368,8 +368,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -380,8 +380,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
-          "source": "Get Classifier",
-          "message": "Get Classifier"
+          "source": "Get classifier",
+          "message": "Get classifier"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
           "source": "Read a classifier and its document categories",
@@ -420,8 +420,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -432,8 +432,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
-          "message": "Delete Classifier"
+          "source": "Delete classifier",
+          "message": "Delete classifier"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
           "source": "Delete a custom document classifier",
@@ -472,8 +472,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -484,8 +484,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
-          "source": "Start Classification",
-          "message": "Start Classification"
+          "source": "Start classification",
+          "message": "Start classification"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
           "source": "Submit a document URL or base64 content for classification",
@@ -608,8 +608,8 @@
           "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
-          "source": "Copy Classifier",
-          "message": "Copy Classifier"
+          "source": "Copy classifier",
+          "message": "Copy classifier"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
           "source": "Start copying a classifier to an authorized resource",
@@ -632,8 +632,8 @@
           "message": "Unique document classifier name."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
-          "source": "Target Resource ID",
-          "message": "Target Resource ID"
+          "source": "Target resource ID",
+          "message": "Target resource ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
           "source": "ID of the target Azure resource where the document classifier should be copied…",
@@ -644,8 +644,8 @@
           "message": "ID of the target Azure resource where the document classifier should be copied to."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
-          "source": "Target Resource Region",
-          "message": "Target Resource Region"
+          "source": "Target resource region",
+          "message": "Target resource region"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
           "source": "Location of the target Azure resource where the document classifier should be…",
@@ -656,8 +656,8 @@
           "message": "Location of the target Azure resource where the document classifier should be copied\nto."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
-          "source": "Target Classifier ID",
-          "message": "Target Classifier ID"
+          "source": "Target classifier ID",
+          "message": "Target classifier ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
           "source": "Identifier of the target document classifier",
@@ -668,8 +668,8 @@
           "message": "Identifier of the target document classifier."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
-          "source": "Target Classifier Location",
-          "message": "Target Classifier Location"
+          "source": "Target classifier location",
+          "message": "Target classifier location"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
           "source": "URL of the copied document classifier in the target account",
@@ -680,8 +680,8 @@
           "message": "URL of the copied document classifier in the target account."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
-          "source": "Access Token",
-          "message": "Access Token"
+          "source": "Access token",
+          "message": "Access token"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
           "source": "Token used to authorize the request",
@@ -692,8 +692,8 @@
           "message": "Token used to authorize the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
-          "source": "Expiration Date Time",
-          "message": "Expiration Date Time"
+          "source": "Expiration date time",
+          "message": "Expiration date time"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
           "source": "Date/time when the access token expires",
@@ -720,8 +720,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
-          "source": "Get Classification Result",
-          "message": "Get Classification Result"
+          "source": "Get classification result",
+          "message": "Get classification result"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
           "source": "Read classification status and document results",
@@ -772,8 +772,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
-          "source": "Authorize Classifier Copy",
-          "message": "Authorize Classifier Copy"
+          "source": "Authorize classifier copy",
+          "message": "Authorize classifier copy"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
           "source": "Authorize an incoming classifier copy in this resource",
@@ -836,8 +836,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
-          "source": "Build Classifier",
-          "message": "Build Classifier"
+          "source": "Build classifier",
+          "message": "Build classifier"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
           "source": "Train a classifier from labeled documents in Azure storage",
@@ -872,8 +872,8 @@
           "message": "Document classifier description."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
-          "source": "Base Classifier ID",
-          "message": "Base Classifier ID"
+          "source": "Base classifier ID",
+          "message": "Base classifier ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
           "source": "Base 'classifierId' on top of which to train the classifier",
@@ -884,8 +884,8 @@
           "message": "Base `classifierId` on top of which to train the classifier."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
-          "source": "Doc Types",
-          "message": "Doc Types"
+          "source": "Doc types",
+          "message": "Doc types"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
           "source": "List of document types to classify against",
@@ -896,8 +896,8 @@
           "message": "List of document types to classify against."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
-          "source": "Allow Overwrite",
-          "message": "Allow Overwrite"
+          "source": "Allow overwrite",
+          "message": "Allow overwrite"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
           "source": "Allow overwriting an existing classifier with the same name",
@@ -924,8 +924,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List extraction models available in this Azure resource",
@@ -952,8 +952,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -964,8 +964,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Analysis",
-          "message": "Start Analysis"
+          "source": "Start analysis",
+          "message": "Start analysis"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
           "source": "Submit a document URL or base64 content for extraction",
@@ -1116,8 +1116,8 @@
           "message": "Query Fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
-          "message": "Query Fields"
+          "source": "Query fields",
+          "message": "Query fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
           "source": "List of additional fields to extract",
@@ -1168,8 +1168,8 @@
           "message": "Figures"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
-          "source": "Start Batch Analysis",
-          "message": "Start Batch Analysis"
+          "source": "Start batch analysis",
+          "message": "Start batch analysis"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
           "source": "Analyze documents from an Azure storage container",
@@ -1192,8 +1192,8 @@
           "message": "Unique document model name."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
-          "source": "Azure Blob Source",
-          "message": "Azure Blob Source"
+          "source": "Azure blob source",
+          "message": "Azure blob source"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
           "source": "Azure Blob Storage content",
@@ -1228,8 +1228,8 @@
           "message": "Blob name prefix."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
-          "source": "Azure Blob File List Source",
-          "message": "Azure Blob File List Source"
+          "source": "Azure blob file list source",
+          "message": "Azure blob file list source"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
           "source": "File list in Azure Blob Storage",
@@ -1252,8 +1252,8 @@
           "message": "Azure Blob Storage container URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
-          "source": "File List",
-          "message": "File List"
+          "source": "File list",
+          "message": "File list"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
           "source": "Path to a JSONL file within the container specifying a subset of documents",
@@ -1264,8 +1264,8 @@
           "message": "Path to a JSONL file within the container specifying a subset of documents."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
-          "source": "Result Container URL",
-          "message": "Result Container URL"
+          "source": "Result container URL",
+          "message": "Result container URL"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
           "source": "Azure Blob Storage container URL where analyze result files will be stored",
@@ -1276,8 +1276,8 @@
           "message": "Azure Blob Storage container URL where analyze result files will be stored."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
-          "source": "Result Prefix",
-          "message": "Result Prefix"
+          "source": "Result prefix",
+          "message": "Result prefix"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
           "source": "Blob name prefix of result files",
@@ -1288,8 +1288,8 @@
           "message": "Blob name prefix of result files."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
-          "source": "Overwrite Existing",
-          "message": "Overwrite Existing"
+          "source": "Overwrite existing",
+          "message": "Overwrite existing"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
           "source": "Overwrite existing analyze result files?",
@@ -1404,8 +1404,8 @@
           "message": "Query Fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
-          "message": "Query Fields"
+          "source": "Query fields",
+          "message": "Query fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
           "source": "List of additional fields to extract",
@@ -1456,8 +1456,8 @@
           "message": "Figures"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Read an extraction model and its supported document fields",
@@ -1496,8 +1496,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -1508,8 +1508,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
-          "message": "Delete Model"
+          "source": "Delete model",
+          "message": "Delete model"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
           "source": "Delete a custom extraction model",
@@ -1548,8 +1548,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -1560,8 +1560,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
-          "source": "Copy Model",
-          "message": "Copy Model"
+          "source": "Copy model",
+          "message": "Copy model"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
           "source": "Start copying a model to an authorized resource",
@@ -1584,8 +1584,8 @@
           "message": "Unique document model name."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
-          "source": "Target Resource ID",
-          "message": "Target Resource ID"
+          "source": "Target resource ID",
+          "message": "Target resource ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
           "source": "ID of the target Azure resource where the document model should be copied to",
@@ -1596,8 +1596,8 @@
           "message": "ID of the target Azure resource where the document model should be copied to."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
-          "source": "Target Resource Region",
-          "message": "Target Resource Region"
+          "source": "Target resource region",
+          "message": "Target resource region"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
           "source": "Location of the target Azure resource where the document model should be copied",
@@ -1608,8 +1608,8 @@
           "message": "Location of the target Azure resource where the document model should be copied\nto."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
-          "source": "Target Model ID",
-          "message": "Target Model ID"
+          "source": "Target model ID",
+          "message": "Target model ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
           "source": "Identifier of the target document model",
@@ -1620,8 +1620,8 @@
           "message": "Identifier of the target document model."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
-          "source": "Target Model Location",
-          "message": "Target Model Location"
+          "source": "Target model location",
+          "message": "Target model location"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
           "source": "URL of the copied document model in the target account",
@@ -1632,8 +1632,8 @@
           "message": "URL of the copied document model in the target account."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
-          "source": "Access Token",
-          "message": "Access Token"
+          "source": "Access token",
+          "message": "Access token"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
           "source": "Token used to authorize the request",
@@ -1644,8 +1644,8 @@
           "message": "Token used to authorize the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
-          "source": "Expiration Date Time",
-          "message": "Expiration Date Time"
+          "source": "Expiration date time",
+          "message": "Expiration date time"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
           "source": "Date/time when the access token expires",
@@ -1672,8 +1672,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
-          "source": "List Batch Results",
-          "message": "List Batch Results"
+          "source": "List batch results",
+          "message": "List batch results"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
           "source": "List batch extraction jobs for a model",
@@ -1712,8 +1712,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Get Batch Result",
-          "message": "Get Batch Result"
+          "source": "Get batch result",
+          "message": "Get batch result"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
           "source": "Read batch progress and individual document outcomes",
@@ -1764,8 +1764,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Delete Batch Result",
-          "message": "Delete Batch Result"
+          "source": "Delete batch result",
+          "message": "Delete batch result"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
           "source": "Delete a stored batch extraction result",
@@ -1816,8 +1816,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Get Analysis Result",
-          "message": "Get Analysis Result"
+          "source": "Get analysis result",
+          "message": "Get analysis result"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
           "source": "Read analysis status and extracted document content",
@@ -1868,8 +1868,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Delete Analysis Result",
-          "message": "Delete Analysis Result"
+          "source": "Delete analysis result",
+          "message": "Delete analysis result"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
           "source": "Delete a stored extraction result",
@@ -1920,8 +1920,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
-          "source": "Download Figure",
-          "message": "Download Figure"
+          "source": "Download figure",
+          "message": "Download figure"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
           "source": "Download the original PNG bytes of an extracted figure",
@@ -1984,8 +1984,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
-          "source": "Download Searchable PDF",
-          "message": "Download Searchable PDF"
+          "source": "Download searchable PDF",
+          "message": "Download searchable PDF"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
           "source": "Download the searchable PDF bytes generated during analysis",
@@ -2036,8 +2036,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
-          "source": "Authorize Model Copy",
-          "message": "Authorize Model Copy"
+          "source": "Authorize model copy",
+          "message": "Authorize model copy"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
           "source": "Authorize an incoming model copy in this resource",
@@ -2100,8 +2100,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
-          "source": "Build Model",
-          "message": "Build Model"
+          "source": "Build model",
+          "message": "Build model"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
           "source": "Train a custom extraction model from labeled documents",
@@ -2156,8 +2156,8 @@
           "message": "Neural"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
-          "source": "Azure Blob Source",
-          "message": "Azure Blob Source"
+          "source": "Azure blob source",
+          "message": "Azure blob source"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
           "source": "Azure Blob Storage content",
@@ -2192,8 +2192,8 @@
           "message": "Blob name prefix."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
-          "source": "Azure Blob File List Source",
-          "message": "Azure Blob File List Source"
+          "source": "Azure blob file list source",
+          "message": "Azure blob file list source"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
           "source": "File list in Azure Blob Storage",
@@ -2216,8 +2216,8 @@
           "message": "Azure Blob Storage container URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
-          "source": "File List",
-          "message": "File List"
+          "source": "File list",
+          "message": "File list"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
           "source": "Path to a JSONL file within the container specifying a subset of documents",
@@ -2240,8 +2240,8 @@
           "message": "List of key-value tag attributes associated with the document model."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
-          "source": "Max Training Hours",
-          "message": "Max Training Hours"
+          "source": "Max training hours",
+          "message": "Max training hours"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
           "source": "Max number of V100-equivalent GPU hours to use for model training",
@@ -2252,8 +2252,8 @@
           "message": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
-          "source": "Allow Overwrite",
-          "message": "Allow Overwrite"
+          "source": "Allow overwrite",
+          "message": "Allow overwrite"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
           "source": "Allow overwriting an existing model with the same name",
@@ -2280,8 +2280,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
-          "source": "Compose Model",
-          "message": "Compose Model"
+          "source": "Compose model",
+          "message": "Compose model"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
           "source": "Combine trained models into one extraction workflow",
@@ -2352,8 +2352,8 @@
           "message": "Per Page"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
-          "source": "Doc Types",
-          "message": "Doc Types"
+          "source": "Doc types",
+          "message": "Doc types"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
           "source": "Dictionary mapping supported 'docTypes' to the corresponding document models",
@@ -2392,8 +2392,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
-          "source": "Get Resource Information",
-          "message": "Get Resource Information"
+          "source": "Get resource information",
+          "message": "Get resource information"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
           "source": "Read resource quotas and custom model usage",
@@ -2420,8 +2420,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
-          "message": "List Operations"
+          "source": "List operations",
+          "message": "List operations"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
           "source": "List recent model and classifier management operations",
@@ -2448,8 +2448,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -2460,8 +2460,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
-          "message": "Get Operation"
+          "source": "Get operation",
+          "message": "Get operation"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
           "source": "Read build or copy progress and its typed result",
@@ -2500,8 +2500,8 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
-          "message": "X Ms Client Request ID"
+          "source": "X ms client request ID",
+          "message": "X ms client request ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
           "source": "An opaque, globally-unique, client-generated string identifier for the request",
@@ -2512,8 +2512,8 @@
           "message": "An opaque, globally-unique, client-generated string identifier for the request."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
-          "source": "Start Analysis from Bytes",
-          "message": "Start Analysis from Bytes"
+          "source": "Start analysis from bytes",
+          "message": "Start analysis from bytes"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
           "source": "Submit document bytes and return the analysis job location",
@@ -2652,8 +2652,8 @@
           "message": "Query Fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
-          "message": "Query Fields"
+          "source": "Query fields",
+          "message": "Query fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
           "source": "List of additional fields to extract",
@@ -2704,8 +2704,8 @@
           "message": "Figures"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
-          "source": "Start Classification from Bytes",
-          "message": "Start Classification from Bytes"
+          "source": "Start classification from bytes",
+          "message": "Start classification from bytes"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
           "source": "Submit document bytes and return the classification job location",
@@ -2816,8 +2816,8 @@
           "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
-          "message": "Analyze Document"
+          "source": "Analyze document",
+          "message": "Analyze document"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
           "source": "Run a Document Intelligence model over a document (async)",
@@ -3044,8 +3044,8 @@
           "message": "Query Fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
-          "message": "Query Fields"
+          "source": "Query fields",
+          "message": "Query fields"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {
           "source": "List of additional fields to extract",

@@ -8,6 +8,8 @@ against UTF-8 keys using UTF-8, Latin-1, UTF-16LE and UTF-16BE input. It include
 empty and missing keys, values equal to NOTHING, UTF-16 byte-prefix collisions,
 invalid encoding input, invalid hashdecl members and successful lookup after
 errors. Both initial values of the existence output are tested.
+The siphash group checks the keyed hash of hardened hash key maps (SipHash-1-3)
+against the 64 published known-answer vectors, also with unaligned input.
 
 Build and run from the source root, using the installed Qore prefix::
 

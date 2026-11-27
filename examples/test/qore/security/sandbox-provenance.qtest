@@ -115,15 +115,18 @@ class SandboxProvenanceTest inherits QUnit::Test {
             ("capability", trusted_read));
         {
             # qore#5741: under a sandbox that allows uncontrolled APIs (and still denies the filesystem), the barrier
-            # is established but does not mask the object's provenance, and the registration is refused because a
-            # sandbox governs it
+            # is established but does not mask the object's provenance; the creation of the system-policy capability
+            # (SandboxManager::createSystemPolicyCall(), a capability of trusted code, not a process-wide
+            # registration, which stays refused to code that any sandbox governs) is allowed, as the code of a trusted
+            # (governed) sandbox creates capabilities as trusted code (qore#7737); the capability, created under that
+            # sandbox, keeps its I/O policy as provenance, which the barrier does not mask
             SandboxManager trusting();
             trusting.setUncontrolledApiPolicy(True);
             Program trusting_program = sandbox(trusting);
             object trusting_reader = trusting_program.callFunction("make", path);
             assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \trusting_reader.barrierRead());
-            assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING, \trusting_program.callFunction(),
-                ("capability", trusted_read));
+            code trusting_capability = trusting_program.callFunction("capability", trusted_read);
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, trusting_capability);
         }
         code tagged = program.callFunction("function_ref");
         assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING,

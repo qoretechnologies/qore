@@ -67,6 +67,17 @@ class QoreSandboxManager;
 // Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
 DLLLOCAL void qore_aot_debug_program_change(bool attached);
 
+//! Records that AOT code compiled without debugging (qcc -g; QORE_AOT_FLAG_DEBUGGING) is registered into the Program
+/** A debugger that is attached to the Program then, or that attaches to it later, gets a warning once for the Program:
+    calls in that code may give no entry and exit events, and some of its functions run their native code under a
+    debugger (qore#7676).  Only the code of the Program a debugger is attached to counts: the code of a module runs in
+    the module's own Program, of which a debugger attached to a Program that uses the module gets no events.
+
+    @param pgm the Program the code is registered into
+    @param label the label of the binary, named in the warning
+*/
+DLLLOCAL void qore_aot_note_code_without_debugging(QoreProgram* pgm, const char* label);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -1434,6 +1445,17 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! Sets @ref sandboxed, and records that sandboxed code exists in the process (qore_sandboxed_code_present)
+    DLLLOCAL void setSandboxedFlag() {
+        qore_sandboxed_code_present.store(true, std::memory_order_release);
+        sandboxed.store(true, std::memory_order_release);
+    }
+
+    //! true if restricted code created the Program or committed code in it with no restricting sandbox that the
+    //! Program keeps; set when the Program is created or the code is committed, never cleared once set (see
+    //! qore_program_is_restricted(); qore#7737)
+    std::atomic<bool> restricted_marked{false};
+
 
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
@@ -1458,6 +1480,31 @@ public:
     //! true if the Program is a host Program: created with no Program running; its code is not restricted for time
     //! zones (QoreTimeZoneManager::callerRestricted())
     bool tz_host = false;
+
+    //! the temporary directory of the Program set with Program::setTempDir() or taken from its creator, if any
+    /** Util::tmp_location() gives it to the code of the Program (SandboxManager::callerTempDir()) instead of the
+        directory of the environment or the platform default (qore#7656); guarded by \c temp_dir_lock
+    */
+    std::string temp_dir;
+    //! true if \c temp_dir is set
+    bool has_temp_dir = false;
+    //! guards \c temp_dir and \c has_temp_dir
+    mutable std::mutex temp_dir_lock;
+
+    //! sets or clears (\a dir nullptr) the temporary directory of the Program (see Program::setTempDir())
+    DLLLOCAL void setTempDir(const char* dir) {
+        // the copy is made before the lock: it can throw std::bad_alloc, and the swap cannot
+        std::string n(dir ? dir : "");
+        std::lock_guard<std::mutex> lg(temp_dir_lock);
+        temp_dir.swap(n);
+        has_temp_dir = dir != nullptr;
+    }
+
+    //! returns the temporary directory of the Program as a new string, or nullptr if it has none
+    DLLLOCAL QoreStringNode* getTempDir() const {
+        std::lock_guard<std::mutex> lg(temp_dir_lock);
+        return has_temp_dir ? new QoreStringNode(temp_dir) : nullptr;
+    }
 
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
@@ -1496,6 +1543,9 @@ public:
     //! pending_restricted_caller of the code being committed, for the classes that the commit commits; with the parse
     //! lock held
     bool commit_restricted_caller = false;
+    //! true if the pending code was parsed by restricted code with no restricting sandbox that the Program keeps: the
+    //! Program is marked restricted (restricted_marked) when the code is committed (qore#7737); with the parse lock held
+    bool pending_restricted_mark = false;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -2373,6 +2423,9 @@ struct QoreParseCreatorSandbox {
     //! true if restricted code is on the parsing code's call stack, also when a manager of a Program that trusts its
     //! code governs the parsing code (see qore_caller_has_restricted_code()) (qore#7635)
     bool restricted = false;
+    //! true if the Program is to be marked restricted when the code is committed: restricted code parses it with no
+    //! restricting sandbox that the Program keeps (qore#7737)
+    bool mark_restricted = false;
 
     DLLLOCAL QoreParseCreatorSandbox() = default;
     DLLLOCAL ~QoreParseCreatorSandbox();
@@ -2414,6 +2467,15 @@ public:
         filtered when it was created, so the library modules that it loads inherit it whoever loads it first
     */
     bool library_module = false;
+
+    //! the name of the module whose Program this is, set once when the module is registered (qore#7302)
+    /** Written once before \c module_name_set is set with release semantics and never changed afterwards, so that the
+        caller walk (qore_get_immediate_caller()) reads it without a lock once it has read the flag with acquire
+        semantics; empty while the module is loaded and initialized
+    */
+    std::string module_name;
+    //! true once \c module_name is set
+    std::atomic<bool> module_name_set{false};
 
     //! Returns the block of an AOT closure at the given location, which the debugger's events of the debug IR of the
     //! closure are given with, as the entry block of an AOT function (#5795)
@@ -4012,13 +4074,13 @@ public:
             state.stop = true;
         }
         if (state.stop) {
-            yy_scan_bytes("", 0, lexer);
+            qore_scanner_scan_bytes("", 0, lexer);
         } else if (final_directive) {
             std::string terminated(code);
             terminated += '\n';
-            yy_scan_bytes(terminated.data(), terminated.size(), lexer);
+            qore_scanner_scan_bytes(terminated.data(), terminated.size(), lexer);
         } else {
-            yy_scan_bytes(code.data(), code.size(), lexer);
+            qore_scanner_scan_bytes(code.data(), code.size(), lexer);
         }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
@@ -5947,7 +6009,8 @@ public:
         if (checkDefine(loc, str, xsink))
             return;
 
-        const bool untrusted = qore_caller_is_untrusted();
+        // code that a trusted (governed) sandbox governs is the host (qore#7737)
+        const bool untrusted = qore_caller_is_restricted_or_untrusted();
         // the value replaced is released after plock (see runTimeUnDefine())
         ValueHolder old(xsink);
         AutoLocker al(plock);
@@ -7382,6 +7445,42 @@ public:
         qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
+    //! records that AOT code compiled without debugging is registered into the Program (qore#7676)
+    /** see qore_aot_note_code_without_debugging()
+    */
+    DLLLOCAL void noteAotCodeWithoutDebugging(const char* label) {
+        if (!aot_without_debugging.load(std::memory_order_acquire)) {
+            {
+                std::lock_guard<std::mutex> l(aot_without_debugging_lock);
+                if (aot_without_debugging_label.empty()) {
+                    aot_without_debugging_label = label && *label ? label : "<unknown>";
+                }
+            }
+            // sequentially consistent with the attach (attachDebug()): one of the two sees the other
+            aot_without_debugging.store(true, std::memory_order_seq_cst);
+        }
+        if (dpgm.load(std::memory_order_seq_cst)) {
+            warnAotCodeWithoutDebugging();
+        }
+    }
+
+    //! warns once on stderr that a debugger is attached to the Program while it has AOT code compiled without
+    //! debugging (qore#7676)
+    DLLLOCAL void warnAotCodeWithoutDebugging() {
+        if (!aot_without_debugging.load(std::memory_order_seq_cst)
+                || aot_without_debugging_warned.exchange(true, std::memory_order_acq_rel)) {
+            return;
+        }
+        std::string label;
+        {
+            std::lock_guard<std::mutex> l(aot_without_debugging_lock);
+            label = aot_without_debugging_label;
+        }
+        fprintf(stderr, "warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded "
+            "(%s): calls in it may give no entry/exit events, and some of its functions cannot be stepped\n",
+            label.c_str());
+    }
+
     //! attaches the debug program
     /** @param n_dpgm the debug program
         @param record records the Program in the debug program; called with the stripe lock of the debug program
@@ -7405,8 +7504,11 @@ public:
             if (!dpgm.load(std::memory_order_relaxed)) {
                 qore_aot_debug_program_change(true);
             }
-            dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
+            // sequentially consistent with noteAotCodeWithoutDebugging(): one of the two sees the other
+            dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_seq_cst);
         }
+        // the warning for AOT code of the Program compiled without debugging (qore#7676)
+        warnAotCodeWithoutDebugging();
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473); after the store, and
         // under tlock, but not under the stripe lock, as it takes the lock of the inline sites
         qore_ir_suspend_inline_states(&dpgm);
@@ -7994,6 +8096,14 @@ private:
     // can read it concurrently with attachDebug()/detachDebug() (which write under tlock)
     // without a data race; relaxed ordering compiles to a plain aligned load/store.
     std::atomic<qore_debug_program_private*> dpgm{nullptr};
+    //! set once AOT code compiled without debugging is registered into the Program (noteAotCodeWithoutDebugging())
+    std::atomic<bool> aot_without_debugging{false};
+    //! set once the warning for that code has been given (warnAotCodeWithoutDebugging())
+    std::atomic<bool> aot_without_debugging_warned{false};
+    //! the label of the first binary compiled without debugging registered into the Program
+    std::string aot_without_debugging_label;
+    //! protects aot_without_debugging_label
+    std::mutex aot_without_debugging_lock;
     QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
     QoreBreakpointList_t breakpointList;
 

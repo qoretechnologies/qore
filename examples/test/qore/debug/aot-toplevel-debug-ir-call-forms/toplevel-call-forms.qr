@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# The debug IR of top-level code compiled ahead of time keeps the function forms of substr(), index() and rindex() as
+# calls and the case conversions that string calls consume, as the debug IR of a function does (qore#7733,
+# qore#7761): a constant attaches a debugger before the top-level code runs, which then runs its debug IR; the output
+# is compared with the AST interpreter's
+%modern
+%allow-debugger
+
+class Recorder inherits DebugProgram {
+    public {
+        #! the step events of the top-level code
+        int steps = 0;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid && pgm.getStatementIdInfo(sid).start_line >= FirstLine) {
+            ++steps;
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+our Recorder R;
+
+bool sub attach() {
+    R = new Recorder();
+    R.addProgram(ProgramControl::getProgram());
+    return True;
+}
+# attaches the debugger before the top-level code runs
+const Attached = attach();
+# the first line of the top-level code whose step events are counted
+const FirstLine = 47;
+
+# a string with an invalid UTF-8 byte, which the string calls reject
+string sub invalid() {
+    return binary_to_string(<61ff62>, "UTF-8");
+}
+
+string s = "abcabc";
+# function forms that succeed
+printf("calls: %y\n", (substr(s, 1, 2), substr(s, -2), index(s, "c"), rindex(s, "b"), index(s, "c", 1)));
+# case conversions fused with the string calls that consume their results
+printf("case: %y\n", (s.lwr().contains("b"), s.upr().size(), s.upr().startsWith("A")));
+# function forms that raise: the innermost frame is the builtin's
+string bad = invalid();
+try {
+    printf("%y\n", substr(bad, 1, 1));
+} catch (hash<ExceptionInfo> ex) {
+    printf("substr frame: %s %s\n", ex.err, ex.callstack[0].function);
+}
+try {
+    printf("%y\n", index(bad, "b"));
+} catch (hash<ExceptionInfo> ex) {
+    printf("index frame: %s %s\n", ex.err, ex.callstack[0].function);
+}
+try {
+    printf("%y\n", rindex(bad, "b"));
+} catch (hash<ExceptionInfo> ex) {
+    printf("rindex frame: %s %s\n", ex.err, ex.callstack[0].function);
+}
+R.removeProgram(ProgramControl::getProgram());
+printf("top-level steps: %d\n", R.steps);

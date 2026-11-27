@@ -13,55 +13,55 @@ public class StabilityAiApi {
     public {
         # Lightweight identities are available without parsing or connecting.
         const Operations = {
-            "generate-ultra": ("POST", "/v2beta/stable-image/generate/ultra", "Generate Ultra Image", "Create detailed marketing images with Stable Image Ultra.", "image"),
-            "generate-core": ("POST", "/v2beta/stable-image/generate/core", "Generate Core Image", "Create affordable concept images with Stable Image Core.", "image"),
-            "generate-sd3": ("POST", "/v2beta/stable-image/generate/sd3", "Generate SD3.5 Image", "Create or transform images with a selected SD3.5 model.", "image"),
-            "upscale-fast": ("POST", "/v2beta/stable-image/upscale/fast", "Upscale Image Quickly", "Increase image resolution for reuse in larger layouts.", "image"),
-            "upscale-conservative": ("POST", "/v2beta/stable-image/upscale/conservative", "Upscale Image Conservatively", "Enlarge an image while preserving its original appearance.", "image"),
-            "start-creative-upscale": ("POST", "/v2beta/stable-image/upscale/creative", "Start Creative Upscale", "Start a detailed upscale and retain its job ID for retrieval.", "image-job"),
-            "get-upscale-result": ("GET", "/v2beta/stable-image/upscale/creative/result/{id}", "Get Creative Upscale Result", "Retrieve a completed upscale or its pending status.", "image-result"),
-            "erase-object": ("POST", "/v2beta/stable-image/edit/erase", "Erase Object", "Remove unwanted objects from a masked image area.", "image"),
-            "inpaint-image": ("POST", "/v2beta/stable-image/edit/inpaint", "Inpaint Image", "Replace a masked image area using a descriptive prompt.", "image"),
-            "outpaint-image": ("POST", "/v2beta/stable-image/edit/outpaint", "Extend Image", "Extend image borders to fit a new composition.", "image"),
-            "search-and-replace": ("POST", "/v2beta/stable-image/edit/search-and-replace", "Search and Replace", "Replace an object selected by a text description.", "image"),
-            "search-and-recolor": ("POST", "/v2beta/stable-image/edit/search-and-recolor", "Search and Recolor", "Recolor an object selected by a text description.", "image"),
-            "remove-background": ("POST", "/v2beta/stable-image/edit/remove-background", "Remove Background", "Isolate a product or subject on a transparent background.", "image"),
-            "start-background-relight": ("POST", "/v2beta/stable-image/edit/replace-background-and-relight", "Start Background and Lighting Edit", "Replace a background and adjust lighting as an asynchronous job.", "image-job"),
-            "get-image-result": ("GET", "/v2beta/results/{id}", "Get Image Job Result", "Retrieve an asynchronous image or its pending status.", "image-result"),
-            "control-sketch": ("POST", "/v2beta/stable-image/control/sketch", "Generate from Sketch", "Turn a sketch into a finished image guided by a prompt.", "image"),
-            "control-structure": ("POST", "/v2beta/stable-image/control/structure", "Generate with Image Structure", "Keep an input image's structure while creating new content.", "image"),
-            "control-style": ("POST", "/v2beta/stable-image/control/style", "Generate with Style Guide", "Create a new image using a reference image's visual style.", "image"),
-            "transfer-style": ("POST", "/v2beta/stable-image/control/style-transfer", "Transfer Image Style", "Apply a reference style to an existing image composition.", "image"),
-            "generate-fast-3d": ("POST", "/v2beta/3d/stable-fast-3d", "Generate Fast 3D Model", "Create a textured 3D asset from an image.", "model"),
-            "generate-point-aware-3d": ("POST", "/v2beta/3d/stable-point-aware-3d", "Generate Point Aware 3D Model", "Create a 3D asset with inferred details on unseen surfaces.", "model"),
+            "generate-ultra": ("POST", "/v2beta/stable-image/generate/ultra", "Generate Ultra image", "Create detailed marketing images with Stable Image Ultra.", "image"),
+            "generate-core": ("POST", "/v2beta/stable-image/generate/core", "Generate Core image", "Create affordable concept images with Stable Image Core.", "image"),
+            "generate-sd3": ("POST", "/v2beta/stable-image/generate/sd3", "Generate SD3.5 image", "Create or transform images with a selected SD3.5 model.", "image"),
+            "upscale-fast": ("POST", "/v2beta/stable-image/upscale/fast", "Upscale image quickly", "Increase image resolution for reuse in larger layouts.", "image"),
+            "upscale-conservative": ("POST", "/v2beta/stable-image/upscale/conservative", "Upscale image conservatively", "Enlarge an image while preserving its original appearance.", "image"),
+            "start-creative-upscale": ("POST", "/v2beta/stable-image/upscale/creative", "Start creative upscale", "Start a detailed upscale and retain its job ID for retrieval.", "image-job"),
+            "get-upscale-result": ("GET", "/v2beta/stable-image/upscale/creative/result/{id}", "Get creative upscale result", "Retrieve a completed upscale or its pending status.", "image-result"),
+            "erase-object": ("POST", "/v2beta/stable-image/edit/erase", "Erase object", "Remove unwanted objects from a masked image area.", "image"),
+            "inpaint-image": ("POST", "/v2beta/stable-image/edit/inpaint", "Inpaint image", "Replace a masked image area using a descriptive prompt.", "image"),
+            "outpaint-image": ("POST", "/v2beta/stable-image/edit/outpaint", "Extend image", "Extend image borders to fit a new composition.", "image"),
+            "search-and-replace": ("POST", "/v2beta/stable-image/edit/search-and-replace", "Search and replace", "Replace an object selected by a text description.", "image"),
+            "search-and-recolor": ("POST", "/v2beta/stable-image/edit/search-and-recolor", "Search and recolor", "Recolor an object selected by a text description.", "image"),
+            "remove-background": ("POST", "/v2beta/stable-image/edit/remove-background", "Remove background", "Isolate a product or subject on a transparent background.", "image"),
+            "start-background-relight": ("POST", "/v2beta/stable-image/edit/replace-background-and-relight", "Start background and lighting edit", "Replace a background and adjust lighting as an asynchronous job.", "image-job"),
+            "get-image-result": ("GET", "/v2beta/results/{id}", "Get image job result", "Retrieve an asynchronous image or its pending status.", "image-result"),
+            "control-sketch": ("POST", "/v2beta/stable-image/control/sketch", "Generate from sketch", "Turn a sketch into a finished image guided by a prompt.", "image"),
+            "control-structure": ("POST", "/v2beta/stable-image/control/structure", "Generate with image structure", "Keep an input image's structure while creating new content.", "image"),
+            "control-style": ("POST", "/v2beta/stable-image/control/style", "Generate with style guide", "Create a new image using a reference image's visual style.", "image"),
+            "transfer-style": ("POST", "/v2beta/stable-image/control/style-transfer", "Transfer image style", "Apply a reference style to an existing image composition.", "image"),
+            "generate-fast-3d": ("POST", "/v2beta/3d/stable-fast-3d", "Generate Fast 3D model", "Create a textured 3D asset from an image.", "model"),
+            "generate-point-aware-3d": ("POST", "/v2beta/3d/stable-point-aware-3d", "Generate Point Aware 3D model", "Create a 3D asset with inferred details on unseen surfaces.", "model"),
             "generate-audio-2": ("POST", "/v2beta/audio/stable-audio-2/text-to-audio", "Generate Audio 2 or 2.5", "Create music or sound effects from a text description.", "audio"),
             "transform-audio-2": ("POST", "/v2beta/audio/stable-audio-2/audio-to-audio", "Transform Audio 2 or 2.5", "Transform an audio recording using a text description.", "audio"),
             "inpaint-audio-2": ("POST", "/v2beta/audio/stable-audio-2/inpaint", "Inpaint Audio 2.5", "Replace a selected time range in an audio recording.", "audio"),
-            "start-audio-3": ("POST", "/v2beta/audio/stable-audio/text-to-audio", "Start Audio 3 Generation", "Start generating a longer music track or sound effect.", "audio-job"),
-            "start-audio-3-transform": ("POST", "/v2beta/audio/stable-audio/audio-to-audio", "Start Audio 3 Transformation", "Start transforming an audio recording with Stable Audio 3.", "audio-job"),
-            "start-audio-3-inpaint": ("POST", "/v2beta/audio/stable-audio/inpaint", "Start Audio 3 Inpainting", "Start replacing a selected time range with Stable Audio 3.", "audio-job"),
-            "get-audio-result": ("GET", "/v2beta/audio/results/{id}", "Get Audio Job Result", "Retrieve completed audio or its pending status.", "audio-result"),
-            "get-account": ("GET", "/v1/user/account", "Get Account", "Read account details and available organizations.", "json"),
-            "get-balance": ("GET", "/v1/user/balance", "Get Credit Balance", "Check the credit balance for the selected organization.", "json"),
-            "list-engines": ("GET", "/v1/engines/list", "List Legacy Engines", "List legacy image engines available to this account.", "json"),
-            "legacy-text-to-image": ("POST", "/v1/generation/{engine_id}/text-to-image", "Generate Legacy Image", "Create images with an available legacy engine.", "legacy-image"),
-            "legacy-image-to-image": ("POST", "/v1/generation/{engine_id}/image-to-image", "Transform Legacy Image", "Transform an image with an available legacy engine.", "legacy-image"),
-            "legacy-mask-image": ("POST", "/v1/generation/{engine_id}/image-to-image/masking", "Mask Legacy Image", "Replace a masked area with an available legacy engine.", "legacy-image"),
+            "start-audio-3": ("POST", "/v2beta/audio/stable-audio/text-to-audio", "Start Audio 3 generation", "Start generating a longer music track or sound effect.", "audio-job"),
+            "start-audio-3-transform": ("POST", "/v2beta/audio/stable-audio/audio-to-audio", "Start Audio 3 transformation", "Start transforming an audio recording with Stable Audio 3.", "audio-job"),
+            "start-audio-3-inpaint": ("POST", "/v2beta/audio/stable-audio/inpaint", "Start Audio 3 inpainting", "Start replacing a selected time range with Stable Audio 3.", "audio-job"),
+            "get-audio-result": ("GET", "/v2beta/audio/results/{id}", "Get audio job result", "Retrieve completed audio or its pending status.", "audio-result"),
+            "get-account": ("GET", "/v1/user/account", "Get account", "Read account details and available organizations.", "json"),
+            "get-balance": ("GET", "/v1/user/balance", "Get credit balance", "Check the credit balance for the selected organization.", "json"),
+            "list-engines": ("GET", "/v1/engines/list", "List legacy engines", "List legacy image engines available to this account.", "json"),
+            "legacy-text-to-image": ("POST", "/v1/generation/{engine_id}/text-to-image", "Generate legacy image", "Create images with an available legacy engine.", "legacy-image"),
+            "legacy-image-to-image": ("POST", "/v1/generation/{engine_id}/image-to-image", "Transform legacy image", "Transform an image with an available legacy engine.", "legacy-image"),
+            "legacy-mask-image": ("POST", "/v1/generation/{engine_id}/image-to-image/masking", "Mask legacy image", "Replace a masked area with an available legacy engine.", "legacy-image"),
         };
     }
 
     private {
-        #! The ID of the lazy value of getSchema() (qore#6843)
-        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \StabilityAiApi::buildSchemaValue());
-        #! The ID of the lazy value of getActionSet() (qore#6843)
-        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \StabilityAiApi::buildActionSetValue());
         static *OpenApi3::OpenApi3Schema schema;
         static *RestSchemaActionSet actions;
     }
 
     private:internal {
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildActionSetValue());
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildSchemaValue());
         static Mutex mutex();
     }
 

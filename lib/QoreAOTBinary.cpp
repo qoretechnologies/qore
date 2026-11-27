@@ -1331,6 +1331,39 @@ static const QoreClass* qoreAOTFindClassInMap(
     return nullptr;
 }
 
+//! Returns true if \a target is \a from or is reached from it through the references that classes hold on other
+//! classes: the class that a class is injected in place of, its base classes and the source of an imported class
+/** A class injected in place of a class that reaches it would keep both alive for ever (qore#7664)
+*/
+static bool qoreAOTClassReaches(const qore_class_private* from, const qore_class_private* target) {
+    std::vector<const qore_class_private*> work{from};
+    std::unordered_set<const qore_class_private*> seen;
+    while (!work.empty()) {
+        const qore_class_private* p = work.back();
+        work.pop_back();
+        if (p == target) {
+            return true;
+        }
+        if (!seen.insert(p).second) {
+            continue;
+        }
+        if (p->injectedClass) {
+            work.push_back(p->injectedClass);
+        }
+        if (p->import_source) {
+            work.push_back(p->import_source);
+        }
+        if (p->scl) {
+            for (const BCNode* bcn : *p->scl) {
+                if (bcn->sclass) {
+                    work.push_back(qore_class_private::get(*bcn->sclass));
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static void qoreAOTAddClassLookupAliases(
         std::unordered_map<std::string, QoreClass*>& class_map,
         QoreClass* qc) {
@@ -9757,6 +9790,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     context.emplace_back("symbol_index_version", std::to_string(QORE_AOT_SYMBOL_INDEX_VERSION));
     context.emplace_back("feature_flags", aotHashHex(writer.feature_flags));
     context.emplace_back("max_opcode_id", std::to_string(QORE_IR_MAX_OPCODE));
+    // compiled with debugging (qcc -g; qore#7676): a change of the choice changes the compile and declaration contracts
+    context.emplace_back("debugging", QORE_ENV_IS_SET("QORE_AOT_DEBUGGING") ? "1" : "0");
     context.emplace_back("module_filter", module_name ? module_name : "");
     context.emplace_back("compile_file", qore_aot_map_source_path(compile_file));
     context.emplace_back("compile_file_count", std::to_string(compile_files ? compile_files->size() : 0));
@@ -11881,7 +11916,29 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeBytes(empty_hash, SH_SIZE);
         }
         if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0) {
-            writer.writeStringRef(priv->injectedClass ? priv->injectedClass->path.c_str() : "");
+            std::string injected_path = priv->injectedClass ? priv->injectedClass->path : std::string();
+#ifdef DEBUG
+            // test hook: "<class>=<path>[,<class>=<path>...]" writes each named class as injected in place of the
+            // class at the path given, as a damaged or crafted image can, so that a test checks what the loader
+            // accepts and refuses (qore#7664)
+            if (QoreEnvironmentValue injected_holder("QORE_AOT_TEST_INJECTED_CLASS"); injected_holder.c_str()) {
+                std::string spec = injected_holder.c_str();
+                size_t start = 0;
+                while (start <= spec.size()) {
+                    size_t end = spec.find(',', start);
+                    if (end == std::string::npos) {
+                        end = spec.size();
+                    }
+                    std::string entry = spec.substr(start, end - start);
+                    size_t eq = entry.find('=');
+                    if (eq != std::string::npos && entry.compare(0, eq, priv->name) == 0) {
+                        injected_path = entry.substr(eq + 1);
+                    }
+                    start = end + 1;
+                }
+            }
+#endif
+            writer.writeStringRef(injected_path.c_str());
         }
         if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0) {
             uint32_t type_param_count = static_cast<uint32_t>(priv->getTypeParamCount());
@@ -12256,7 +12313,18 @@ static void writeTypedefsSection(QoreAOTBinaryWriter& writer, const AOTSerialize
 
     for (auto& ti : state.typedefs) {
         writer.writeStringRef(ti.name.c_str());
+#ifdef DEBUG
+        // test hook: writes the typedef named with a type that no Program has, so that the type resolution of the
+        // image fails after its base classes are attached (qore#7664)
+        if (QoreEnvironmentValue unresolved_holder("QORE_AOT_TEST_UNRESOLVED_TYPEDEF");
+                unresolved_holder.c_str() && ti.name == unresolved_holder.c_str()) {
+            writer.writeStringRef("QoreAOTTestUnresolvedType");
+        } else {
+            writeTypePathRef(writer, ti.typeInfo);
+        }
+#else
         writeTypePathRef(writer, ti.typeInfo);
+#endif
         writer.writeU32(ti.ns_idx);
         writer.writeU8(ti.pub ? 1 : 0);
     }
@@ -13041,6 +13109,8 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     // it has the debugger's events of its statements, as the debug IR of a function (#5816); without a debugger, the
     // closure runs its native code
     ir->emit_debug_statements = pgm && qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+    // the calls that the serialized IR cannot express as pseudo-method instructions stay calls (qore#7733)
+    ir->lower_call_forms_for_debug_ir = true;
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     // the object of the calls through self in a closure created in a method (issue #5823)
@@ -13388,6 +13458,19 @@ const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* 
         return b->loc;
     }
     return const_cast<UserVariantBase*>(uvb)->getUserSignature()->getParseLocation();
+}
+
+void qore_aot_write_closure_locations(QoreAOTBinaryWriter& writer, const UserClosureFunction* ucf) {
+    if (writer.omit_source_locations) {
+        qore_aot_write_source_location(writer, nullptr);
+        qore_aot_write_source_location(writer, nullptr);
+        return;
+    }
+    qore_aot_write_source_location(writer, qore_aot_closure_location(ucf));
+    const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    qore_aot_write_source_location(writer, uvb
+        ? const_cast<UserVariantBase*>(uvb)->getUserSignature()->getParseLocation() : nullptr);
 }
 
 //! Classify and write a QoreValue expression in AOTExprKind format, without the source location of a call
@@ -14752,9 +14835,8 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     // slot carries the native key when one is available.
                     writer.writeStringRef("");
                 }
-                // the location of the closure (see v26)
-                qore_aot_write_source_location(writer, writer.omit_source_locations ? nullptr
-                    : qore_aot_closure_location(ucf));
+                // the locations of the closure's block (see v26) and signature (see v54)
+                qore_aot_write_closure_locations(writer, ucf);
 
                 // Write return type
                 writeTypePathRef(writer, sig->getReturnTypeInfo());
@@ -15615,11 +15697,11 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             std::vector<uint32_t>* string_refs = aotDebugIRDigestRequested() ? &payload_string_refs : nullptr;
             struct StringRefTracking {
                 QoreAOTBinaryWriter& writer;
-                DLLLOCAL StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
+                StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
                         : writer(writer) {
                     writer.string_ref_positions = positions;
                 }
-                DLLLOCAL ~StringRefTracking() {
+                ~StringRefTracking() {
                     writer.string_ref_positions = nullptr;
                 }
             } string_ref_tracking(writer, string_refs);
@@ -17348,10 +17430,15 @@ bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhas
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
-    if (!registerConstantShellsPhase(error)
-            || !resolveTypes(error)
-            || !resolveConstants(error)
-            || !resolveStaticsAndConstants(error)) {
+    bool ok = registerConstantShellsPhase(error) && resolveTypes(error);
+    // the class injections are checked once the base classes are attached, also if the type resolution failed after
+    // attaching some of them, so that no refused class keeps its reference; the first error is reported (a batch of
+    // blobs checks them once the type resolution of all of its blobs is done; see QoreAOTBinaryMultiDeserializer)
+    std::string injection_error;
+    if (!checkClassInjectionCycles(ok ? error : injection_error)) {
+        ok = false;
+    }
+    if (!ok || !resolveConstants(error) || !resolveStaticsAndConstants(error)) {
         return false;
     }
     if (!rebuildRootIndexes(error, IndexPhase::TypeAndValue)) {
@@ -18544,11 +18631,53 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                     + std::string(class_list[i]->getName()) + "'";
                 return false;
             }
-            qore_class_private::get(*class_list[i])->injectedClass = qore_class_private::get(*injected);
+            qore_class_private* cpriv = qore_class_private::get(*class_list[i]);
+            const qore_class_private* ipriv = qore_class_private::get(*injected);
+            // the class references the class that it is injected in place of (qore#7664): a class is never injected
+            // in place of itself, nor in place of a class that reaches it, which would keep the classes alive for
+            // ever; the base classes are not resolved yet, so the classes are checked again with them in
+            // checkClassInjectionCycles()
+            if (qoreAOTClassReaches(ipriv, cpriv)) {
+                error = "AOT class '" + std::string(class_list[i]->getName())
+                    + "' cannot be injected in place of '" + std::string(class_injected_paths[i].c_str())
+                    + "': the injection leads back to the class itself";
+                return false;
+            }
+            assert(!cpriv->injectedClass);
+            if (cpriv->injectedClass) {
+                const_cast<qore_class_private*>(cpriv->injectedClass)->deref(false, false, false);
+            }
+            ipriv->ref();
+            cpriv->injectedClass = ipriv;
         }
     }
 
     return true;
+}
+
+bool QoreAOTBinaryDeserializer::checkClassInjectionCycles(std::string& error) {
+    // every class that leads back to itself releases its reference before the image is refused, so that none of
+    // them keeps its classes alive for ever (qore#7664); only the injected classes are walked, so there is no
+    // cancellation point: a cancelled check would leave the references of the classes not checked yet
+    bool ok = true;
+    for (uint32_t i = 0; i < class_list.size(); ++i) {
+        if (!class_list[i] || preexisting_classes.count(i)) {
+            continue;
+        }
+        qore_class_private* cpriv = qore_class_private::get(*class_list[i]);
+        const qore_class_private* ipriv = cpriv->injectedClass;
+        if (!ipriv || !qoreAOTClassReaches(ipriv, cpriv)) {
+            continue;
+        }
+        if (ok) {
+            error = "AOT class '" + std::string(class_list[i]->getName()) + "' cannot be injected in place of '"
+                + ipriv->path + "': the injection leads back to the class itself";
+            ok = false;
+        }
+        cpriv->injectedClass = nullptr;
+        const_cast<qore_class_private*>(ipriv)->deref(false, false, false);
+    }
+    return ok;
 }
 
 bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {

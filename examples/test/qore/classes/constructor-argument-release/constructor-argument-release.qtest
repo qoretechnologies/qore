@@ -56,7 +56,7 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         TmpDir tmp("constructor-argument-release-");
         foreach int opt in (0, 3) {
             string exe = tmp.path + DirSep + "constructor-argument-release";
-            checked(prefix + extra_env + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe)
+            checked(prefix + extra_env + quote(qcc_bin) + sprintf(" -O%d -g -o ", opt) + quote(exe)
                 + " " + quote(worker));
             assertTrue(is_file(exe), "qcc produced the executable");
             foreach bool debug in (False, True) {
@@ -80,7 +80,7 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         foreach int opt in (0, 3) {
             foreach bool strip in (False, True) {
                 string exe = tmp.path + DirSep + "debugger";
-                checked(prefix + quote(qcc_bin) + sprintf(" -O%d ", opt) + (strip ? "--strip-source " : "")
+                checked(prefix + quote(qcc_bin) + sprintf(" -O%d -g ", opt) + (strip ? "--strip-source " : "")
                     + "-o " + quote(exe) + " " + quote(worker));
                 assertEq(expected, ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"),
                     sprintf("qcc -O%d stripped=%y attached debugger", opt, strip));

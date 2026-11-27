@@ -1,0 +1,16 @@
+repro: RUNTIME-TYPE-ERROR file="<fixture>" line=41 endline=41 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+local object: RUNTIME-TYPE-ERROR file="<fixture>" line=41 endline=41 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+plain: RUNTIME-TYPE-ERROR file="<fixture>" line=51 endline=51 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+on_exit: RUNTIME-TYPE-ERROR file="<fixture>" line=61 endline=61 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+string: RUNTIME-TYPE-ERROR file="<fixture>" line=75 endline=75 source="" offset=0 lang="Qore" desc="<block return> expects type 'string', but got no value instead: block missing return statement"
+method: RUNTIME-TYPE-ERROR file="<fixture>" line=86 endline=86 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+self method: RUNTIME-TYPE-ERROR file="<fixture>" line=86 endline=86 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+private method: RUNTIME-TYPE-ERROR file="<fixture>" line=101 endline=101 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+final class method: RUNTIME-TYPE-ERROR file="<fixture>" line=117 endline=117 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+static method: RUNTIME-TYPE-ERROR file="<fixture>" line=108 endline=108 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+local closure: RUNTIME-TYPE-ERROR file="<fixture>" line=136 endline=136 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+closure: RUNTIME-TYPE-ERROR file="<fixture>" line=146 endline=146 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+optional return: ok 1, other null
+softlist return: ok [1], other []
+direct: RUNTIME-TYPE-ERROR file="<fixture>" line=51 endline=51 source="" offset=0 lang="Qore" desc="<block return> expects type 'int', but got no value instead: block missing return statement"
+done

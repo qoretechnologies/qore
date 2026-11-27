@@ -1042,14 +1042,15 @@ nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAME
 *object logger = get_async_io_logger();
     @endcode
 
-    @return the logger object, or @ref nothing "NOTHING" if none is set or if the caller is code that is sandboxed or
-    acts for sandboxed code, which does not get the logger of the process (see @ref sandbox_process_wide_registries)
+    @return the logger object, or @ref nothing "NOTHING" if none is set or if the caller is code that is restricted or
+    acts for restricted code, which does not get the logger of the process (see @ref sandbox_process_wide_registries
+    and @ref sandbox_manager_classes)
 
     @since %Qore 3.0
 */
 *object get_async_io_logger() [flags=CONSTANT;dom=PROCESS] {
-    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the logger is process-wide and configured by the host: not handed to restricted code (issue #6836, qore#7737)
+    if (qore_caller_is_restricted()) {
         return QoreValue();
     }
     return qore_get_async_io_logger_object();  // already referenced
@@ -2568,6 +2569,20 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2602,6 +2617,20 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @par Example:
     @code{.py}
@@ -2641,6 +2670,20 @@ list<hash<auto>> get_module_list() {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2675,6 +2718,20 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @par Example:
     @code{.py}
@@ -3899,6 +3956,7 @@ load_user_module_with_program("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -4508,8 +4566,9 @@ auto val = get_module_option(mod, opt);
     @param option the name of the option
 
     @return the value of the given module option, or @ref nothing "NOTHING" if it is not set or if the calling code
-    is the code of a sandboxed %Program, which does not get the module options of the process (see
-    @ref sandbox_process_wide_registries)
+    is the code of a restricted %Program, which does not get the module options of the process (see
+    @ref sandbox_process_wide_registries; the code of a %Program that a trusted, governed, sandbox governs gets them,
+    see @ref sandbox_manager_classes)
 
     @note module options are process-wide and set by trusted code (see set_module_option()); the C++ code of a module
     reads its own options with \c qore_get_module_option()
@@ -4520,8 +4579,9 @@ auto val = get_module_option(mod, opt);
     @since %Qore 3.0 the code of a sandboxed %Program gets no value
 */
 auto get_module_option(string module, string option) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
-    // module options are process-wide and configured by the host: not handed to sandboxed code (qore#6749)
-    if (qore_calling_code_is_sandboxed()) {
+    // module options are process-wide and configured by the host: not handed to restricted code (qore#6749,
+    // qore#7737)
+    if (qore_calling_code_is_restricted()) {
         return QoreValue();
     }
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
@@ -4613,8 +4673,9 @@ nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] 
     @param key the registry key
 
     @return the value stored under the given key, or @ref nothing if not set or if the calling code is the code of a
-    sandboxed %Program, which does not get the values that the host published for the whole process (see
-    @ref sandbox_process_wide_registries)
+    restricted %Program, which does not get the values that the host published for the whole process (see
+    @ref sandbox_process_wide_registries; the code of a %Program that a trusted, governed, sandbox governs gets them,
+    see @ref sandbox_manager_classes)
 
     @note library module code still gets the values when it serves sandboxed code, as the \c DataProvider module
     does for the custom expressions that the host registers; such code is responsible for what it returns to its
@@ -4626,8 +4687,9 @@ nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] 
  */
 auto get_app_registry(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
     // the registry is process-wide and holds the host's data and callbacks: not handed to the code of a sandboxed
-    // Program, while the library modules that read it to serve such code still get it (qore#6749)
-    if (qore_calling_code_is_sandboxed()) {
+    // Program, while the library modules that read it to serve such code still get it (qore#6749); the code of a
+    // Program that a trusted (governed) sandbox governs gets it (qore#7737)
+    if (qore_calling_code_is_restricted()) {
         return QoreValue();
     }
     TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);

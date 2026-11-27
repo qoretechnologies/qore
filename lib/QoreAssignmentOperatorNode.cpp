@@ -282,6 +282,108 @@ static bool qore_assignment_reads_through_reference(const QoreTypeInfo* ti, cons
         || qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
 }
 
+//! returns true if a weak or opaque assignment of a value of type \a value_ti to an lvalue of type \a target_ti is
+//! known at parse time to wrap the value in a new list, or to convert no value to a new empty list (qore#7619)
+/** The lvalue's type is a softlist type (softlist, *softlist, softlist<T>), which wraps a value that is not a list in
+    a new list, and converts NOTHING and NULL to a new empty list unless it takes NOTHING (*softlist, *softlist<T>);
+    the value's type cannot be a list, nor, for a type that takes NOTHING, NOTHING or NULL.  A value that can be a
+    list is checked by qore_parse_weak_store_converts() and at run time; any other case is refused by the run-time
+    check of LValueHelper::assign()
+
+    @param kind set to what the lvalue makes of the value: no value only (the value's type is NOTHING or NULL), a
+    value that is not a list only, or either (ex: a \c *int value)
+*/
+static bool qore_parse_weak_store_wraps_type(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
+        QoreWeakWrapKind& kind) {
+    if (!QoreTypeInfo::hasType(value_ti) || !QoreTypeInfo::isSoftListType(target_ti)
+            || QoreTypeInfo::isReference(value_ti)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(value_ti, NT_LIST) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    bool maybe_nothing = QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(value_ti, NT_NULL) != QTI_NOT_EQUAL;
+    // a *softlist lvalue keeps NOTHING, and converts NULL to it: a value that can be either is left to run time
+    if (maybe_nothing && QoreTypeInfo::parseReturns(target_ti, NT_NOTHING) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    if (!maybe_nothing) {
+        kind = QoreWeakWrapKind::Value;
+    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT) {
+        kind = QoreWeakWrapKind::NoValue;
+    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT) {
+        // NULL is wrapped in a list by a softlist<T> whose element type takes it (ex: softlist<*int> gives [NULL]);
+        // the other softlist types convert it to an empty list
+        const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexSoftListOrNothing(target_ti);
+        kind = QoreTypeInfo::hasType(eti) && eti != autoTypeInfo
+                && QoreTypeInfo::parseAccepts(eti, nullTypeInfo) != QTI_NOT_EQUAL
+            ? QoreWeakWrapKind::Value
+            : QoreWeakWrapKind::NoValue;
+    } else {
+        kind = QoreWeakWrapKind::Either;
+    }
+    return true;
+}
+
+//! as qore_parse_weak_store_wraps_type(), also for a union type with softlist members (qore#7619)
+/** A union wraps the value if each of its members that can accept the value wraps it (and one can); a member that
+    can accept it as it is, or a union that takes NOTHING for a value that can be NOTHING or NULL, leaves the store to
+    the run-time check, which refuses the conversion that runs
+*/
+static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
+        QoreWeakWrapKind& kind) {
+    const QoreUnionTypeInfo* u = QoreTypeInfo::getUnionType(target_ti);
+    if (!u) {
+        return qore_parse_weak_store_wraps_type(target_ti, value_ti, kind);
+    }
+    if (!QoreTypeInfo::hasType(value_ti) || QoreTypeInfo::isReference(value_ti)) {
+        return false;
+    }
+    if (u->isOrNothing() && (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) != QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(value_ti, NT_NULL) != QTI_NOT_EQUAL)) {
+        return false;
+    }
+    bool wraps = false;
+    for (const QoreTypeInfo* member : u->getMemberTypes()) {
+        if (QoreTypeInfo::parseAccepts(member, value_ti) == QTI_NOT_EQUAL) {
+            continue;
+        }
+        QoreWeakWrapKind member_kind = QoreWeakWrapKind::Value;
+        if (!qore_parse_weak_store_wraps_type(member, value_ti, member_kind)) {
+            return false;
+        }
+        kind = wraps && kind != member_kind ? QoreWeakWrapKind::Either : member_kind;
+        wraps = true;
+    }
+    return wraps;
+}
+
+//! returns the type that a weak or opaque assignment to \a left assigns the value with, for its parse-time checks
+//! (qore#7619)
+/** A key of a hash<string, T> or an element of a list<T> is assigned with T, which the type of the lvalue, \a ti,
+    gives as *T, as the key or the element can be missing; any other lvalue with \a ti
+*/
+static const QoreTypeInfo* qore_parse_weak_store_lvalue_type(const QoreValue& left, const QoreTypeInfo* ti) {
+    const AbstractQoreNode* node = left.getInternalNode();
+    if (!node) {
+        return ti;
+    }
+    const QoreTypeInfo* eti = nullptr;
+    if (const QoreHashObjectDereferenceOperatorNode* h
+            = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        if (!h->isSlice()) {
+            eti = QoreTypeInfo::getReturnComplexHashOrNothing(h->getOwnerTypeInfo());
+        }
+    } else if (const QoreSquareBracketsOperatorNode* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        const ParseNode* container = dynamic_cast<const ParseNode*>(sb->getLeft().getInternalNode());
+        if (container) {
+            eti = QoreTypeInfo::getReturnComplexListOrNothing(container->getParseTypeInfo());
+        }
+    }
+    return QoreTypeInfo::hasType(eti) ? eti : ti;
+}
+
 int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
         AssignmentMode mode) {
     int err = parseInitIntern(parse_context, mode);
@@ -758,7 +860,17 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                 target_ti = decl_ti;
             }
         }
-        if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
+        // a softlist lvalue that is known to wrap the value in a new list, or to convert no value to a new empty list,
+        // is refused likewise (qore#7619)
+        // the declared type of a key or an element, which the error names as the run-time error names it
+        const QoreTypeInfo* wrap_ti = qore_parse_weak_store_lvalue_type(left, ti);
+        QoreWeakWrapKind kind = QoreWeakWrapKind::Value;
+        if (qore_parse_weak_store_wraps(wrap_ti, parse_context.typeInfo, kind)) {
+            qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
+                qore_weak_store_wrap_desc(mode == AssignmentMode::Weak, QoreTypeInfo::getName(parse_context.typeInfo),
+                    QoreTypeInfo::getName(wrap_ti), kind));
+            err = -1;
+        } else if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
             qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
                 qore_weak_store_conversion_desc(mode == AssignmentMode::Weak,
                     QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(target_ti)));

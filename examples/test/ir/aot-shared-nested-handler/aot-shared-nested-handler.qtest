@@ -75,7 +75,7 @@ class SharedNestedHandlerTest inherits QUnit::Test {
         copy_file(source + "/image.q", script);
         copy_file(source + "/handler.qi", body);
         int rc;
-        string log = backquote(sprintf("%sQORE_IR_OPT_STATS=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 %s -O%d -o %s %s 2>&1",
+        string log = backquote(sprintf("%sQORE_IR_OPT_STATS=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 %s -O%d -g -o %s %s 2>&1",
             env, quote(qcc), opt, quote(exe), quote(script)), \rc);
         assertEq(0, rc, log);
         assertTrue(log.find("compiled native closure '__aot_closure::makeHandler()::") != -1,

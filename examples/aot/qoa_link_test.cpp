@@ -63,14 +63,14 @@ int main() {
         "}\n";
     if (qore_parse_source_string(pgm, src, "<qoa_link_test>") != 0) {
         fprintf(stderr, "qore_parse_source_string failed: %s\n",
-            qore_last_error(pgm));
+            qore_last_error(pgm) ? qore_last_error(pgm) : "(reported above)");
         qore_destroy_program(pgm);
         qore_cleanup();
         return 1;
     }
     if (qore_parse_commit(pgm) != 0) {
         fprintf(stderr, "qore_parse_commit failed: %s\n",
-            qore_last_error(pgm));
+            qore_last_error(pgm) ? qore_last_error(pgm) : "(reported above)");
         qore_destroy_program(pgm);
         qore_cleanup();
         return 1;
@@ -79,7 +79,7 @@ int main() {
     int rc = qore_run_callable(pgm, "qoa_link_test_drive", nullptr);
     if (rc != 0) {
         fprintf(stderr, "qore_run_callable returned %d: %s\n",
-            rc, qore_last_error(pgm));
+            rc, qore_last_error(pgm) ? qore_last_error(pgm) : "(reported above)");
         qore_destroy_program(pgm);
         qore_cleanup();
         return 1;

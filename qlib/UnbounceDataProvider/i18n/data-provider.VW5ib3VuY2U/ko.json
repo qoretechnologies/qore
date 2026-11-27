@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "계정 목록"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -416,7 +416,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "계정 가져오기"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "계정 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
-          "source": "List Sub-Accounts",
+          "source": "List sub-accounts",
           "message": "하위 계정 목록 조회"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
@@ -520,7 +520,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
-          "source": "Get a Sub-Account",
+          "source": "Get a sub-account",
           "message": "하위 계정 조회"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
@@ -540,7 +540,7 @@
           "message": "하위 계정 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "도메인 목록 조회"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
@@ -624,7 +624,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
-          "source": "Get a Domain",
+          "source": "Get a domain",
           "message": "도메인 가져오기"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
@@ -644,7 +644,7 @@
           "message": "도메인 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
-          "source": "List Page Groups",
+          "source": "List page groups",
           "message": "페이지 그룹 목록 조회"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "페이지 목록 조회"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
@@ -828,7 +828,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
-          "source": "Get a Page",
+          "source": "Get a page",
           "message": "페이지 조회"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
@@ -848,7 +848,7 @@
           "message": "페이지 ID"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
-          "source": "List Form Fields",
+          "source": "List form fields",
           "message": "양식 필드 목록"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "리드 나열"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
@@ -968,7 +968,7 @@
           "message": "결과 오프셋"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "리드 가져오기"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -988,7 +988,7 @@
           "message": "리드 ID"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "리드 생성"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "이 리드와 연결할 방문자 ID"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "리드 삭제"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "삭제할 리드의 고유 식별자"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Get Lead Deletion Request",
+          "source": "Get lead deletion request",
           "message": "리드 삭제 요청 조회"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1148,7 +1148,7 @@
           "message": "삭제 요청 ID"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Create Lead Deletion Request",
+          "source": "Create lead deletion request",
           "message": "리드 삭제 요청 생성"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "이 날짜 또는 그 이전에 생성된 리드 삭제"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "사용자 가져오기"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "사용자 ID (현재 사용자의 경우 비워 둠)"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
-          "source": "Watch New Leads",
+          "source": "Watch new leads",
           "message": "새 리드 감시"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {

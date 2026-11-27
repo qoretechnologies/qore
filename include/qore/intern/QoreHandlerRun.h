@@ -61,6 +61,12 @@ struct IRCallFrame;
 struct QoreHandlerRunContext {
     //! Takes the value of a return statement of the handler (borrowed: the function takes a reference of its own)
     using hand_over_t = void (*)(void* data, QoreValue value, ExceptionSink* xsink);
+    //! Releases the value that the values handed over left in the function that takes them, which a debugger's
+    //! request abandons (qore#7625)
+    using abandon_t = void (*)(void* data, ExceptionSink* xsink);
+    //! Returns true if the run takes a debugger's break or continue request (\a rc) that ends the handler, as the
+    //! AST interpreter decides it (StatementBlock::requestTakenInFunction(), qore#7625)
+    using takes_request_t = bool (*)(const void* run_info, int rc);
 
     //! true if the handler runs while an exception or a thread_exit unwinds the block of its function
     bool unwinding = false;
@@ -71,6 +77,17 @@ struct QoreHandlerRunContext {
     hand_over_t hand_over = nullptr;
     //! the data of hand_over
     void* data = nullptr;
+    //! the function that releases what the handler handed over when a debugger's request abandons its return, with
+    //! data, if any: only the IR interpreter's frames take requests (see qore_handler_abandon_return(), qore#7625)
+    abandon_t abandon = nullptr;
+    //! the function that decides whether the run takes a request that ends the handler, with run_info, if any: of
+    //! this run, not forwarded (see qore_handler_abandon_return(), qore#7625)
+    takes_request_t takes_request = nullptr;
+    //! the data of takes_request
+    const void* run_info = nullptr;
+    //! the count of the values handed over (hand_over_count) when the run started: a request that abandons the
+    //! return of the handler releases what was handed over since (qore#7625)
+    uint64_t run_start_count = 0;
     //! the count of the values handed over to the function that takes them (the frame of the IR interpreter that
     //! runs the handlers, or the hold of native code), which qore_handler_return() increments, or nullptr (#6552)
     /** A ScopeExit past the inline cap outside the cleanups of a return statement compares it before and after its
@@ -100,6 +117,7 @@ struct QoreHandlerRunContext {
         returning = outer.returning;
         hand_over = outer.hand_over;
         data = outer.data;
+        abandon = outer.abandon;
         hand_over_count = outer.hand_over_count;
     }
 };
@@ -110,6 +128,20 @@ DLLLOCAL QoreHandlerRunContext*& qore_handler_run_context();
 //! Returns the count of the values handed over to the function that the innermost handler run of the current thread
 //! hands its values to (QoreHandlerRunContext::hand_over_count), or 0 if none (#6552)
 DLLLOCAL uint64_t qore_handler_run_hand_over_count();
+
+//! Abandons the values that the innermost handler run of the current thread has handed over since it started
+//! (qore#7625)
+/** A debugger's break or continue request that abandons the return of the block that it leaves: the AST interpreter's
+    block releases the return at once, when its handlers have run (StatementBlock::requestTakenInFunction()).  With
+    \a rc 0, the handler's function takes the request (a loop or a switch statement of its body); with \a rc
+    RC_BREAK or RC_CONTINUE, the request leaves the handler's function, and the run decides
+    (QoreHandlerRunContext::takes_request): a run that is not the last of its exit takes it, and so does a loop or a
+    switch statement of the function that the handler runs for, or a run around it that forwards to the same function.
+    If values were handed over in the run (QoreHandlerRunContext::run_start_count) and the request abandons them, the
+    run releases what they left in the function that takes them (QoreHandlerRunContext::abandon) and its count goes back,
+    so that the code that runs the handler sees no value handed over.  See QoreIROpcode::HandlerAbandonReturn.
+*/
+DLLLOCAL void qore_handler_abandon_return(int rc, ExceptionSink* xsink);
 
 //! Pushes the context of a handler run for the lifetime of the object, on every way out (an exception, a thread_exit,
 //! a cancellation), and pops it

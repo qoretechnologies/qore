@@ -1954,6 +1954,12 @@ ArrayList l();
       of a @ref sandbox_filesystem "sandbox file-system policy" for the sources that these loads and \c %%include
       read; the \c desc of a child module in the \c "child-modules" of a module description is replaced by a note
       when the error was built for code without this option
+    - the process's current directory that a @ref Qore::Dir "Dir" object starts in (since %Qore 3.0): the paths that
+      derive from it (@ref Qore::Dir::path() "Dir::path()", the names of files opened with
+      @ref Qore::Dir::openFile() "Dir::openFile()", the errors of the object's operations and the denials of a
+      @ref sandbox_filesystem "sandbox file-system policy" for them) and the results of @ref Qore::realpath() "realpath()"
+      for relative paths, and for absolute paths whose canonical form shares more leading directories with it than
+      the path given does (ex: \c "/proc/self/cwd"), are given relative to it; see @ref sandbox_fs_dir_cwd
 
     @par Known Limitation:
     The following still give paths of the host to code with this option:
@@ -1964,6 +1970,11 @@ ArrayList l();
     - an exception hash that other code made and passed on, which has the form that the code that caught it was given;
       for example one that trusted code caught under a host grant (@ref Qore::SandboxManager::callWithSystemPolicy()
       "SandboxManager::callWithSystemPolicy()") and returned
+    - the process's current directory can be found by code that may read its parent directories: the depth of the
+      directory shows in the relative paths of a @ref Qore::Dir "Dir" object above it (\c "../.."), and the names of
+      the directories in listings of the parents, and the targets of symbolic links that @ref Qore::readlink()
+      "readlink()" and directory listings give, such as that of \c "/proc/self/cwd", unless a file-system policy denies
+      reading them (see @ref sandbox_fs_dir_cwd)
     .
     A debugger (@ref Qore::DebugProgram "DebugProgram", which needs the \c DEBUGGER functional domain) has full
     access to the code that it debugs, and is given the locations of its exceptions with their full paths.

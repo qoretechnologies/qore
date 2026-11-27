@@ -550,6 +550,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::CopyCallArg, {G::Base}},
     {O::ReleaseCallArgSource, {G::Base}},
     {O::ReadReferenceThrough, {G::Base}},
+    // the release on a path of a debugger's request in debug IR, with the request as an optional operand (qore#7625)
+    {O::HandlerAbandonReturn, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

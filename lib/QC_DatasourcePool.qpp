@@ -1513,6 +1513,8 @@ dsp.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id
     - the observer applies to every connection in the pool, including connections opened later
     - observer registration is scoped to this object; two pools in the same process are completely
       independent
+    - an observer that queries this object captures it weakly, or the object is never destroyed: see
+      @ref sql_mutation_observer_capture
 
     @see
     - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"

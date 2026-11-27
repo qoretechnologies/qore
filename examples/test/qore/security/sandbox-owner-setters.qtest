@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The setters of state that other code relies on refuse a caller whose sandbox did not create the object (issue
+# #7035): under tenant isolation, a tenant cannot change the logger of the HTTP server's async socket I/O controller
+# or of a DPQL action session, or the conversation context store of an AI data provider, of an object that the host
+# or another tenant created, and the reflection API does not give it the non-public members of such an object; the
+# owner, code-safety sandboxes and trusted code are not affected.  The reflection API refuses a tenant the private
+# member of a class that trusted code declared on an object of another Program before (issue #6843).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires DataProvider
+%requires RestClientIo
+%requires OpenAiDataProvider
+
+%exec-class SandboxOwnerSettersTest
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires Logger
+%requires reflection
+
+#! changes the state of the object with the given setter; returns \"ok\" or the exception code
+string sub set(string setter, object obj) {
+    try {
+        switch (setter) {
+            case \"logger\": obj.setLogger(new Logger::Logger(\"tenant\")); break;
+            case \"context-store\":
+                obj.setConversationContextStore(new OpenAiDataProvider::OpenAiConversationContextStoreCallbacks(
+                    *hash<auto> sub (string id) { return; }, sub (string id, hash<auto> h) {}));
+                break;
+            default: throw \"UNKNOWN-SETTER\", setter;
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! a subclass that reads the non-public logger member of a LoggerWrapper with the reflection API
+class LSub inherits Logger::LoggerWrapper {
+    static string reflectWrite(Logger::LoggerWrapper w) {
+        try {
+            Reflection::NormalMember m = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\");
+            m.setValue(w, new Logger::Logger(\"tenant\"));
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! gets the logger with the private accessor of LoggerWrapper with the reflection API: a method or its variant
+    static string reflectCall(Logger::LoggerWrapper w, bool variant) {
+        try {
+            Reflection::NormalMethod m = Reflection::Class::forName(\"Logger::LoggerWrapper\").getNormalMethod(
+                \"getLogger\");
+            auto v = variant ? m.getVariants()[0].call(w) : m.call(w);
+            return v ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static string reflect(Logger::LoggerWrapper w) {
+        try {
+            auto v = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\").getValue(w);
+            return v ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+string sub reflect(Logger::LoggerWrapper w) {
+    return LSub::reflect(w);
+}
+
+#! calls the private accessor of the logger of a LoggerWrapper with the reflection API
+string sub reflect_call(Logger::LoggerWrapper w, bool variant) {
+    return LSub::reflectCall(w, variant);
+}
+
+#! writes the non-public logger member of a LoggerWrapper with the reflection API
+string sub reflect_write(Logger::LoggerWrapper w) {
+    return LSub::reflectWrite(w);
+}
+
+Logger::LoggerWrapper sub make_wrapper() {
+    return new Logger::LoggerWrapper(new Logger::Logger(\"own\"));
+}
+
+object sub make_dpql() {
+    return new DataProvider::DpqlActionSession();
+}
+
+object sub make_ai() {
+    return new OpenAiDataProvider::OpenAiResponseCreateDataProvider(
+        new RestClientIo::RestClientIo({\"url\": \"http://localhost:1\"}));
+}
+";
+
+class SandboxOwnerSettersTest inherits QUnit::Test {
+    public {
+        #! the exception of a refused change
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+    }
+
+    private {
+        AsyncSocketIoController io_ctrl;
+    }
+
+    constructor() : QUnit::Test("sandbox owner setters", "1.0", \ARGV) {
+        addTestCase("tenants and the host", \ownerTest());
+        addTestCase("code safety and trusted code", \trustedTest());
+        addTestCase("reflection writes", \reflectionWriteTest());
+        foreach string mode in (keys ExecModes) {
+            addTestCase("reflection reads and calls in " + mode, getReflectionOwnerTest(mode));
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        io_ctrl = new AsyncSocketIoController(False);
+    }
+
+    globalTearDown() {
+        io_ctrl.stop();
+    }
+
+    #! creates a tenant
+    private static Program tenant(*int level) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        if (exists level) {
+            sm.setEnforcementLevel(level);
+        }
+        p.setSandboxManager(sm);
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! the host's objects
+    private hash<string, object> hostObjects() {
+        return {
+            "controller": new HttpAsyncSocketIoController(io_ctrl, new Logger("host")),
+            "dpql": new DpqlActionSession(),
+            "ai": new OpenAiResponseCreateDataProvider(new RestClientIo({"url": "http://localhost:1"})),
+        };
+    }
+
+    ownerTest() {
+        Program a = tenant();
+        Program b = tenant();
+        hash<string, object> host = hostObjects();
+
+        assertEq(Err, a.callFunction("set", "logger", host.controller), "the host's async socket I/O controller");
+        assertEq(Err, a.callFunction("set", "logger", host.dpql), "the host's DPQL action session");
+        assertEq(Err, a.callFunction("set", "context-store", host.ai), "the host's AI data provider");
+        assertEq(Err, a.callFunction("set", "logger", b.callFunction("make_dpql")), "B's DPQL action session");
+        assertEq(Err, a.callFunction("set", "context-store", b.callFunction("make_ai")), "B's AI data provider");
+
+        # the tenant's own objects
+        assertEq("ok", a.callFunction("set", "logger", a.callFunction("make_dpql")), "A's DPQL action session");
+        assertEq("ok", a.callFunction("set", "context-store", a.callFunction("make_ai")), "A's AI data provider");
+
+        # the reflection API: the private member of a class that trusted code declared is not given to a tenant's
+        # code on an object of another Program at all (qore#6843)
+        assertEq("REFLECTION-ACCESS-ERROR", a.callFunction("reflect", new LoggerWrapper(new Logger("host"))),
+            "A reads the host's object with reflection");
+        # also on its own object: the subclass of a class that trusted code declared, declared by sandboxed code, cannot
+        # use its private declarations (qore#6843); the owner rule of reflection applies to the code of a class that
+        # was declared before the sandbox was set (see reflectionWriteTest())
+        assertEq("REFLECTION-ACCESS-ERROR", a.callFunction("reflect", a.callFunction("make_wrapper")),
+            "A reads its own object with reflection");
+    }
+
+    #! returns the reflection owner test of the given execution mode
+    private code getReflectionOwnerTest(string mode) {
+        return sub () { reflectionOwnerTest(mode); };
+    }
+
+    #! the reflection API reads a non-public member and calls a non-public method or method variant of an object only
+    #! for code that owns the object
+    reflectionOwnerTest(string mode) {
+        # an object of the tenant's Program that it created before it was sandboxed: its sandbox did not create it;
+        # the class of the tenant's subclass was declared before the sandbox was set, so it may use the private
+        # declarations of the class (qore#6843)
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        LoggerWrapper pre = p.callFunction("make_wrapper");
+        p.setSandboxManager(new SandboxManager());
+        LoggerWrapper own = p.callFunction("make_wrapper");
+        # the results of a read, a method call and a variant call on the object
+        code results = hash<string, string> sub (LoggerWrapper w) {
+            return {
+                "read": p.callFunction("reflect", w),
+                "method": p.callFunction("reflect_call", w, False),
+                "variant": p.callFunction("reflect_call", w, True),
+            };
+        };
+        assertEq({"read": Err, "method": Err, "variant": Err}, results(pre),
+            mode + ": an object that the sandbox did not create");
+        assertEq({"read": "logger", "method": "logger", "variant": "logger"}, results(own),
+            mode + ": the tenant's own object");
+    }
+
+    #! the reflection API writes a non-public member of an object only for code that owns the object
+    reflectionWriteTest() {
+        # an object of the tenant's Program that it created before it was sandboxed: its sandbox did not create it
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        LoggerWrapper pre = p.callFunction("make_wrapper");
+        p.setSandboxManager(new SandboxManager());
+        assertEq(Err, p.callFunction("reflect_write", pre), "an object that the sandbox did not create");
+        assertEq("ok", p.callFunction("reflect_write", p.callFunction("make_wrapper")), "the tenant's own object");
+    }
+
+    trustedTest() {
+        hash<string, object> host = hostObjects();
+        Program safe = tenant(QSEL_CODE_SAFETY);
+        assertEq("ok", safe.callFunction("set", "logger", host.controller), "code safety: the controller");
+        assertEq("ok", safe.callFunction("set", "logger", host.dpql), "code safety: the DPQL action session");
+        assertEq("ok", safe.callFunction("set", "context-store", host.ai), "code safety: the AI data provider");
+        # the private member of a class that trusted code declared, on an object of another Program, is not given to
+        # sandboxed code with reflection, also at the enforcement level of code safety (qore#6843)
+        assertEq("REFLECTION-ACCESS-ERROR", safe.callFunction("reflect", new LoggerWrapper(new Logger("host"))),
+            "code safety: reflection");
+
+        # trusted code changes any object
+        Program a = tenant();
+        DpqlActionSession dpql = a.callFunction("make_dpql");
+        dpql.setLogger(new Logger("host"));
+        host.controller.setLogger(new Logger("host"));
+        assertTrue(True, "trusted code changes the loggers");
+    }
+}

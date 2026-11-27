@@ -1,0 +1,42 @@
+int: native
+int result: native
+float: native
+bool: native
+bool as auto: native
+int to float: native
+float to int: native
+no args: native
+wide int: native
+wide int loop: native
+tagged float: native
+string: fast
+mixed native kinds: native
+3 args: native
+boxed and native: fast
+int as auto: native
+float as auto: native
+exception: fast
+nested exception: fast
+native exception: native
+native exception in a loop: native
+native exceptions in a try block: native
+recursion in the callee: fast
+exceptions in a loop: fast
+return type: fast
+auto return to int: fast
+store conversions: fast
+entry's boxed value stored into native locals: native
+native bool and float stores: native
+named: generic
+too few args: generic
+too many args: generic
+wrong type: generic
+NOTHING arg: generic
+float arg to int: generic
+default argument: generic
+closure: generic
+runtime reference: native
+reference in a hash: generic
+recursion: fast
+concurrent first use: native
+sandboxed reference called by the program: generic

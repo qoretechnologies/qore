@@ -315,7 +315,7 @@ public class LlamaParseManifest {
                 "action": "parse-file",
                 "method": "POST",
                 "path": "/api/v2/parse",
-                "display_name": "Parse Document",
+                "display_name": "Parse document",
                 "short_desc": "Parse a document into markdown, text and structured items",
                 "desc": "Submits a document to LlamaParse and returns the job that was started.\n\n"
                     "Give the document either as `file_id` - a file already uploaded to the project - "
@@ -396,7 +396,7 @@ public class LlamaParseManifest {
                 "action": "list-parse-jobs",
                 "method": "GET",
                 "path": "/api/v2/parse",
-                "display_name": "List Parse Jobs",
+                "display_name": "List parse jobs",
                 "short_desc": "List parse jobs in this project",
                 "desc": "Lists parse jobs, newest first, with optional filtering by status, by job ID "
                     "and by when they were created.\n\n"
@@ -437,7 +437,7 @@ public class LlamaParseManifest {
                 "action": "get-parse-job",
                 "method": "GET",
                 "path": "/api/v2/parse/{job_id}",
-                "display_name": "Get Parse Job",
+                "display_name": "Get parse job",
                 "short_desc": "Get a parse job and the content it produced",
                 "desc": "Returns a parse job.  By itself that is only the job's status; the parsed "
                     "content comes back when `expand` asks for it.\n\n"
@@ -475,7 +475,7 @@ public class LlamaParseManifest {
                 "action": "cancel-parse-job",
                 "method": "POST",
                 "path": "/api/v2/parse/{job_id}/cancel",
-                "display_name": "Cancel Parse Job",
+                "display_name": "Cancel parse job",
                 "short_desc": "Cancel a running parse job",
                 "desc": "Cancels a parse job that is pending or running.  A job that has already "
                     "finished, failed or been cancelled cannot be cancelled again.",
@@ -493,7 +493,7 @@ public class LlamaParseManifest {
                 "action": "list-parse-versions",
                 "method": "GET",
                 "path": "/api/v2/parse/versions",
-                "display_name": "List Parse Versions",
+                "display_name": "List parse versions",
                 "short_desc": "List the parse versions each tier accepts",
                 "desc": "Lists the dated versions each parsing tier currently accepts, and what "
                     "`latest` resolves to for each.\n\n"
@@ -508,7 +508,7 @@ public class LlamaParseManifest {
                 "action": "list-files",
                 "method": "GET",
                 "path": "/api/v1/beta/files",
-                "display_name": "List Files",
+                "display_name": "List files",
                 "short_desc": "List the files uploaded to this project",
                 "desc": "Lists the files uploaded to this project.  A file is uploaded once and can "
                     "then be parsed, extracted from, classified and split without being sent again.",
@@ -560,7 +560,7 @@ public class LlamaParseManifest {
                 "action": "get-file",
                 "method": "GET",
                 "path": "/api/v1/beta/files/{file_id}",
-                "display_name": "Get File",
+                "display_name": "Get file",
                 "short_desc": "Get one file's metadata",
                 "desc": "Returns one file's metadata.  Ask for `download_url` through `expand` to get "
                     "a link to the stored content.",
@@ -587,7 +587,7 @@ public class LlamaParseManifest {
                 "action": "delete-file",
                 "method": "DELETE",
                 "path": "/api/v1/beta/files/{file_id}",
-                "display_name": "Delete File",
+                "display_name": "Delete file",
                 "short_desc": "Delete a file from the project",
                 "desc": "Deletes a file from the project.  Jobs that already ran against it keep "
                     "their results.",
@@ -605,7 +605,7 @@ public class LlamaParseManifest {
                 "action": "get-file-content-url",
                 "method": "GET",
                 "path": "/api/v1/beta/files/{file_id}/content",
-                "display_name": "Get File Download URL",
+                "display_name": "Get file download URL",
                 "short_desc": "Get a temporary URL to download a file's content",
                 "desc": "Returns a presigned URL for downloading the file's stored content.  The URL "
                     "expires, so fetch it when the download is about to happen rather than storing "
@@ -630,7 +630,7 @@ public class LlamaParseManifest {
                 "action": "list-page-figures",
                 "method": "GET",
                 "path": "/api/v1/files/{id}/page-figures",
-                "display_name": "List Page Figures",
+                "display_name": "List page figures",
                 "short_desc": "List the figures extracted from a document's pages",
                 "desc": "Lists the figures - charts, diagrams and images - that parsing extracted from "
                     "a document, across all of its pages.",
@@ -648,7 +648,7 @@ public class LlamaParseManifest {
                 "action": "list-page-figures-for-page",
                 "method": "GET",
                 "path": "/api/v1/files/{id}/page-figures/{page_index}",
-                "display_name": "List Figures on a Page",
+                "display_name": "List figures on a page",
                 "short_desc": "List the figures extracted from one page",
                 "desc": "Lists the figures parsing extracted from one page of a document.",
                 "groups": (GroupParse,),
@@ -670,7 +670,7 @@ public class LlamaParseManifest {
                 "action": "list-page-screenshots",
                 "method": "GET",
                 "path": "/api/v1/files/{id}/page_screenshots",
-                "display_name": "List Page Screenshots",
+                "display_name": "List page screenshots",
                 "short_desc": "List the page screenshots parsing produced",
                 "desc": "Lists the rendered page images parsing produced for a document.  Useful for "
                     "showing a reviewer the page a value was read from.",
@@ -688,7 +688,7 @@ public class LlamaParseManifest {
                 "action": "get-page-screenshot",
                 "method": "GET",
                 "path": "/api/v1/files/{id}/page_screenshots/{page_index}",
-                "display_name": "Get Page Screenshot",
+                "display_name": "Get page screenshot",
                 "short_desc": "Get the rendered image of one page",
                 "desc": "Returns the rendered image of one page of a parsed document.",
                 "groups": (GroupParse,),
@@ -712,7 +712,7 @@ public class LlamaParseManifest {
                 "action": "extract-from-document",
                 "method": "POST",
                 "path": "/api/v2/extract",
-                "display_name": "Extract Structured Data",
+                "display_name": "Extract structured data",
                 "short_desc": "Extract structured data from a document against a JSON schema",
                 "desc": "Pulls structured data out of a document and returns the job that was "
                     "started.\n\n"
@@ -761,7 +761,7 @@ public class LlamaParseManifest {
                 "action": "list-extract-jobs",
                 "method": "GET",
                 "path": "/api/v2/extract",
-                "display_name": "List Extraction Jobs",
+                "display_name": "List extraction jobs",
                 "short_desc": "List extraction jobs in this project",
                 "desc": "Lists extraction jobs, newest first, with optional filtering by status, by "
                     "configuration and by when they were created.",
@@ -821,7 +821,7 @@ public class LlamaParseManifest {
                 "action": "get-extract-job",
                 "method": "GET",
                 "path": "/api/v2/extract/{job_id}",
-                "display_name": "Get Extraction Job",
+                "display_name": "Get extraction job",
                 "short_desc": "Get an extraction job and its extracted data",
                 "desc": "Returns an extraction job, including the structured data it produced once it "
                     "has completed.",
@@ -839,7 +839,7 @@ public class LlamaParseManifest {
                 "action": "cancel-extract-job",
                 "method": "POST",
                 "path": "/api/v2/extract/{job_id}/cancel",
-                "display_name": "Cancel Extraction Job",
+                "display_name": "Cancel extraction job",
                 "short_desc": "Cancel a running extraction job",
                 "desc": "Cancels an extraction job that is pending or running.  A job in a terminal "
                     "status cannot be cancelled.",
@@ -857,7 +857,7 @@ public class LlamaParseManifest {
                 "action": "delete-extract-job",
                 "method": "DELETE",
                 "path": "/api/v2/extract/{job_id}",
-                "display_name": "Delete Extraction Job",
+                "display_name": "Delete extraction job",
                 "short_desc": "Delete an extraction job and its result",
                 "desc": "Deletes an extraction job and the data it extracted.  The document it ran "
                     "against is not deleted.",
@@ -876,7 +876,7 @@ public class LlamaParseManifest {
                 "method": "POST",
                 "mutates_state": False,
                 "path": "/api/v2/extract/schema/generate",
-                "display_name": "Generate Extraction Schema",
+                "display_name": "Generate extraction schema",
                 "short_desc": "Write an extraction schema from a plain-language description",
                 "desc": "Turns a plain-language description of the fields you want into the JSON "
                     "Schema **Extract Structured Data** takes as its `data_schema`.\n\n"
@@ -911,7 +911,7 @@ public class LlamaParseManifest {
                 "method": "POST",
                 "mutates_state": False,
                 "path": "/api/v2/extract/schema/validation",
-                "display_name": "Validate Extraction Schema",
+                "display_name": "Validate extraction schema",
                 "short_desc": "Check an extraction schema before running a job with it",
                 "desc": "Checks that a JSON Schema is one LlamaExtract can use, and reports what is "
                     "wrong with it if not.  Cheaper than discovering the problem when a job fails.",
@@ -924,7 +924,7 @@ public class LlamaParseManifest {
                 "action": "classify-document",
                 "method": "POST",
                 "path": "/api/v2/classify",
-                "display_name": "Classify Document",
+                "display_name": "Classify document",
                 "short_desc": "Decide which of a set of document types a document is",
                 "desc": "Classifies a document against a set of rules and returns the job that was "
                     "started.\n\n"
@@ -978,7 +978,7 @@ public class LlamaParseManifest {
                 "action": "list-classify-jobs",
                 "method": "GET",
                 "path": "/api/v2/classify",
-                "display_name": "List Classification Jobs",
+                "display_name": "List classification jobs",
                 "short_desc": "List classification jobs in this project",
                 "desc": "Lists classification jobs, with optional filtering by status, by "
                     "configuration and by when they were created.",
@@ -1022,7 +1022,7 @@ public class LlamaParseManifest {
                 "action": "get-classify-job",
                 "method": "GET",
                 "path": "/api/v2/classify/{job_id}",
-                "display_name": "Get Classification Job",
+                "display_name": "Get classification job",
                 "short_desc": "Get a classification job and its result",
                 "desc": "Returns a classification job, including the matched document type, the "
                     "confidence score and the reasoning once it has completed.",
@@ -1040,7 +1040,7 @@ public class LlamaParseManifest {
                 "action": "cancel-classify-job",
                 "method": "POST",
                 "path": "/api/v2/classify/{job_id}/cancel",
-                "display_name": "Cancel Classification Job",
+                "display_name": "Cancel classification job",
                 "short_desc": "Cancel a running classification job",
                 "desc": "Cancels a classification job that is pending or running.  A job in a terminal "
                     "status cannot be cancelled.",
@@ -1060,7 +1060,7 @@ public class LlamaParseManifest {
                 "action": "split-document",
                 "method": "POST",
                 "path": "/api/v1/split/jobs",
-                "display_name": "Split Document",
+                "display_name": "Split document",
                 "short_desc": "Split one document into its constituent sub-documents",
                 "desc": "Splits a document that holds several documents into its parts and returns the "
                     "job that was started.\n\n"
@@ -1101,7 +1101,7 @@ public class LlamaParseManifest {
                 "action": "list-split-jobs",
                 "method": "GET",
                 "path": "/api/v1/split/jobs",
-                "display_name": "List Split Jobs",
+                "display_name": "List split jobs",
                 "short_desc": "List split jobs in this project",
                 "desc": "Lists split jobs, with optional filtering by status and by when they were "
                     "created.",
@@ -1142,7 +1142,7 @@ public class LlamaParseManifest {
                 "action": "get-split-job",
                 "method": "GET",
                 "path": "/api/v1/split/jobs/{split_job_id}",
-                "display_name": "Get Split Job",
+                "display_name": "Get split job",
                 "short_desc": "Get a split job and the parts it found",
                 "desc": "Returns a split job, including the sub-documents it identified once it has "
                     "completed.",
@@ -1160,7 +1160,7 @@ public class LlamaParseManifest {
                 "action": "cancel-split-job",
                 "method": "POST",
                 "path": "/api/v1/split/jobs/{split_job_id}/cancel",
-                "display_name": "Cancel Split Job",
+                "display_name": "Cancel split job",
                 "short_desc": "Cancel a running split job",
                 "desc": "Cancels a split job that is pending or processing.",
                 "groups": (GroupSplit,),
@@ -1177,7 +1177,7 @@ public class LlamaParseManifest {
                 "action": "delete-split-job",
                 "method": "DELETE",
                 "path": "/api/v1/split/jobs/{split_job_id}",
-                "display_name": "Delete Split Job",
+                "display_name": "Delete split job",
                 "short_desc": "Delete a split job and its result",
                 "desc": "Deletes a split job and the parts it identified.  The document it ran "
                     "against is not deleted.",
@@ -1197,7 +1197,7 @@ public class LlamaParseManifest {
                 "action": "create-batch",
                 "method": "POST",
                 "path": "/api/v2/batches",
-                "display_name": "Create Batch",
+                "display_name": "Create batch",
                 "short_desc": "Process every file in a directory in one job",
                 "desc": "Processes every file in a source directory under one configuration and "
                     "returns the batch that was started.\n\n"
@@ -1228,7 +1228,7 @@ public class LlamaParseManifest {
                 "action": "list-batches",
                 "method": "GET",
                 "path": "/api/v2/batches",
-                "display_name": "List Batches",
+                "display_name": "List batches",
                 "short_desc": "List batches in this project",
                 "desc": "Lists batches, with optional filtering by status, by source directory and by "
                     "when they were created.",
@@ -1267,7 +1267,7 @@ public class LlamaParseManifest {
                 "action": "get-batch",
                 "method": "GET",
                 "path": "/api/v2/batches/{batch_id}",
-                "display_name": "Get Batch",
+                "display_name": "Get batch",
                 "short_desc": "Get a batch and its per-file outcomes",
                 "desc": "Returns a batch.  Ask for `results` through `expand` to see what happened to "
                     "each file, which is where a batch that completed with failures reports them.",
@@ -1295,7 +1295,7 @@ public class LlamaParseManifest {
                 "action": "cancel-batch",
                 "method": "POST",
                 "path": "/api/v2/batches/{batch_id}/cancel",
-                "display_name": "Cancel Batch",
+                "display_name": "Cancel batch",
                 "short_desc": "Cancel a running batch",
                 "desc": "Cancels a running batch.  Files that already finished keep their results; a "
                     "batch in a terminal status cannot be cancelled.",
@@ -1315,7 +1315,7 @@ public class LlamaParseManifest {
                 "action": "create-configuration",
                 "method": "POST",
                 "path": "/api/v1/beta/configurations",
-                "display_name": "Create Configuration",
+                "display_name": "Create configuration",
                 "short_desc": "Save a parse, extract, classify or split configuration for reuse",
                 "desc": "Saves a configuration so that later jobs can name it instead of repeating "
                     "it.\n\n"
@@ -1342,7 +1342,7 @@ public class LlamaParseManifest {
                 "action": "list-configurations",
                 "method": "GET",
                 "path": "/api/v1/beta/configurations",
-                "display_name": "List Configurations",
+                "display_name": "List configurations",
                 "short_desc": "List the saved configurations in this project",
                 "desc": "Lists the saved configurations in this project, optionally narrowed to one "
                     "or more product types.",
@@ -1376,7 +1376,7 @@ public class LlamaParseManifest {
                 "action": "get-configuration",
                 "method": "GET",
                 "path": "/api/v1/beta/configurations/{config_id}",
-                "display_name": "Get Configuration",
+                "display_name": "Get configuration",
                 "short_desc": "Get one saved configuration",
                 "desc": "Returns one saved configuration and the parameters it holds.",
                 "groups": (GroupConfigurations,),
@@ -1393,7 +1393,7 @@ public class LlamaParseManifest {
                 "action": "update-configuration",
                 "method": "PUT",
                 "path": "/api/v1/beta/configurations/{config_id}",
-                "display_name": "Update Configuration",
+                "display_name": "Update configuration",
                 "short_desc": "Update a saved configuration",
                 "desc": "Updates a saved configuration.  Omit a field to leave it unchanged.",
                 "groups": (GroupConfigurations,),
@@ -1418,7 +1418,7 @@ public class LlamaParseManifest {
                 "action": "delete-configuration",
                 "method": "DELETE",
                 "path": "/api/v1/beta/configurations/{config_id}",
-                "display_name": "Delete Configuration",
+                "display_name": "Delete configuration",
                 "short_desc": "Delete a saved configuration",
                 "desc": "Deletes a saved configuration.  Jobs that already ran with it keep the "
                     "configuration they were given.",
@@ -1438,7 +1438,7 @@ public class LlamaParseManifest {
                 "action": "create-directory",
                 "method": "POST",
                 "path": "/api/v1/beta/directories",
-                "display_name": "Create Directory",
+                "display_name": "Create directory",
                 "short_desc": "Create a directory to group files for batch processing",
                 "desc": "Creates a directory.  A directory groups files so that a batch can put all "
                     "of them through the same configuration in one job.",
@@ -1460,7 +1460,7 @@ public class LlamaParseManifest {
                 "action": "list-directories",
                 "method": "GET",
                 "path": "/api/v1/beta/directories",
-                "display_name": "List Directories",
+                "display_name": "List directories",
                 "short_desc": "List the directories in this project",
                 "desc": "Lists the directories in this project.  A batch runs over a directory, so "
                     "this is where its ID comes from.",
@@ -1489,7 +1489,7 @@ public class LlamaParseManifest {
                 "action": "get-directory",
                 "method": "GET",
                 "path": "/api/v1/beta/directories/{directory_id}",
-                "display_name": "Get Directory",
+                "display_name": "Get directory",
                 "short_desc": "Get one directory",
                 "desc": "Returns one directory.",
                 "groups": (GroupDirectories,),
@@ -1506,7 +1506,7 @@ public class LlamaParseManifest {
                 "action": "update-directory",
                 "method": "PATCH",
                 "path": "/api/v1/beta/directories/{directory_id}",
-                "display_name": "Update Directory",
+                "display_name": "Update directory",
                 "short_desc": "Rename a directory or change its description",
                 "desc": "Updates a directory's name or description.  Omit a field to leave it "
                     "unchanged.",
@@ -1532,7 +1532,7 @@ public class LlamaParseManifest {
                 "action": "delete-directory",
                 "method": "DELETE",
                 "path": "/api/v1/beta/directories/{directory_id}",
-                "display_name": "Delete Directory",
+                "display_name": "Delete directory",
                 "short_desc": "Delete a directory",
                 "desc": "Deletes a directory.  The files it grouped are not deleted; they simply stop "
                     "being members of it.",
@@ -1550,7 +1550,7 @@ public class LlamaParseManifest {
                 "action": "add-directory-file",
                 "method": "POST",
                 "path": "/api/v1/beta/directories/{directory_id}/files",
-                "display_name": "Add File to Directory",
+                "display_name": "Add file to directory",
                 "short_desc": "Put an uploaded file into a directory",
                 "desc": "Adds a file that has already been uploaded to a directory, so that the next "
                     "batch over that directory includes it.",
@@ -1583,7 +1583,7 @@ public class LlamaParseManifest {
                 "action": "list-directory-files",
                 "method": "GET",
                 "path": "/api/v1/beta/directories/{directory_id}/files",
-                "display_name": "List Files in a Directory",
+                "display_name": "List files in a directory",
                 "short_desc": "List the files a directory holds",
                 "desc": "Lists the files a directory holds, with optional filtering by name and by "
                     "when they were last changed.",
@@ -1636,7 +1636,7 @@ public class LlamaParseManifest {
                 "action": "get-directory-file",
                 "method": "GET",
                 "path": "/api/v1/beta/directories/{directory_id}/files/{directory_file_id}",
-                "display_name": "Get a File in a Directory",
+                "display_name": "Get a file in a directory",
                 "short_desc": "Get one file's entry in a directory",
                 "desc": "Returns one file's entry in a directory, which carries the name and metadata "
                     "the directory holds for it rather than the file itself.",
@@ -1662,7 +1662,7 @@ public class LlamaParseManifest {
                 "action": "update-directory-file",
                 "method": "PATCH",
                 "path": "/api/v1/beta/directories/{directory_id}/files/{directory_file_id}",
-                "display_name": "Update a File in a Directory",
+                "display_name": "Update a file in a directory",
                 "short_desc": "Rename a file in a directory or move it to another",
                 "desc": "Updates a file's entry in a directory.  `target_directory_id` moves the file "
                     "to another directory; omit a field to leave it unchanged.",
@@ -1697,7 +1697,7 @@ public class LlamaParseManifest {
                 "action": "delete-directory-file",
                 "method": "DELETE",
                 "path": "/api/v1/beta/directories/{directory_id}/files/{directory_file_id}",
-                "display_name": "Remove a File from a Directory",
+                "display_name": "Remove a file from a directory",
                 "short_desc": "Remove one file from a directory",
                 "desc": "Removes one file from a directory.  The uploaded file itself is not deleted.",
                 "groups": (GroupDirectories,),
@@ -1722,7 +1722,7 @@ public class LlamaParseManifest {
                 "action": "delete-directory-files",
                 "method": "POST",
                 "path": "/api/v1/beta/directories/{directory_id}/files/bulk-delete",
-                "display_name": "Remove Files from a Directory",
+                "display_name": "Remove files from a directory",
                 "short_desc": "Remove several files from a directory at once",
                 "desc": "Removes several files from a directory in one request.  The uploaded files "
                     "themselves are not deleted.",
@@ -1750,7 +1750,7 @@ public class LlamaParseManifest {
                 "action": "list-projects",
                 "method": "GET",
                 "path": "/api/v2/projects",
-                "display_name": "List Projects",
+                "display_name": "List projects",
                 "short_desc": "List the projects this API key can reach",
                 "desc": "Lists the projects this API key can reach.  A project scopes files, saved "
                     "configurations and jobs, and every other action can be pointed at one.",
@@ -1770,7 +1770,7 @@ public class LlamaParseManifest {
                 "action": "get-project",
                 "method": "GET",
                 "path": "/api/v2/projects/{project_id}",
-                "display_name": "Get Project",
+                "display_name": "Get project",
                 "short_desc": "Get one project",
                 "desc": "Returns one project.",
                 "groups": (GroupAccount,),
@@ -1787,7 +1787,7 @@ public class LlamaParseManifest {
                 "action": "list-organizations",
                 "method": "GET",
                 "path": "/api/v2/organizations",
-                "display_name": "List Organizations",
+                "display_name": "List organizations",
                 "short_desc": "List the organizations this API key can reach",
                 "desc": "Lists the organizations this API key can reach.  An organization holds "
                     "projects.",
@@ -1798,7 +1798,7 @@ public class LlamaParseManifest {
                 "action": "list-supported-file-types",
                 "method": "GET",
                 "path": "/api/v1/parsing/supported_file_extensions",
-                "display_name": "List Supported File Types",
+                "display_name": "List supported file types",
                 "short_desc": "List the file extensions LlamaParse accepts",
                 "desc": "Lists the file extensions LlamaParse can parse.  Check a document against "
                     "this before uploading it, rather than discovering the answer from a failed "

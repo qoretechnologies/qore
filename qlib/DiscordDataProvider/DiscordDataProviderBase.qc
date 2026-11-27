@@ -107,8 +107,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Sleeps on the calling thread for the given interval

@@ -74,7 +74,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/list",
             "action": "list",
-            "display_name": "Search for Messages",
+            "display_name": "Search for messages",
             "short_desc": "Search for messages",
             "desc": "Search for messages in the account",
             "action_code": DPAT_API,
@@ -129,7 +129,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/get",
             "action": "get",
-            "display_name": "Retrieve a Message",
+            "display_name": "Retrieve a message",
             "short_desc": "Retrieve a message",
             "desc": "Retrieve a message",
             "action_code": DPAT_API,
@@ -154,7 +154,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/attachments/get",
             "action": "get-attachment",
-            "display_name": "Retrieve an Attachment",
+            "display_name": "Retrieve an attachment",
             "short_desc": "Retrieve an attachment",
             "desc": "Retrieve an attachment",
             "action_code": DPAT_API,
@@ -192,7 +192,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/watch",
             "action": "watch",
-            "display_name": "New Email",
+            "display_name": "New email",
             "short_desc": "React to new emails",
             "desc": "React to new emails; when a new email arrives, all the message information including the "
                 "message body is returned as output data",
@@ -256,7 +256,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/watch-attachment",
             "action": "watch-attachment",
-            "display_name": "New Email Attachments",
+            "display_name": "New email attachments",
             "short_desc": "React to new email attachments",
             "desc": "React to new email attachments",
             "action_code": DPAT_EVENT,
@@ -330,7 +330,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/trash",
             "action": "trash-message",
-            "display_name": "Move a Message to the Trash",
+            "display_name": "Move a message to the trash",
             "short_desc": "Place an existing stored Gmail message in the recoverable trash folder",
             "desc": "Relocates the existing stored Gmail message identified by `message_id` from its "
                 "current mailbox folder into Gmail's recoverable trash folder. The same stored message "
@@ -362,7 +362,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/delete",
             "action": "delete-message",
-            "display_name": "Delete a Message",
+            "display_name": "Delete a message",
             "short_desc": "Permanently delete a message; this cannot be undone",
             "desc": "Permanently deletes a message. **This cannot be undone**: the message does not go to "
                 "the trash and no copy remains, so use `trash-message` unless the message must be "
@@ -396,7 +396,7 @@ module GmailDataProvider {
                 "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
                     "selector_value": "text/html", "fallback": "plain-body", "plain_alternative": True},
             }},
-            "display_name": "Send a Message",
+            "display_name": "Send a message",
             "short_desc": "Create and transmit a new outgoing email through Gmail",
             "desc": "Creates a new outgoing email from the supplied recipient addresses, subject, body, "
                 "and attachments, and transmits that new email through Gmail. Set `thread_id` and "
@@ -412,7 +412,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/list-with-metadata",
             "action": "list-with-metadata",
-            "display_name": "Search for Messages with Metadata",
+            "display_name": "Search for messages with metadata",
             "short_desc": "Search for messages and return each match with its headers",
             "desc": "Search for messages in the account and return each matching message with its metadata, "
                 "instead of the bare message and thread IDs that `list` returns. Each match is retrieved "
@@ -430,7 +430,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/messages/untrash",
             "action": "untrash-message",
-            "display_name": "Restore a Message from the Trash",
+            "display_name": "Restore a message from the trash",
             "short_desc": "Move a message from the trash back into the mailbox",
             "desc": "Moves the message identified by `id` out of Gmail's trash folder and back into the "
                 "mailbox, undoing `trash-message`; a message that Gmail has already purged from the trash "
@@ -457,7 +457,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/modify-message-labels",
             "action": "modify-message-labels",
-            "display_name": "Change a Message's Labels",
+            "display_name": "Change a message's labels",
             "short_desc": "Add labels to and remove labels from a message",
             "desc": "Adds the labels in `addLabelIds` to and removes the labels in `removeLabelIds` from the "
                 "message identified by `id` in one call. Gmail's system labels are changed the same way: "
@@ -475,7 +475,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/labels/list",
             "action": "list-labels",
-            "display_name": "List Labels",
+            "display_name": "List labels",
             "short_desc": "List all labels in the account",
             "desc": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, "
                 "and so on) and user-created labels, each with the ID that `modify-message-labels` and the "
@@ -492,7 +492,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/labels/create",
             "action": "create-label",
-            "display_name": "Create a Label",
+            "display_name": "Create a label",
             "short_desc": "Create a new user label in the account",
             "desc": "Creates a new user label in the account and returns it with the ID that "
                 "`modify-message-labels` takes",
@@ -560,7 +560,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/create-draft",
             "action": "create-draft",
-            "display_name": "Create a Draft",
+            "display_name": "Create a draft",
             "short_desc": "Create a new draft email in Gmail without sending it",
             "desc": "Creates a new draft email from the supplied recipient addresses, subject, body, and "
                 "attachments, and stores it in Gmail's drafts folder without sending it, so that a person can "
@@ -577,7 +577,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/drafts/list",
             "action": "list-drafts",
-            "display_name": "Search for Drafts",
+            "display_name": "Search for drafts",
             "short_desc": "Search for drafts",
             "desc": "Search for drafts in the account; each draft is returned with its ID and the ID and thread "
                 "ID of the message it holds. Use `get-draft` to retrieve a draft's content",
@@ -624,7 +624,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/get-draft",
             "action": "get-draft",
-            "display_name": "Retrieve a Draft",
+            "display_name": "Retrieve a draft",
             "short_desc": "Retrieve a draft",
             "desc": "Retrieves a draft and the message it holds in the requested `format`",
             "action_code": DPAT_API,
@@ -660,7 +660,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/send-draft",
             "action": "send-draft",
-            "display_name": "Send a Draft",
+            "display_name": "Send a draft",
             "short_desc": "Send an existing draft as it is",
             "desc": "Sends the draft identified by `id` as it is to the recipients it names; Gmail removes the "
                 "draft and returns the sent message. Use `get-draft` first to review what will be sent",
@@ -687,7 +687,7 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/delete-draft",
             "action": "delete-draft",
-            "display_name": "Delete a Draft",
+            "display_name": "Delete a draft",
             "short_desc": "Permanently delete a draft; this cannot be undone",
             "desc": "Permanently deletes a draft. **This cannot be undone**: the draft does not go to the trash "
                 "and no copy remains.\n\n"

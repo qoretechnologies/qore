@@ -258,6 +258,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
+        # - AOTBatchRefusedErrorOutput (#7700): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
@@ -393,8 +394,23 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   started with a module directory of library code, as a module's initialization runs once in a process
         # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
         #   execution mode, under a small stack rlimit, as the checks are of the start of the process
+        # - AOTStringSplitTrim (#5578 theme F), StringFastPathFrames (#7711) and ListJoinFastPathFrames (#7731): their
+        #   checks run in child processes that set their own execution modes and in qcc executables
+        # - module-hash-deps and module-deps-hash (#7796): their checks load modules from source and compiled with qcc
+        #   in child processes that set their own execution modes, as a module is loaded once in a process
+        # - qcc-require-cycles (#7808): its checks compile modules with qcc and load them from source and AOT in child
+        #   processes that set their own execution modes
+        # - TruncatedQmod (#7804): its checks cut a module that it compiles with qcc and load it in child processes that
+        #   set their own execution modes and from a qcc executable
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/qore/misc/module-loader/qcc-require-cycles.qtest",
+                                 "examples/test/qore/misc/module-loader/TruncatedQmod.qtest",
+                                 "examples/test/qore/misc/module-loader/module-hash-deps.qtest",
+                                 "examples/test/module-cpp-api/module-deps/module-deps-hash.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
+                                 "examples/test/ir/AOTStringSplitTrim.qtest",
+                                 "examples/test/ir/StringFastPathFrames.qtest",
+                                 "examples/test/ir/ListJoinFastPathFrames.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
@@ -410,6 +426,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTLinkUnresolvedReference.qtest",
+                                 "examples/test/ir/AOTBatchRefusedErrorOutput.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/AOTDebugCatchTables.qtest",
@@ -444,6 +461,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",

@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# Native code fuses these calls with the expressions that consume their results (string, collection, aggregate and
+# measurement consumers), replaces calls by their known results (object scalar projections) or runs the callees'
+# bodies inline (getters, setters, known call references); while a debugger is attached, each call must report the
+# function events of the ordinary call and give the same values.  The callees' lines are matched by line number below
+# (CalleeLines); keep them in place.
+
+# string producers
+string sub concatPair(string left, string right) {
+    return left + right; # line 15
+}
+string sub convertInt(int value) {
+    return string(value); # line 18
+}
+# collection producers
+*int sub listValue(list<int> values, int index) {
+    return values[index]; # line 22
+}
+*int sub hashValue(hash<string, int> values) {
+    return values.answer; # line 25
+}
+# aggregate producers
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {"left": left, "middle": middle, "right": right}; # line 29
+}
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right); # line 32
+}
+list<float> sub makeFloats(float left, float right) {
+    return (left, right); # line 35
+}
+class StaticProducer {
+    static string pair(string a, string b) {
+        return a + b; # line 39
+    }
+}
+final class Formatter {
+    string format(int value) {
+        return string(value); # line 44
+    }
+}
+final class Projected {
+    private { int int_value; }
+    constructor(int int_value) {
+        self.int_value = int_value;
+    }
+    int getInt() {
+        return int_value; # line 53
+    }
+}
+class Member {
+    public { int count = 0; }
+    int getCount() {
+        return count; # line 59
+    }
+    int setGet(int v) {
+        count = v; return count; # line 62
+    }
+    int addGet(int v) {
+        count += v; return count; # line 65
+    }
+    string mine(string a) {
+        return a + "!"; # line 68
+    }
+    int selfCalls(string a) {
+        return mine(a).size() + getCount();
+    }
+}
+int sub intA(int v) {
+    return (v * 33 + 17) & 65535; # line 75
+}
+int sub intB(int v) {
+    return (v * 33 + 19) & 65535; # line 78
+}
+
+const CalleeLines = {
+    "15": "concatPair", "18": "convertInt", "22": "listValue", "25": "hashValue", "29": "makeRow",
+    "32": "makeValues", "35": "makeFloats", "39": "StaticProducer::pair", "44": "Formatter::format",
+    "53": "Projected::getInt", "59": "Member::getCount", "62": "Member::setGet", "65": "Member::addGet",
+    "68": "Member::mine", "75": "intA", "78": "intB",
+};
+
+class CalleeRecorder inherits DebugProgram {
+    public {
+        hash<string, int> entries = {};
+        hash<string, int> exits = {};
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *string key = CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++entries{key};
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *string key = CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++exits{key};
+        }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+CalleeRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+int attach_at = -1;
+
+# a Program that cannot be debugged (see AOTFusedCallDebugger.qtest) runs the same calls without events
+sub attachRecorder() {
+    try {
+        recorder.addProgram(pc);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "DEBUGGING") {
+            rethrow;
+        }
+    }
+}
+sub detachRecorder() {
+    try {
+        recorder.removeProgram(pc);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "DEBUGGING") {
+            rethrow;
+        }
+    }
+}
+
+sub maybeAttach(int i) {
+    if (i == attach_at) {
+        attachRecorder();
+    }
+}
+
+# a known call reference with one of two targets
+# (its body has no other call, which a debugger could attach in, so only its structure is checked)
+int sub finiteChoice(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+
+# a getter call replaced by the value given to the constructor of a local object; the debugger can attach first
+int sub projectedKernel(int i) {
+    maybeAttach(i);
+    Projected value(i);
+    return value.getInt();
+}
+
+# the fused and inlined calls in a loop that can attach the debugger before them
+list<auto> sub fusedLoop(int n, Member member) {
+    Formatter formatter();
+    list<int> values = (10, 20, 30);
+    hash<string, int> row = {"answer": 42};
+    list<auto> results = ();
+    for (int i = 0; i < n; ++i) {
+        maybeAttach(i);
+        int t = concatPair("ab", "cd").size();
+        if (concatPair("ab", "cd").startsWith("ab")) {
+            ++t;
+        }
+        t += convertInt(i * 100).length();
+        string s = concatPair("hello", "world").substr(1, 3);
+        t += s.size();
+        t += StaticProducer::pair("x", "yz").size();
+        if (listValue(values, i % 3) == 20) {
+            t += 100;
+        }
+        if (hashValue(row) != 42) {
+            t += 1000;
+        }
+        t += makeRow(i, i + 1, i + 2).middle;
+        t += makeValues(i, i + 1, i + 2)[2];
+        t += makeValues(i, 5, 6)[i % 3];
+        t += (makeFloats(1.5, 2.5)[1] * 2.0).toInt();
+        t += formatter.format(i * 1000).size();
+        t += member.getCount() + member.setGet(i) + member.addGet(1);
+        t += member.selfCalls("q");
+        t += finiteChoice(i % 2 == 0, i);
+        results += (t, s);
+    }
+    for (int i = 0; i < n; ++i) {
+        results += projectedKernel(i + n);
+    }
+    return results;
+}
+
+# the same calls in the loop itself, in a try block
+list<auto> sub fusedTryLoop(int n, Member member) {
+    Formatter formatter();
+    list<int> values = (10, 20, 30);
+    hash<string, int> row = {"answer": 42};
+    list<auto> results = ();
+    try {
+        for (int i = 0; i < n; ++i) {
+            maybeAttach(i);
+            string s = concatPair("hello", "world").substr(1, 3);
+            Projected projected(i);
+            results += (
+                concatPair("ab", "cd").size(),
+                concatPair("ab", "cd").startsWith("ab"),
+                convertInt(i * 100).length(),
+                s,
+                listValue(values, i % 3) == 20,
+                makeRow(i, i + 1, i + 2).middle,
+                makeValues(i, 5, 6)[i % 3],
+                formatter.format(i * 1000).size(),
+                projected.getInt(),
+                member.getCount() + member.setGet(i) + member.addGet(1),
+                finiteChoice(i % 2 == 0, i),
+            );
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        results += ex.err;
+    }
+    return results;
+}
+
+# direct calls of a loop that JIT code compiles with its callees, attaching the debugger itself
+int sub batchLoop(list<int> values, hash<string, int> row, int n, int at) {
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == at) {
+            attachRecorder();
+        }
+        if (listValue(values, i % 3) == 20) {
+            ++t;
+        }
+        if (hashValue(row) != 42) {
+            t += 100;
+        }
+        t += concatPair("ab", "cd").size() + convertInt(i).length();
+    }
+    return t;
+}
+
+sub report(string label, list<auto> results) {
+    printf("%s values: %y\n", label, results);
+    hash<string, int> entries;
+    hash<string, int> exits;
+    foreach string key in (sort(keys recorder.entries)) {
+        entries{key} = recorder.entries{key};
+    }
+    foreach string key in (sort(keys recorder.exits)) {
+        exits{key} = recorder.exits{key};
+    }
+    printf("%s entry counts: %y\n", label, entries);
+    printf("%s exit counts: %y\n", label, exits);
+    recorder.entries = {};
+    recorder.exits = {};
+}
+
+Member member();
+for (int i = 0; i < 32; ++i) {
+    fusedLoop(3, member);
+    fusedTryLoop(3, member);
+}
+report("warmup", ());
+
+# attached before the calls
+attachRecorder();
+list<auto> results = fusedLoop(4, member) + fusedTryLoop(4, member);
+detachRecorder();
+report("before", results);
+
+# detached again
+results = fusedLoop(4, member) + fusedTryLoop(4, member);
+report("detached", results);
+
+# attached during loops that already run natively: iterations 3 to 7
+attach_at = 3;
+results = fusedLoop(8, member);
+detachRecorder();
+results += fusedTryLoop(8, member);
+detachRecorder();
+report("during", results);
+
+# attached in a kernel that already runs natively, before its replaced getter call: the kernel call with 6
+attach_at = 6;
+results = fusedLoop(4, member);
+detachRecorder();
+report("kernel", results);
+
+# attached by a loop that JIT code compiles with its callees: iterations 3 to 8
+list<int> batch_values = (10, 20, 30);
+hash<string, int> batch_row = {"answer": 42};
+for (int i = 0; i < 32; ++i) {
+    batchLoop(batch_values, batch_row, 4, -1);
+}
+results = (batchLoop(batch_values, batch_row, 9, 3),);
+detachRecorder();
+report("batch", results);
+
+attach_at = -1;
+results = fusedLoop(4, member) + fusedTryLoop(4, member) + (batchLoop(batch_values, batch_row, 4, -1),);
+report("after", results);

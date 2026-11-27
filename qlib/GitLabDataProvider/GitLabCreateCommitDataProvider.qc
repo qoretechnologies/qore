@@ -237,7 +237,7 @@ public class GitLabCreateCommitDataProvider inherits DataProvider::AbstractDataP
         const RequestPath = "/api/v4/projects/%s/repository/commits";
 
         #! The action display name
-        const DisplayName = "Create Commit";
+        const DisplayName = "Create commit";
 
         #! The action short description
         const ShortDesc = "Commit one or more file changes";

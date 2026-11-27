@@ -1680,6 +1680,22 @@ conn.checkSandboxAccess(True);
         return self;
     }
 
+    #! Copies the connection: a copy that code restricted from the \c NETWORK domain makes has no creator proof
+    /** The creator proof (see @ref creator_proof) is the proof of the code that created the connection: a copy that
+        code that could not take a proof of its own makes (also of a connection that was lent to it) has none, so the
+        clients that the copy creates are that code's own, which are refused when they create their connection
+        managers, and the copy does not grant the creator's proof to the clients created while its methods run; a copy
+        that unrestricted code makes keeps it, and so do the private copies that the connection makes for restricted
+        code that was lent it, from which its clients are created (qore#7302 with qore#7499)
+
+        @since %ConnectionProvider 3.1
+    */
+    copy() {
+        if (creator_proof && SandboxManager::isLentToRestricted(DOM_NETWORK)) {
+            remove creator_proof;
+        }
+    }
+
     #! Returns a private copy of the connection with the file path options that its creator set
     private:internal AbstractConnection getLentFilePathCopy(list<string> fpo) {
         # test hook (a debug build of the library only; see dbgSetLentTargetHook())
@@ -1687,6 +1703,8 @@ conn.checkSandboxAccess(True);
             dbg_lent_target_hook(self);
         }
         AbstractConnection c = copy();
+        # the private copy creates the connection's clients: it keeps the creator's proof (see copy())
+        c.creator_proof = creator_proof;
         c.setLentFilePathOptions(fpo, creator_target);
         return c;
     }
@@ -1706,6 +1724,8 @@ conn.checkSandboxAccess(True);
             dbg_lent_target_hook(self);
         }
         AbstractConnection c = copy();
+        # the private copy creates the connection's clients: it keeps the creator's proof (see copy())
+        c.creator_proof = creator_proof;
         c.setLentTarget(creator_target);
         return c;
     }

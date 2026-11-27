@@ -770,6 +770,71 @@ inside a `try` block in the loop, take the exception target in force where the l
 `is_loop_header`, which also marks the headers of expression loops, only counts iterations for on-stack replacement.
 The kind is serialized in AOT code with the block's loop-header flag.
 
+#### Inline polls of native code
+
+Native code (JIT, tiered and AOT) makes the check of a loop statement's iteration as an inline poll
+(`QoreIRToLLVM::emitLoopCancelPoll()`): two relaxed 32-bit atomic loads, of the thread's request bits
+(`ThreadEntry::cancel_requested`) and of `qore_sandbox_interrupt_count`, and a branch; only when one of them is not 0
+does it call `qore_rt_check_cancel_poll()`, which makes the check of `qore_check_cancel()` with the statement's label.
+A tight loop thus checks without a call, a thread-local lookup or a fence.
+
+**The same result.**  `qore_check_cancel()` returns `false` whenever both words are 0: every path that raises or
+returns `true` needs a request bit (`QCR_THREAD_CANCEL`, `QCR_SANDBOX_LIMIT`) or a requested interrupt (the count), and
+the deferrals only suppress.  A poll that finds both 0 therefore skips a call that would have returned `false`, and a
+poll that finds either set makes the full check, which decides as before: deferrals, the scope of a request (and the
+drop of a request out of scope), a stale sandbox limit bit (cleared there), the lookup of the governing sandbox
+manager, the exception and its label.  The exception check after the poll tests the sink on both paths, as it did
+after the call, so an exception pending before the poll is branched on there as before.  The check of a poll right
+after an invoke, whose own check is skipped as its normal edge has a clear sink, is not skipped, so an exception that
+the full check raises is branched on at once.  In an init function, whose exception checks are deferred, every poll
+makes the full check as before; `QORE_DISABLE_LLVM_INLINE_CANCEL_POLL`, set when the code is compiled, does that for
+every poll (for comparisons).
+
+**The addresses.**  The entry block of a function with polls sets two stack slots to a module-private word that is
+never 0 (`qore_cancel_poll_unresolved`), so the first poll of every invocation calls `qore_rt_check_cancel_poll()`,
+which makes the full check and returns the addresses of the thread's word and of the count (`QoreCancelPollWords`) for
+the following polls of the invocation.  No call is made at function entry, so a function whose loop does not start
+costs nothing more, and an invocation that runs a loop makes one call, which is what each iteration cost before.
+Emitted code makes no thread-local access, so the polls work the same for every way a thread is started, in JIT code,
+AOT executables and `qcc` modules loaded by another process, with any TLS model, on every platform.  The address of
+the thread's word stays its own for the invocation: `thread_list.entry` is never freed, the TID of a thread does not
+change while it runs Qore code (it is released after the thread has left it; a child created with `fork()` keeps the
+TID of the thread that forked; deregistering a foreign thread with Qore code on its stack and registering it again
+is not supported), and a native invocation does not move to another thread.  Without thread data (objects in the
+static namespace destroyed after it) or with an invalid TID, `qore_rt_check_cancel_poll()` returns libqore's own word
+that is never 0, so every poll makes the full check, as before.
+
+**Memory ordering.**  Relaxed loads give the same points of cancellation as the seq_cst loads of `qore_check_cancel()`:
+- the decision is made by the full check, whose loads are unchanged; the poll only selects when it is made;
+- a request that happens before a poll (a request from another thread followed by any synchronization with the
+  polling thread, such as a `Queue`, `Counter` or mutex handshake, or the thread's own request) is seen by that poll:
+  a relaxed load cannot read a value older than a store that happens before it (write-read coherence), the same
+  guarantee that the seq_cst load gave;
+- a request concurrent with a poll is seen by that poll or a later one, as with a seq_cst load, whose place relative
+  to a concurrent store in the total order is not determined either; that it is seen at all rests on the same rule
+  for both (a store becomes visible to atomic loads within a reasonable time, [atomics.order]).  A spinning loop with
+  no call in its body is stopped by a request from another thread made without any synchronization
+  (`loop-cancellation-points/fast-path.q`).  The requests are published with seq_cst
+  read-modify-write operations (`fetch_or()` of the bits in `cancelThread()` and by the sandbox watchdog and memory
+  accounting, `fetch_add()` of the count in `requestInterrupt()`), and the hardware makes a store visible to a plain
+  load and to a load-acquire at the same time (x86-64 emits the same `mov` for both; arm64 is multi-copy atomic, and
+  `ldar` differs from `ldr` only in how it orders the thread's own accesses, which can delay it but never gives it a
+  fresher value), so the latency is unchanged; an atomic load is made again in every iteration: LLVM treats an
+  atomic load that is not unordered as possibly writing memory, so it neither hoists nor merges it out of the loop,
+  and the loop also contains the call of the full check;
+- seq_cst is required where a thread stores and then loads in a Dekker-style protocol: a waiter that registers its
+  wait (`waiting_on`, `waiting_fd`) and then loads the request bits, against the canceller that sets them and then
+  loads the registration.  A poll stores nothing before its load and nothing waits on its result; every wait makes
+  its own seq_cst check in its C++ code.  The rule of the count of requested interrupts (see "Cost of a check") and
+  the release of a request's scope before its bit depend only on the writers and on the full check, which loads the
+  words again with seq_cst before it reads the scope.
+
+**AOT.**  The change is in the emitted code, so the fingerprint of the code changes with it; it adds the runtime
+symbol `qore_rt_check_cancel_poll`, and keeps `qore_rt_check_cancel` for code compiled before.  The AOT format is
+unchanged.  In debug builds `dbg_get_cancel_check_count()` counts the full checks, so a native loop without a request
+counts one per invocation (`loop-cancellation-points/poll-points.q` and the `inline polls` case of
+`loop-cancellation-points.qtest` check both the points and the count in every execution mode and with AOT).
+
 #### Blocking Primitives
 
 `QoreCondition::waitWithInterrupt()` registers its condition and mutex (see "Condition waits") and
@@ -1161,6 +1226,12 @@ active and stays).  So no deferral reaches sandboxed code:
   the host's cancellation, interrupt or limit like any other sandboxed code.  Refusing it would break
   such code without protecting anything that the neutralisation does not.
 
+"Sandboxed" here means restricted (qore#7737): the Program test is `qore_program_is_restricted()`, and a
+class's destructor is judged by `qore_class_private::isRestrictedDestructorCode()`.  The code of a Program that a
+trusted (governed) sandbox governs (one that allows uncontrolled APIs, which a host attaches to trusted code for its
+interrupts and limits) keeps the deferral of trusted code, so that its cleanup invariants hold; an interrupt or a
+limit of its sandbox is delivered at its next cancellation point after the deferral.
+
 Trusted code keeps every deferral.  `AbstractWatchDataProviderBase::notifyObservers()` still runs the
 observers in `defer_thread_cancel()`, so a trusted observer's notification completes when polling is
 stopped (`WatchDataProviderShutdown.qtest`, "notification not interrupted by cancellation"); a sandboxed
@@ -1318,7 +1389,9 @@ stops *every* thread in the target program — remained unrestricted.
 flag (seq_cst on the load — required by the wait/cancel race; on x86 this is identical to a
 plain load, on weak-memory architectures it adds one fence per check).  Only if that passes
 does it construct the `QoreSandboxManagerHelper` RAII helper for the program interrupt check.
-For the common case (not cancelled), the cost is one TLS read + one atomic load.
+For the common case (not cancelled), the cost is one TLS read + one atomic load.  Native code (JIT, tiered, AOT)
+polls inline instead: two relaxed loads and a branch, without a call or a TLS read, and calls the check only when a
+word is set or once per invocation to resolve the words (see "Inline polls of native code").
 
 **Blocking waits**: `waitWithInterrupt()` does a single `pthread_cond_wait` /
 `pthread_cond_timedwait`, no polling.  Per-wait overhead is two acquisitions of the wait registry

@@ -191,8 +191,10 @@ echo "QORE_TEST_JOBS=${QORE_TEST_JOBS}"
 echo "-- running $(echo ${TSAN_TESTS} | wc -w) tests with the TSan build --"
 TEST_START=$(date +%s)
 echo "=== TSan tests start: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+# the job's suites run to their ends and the job ends with the summary of the failing ones (see ci-suites.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-suites.sh"
 TEST_RC=0
-${NO_ASLR} gosu qore:qore env \
+qore_ci_suite "Qore tests under ThreadSanitizer (run_tests.sh)" ${NO_ASLR} gosu qore:qore env \
     QORE_BINARY="${BUILD_DIR}/qore" \
     QORE_DEBUG_BINARY="${BUILD_DIR}/qore" \
     LIBQORE_BINARY="${BUILD_DIR}/libqore.so" \
@@ -202,7 +204,7 @@ ${NO_ASLR} gosu qore:qore env \
     QORE_TEST_JOBS="${QORE_TEST_JOBS}" \
     TSAN_OPTIONS="${TSAN_OPTIONS}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
-    ./run_tests.sh ${TSAN_TESTS} || TEST_RC=$?
+    ./run_tests.sh ${TSAN_TESTS}
 TEST_END=$(date +%s)
 echo "=== TSan tests end: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ($((TEST_END - TEST_START)) s) ==="
 qore_ci_resource_report "after the tests"
@@ -214,17 +216,20 @@ for report in ${REPORTS}; do
     echo "=== TSan report: ${report} ==="
     cat "${report}"
 done
-echo "TSan build: $((BUILD_END - BUILD_START)) s, tests: $((TEST_END - TEST_START)) s, test result: ${TEST_RC}," \
+echo "TSan build: $((BUILD_END - BUILD_START)) s, tests: $((TEST_END - TEST_START)) s, test result:" \
+    "$(cut -f1 "${qore_ci_suites_dir}/results" 2>/dev/null | tail -1)," \
     "TSan reports: $(echo ${REPORTS} | wc -w)"
 set -x
 
+# a report of ThreadSanitizer fails the job also when every test passed
+if [ -n "${REPORTS}" ]; then
+    echo "ERROR: ThreadSanitizer reported errors (above)" >&2
+fi
+qore_ci_suite "ThreadSanitizer reports (none may be made)" test -z "${REPORTS}"
+qore_ci_suites_summary || TEST_RC=1
 if ! qore_ci_end_job_processes; then
     exit 1
 fi
 if [ "${TEST_RC}" != "0" ]; then
     exit ${TEST_RC}
-fi
-if [ -n "${REPORTS}" ]; then
-    echo "ERROR: ThreadSanitizer reported errors (above)" >&2
-    exit 1
 fi

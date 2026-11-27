@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
-          "message": "List Projects"
+          "source": "List projects",
+          "message": "List projects"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
           "source": "List projects",
@@ -352,8 +352,8 @@
           "message": "List all projects in an organization."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
-          "message": "Create Project"
+          "source": "Create project",
+          "message": "Create project"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
           "source": "Create a new project",
@@ -400,8 +400,8 @@
           "message": "Whether to force encryption with a customer-managed encryption key (CMEK). Default is `false`."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
-          "message": "List Organizations"
+          "source": "List organizations",
+          "message": "List organizations"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
           "source": "List organizations",
@@ -412,8 +412,8 @@
           "message": "List all organizations associated with an account."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
-          "message": "Get Project"
+          "source": "Get project",
+          "message": "Get project"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.short_desc": {
           "source": "Get project details",
@@ -436,8 +436,8 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
-          "message": "Delete Project"
+          "source": "Delete project",
+          "message": "Delete project"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
           "source": "Delete a project",
@@ -460,8 +460,8 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
-          "message": "Update Project"
+          "source": "Update project",
+          "message": "Update project"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.short_desc": {
           "source": "Update a project",
@@ -520,8 +520,8 @@
           "message": "Whether to force encryption with a customer-managed encryption key (CMEK). Once enabled, CMEK encryption cannot be disabled."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
-          "message": "Get Organization"
+          "source": "Get organization",
+          "message": "Get organization"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Get organization details",
@@ -544,8 +544,8 @@
           "message": "Organization ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Delete Organization",
-          "message": "Delete Organization"
+          "source": "Delete organization",
+          "message": "Delete organization"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Delete an organization",
@@ -568,8 +568,8 @@
           "message": "Organization ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Update Organization",
-          "message": "Update Organization"
+          "source": "Update organization",
+          "message": "Update organization"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Update an organization",
@@ -604,8 +604,8 @@
           "message": "The new name for the organization."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.display_name": {
-          "source": "List Project API Keys",
-          "message": "List Project API Keys"
+          "source": "List project API keys",
+          "message": "List project API keys"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.short_desc": {
           "source": "List API keys",
@@ -628,8 +628,8 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.display_name": {
-          "source": "Create API Key",
-          "message": "Create API Key"
+          "source": "Create API key",
+          "message": "Create API key"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.short_desc": {
           "source": "Create an API key",
@@ -700,8 +700,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.display_name": {
-          "source": "Get API Key",
-          "message": "Get API Key"
+          "source": "Get API key",
+          "message": "Get API key"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.short_desc": {
           "source": "Get API key details",
@@ -724,8 +724,8 @@
           "message": "API key ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key",
-          "message": "Delete API Key"
+          "source": "Delete API key",
+          "message": "Delete API key"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.short_desc": {
           "source": "Delete an API key",
@@ -748,8 +748,8 @@
           "message": "API key ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.display_name": {
-          "source": "Update API Key",
-          "message": "Update API Key"
+          "source": "Update API key",
+          "message": "Update API key"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.short_desc": {
           "source": "Update an API key",
@@ -820,8 +820,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List users in the organization",
@@ -868,8 +868,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
-          "message": "Get User"
+          "source": "Get user",
+          "message": "Get user"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.short_desc": {
           "source": "Get user details",
@@ -892,8 +892,8 @@
           "message": "User ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User",
-          "message": "Delete User"
+          "source": "Delete user",
+          "message": "Delete user"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.short_desc": {
           "source": "Remove a user from the organization",
@@ -916,8 +916,8 @@
           "message": "User ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
-          "message": "List Invites"
+          "source": "List invites",
+          "message": "List invites"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
           "source": "List invites",
@@ -952,8 +952,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
-          "message": "Create Invite"
+          "source": "Create invite",
+          "message": "Create invite"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
           "source": "Invite a user to the organization",
@@ -1084,8 +1084,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.display_name": {
-          "source": "Get Invite",
-          "message": "Get Invite"
+          "source": "Get invite",
+          "message": "Get invite"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.short_desc": {
           "source": "Get invite details",
@@ -1108,8 +1108,8 @@
           "message": "Invite ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.display_name": {
-          "source": "Delete Invite",
-          "message": "Delete Invite"
+          "source": "Delete invite",
+          "message": "Delete invite"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.short_desc": {
           "source": "Delete an invite",
@@ -1132,8 +1132,8 @@
           "message": "Invite ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.display_name": {
-          "source": "Resend Invite",
-          "message": "Resend Invite"
+          "source": "Resend invite",
+          "message": "Resend invite"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.short_desc": {
           "source": "Resend an invite email",
@@ -1156,8 +1156,8 @@
           "message": "Invite ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
-          "message": "List Service Accounts"
+          "source": "List service accounts",
+          "message": "List service accounts"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
           "source": "List service accounts",
@@ -1192,8 +1192,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
-          "message": "Create Service Account"
+          "source": "Create service account",
+          "message": "Create service account"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
           "source": "Create a service account",
@@ -1324,8 +1324,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
-          "message": "Get Service Account"
+          "source": "Get service account",
+          "message": "Get service account"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
           "source": "Get service account details",
@@ -1348,8 +1348,8 @@
           "message": "The unique identifier of the service account."
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
-          "message": "Delete Service Account"
+          "source": "Delete service account",
+          "message": "Delete service account"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
           "source": "Delete a service account",
@@ -1372,8 +1372,8 @@
           "message": "The unique identifier of the service account."
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
-          "message": "Update Service Account"
+          "source": "Update service account",
+          "message": "Update service account"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
           "source": "Update a service account",
@@ -1408,8 +1408,8 @@
           "message": "A new name for the service account. If omitted, the name is unchanged."
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.display_name": {
-          "source": "Rotate Service Account Secret",
-          "message": "Rotate Service Account Secret"
+          "source": "Rotate service account secret",
+          "message": "Rotate service account secret"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.short_desc": {
           "source": "Rotate a service account's OAuth client secret",
@@ -1432,8 +1432,8 @@
           "message": "The unique identifier of the service account."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
-          "message": "List Role Bindings"
+          "source": "List role bindings",
+          "message": "List role bindings"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
           "source": "List role bindings",
@@ -1604,8 +1604,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
-          "message": "Create Role Binding"
+          "source": "Create role binding",
+          "message": "Create role binding"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {
           "source": "Create a role binding",
@@ -1752,8 +1752,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.display_name": {
-          "source": "Get Role Binding",
-          "message": "Get Role Binding"
+          "source": "Get role binding",
+          "message": "Get role binding"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.short_desc": {
           "source": "Get role binding details",
@@ -1776,8 +1776,8 @@
           "message": "Role binding ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Delete Role Binding",
-          "message": "Delete Role Binding"
+          "source": "Delete role binding",
+          "message": "Delete role binding"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.short_desc": {
           "source": "Delete a role binding",

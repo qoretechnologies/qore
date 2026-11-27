@@ -278,7 +278,7 @@ public class XeroNewContactDataProvider inherits XeroAccountingWatchDataProvider
         const EventName = "new_contact";
 
         #! The event display name
-        const DisplayName = "New Contact";
+        const DisplayName = "New contact";
 
         #! The event short description
         const ShortDesc = "Fires when a contact is created or changed";
@@ -356,7 +356,7 @@ public class XeroNewBillDataProvider inherits XeroAccountingWatchDataProviderBas
         const EventName = "new_bill";
 
         #! The event display name
-        const DisplayName = "New Bill";
+        const DisplayName = "New bill";
 
         #! The event short description
         const ShortDesc = "Fires when a bill is created or changed";
@@ -439,7 +439,7 @@ public class XeroNewCreditNoteDataProvider inherits XeroAccountingWatchDataProvi
         const EventName = "new_credit_note";
 
         #! The event display name
-        const DisplayName = "New Credit Note";
+        const DisplayName = "New credit note";
 
         #! The event short description
         const ShortDesc = "Fires when a credit note is created or changed";
@@ -518,7 +518,7 @@ public class XeroNewBankTransactionDataProvider inherits XeroAccountingWatchData
         const EventName = "new_bank_transaction";
 
         #! The event display name
-        const DisplayName = "New Bank Transaction";
+        const DisplayName = "New bank transaction";
 
         #! The event short description
         const ShortDesc = "Fires when a bank transaction is created or changed";
@@ -596,7 +596,7 @@ public class XeroNewPaymentDataProvider inherits XeroAccountingWatchDataProvider
         const EventName = "new_payment";
 
         #! The event display name
-        const DisplayName = "New Payment";
+        const DisplayName = "New payment";
 
         #! The event short description
         const ShortDesc = "Fires when a payment is created or changed";
@@ -673,7 +673,7 @@ public class XeroNewPurchaseOrderDataProvider inherits XeroAccountingWatchDataPr
         const EventName = "new_purchase_order";
 
         #! The event display name
-        const DisplayName = "New Purchase Order";
+        const DisplayName = "New purchase order";
 
         #! The event short description
         const ShortDesc = "Fires when a purchase order is created or changed";
@@ -754,7 +754,7 @@ public class XeroNewEmployeeDataProvider inherits XeroWatchDataProviderBase {
         const EventName = "new_employee";
 
         #! The event display name
-        const DisplayName = "New Employee";
+        const DisplayName = "New employee";
 
         #! The event short description
         const ShortDesc = "Fires when an employee is added to payroll or changed";

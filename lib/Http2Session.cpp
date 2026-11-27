@@ -1200,6 +1200,7 @@ void Http2Session::releaseResetStream(int32_t stream_id, uint32_t error_code) {
     stream_send_limits.erase(stream_id);
     stream_refused_len.erase(stream_id);
     stream_taken_total.erase(stream_id);
+    endSendRateWaitUnlocked(stream_id);
     // an InputStream sending on the stream stops, as when the stream closes (see onStreamCloseCallback())
     {
         auto iit = stream_input_streams_.find(stream_id);
@@ -1247,6 +1248,113 @@ bool Http2Session::isDrainComplete() const {
     std::lock_guard<std::recursive_mutex> lg(m);
     return draining.load(std::memory_order_acquire) && streams.empty() && send_offset >= send_buffer.size()
         && !nghttp2_session_want_write(session);
+}
+
+bool Http2Session::isSessionDone() const {
+    if (!goaway_exchanged.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!session || nghttp2_session_want_read(session) || nghttp2_session_want_write(session)
+            || send_offset < send_buffer.size()) {
+        return false;
+    }
+    // after the GOAWAY of a connection error, the session is dead (nghttp2 reads and writes nothing more); otherwise
+    // a stream that nghttp2 has closed can still have work in the server (a request body that its handler has not
+    // read yet, a handler still running), which ends first, as for a drain (isDrainComplete())
+    return goaway_error_sent >= 0 || streams.empty();
+}
+
+//! Returns the name of an HTTP/2 frame type (RFC 9113 section 6, RFC 7838 and RFC 9218)
+static const char* qore_h2_frame_type_name(uint8_t type) {
+    switch (type) {
+        case NGHTTP2_DATA: return "DATA";
+        case NGHTTP2_HEADERS: return "HEADERS";
+        case NGHTTP2_PRIORITY: return "PRIORITY";
+        case NGHTTP2_RST_STREAM: return "RST_STREAM";
+        case NGHTTP2_SETTINGS: return "SETTINGS";
+        case NGHTTP2_PUSH_PROMISE: return "PUSH_PROMISE";
+        case NGHTTP2_PING: return "PING";
+        case NGHTTP2_GOAWAY: return "GOAWAY";
+        case NGHTTP2_WINDOW_UPDATE: return "WINDOW_UPDATE";
+        case NGHTTP2_CONTINUATION: return "CONTINUATION";
+        case NGHTTP2_ALTSVC: return "ALTSVC";
+        case NGHTTP2_ORIGIN: return "ORIGIN";
+        case NGHTTP2_PRIORITY_UPDATE: return "PRIORITY_UPDATE";
+        default: return "unknown";
+    }
+}
+
+std::string Http2Session::getPeerDesc() const {
+    struct sockaddr_storage addr;
+    socklen_t len = 0;
+    ExceptionSink xsink;
+    if (!sock || sock->getPeerSockAddr(&xsink, addr, len)) {
+        xsink.clear();
+        return "an unknown peer";
+    }
+    char host[NI_MAXHOST];
+    char serv[NI_MAXSERV];
+    if (getnameinfo(reinterpret_cast<const struct sockaddr*>(&addr), len, host, sizeof host, serv, sizeof serv,
+            NI_NUMERICHOST | NI_NUMERICSERV)) {
+        return "an unknown peer";
+    }
+    std::string rv;
+    if (addr.ss_family == AF_INET6) {
+        rv = "[";
+        rv += host;
+        rv += "]";
+    } else {
+        rv = host;
+    }
+    rv += ":";
+    rv += serv;
+    return rv;
+}
+
+bool Http2Session::takeErrorLogSlot() const {
+    if (!qore_async_io_any_logger() || error_frames_logged > QORE_H2_MAX_ERROR_FRAME_LOGS) {
+        return false;
+    }
+    if (++error_frames_logged <= QORE_H2_MAX_ERROR_FRAME_LOGS) {
+        return true;
+    }
+    // a peer that keeps sending frames that are not valid cannot make the server log without bound: the logger runs
+    // on the I/O thread that all connections share
+    qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 %s: %u HTTP/2 error frames logged for the connection with %s; "
+        "further ones are not logged", is_server ? "server" : "client", QORE_H2_MAX_ERROR_FRAME_LOGS,
+        getPeerDesc().c_str());
+    return false;
+}
+
+void Http2Session::logErrorFrame(const nghttp2_frame* frame, bool sent) const {
+    // NO_ERROR and CANCEL report no error: they are not logged, as they are routine (RFC 9113 section 8.1 resets,
+    // abandoned requests, graceful shutdowns)
+    uint32_t code = frame->hd.type == NGHTTP2_GOAWAY ? frame->goaway.error_code : frame->rst_stream.error_code;
+    if (code == NGHTTP2_NO_ERROR || (frame->hd.type == NGHTTP2_RST_STREAM && code == NGHTTP2_CANCEL)
+            || !takeErrorLogSlot()) {
+        return;
+    }
+    const char* role = is_server ? "server" : "client";
+    const char* dir = sent ? "sent to" : "received from";
+    if (frame->hd.type == NGHTTP2_GOAWAY) {
+        std::string debug_data;
+        if (frame->goaway.opaque_data_len) {
+            // the debug data is opaque (RFC 9113 section 6.8): only its printable ASCII characters are logged
+            debug_data = ": ";
+            size_t len = std::min<size_t>(frame->goaway.opaque_data_len, 256);
+            for (size_t i = 0; i < len; ++i) {
+                uint8_t ch = frame->goaway.opaque_data[i];
+                debug_data += (ch >= 0x20 && ch < 0x7f) ? static_cast<char>(ch) : '?';
+            }
+        }
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 %s: GOAWAY %s %s: %s (%u), last stream %d%s", role, dir,
+            getPeerDesc().c_str(), nghttp2_http2_strerror(code), code, frame->goaway.last_stream_id,
+            debug_data.c_str());
+    } else {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 %s: RST_STREAM %s %s on stream %d: %s (%u)", role, dir,
+            getPeerDesc().c_str(), frame->hd.stream_id, nghttp2_http2_strerror(code), code);
+    }
 }
 
 int Http2Session::sendShutdownGoaway(ExceptionSink* xsink) {
@@ -1871,6 +1979,13 @@ BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, Ex
             && credit_due) {
         *credit_due = true;
     }
+    // the last data of a closed tunnel whose dispatch has returned: nothing needs its record any more (qore#7770);
+    // the caller then sees the stream as closed (isStreamClosed())
+    if (is_server && it->second->is_connect && it->second->tunnel_released && it->second->body.empty()
+            && it->second->state == Http2StreamState::Closed) {
+        printd(5, "takeStreamData(%d) removing the closed CONNECT tunnel\n", stream_id);
+        streams.erase(it);
+    }
     return rv;
 }
 
@@ -2229,19 +2344,34 @@ void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
-        // RFC 7540 §8.3 / RFC 8441: a CONNECT stream is a bidirectional tunnel;
-        // after the Qore dispatch closure exits we must NOT remove the stream
-        // entry or onDataChunkRecvCallback will silently discard subsequent
-        // peer-sent frames at `stream == nullptr`.  The entry is reclaimed
-        // later via onStreamCloseCallback when the peer actually closes.
-        if (it->second->is_connect) {
-            printd(5, "cleanupStream(%d) preserving active CONNECT tunnel\n",
-                stream_id);
-            if (http2DebugEnabled()) {
-                fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d preserving CONNECT tunnel\n",
-                    stream_id);
-                fflush(stderr);
+        // RFC 7540 §8.3 / RFC 8441: a CONNECT stream is a bidirectional tunnel; after the Qore dispatch closure
+        // exits, the stream's entry is kept while the stream is open, or onDataChunkRecvCallback would silently
+        // discard subsequent peer-sent frames at `stream == nullptr`.  The entry is removed when the stream closes
+        // (onStreamCloseCallback()), as below for the other streams: it was kept for the life of the session before,
+        // so that a long-lived connection kept one record for each tunnel it served, and a drain or the end of the
+        // session after a GOAWAY never completed (qore#7770)
+        // (handler_done is not set for a tunnel: the data of a stream whose handler is done is discarded, but a tunnel
+        // is still served after its dispatch has returned)
+        if (it->second->is_connect && is_server) {
+            if (!it->second->rst_submitted
+                    && (it->second->state != Http2StreamState::Closed || !it->second->body.empty())) {
+                printd(5, "cleanupStream(%d) keeping the CONNECT tunnel until it closes\n", stream_id);
+                if (http2DebugEnabled()) {
+                    fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d preserving CONNECT tunnel\n",
+                        stream_id);
+                    fflush(stderr);
+                }
+                it->second->tunnel_released = true;
+                return;
             }
+            printd(5, "cleanupStream(%d) removing the closed CONNECT tunnel\n", stream_id);
+            // the record of a reset by the peer is kept: the tunnel is still served after its dispatch, and its next
+            // send reports the reset (and removes the record)
+            streams.erase(it);
+            return;
+        }
+        if (it->second->is_connect) {
+            // a client's CONNECT stream is released by the client itself
             return;
         }
         // the handler is done with the stream, but the stream outlives it while it is open (a response body sent
@@ -2288,6 +2418,21 @@ void Http2Session::releaseStreamBodyConsumer(int32_t stream_id) {
     // the handler is done with the stream, and it is closed: nothing needs the record any more
     if (it->second->handler_done && it->second->state == Http2StreamState::Closed) {
         printd(5, "releaseStreamBodyConsumer(%d) removing the stream\n", stream_id);
+        streams.erase(it);
+    }
+}
+
+void Http2Session::releaseTunnelConsumer(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it == streams.end() || !is_server || !it->second->is_connect) {
+        return;
+    }
+    it->second->tunnel_unconsumed = true;
+    // the data that no consumer takes any more: its window was given back when it was received
+    it->second->body.clear();
+    if (it->second->tunnel_released && it->second->state == Http2StreamState::Closed) {
+        printd(5, "releaseTunnelConsumer(%d) removing the closed CONNECT tunnel\n", stream_id);
         streams.erase(it);
     }
 }
@@ -2428,6 +2573,17 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         qore_dbg_h2_connection_window_updates[is_server ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
     }
 #endif
+    // every error frame sent is logged (qore#7770)
+    if (h2 && (frame->hd.type == NGHTTP2_GOAWAY || frame->hd.type == NGHTTP2_RST_STREAM)) {
+        if (frame->hd.type == NGHTTP2_GOAWAY) {
+            if (frame->goaway.error_code != NGHTTP2_NO_ERROR) {
+                std::lock_guard<std::recursive_mutex> lg(h2->m);
+                h2->goaway_error_sent = frame->goaway.error_code;
+            }
+            h2->goaway_exchanged.store(true, std::memory_order_release);
+        }
+        h2->logErrorFrame(frame, true);
+    }
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -2544,13 +2700,20 @@ void Http2Session::stopRequestAfterResponse(int32_t stream_id) {
     // (and that is discarded without crediting the stream's flow control window once the stream is cleaned up),
     // and a client that sends its whole request before reading the response never reads it.  The reset is sent
     // only now that the frame carrying END_STREAM has been written, so it cannot cancel any part of the response.
-    // Extended CONNECT tunnels are excluded: each side closes its half of a tunnel independently.
+    // CONNECT tunnels are excluded: each side closes its half of a tunnel independently.  A WebSocket tunnel
+    // (RFC 8441) is not: the server ends its half only after its WebSocket connection has closed (after the closing
+    // handshake, or after the close timeout or an error), after which the client has nothing left to send.  A
+    // client that then closes its WebSocket without ending its half of the stream (Chromium does, qore#7770) would
+    // otherwise leave the stream half-closed (local) for the life of the connection, where it counts against
+    // SETTINGS_MAX_CONCURRENT_STREAMS (RFC 9113 section 5.1.2): once enough such streams have accumulated, a client
+    // that counts them as closed opens a stream over the limit, and nghttp2 ends the whole connection with
+    // GOAWAY(PROTOCOL_ERROR), with every other request and WebSocket connection on it.
     if (!session || nghttp2_session_get_stream_remote_close(session, stream_id) != 0) {
         // the client has sent its complete request, or the stream is already closed
         return;
     }
     auto it = streams.find(stream_id);
-    if (it != streams.end() && it->second->is_connect) {
+    if (it != streams.end() && it->second->is_connect && it->second->stream_type != Http2StreamType::WebSocket) {
         return;
     }
     printd(5, "Http2Session::stopRequestAfterResponse() stream %d: response sent before the complete request; "
@@ -2584,6 +2747,13 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
     printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, static_cast<int>(frame->hd.length), h2->is_server,
         h2->sock->sock.load());
+    // every error frame received is logged: it reports an error that the session caused (qore#7770)
+    if (h2 && (frame->hd.type == NGHTTP2_GOAWAY || frame->hd.type == NGHTTP2_RST_STREAM)) {
+        if (frame->hd.type == NGHTTP2_GOAWAY) {
+            h2->goaway_exchanged.store(true, std::memory_order_release);
+        }
+        h2->logErrorFrame(frame, false);
+    }
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameRecvCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -2799,6 +2969,21 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         stream = h2->getStream(stream_id);
         // the rest of the request body of a stream whose handler is done is discarded like that of a removed stream,
         // unless a Queue that the handler registered receives it
+        if (stream && stream->is_connect && stream->tunnel_unconsumed) {
+            // a tunnel whose consumer has been ended: its data is discarded and credited on the stream too, as the
+            // tunnel stays open until the client ends it, which a client that first sends all its data would never
+            // do without the credit (qore#7770)
+            printd(5, "onDataChunkRecvCallback: server tunnel %d has no consumer, discarding %zu bytes\n", stream_id,
+                len);
+            if (len) {
+                int rv = h2->consumeReceivedData(stream_id, len);
+                if (rv) {
+                    printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len,
+                        stream_id, nghttp2_strerror(rv));
+                }
+            }
+            return 0;
+        }
         if (stream && stream->handler_done && !stream->body_consumer) {
             stream = nullptr;
         }
@@ -3003,15 +3188,22 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         // streams that were closed before being dispatched (e.g. RST_STREAM
         // before dispatch), and dispatched streams whose handler is done
         // (cleanupStream()) and whose request body no registered Queue still
-        // has to receive the end of. Do NOT erase CONNECT streams (needed for
-        // continued tunnel I/O) or other dispatched streams (handler thread may
-        // still be reading).
+        // has to receive the end of. Do NOT erase other dispatched streams
+        // (handler thread may still be reading).  A server's CONNECT stream
+        // is erased under the same conditions: it is closed, so no tunnel I/O
+        // follows (qore#7770); a client's CONNECT stream is kept as before, as
+        // the client releases it itself
         {
             auto it = h2->streams.find(stream_id);
-            if (it != h2->streams.end() && !it->second->is_connect
-                    && (!it->second->dispatched
-                        || (it->second->handler_done && !it->second->body_consumer))) {
-                h2->streams.erase(it);
+            if (it != h2->streams.end()) {
+                const Http2StreamInfo& info = *it->second;
+                // a server's tunnel is released once its dispatch has returned and the data received on it has been
+                // taken (takeStreamData() releases it then): data received with the close is still delivered
+                if (info.is_connect
+                        ? (h2->is_server && (!info.dispatched || (info.tunnel_released && info.body.empty())))
+                        : (!info.dispatched || (info.handler_done && !info.body_consumer))) {
+                    h2->streams.erase(it);
+                }
             }
         }
     }
@@ -3022,6 +3214,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
     h2->stream_taken_total.erase(stream_id);
+    h2->endSendRateWaitUnlocked(stream_id);
     h2->streamed_response_rules.erase(stream_id);
     h2->app_reset_unsent_streams.erase(stream_id);
 #ifdef DEBUG
@@ -3413,12 +3606,19 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
 
 int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, int lib_error_code, void* user_data) {
-    // Log invalid frames for debugging but don't fail
-    [[maybe_unused]] Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    // nghttp2 answers the frame itself, with RST_STREAM (a stream error) or GOAWAY (a connection error), which are
+    // logged when they are sent; the frame that caused it is logged here (qore#7770)
+    Http2Session* h2 = static_cast<Http2Session*>(user_data);
     printd(1, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x len=%d err=%s "
         "remote_max_frame=%u local_max_frame=%u\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length,
         nghttp2_strerror(lib_error_code), h2->remote_settings.max_frame_size, h2->local_settings.max_frame_size);
+    if (h2->takeErrorLogSlot()) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 %s: invalid %s frame received from %s on stream %d (flags "
+            "0x%x, length %u): %s", h2->is_server ? "server" : "client", qore_h2_frame_type_name(frame->hd.type),
+            h2->getPeerDesc().c_str(), frame->hd.stream_id, frame->hd.flags, static_cast<unsigned>(frame->hd.length),
+            nghttp2_strerror(lib_error_code));
+    }
     return 0;
 }
 
@@ -3712,9 +3912,9 @@ WebSocketCloseRecordRef Http2Session::getWebSocketCloseRecord(int32_t stream_id,
     return rec;
 }
 
-std::unordered_map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
+std::map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
     std::lock_guard<std::recursive_mutex> lg(m);
-    std::unordered_map<int32_t, WebSocketCloseRecordRef> rv;
+    std::map<int32_t, WebSocketCloseRecordRef> rv;
     rv.swap(ws_close_records);
     return rv;
 }
@@ -4419,16 +4619,125 @@ void Http2Session::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, 
         return;
     }
     pump_bound_set = true;
-    if (min_rate > 0 && window_ms > 0) {
-        pump_send_rate = SendRateWindow(min_rate, window_ms);
-        // the transport shows a client's progress in steps of its flow-control window and of TCP's; the I/O thread
-        // checks at least every check interval, so a longer time between checks is its own delay
-        pump_send_rate.enableProgressSteps();
-        pump_send_rate.setMaxWaitCharge(2 * pump_send_rate.getCheckIntervalMs());
-    }
+    // the bounds replace a rate that a check of a handler thread set without them, with a new measurement, as on
+    // HTTP/3
+    pump_rate_set = false;
+    pump_send_rate = SendRateWindow();
+    setSendRateUnlocked(min_rate, window_ms);
     if (stall_ms > 0) {
         pump_stall_ms = stall_ms;
     }
+}
+
+void Http2Session::setSendRateUnlocked(int64_t min_rate, int64_t window_ms) {
+    if (pump_rate_set) {
+        return;
+    }
+    pump_rate_set = true;
+    if (min_rate > 0 && window_ms > 0) {
+        pump_send_rate = SendRateWindow(min_rate, window_ms);
+        // the transport shows a client's progress in steps of its flow-control window and of TCP's; the I/O thread
+        // and the waiting senders check at least every check interval, so a longer time between checks is their own
+        // delay
+        pump_send_rate.enableProgressSteps();
+        pump_send_rate.setMaxWaitCharge(2 * pump_send_rate.getCheckIntervalMs());
+    }
+}
+
+void Http2Session::refreshClientTakenUnlocked() {
+    // the body bytes that the client has taken: the bytes that nghttp2 has taken less those still unwritten, so that
+    // data in Qore's send buffer is not counted, nor other frames that are written while flow control holds the
+    // bodies (qore#7653)
+    uint64_t unwritten = send_buffer.size() - send_offset;
+    uint64_t taken = conn_taken_total > unwritten ? conn_taken_total - unwritten : 0;
+    if (taken > conn_client_taken) {
+        conn_client_taken = taken;
+    }
+}
+
+bool Http2Session::isConnectionWaitingUnlocked(int32_t except) const {
+    for (int32_t id : send_rate_waiters) {
+        if (id != except) {
+            return true;
+        }
+    }
+    for (auto& [stream_id, b] : bound_bodies) {
+        if (isBoundBodyWaiting(stream_id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Http2Session::updateSendRateUnlocked(int64_t now_ms, std::vector<int32_t>& ended_bodies, int32_t leaving) {
+    if (!pump_send_rate.enabled()) {
+        return false;
+    }
+    refreshClientTakenUnlocked();
+    // a send that ends its wait with this update waited until now
+    bool was_waiting = leaving >= 0 && send_rate_waiters.count(leaving);
+    // waiting from now on: the other sends of handler threads, and the bodies that the bounds charge
+    bool waiting = isConnectionWaitingUnlocked(was_waiting ? leaving : -1);
+    if (!pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting, now_ms)) {
+        return false;
+    }
+    // a debt that no waiting body ends is not left for a later, unrelated wait
+    if (!(waiting || was_waiting)) {
+        pump_send_rate.restart();
+        return false;
+    }
+    for (auto& [stream_id, b] : bound_bodies) {
+        if (isBoundBodyWaiting(stream_id)) {
+            ended_bodies.push_back(stream_id);
+        }
+    }
+    // the waiting sends of handler threads end when they check next
+    send_rate_ended.insert(send_rate_waiters.begin(), send_rate_waiters.end());
+    send_rate_waiters.clear();
+    // the next waits start a new measurement: they are not charged for the ended bodies
+    pump_send_rate.restart();
+    return true;
+}
+
+bool Http2Session::checkStreamSendRate(int32_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    verdict = false;
+    setSendRateUnlocked(min_rate, window_ms);
+    if (send_rate_ended.erase(stream_id)) {
+        return true;
+    }
+    // only an open stream waits: a wait registered for another one would never be ended by its close
+    if (waiting && stream_id > 0 && session && !isSessionClosed() && nghttp2_session_find_stream(session, stream_id)) {
+        send_rate_waiters.insert(stream_id);
+    }
+    // the time is read under the lock, so that the measurement's samples are in order whatever thread takes them; the
+    // bodies that a verdict ends are ended by the I/O thread, which ending one can make end the connection
+    verdict = updateSendRateUnlocked(q_clock_getmicros_monotonic() / 1000, rate_ended_bodies,
+        waiting ? -1 : stream_id);
+    if (!waiting) {
+        send_rate_waiters.erase(stream_id);
+    }
+    // a send that is done is told of a verdict that it waited for as well
+    return send_rate_ended.erase(stream_id);
+}
+
+void Http2Session::endSendRateWaitUnlocked(int32_t stream_id) {
+    send_rate_ended.erase(stream_id);
+    if (!send_rate_waiters.count(stream_id)) {
+        return;
+    }
+    if (pump_send_rate.enabled()) {
+        refreshClientTakenUnlocked();
+        bool waiting = isConnectionWaitingUnlocked(stream_id);
+        // a verdict is not reached here; with other waits it is reached by their next check, and without one the
+        // debt is not left for a later, unrelated wait
+        if (pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting,
+                q_clock_getmicros_monotonic() / 1000) && !waiting) {
+            pump_send_rate.restart();
+        }
+    }
+    send_rate_waiters.erase(stream_id);
 }
 
 void Http2Session::updateActiveInputStreams() {
@@ -4570,22 +4879,12 @@ void Http2Session::endBoundBody(int32_t stream_id, const char* reason, Exception
 }
 
 void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
-    if (!pump_bound_set) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!pump_bound_set && send_rate_waiters.empty() && rate_ended_bodies.empty()) {
         return;
     }
     int64_t now = q_clock_getmicros_monotonic() / 1000;
     uint64_t written = send_buffer_base + send_offset;
-    // the body bytes that the client has taken: the bytes that nghttp2 has taken less those still unwritten, so that
-    // data in Qore's send buffer is not counted, nor other frames that are written while flow control holds the
-    // bodies (qore#7653)
-    {
-        uint64_t unwritten = send_buffer.size() - send_offset;
-        uint64_t taken = conn_taken_total > unwritten ? conn_taken_total - unwritten : 0;
-        if (taken > conn_client_taken) {
-            conn_client_taken = taken;
-        }
-    }
-    bool waiting = false;
     // the bodies that a bound ends, with the reason, which are ended after the iterations
     std::vector<std::pair<int32_t, std::string>> ended;
     // the no-progress bound of each body
@@ -4594,7 +4893,6 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
             b.bound_progress_ms = 0;
             continue;
         }
-        waiting = true;
         // a body whose ending frame waits in the connection's output progresses with the connection's writes
         bool by_written = b.end_pos_set || b.reset_pending;
         uint64_t progress;
@@ -4615,15 +4913,15 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
             ended.emplace_back(stream_id, reason.c_str());
         }
     }
-    // the minimum rate of the connection, across its streams, while a body waits for the client
-    if (pump_send_rate.enabled()
-            && pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting, now) && waiting) {
+    // the minimum rate of the connection, across its streams, while a body or a send of a handler thread waits for
+    // the client; with the bodies that a check of a handler thread found below the rate, which only this thread ends
+    std::vector<int32_t> rate_ended;
+    rate_ended.swap(rate_ended_bodies);
+    updateSendRateUnlocked(now, rate_ended);
+    if (!rate_ended.empty()) {
         QoreStringMaker reason("the client took less than the minimum rate of %lld bytes/s",
             (long long)pump_send_rate.getMinRate());
-        for (auto& [stream_id, b] : bound_bodies) {
-            if (!isBoundBodyWaiting(stream_id)) {
-                continue;
-            }
+        for (int32_t stream_id : rate_ended) {
             bool found = false;
             for (auto& e : ended) {
                 if (e.first == stream_id) {
@@ -4631,12 +4929,10 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
                     break;
                 }
             }
-            if (!found) {
+            if (!found && bound_bodies.count(stream_id)) {
                 ended.emplace_back(stream_id, reason.c_str());
             }
         }
-        // the next waits start a new measurement: they are not charged for the ended bodies
-        pump_send_rate.restart();
     }
     for (auto& e : ended) {
         endBoundBody(e.first, e.second.c_str(), xsink);

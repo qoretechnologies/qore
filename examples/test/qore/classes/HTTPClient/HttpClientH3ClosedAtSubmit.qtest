@@ -138,5 +138,20 @@ class HttpClientH3ClosedAtSubmitTest inherits QUnit::Test {
         # the connection that served the repeated requests is used again
         assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the next request is answered");
         assertEq(conn, receivedOnce("GET").conn, "the next request is sent on the same connection");
+
+        # a request that selects its own target (sendUrl()) is repeated in the same way on a new connection of the
+        # client's connection manager, which it leaves as it is (qore#7720)
+        armHook(var);
+        {
+            on_exit unsetenv(var);
+            hash<auto> rv = hc.sendUrl(NOTHING, "GET", url + "/");
+            assertEq(200, rv.status_code, "sendUrl(): the request is repeated on a new connection and answered");
+        }
+        auto url_conn = receivedOnce("GET").conn;
+        assertNeq(conn, url_conn, "sendUrl(): the request was repeated on another connection");
+        assertEq("HTTP/3", hc.getHttpVersion(), "sendUrl(): the response used HTTP/3");
+        assertTrue(hc.isHttp3Active(), "sendUrl(): the client's HTTP/3 state is unchanged");
+        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the client's next request is answered");
+        assertEq(url_conn, receivedOnce("GET").conn, "the client's next request uses the connection of its manager");
     }
 }

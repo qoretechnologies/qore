@@ -2538,7 +2538,9 @@ if (x || y)
     do not extend the life of the value and also do not participate in object graph cycles (i.e. recursive
     references) and therefore can be used to break up large graphs of objects to improve garbage collector
     performance with such graphs, however the programmer must ensure that the value has a valid
-    strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
+    strong reference elsewhere or the value will go out of scope.  A callback that an object holds and that uses the
+    object captures it weakly, so that the object can be destroyed: for example, a datasource mutation observer that
+    queries the datasource that it observes (see @ref sql_mutation_observer_capture).  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
     reference raises \c HASH-ERROR or \c LIST-ERROR.  A @ref new "new" expression made from it, and a value made
     from it with another type, by a @ref cast "cast" or the conversion of a variable, a parameter, a member or a return
@@ -2585,6 +2587,27 @@ if (x || y)
     \c PARSE-TYPE-ERROR when the types of a stripping lvalue and of a typed value are known at parse time, and with
     \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value.  An lvalue of a type that keeps the value (\c auto,
     <tt>hash&lt;auto&gt;</tt>, <tt>list&lt;auto&gt;</tt> or the value's own type) takes the weak reference to it.\n<br>
+    @anchor weak_assignment_wrap Likewise, a weak assignment of a value that is not a list (an object, a scalar value or
+    a hash, also one that a weak reference designates) to a \c softlist, \c *softlist or
+    <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt> lvalue, also as a member of a union type (ex:
+    <tt>union&lt;softlist, string&gt;</tt> for an integer), is an error, as the lvalue's type wraps the value in a new
+    list, which the weak reference would designate instead of the value assigned; so is a weak assignment of
+    @ref nothing "NOTHING" or @ref null "NULL" to a \c softlist or <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt>
+    lvalue, whose type converts it to a new list: an empty one, or one that holds @ref null "NULL" for a
+    <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt> whose element type takes it (ex: <tt>softlist&lt;*int&gt;</tt>).  A
+    \c *softlist lvalue keeps @ref nothing "NOTHING", and converts @ref null "NULL" to it, except a
+    <tt>*softlist&lt;</tt><em>type</em><tt>&gt;</tt> whose element type takes @ref null "NULL" (ex:
+    <tt>*softlist&lt;*int&gt;</tt>), which wraps it in a new list and refuses it as well.  The assignment is refused
+    with \c PARSE-TYPE-ERROR when the type of the value is known at parse time not to be a list (and, for a
+    \c *softlist lvalue, not to be @ref nothing "NOTHING" or @ref null "NULL"; for a union, when each of its members
+    that can accept the value wraps it), and with \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value;
+    declare the lvalue with a type that keeps the value as it is (\c auto or the value's own type), or assign a list
+    (ex: a <tt>list&lt;auto&gt;</tt>) that holds the value.  A list assigned to a \c softlist lvalue is not wrapped,
+    and the rules above apply to it.  Likewise, a weak assignment of an iterator to a
+    <tt>list&lt;</tt><em>type</em><tt>&gt;</tt> lvalue, whose type builds a new list from the iterator, is refused
+    with \c RUNTIME-TYPE-ERROR before the iterator is iterated (in every
+    @ref exec_mode_overview "execution mode"); assign a list instead, or declare the lvalue as \c auto to keep the
+    iterator.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
@@ -2592,12 +2615,22 @@ if (x || y)
     statement, as any temporary value is.  This holds also while another thread releases the last strong reference
     to the object: a method called through a weak reference to it, or on a value read from one, before that thread
     has started to destroy the object keeps it, and the object is destroyed when the call releases it, not while the
-    call runs.\n<br>
+    call runs.  Once that thread has started to destroy the object (its destructor runs, also for an object collected
+    with a cycle, and its members are deleted when the destructor returns), a method that another thread calls on the
+    object, through a weak reference or on a value read from one, is refused with \c OBJECT-ALREADY-DELETED, as a call
+    on a deleted object is, so that it never uses the members while they are deleted; a reference read from a weak
+    reference then does not keep the object either.  The destructor's own calls on the object are made, and so are
+    the calls that the holders of strong references make while an explicit @ref delete "delete" runs the destructor.\n<br>
     When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
     variable's own value and shows the changes later made through the variable; this is the same in every
-    @ref exec_mode_overview "execution mode".  The same holds for an lvalue path from a variable, the object or a class
+    @ref exec_mode_overview "execution mode".  A parameter passed by value is a variable of the call: when its hash or
+    list is also the caller's value, the parameter gets a copy of its own, which the call releases when it returns, so
+    a weak reference to the parameter (ex: <tt>gx := h</tt> in <tt>sub f(hash<string, int> h)</tt>) designates that
+    copy and is empty once the call has returned; to designate the caller's container, the caller passes a reference
+    (<tt>f(\\th)</tt> to <tt>sub f(reference<hash<string, int>> h)</tt>), and the weak assignment designates the
+    variable that the reference refers to.  The same holds for an lvalue path from a variable, the object or a class
     static variable: an object member (<tt>w := c.l</tt>), a member of the object (<tt>w := l</tt> in a method), a hash
     key (<tt>w := h.k</tt>) or a list element (<tt>w := l[0]</tt>), also when its steps have no type when the code is
     parsed (ex: <tt>w := a.k</tt> with <tt>auto a</tt>), whose values are then checked when the assignment runs: the
@@ -2690,7 +2723,9 @@ if (x || y)
     ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
     still in use; a mistake with \c \@= leaks one.\n<br>
     As for the weak assignment operator, an opaque assignment of a hash or a list to an lvalue whose type converts it
-    to a copy of its own is an error (see @ref weak_assignment_conversion).
+    to a copy of its own is an error (see @ref weak_assignment_conversion), as is an opaque assignment of a value that
+    a \c softlist lvalue wraps in a new list or converts to a new empty list, or of an iterator that a list lvalue
+    builds a new list from (see @ref weak_assignment_wrap).
 
     @par Warning
     <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value
@@ -2743,6 +2778,12 @@ if (x || y)
 
     @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
     released, including after a partial merge fails; their destructors can read or modify the target.
+
+    An object \a expression gives the \a lvalue the members that the code of the operator may read, as the other reads
+    of a whole object do (such as the @ref keys "keys operator" and a conversion to a hash): its public members, and
+    its private members only in the code of its class or of a class with private access to it (a
+    \c private:internal member, which is kept in storage of its class's own, is not merged into an object of another
+    class); see @ref sandbox_object_ownership for the code of a sandbox.
 
     A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
     \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended

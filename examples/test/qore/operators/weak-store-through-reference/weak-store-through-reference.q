@@ -179,6 +179,129 @@ string sub hot_normal(hash<string, int> th) {
     return x.fullType();
 }
 
+# referenced lvalues that are not locals: globals, members and container elements (issue #7617)
+our hash wst_g_hash = {"old": 1};
+our auto wst_g_auto;
+our hash<auto!> wst_g_hauto = {};
+our list<auto!> wst_g_lauto = ();
+
+class WstHolder {
+    public {
+        hash hm = {"old": 1};
+        auto am;
+        hash<auto!> hauto = {};
+    }
+}
+
+#! runs a store that may be refused and prints the lvalue afterwards
+sub try_store(string label, code store, code read) {
+    try {
+        store();
+        show(label + ": stored", read());
+    } catch (hash<ExceptionInfo> ex) {
+        show_error(label, ex);
+        show(label + " after the error", read());
+    }
+}
+
+#! stores weakly through a reference parameter
+sub param_ref_weak(reference r, auto v) {
+    r := v;
+}
+
+#! stores opaquely through a reference parameter
+sub param_ref_opaque(reference r, auto v) {
+    r @= v;
+}
+
+#! stores weakly through a reference<hash> parameter
+sub param_typed_ref_weak(reference<hash> r, auto v) {
+    r := v;
+}
+
+#! stores weakly through a reference parameter that a closure captures
+sub param_ref_closure(reference r, auto v) {
+    code c = sub () { r := v; };
+    c();
+}
+
+#! stores through locals that hold references to globals, members and elements, and through reference parameters
+sub other_lvalues(hash<string, int> th, list<int> tl) {
+    # the sources are locals of this function, so that a weak reference to them designates the value itself
+    hash<string, int> src = th + {};
+    list<int> lsrc = tl + ();
+    hash plain = {"p": 1};
+    list plain_list = (1, 2);
+
+    # globals
+    reference rg = \wst_g_hash;
+    try_store("global hash :=", sub () { rg := src; }, auto sub () { return wst_g_hash; });
+    any rga = \wst_g_auto;
+    rga := src;
+    src.b = 2;
+    show("global auto := hash<string, int>, after a change of the source", wst_g_auto);
+    reference rgh = \wst_g_hauto;
+    try_store("global hash<auto!> := hash", sub () { rgh := plain; }, auto sub () { return wst_g_hauto; });
+    try_store("global hash<auto!> := hash<string, int>", sub () { rgh := src; },
+        auto sub () { return wst_g_hauto; });
+    any rgl = \wst_g_lauto;
+    try_store("global list<auto!> := list", sub () { rgl := plain_list; }, auto sub () { return wst_g_lauto; });
+    try_store("global list<auto!> @= list<int>", sub () { rgl @= lsrc; }, auto sub () { return wst_g_lauto; });
+
+    # members
+    WstHolder hld();
+    reference rm = \hld.hm;
+    try_store("member hash :=", sub () { rm := src; }, auto sub () { return hld.hm; });
+    any rma = \hld.am;
+    rma @= src;
+    show("member auto @= hash<string, int>", hld.am);
+    reference rmh = \hld.hauto;
+    try_store("member hash<auto!> := hash", sub () { rmh := plain; }, auto sub () { return hld.hauto; });
+    try_store("member hash<auto!> := hash<string, int>", sub () { rmh := src; },
+        auto sub () { return hld.hauto; });
+
+    # container elements
+    hash h = {"k": 1};
+    reference rk = \h.k;
+    try_store("untyped hash key :=", sub () { rk := src; }, auto sub () { return h.k; });
+    hash<string, auto> ha = {"k": 1, "s": "x"};
+    any rka = \ha.k;
+    rka := src;
+    show("hash<string, auto> key := hash<string, int>", ha.k);
+    list l = (1,);
+    reference re = \l[0];
+    try_store("untyped list element :=", sub () { re := src; }, auto sub () { return l[0]; });
+    list<auto> la = (1, "x");
+    any rea = \la[0];
+    rea := lsrc;
+    show("list<auto> element := list<int>", la[0]);
+
+    # a plain container keeps the source in a hash<auto!> or list<auto!> lvalue (issue #7572)
+    hash<auto!> hau = {};
+    any rh = \hau;
+    try_store("local hash<auto!> := hash", sub () { rh := plain; }, auto sub () { return hau; });
+    plain.q = 2;
+    show("local hash<auto!> after a change of the source", hau);
+    try_store("local hash<auto!> := hash<string, int>", sub () { rh := src; }, auto sub () { return hau; });
+    list<auto!> lau = ();
+    reference rl = \lau;
+    try_store("local list<auto!> @= list", sub () { rl @= plain_list; }, auto sub () { return lau; });
+    try_store("local list<auto!> := list<int>", sub () { rl := lsrc; }, auto sub () { return lau; });
+
+    # reference parameters
+    hash hx = {"old": 1};
+    try_store("reference parameter :=", sub () { param_ref_weak(\hx, src); }, auto sub () { return hx; });
+    try_store("reference parameter @=", sub () { param_ref_opaque(\hx, src); }, auto sub () { return hx; });
+    try_store("reference<hash> parameter :=", sub () { param_typed_ref_weak(\hx, src); },
+        auto sub () { return hx; });
+    try_store("reference parameter to a global :=", sub () { param_ref_weak(\wst_g_hash, src); },
+        auto sub () { return wst_g_hash; });
+    try_store("reference parameter to a member @=", sub () { param_ref_opaque(\hld.hm, src); },
+        auto sub () { return hld.hm; });
+    try_store("reference parameter in a closure :=", sub () { param_ref_closure(\hx, src); },
+        auto sub () { return hx; });
+}
+
 hash<string, int> th = {"a": 1};
 list<int> tl = (1, 2);
 WstObj obj();
@@ -344,6 +467,7 @@ block_scoped(th);
 }
 
 closure_captured(th);
+other_lvalues(th, tl);
 
 # an unbound reference local
 {

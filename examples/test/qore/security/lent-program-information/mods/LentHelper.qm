@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module that uses a function of the external-information domain internally and starts a thread that calls into a
+# Program (see ../lent-program-information.q)
+
+%modern
+
+module LentHelper {
+    version = "1.0";
+    desc = "a module for lent-program-information.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace LentHelper {
+    #! uses getpid() internally and returns whether it got a value
+    public string sub pid() {
+        return getpid() > 0 ? "pid" : "none";
+    }
+
+    #! calls the given function of the Program in a thread that the module starts, where only module code is on the
+    #! stack, and returns its result
+    public auto sub thr(Program h, string f) {
+        Queue q();
+        background sub () {
+            try {
+                q.push(h.callFunction(f));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    }
+}

@@ -115,7 +115,7 @@ class ObjectConstructionShortcutsTest inherits QUnit::Test {
         foreach string opt in (("-O0", "-O3")) {
             string exe = tmp.path + DirSep + name + opt;
             int rc;
-            string out = backquote(sprintf("%s%s %s -o %s %s 2>&1", env(), quote(qcc_bin), opt, quote(exe),
+            string out = backquote(sprintf("%s%s %s -g -o %s %s 2>&1", env(), quote(qcc_bin), opt, quote(exe),
                 quote(scriptPath(name))), \rc);
             assertEq(0, rc, sprintf("%s qcc %s: %s", name, opt, out));
             foreach string off in (("", NoShortcuts)) {

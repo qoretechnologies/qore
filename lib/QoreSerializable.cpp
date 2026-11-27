@@ -239,10 +239,10 @@ const qore_class_private* qore_serialization_caller_class() {
 
 bool qore_serialization_calling_code_trusted() {
     // the code that invokes the builtin, also through a call reference or a closure that other code created: not the
-    // code of a sandboxed Program
+    // code of a restricted Program (the code of a trusted, governed, sandbox is trusted; qore#7737)
     {
         QoreProgram* invoking_pgm = qore_builtin_caller_program();
-        if (invoking_pgm && qore_program_is_sandboxed(invoking_pgm)) {
+        if (invoking_pgm && qore_program_is_restricted(invoking_pgm)) {
             return false;
         }
     }
@@ -252,12 +252,13 @@ bool qore_serialization_calling_code_trusted() {
         // the code of a class that trusted code declared acts for itself
         return !class_ctx->isSandboxDeclared(true);
     }
-    // the code of a trusted Program outside a class acts for itself; library code acts for its caller
+    // the code of a trusted Program outside a class acts for itself; library code acts for its caller; the code of a
+    // trusted (governed) sandbox is trusted, as for the private access of reflection (qore#7737)
     const QoreProgram* pgm = getProgram();
-    if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+    if (pgm && !qore_program_is_restricted(pgm) && !qore_program_is_library_module(pgm)) {
         return true;
     }
-    return !qore_caller_is_sandboxed();
+    return !qore_caller_is_restricted();
 }
 
 bool qore_serializable_receiver_function(const QoreFunction* func) {
@@ -277,6 +278,9 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     if (unrestricted) {
         return false;
     }
+#ifdef DEBUG
+    assertFrame();
+#endif
     if (!class_ctx_known) {
         class_ctx = qore_serialization_caller_class();
         class_ctx_known = true;
@@ -288,16 +292,32 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
         || (!internal && decl.runtimeCheckPrivateClassAccess(class_ctx)))) {
         return false;
     }
-    // any other code: withheld if sandboxed code is in the chain of callers
+    // any other code: withheld if restricted code is in the chain of callers (qore#7737)
     return chainSandboxed();
 }
 
 bool QoreSerializationCaller::chainSandboxed() {
     if (chain_sandboxed < 0) {
-        chain_sandboxed = qore_receiver_caller_is_sandboxed(receiver) ? 1 : 0;
+        chain_sandboxed = qore_receiver_caller_is_restricted(receiver) ? 1 : 0;
     }
     return chain_sandboxed;
 }
+
+#ifdef DEBUG
+void QoreSerializationCaller::recordFrame() {
+    dbg_stack_loc = get_runtime_stack_location();
+    dbg_class = runtime_get_class();
+    dbg_caller_class = runtime_get_caller_class();
+    dbg_pgm = getProgram();
+}
+
+void QoreSerializationCaller::assertFrame() const {
+    assert(get_runtime_stack_location() == dbg_stack_loc);
+    assert(runtime_get_class() == dbg_class);
+    assert(runtime_get_caller_class() == dbg_caller_class);
+    assert(getProgram() == dbg_pgm);
+}
+#endif
 
 bool QoreSerializationCaller::withholds(const qore_class_private& decl, bool internal) {
     return decl.sandboxSerializationProtected() && restricts(decl, internal);
@@ -636,8 +656,8 @@ QoreValue QoreSerializable::serializeObjectToData(const QoreObject& obj, bool we
 imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject& self,
         QoreInternalSerializationContext& context, const QoreString& str, imap_t::iterator hint,
         ExceptionSink* xsink) {
-    // code that is sandboxed or acts for sandboxed code cannot serialize a shared object (qore#7673); checked before
-    // the object is added to the index, so that a refused object aborts the serialization
+    // code that is restricted or acts for restricted code cannot serialize a shared object (qore#7673, qore#7737);
+    // checked before the object is added to the index, so that a refused object aborts the serialization
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {
@@ -661,6 +681,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             return i0;
         }
     }
+
+    // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
+    // created the object (qore#7033)
+    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);
@@ -738,9 +762,12 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             bool protect = current_priv->sandboxSerializationProtected();
 
             // see if the local class has a serializeMembers() method defined; the method of a protected class is not
-            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146)
-            const QoreMethod* serializeMembers = protect && context.caller.restricts(*current_priv, true) ? nullptr
-                : current_cls.findLocalMethod("serializeMembers");
+            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146), nor
+            // for code that may not read the non-public members of the object as a whole (qore#7033): the automatic
+            // members are serialized then, with the rule of each
+            const QoreMethod* serializeMembers = !non_public
+                || (protect && context.caller.restricts(*current_priv, true))
+                ? nullptr : current_cls.findLocalMethod("serializeMembers");
 
             // iterate all nornal members in the class
             QoreClassMemberIterator mi(ci.get());
@@ -766,6 +793,14 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
                 if (protect && m.getAccess() != Public
                     && context.caller.restricts(*current_priv, m.getAccess() == Internal)) {
                     raiseWithheldError(current_cls, "member", mname, xsink);
+                    return context.imap.end();
+                }
+                // a non-public member of an object whose non-public members the calling code may not read as a
+                // whole: the code is sandboxed and its sandbox did not create the object (qore#7033)
+                if (!non_public && m.getAccess() != Public) {
+                    xsink->raiseException("SERIALIZATION-ERROR", "cannot serialize non-public member '%s::%s' of an "
+                        "object of class '%s' that the sandbox of the calling code did not create",
+                        current_cls.getName(), mname, cls.getName());
                     return context.imap.end();
                 }
 

@@ -82,7 +82,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "create",
-            "display_name": "Create Record",
+            "display_name": "Create record",
             "short_desc": "Create a record in Salesforce",
             "desc": "Create a record in Salesforce using Salesforce's REST API",
             "path_vars": {
@@ -102,7 +102,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "find_single",
-            "display_name": "Find Single Record",
+            "display_name": "Find single record",
             "short_desc": "Find a single record in Salesforce",
             "desc": "Find a single record in Salesforce using Salesforce's REST API",
             "path_vars": {
@@ -122,7 +122,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "find",
-            "display_name": "Find Matching Records",
+            "display_name": "Find matching records",
             "short_desc": "Find records in Salesforce",
             "desc": "Find records in Salesforce using Salesforce's REST API",
             "path_vars": {
@@ -142,7 +142,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "update",
-            "display_name": "Update Records",
+            "display_name": "Update records",
             "short_desc": "Update records in Salesforce",
             "desc": "Update records in Salesforce using Salesforce's REST API",
             "path_vars": {
@@ -162,7 +162,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "upsert",
-            "display_name": "Upsert Records",
+            "display_name": "Upsert records",
             "short_desc": "Upsert records in Salesforce",
             "desc": "Upsert records in Salesforce using Salesforce's REST API",
             "path_vars": {
@@ -182,7 +182,7 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "delete",
-            "display_name": "Delete Records",
+            "display_name": "Delete records",
             "short_desc": "Delete records in Salesforce",
             "desc": "Delete records in Salesforce using Salesforce's REST API",
             "path_vars": {

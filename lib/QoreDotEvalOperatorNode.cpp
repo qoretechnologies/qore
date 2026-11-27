@@ -347,7 +347,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             // a class that sandboxed code declared cannot call the private methods of a class that trusted code
             // declared (qore#6843)
             if (meth && strcmp(mname, "copy")
-                    && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
+                    && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false,
+                        qore_class_private::get(*nqc))) {
                 return -1;
             }
             if (qore_class_private::parseNeedsReceiverDispatch(*nqc, meth)) {
@@ -701,7 +702,8 @@ int QoreDotEvalOperatorNode::parseBindMethod(QoreParseContext& parse_context, co
     const char* mname = m->getName();
     // a class that sandboxed code declared cannot call the private methods of a class that trusted code declared, on
     // any object (qore#6843)
-    if (!m->isPseudo() && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, parse_get_class_priv(), false)) {
+    if (!m->isPseudo() && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, parse_get_class_priv(), false,
+            qore_class_private::get(*qc))) {
         return -1;
     }
 

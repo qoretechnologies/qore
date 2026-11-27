@@ -108,6 +108,9 @@ module Util {
 
 
     @section util_3_0 Util 3.0
+    - @ref Util::tmp_location() "tmp_location()" returns the temporary directory that the host set for the calling
+      code's %Program with @ref Qore::Program::setTempDir() "Program::setTempDir()", if any (see
+      @ref sandbox_temp_dir)
     - @ref Util::substitute_env_vars() "substitute_env_vars()" and the \c $VAR references of a \c file:// URL of
       @ref Util::get_file_from_url() "get_file_from_url()" expand no environment variables of the host for code
       restricted from external information (see @ref sandbox_ambient_host_data)
@@ -2063,7 +2066,13 @@ string testfile = tmp_location() + '/test.txt';
 unlink(testfile);
     @endcode
 
-    Environment variables are searched in the following order (the first with a value is used):
+    If the host set a temporary directory for the %Program of the calling code with
+    @ref Qore::Program::setTempDir() "Program::setTempDir()" (see @ref Qore::SandboxManager::callerTempDir()
+    "SandboxManager::callerTempDir()"), it is returned as it was set, for every caller in that %Program; if the
+    calling code cannot write to it, an exception is raised: no other directory is used then (see
+    @ref sandbox_temp_dir).
+
+    Otherwise, environment variables are searched in the following order (the first with a value is used):
     - \c TMPDIR
     - \c TMP
     - \c TEMP
@@ -2078,11 +2087,22 @@ unlink(testfile);
     creates for such code (ex: FsUtil::TmpDir), which such code can place elsewhere by giving their directory
     explicitly (see @ref sandbox_ambient_host_data)
 
-    @throw TMP-ERROR unable to find the location of the temporary directory; temporary directory is not writable
+    @throw TMP-ERROR unable to find the location of the temporary directory; temporary directory is not writable;
+    the temporary directory of the calling code's %Program is not writable for it
 
     @since Util 1.2
 */
 public string sub tmp_location() {
+    # the directory that the host chose for the caller's Program, as it was set: no other directory is used if it
+    # cannot be used, and no path of the host behind it is resolved (qore#7656)
+    *string pgm_dir = SandboxManager::callerTempDir();
+    if (pgm_dir) {
+        if (!is_writable(pgm_dir)) {
+            throw "TMP-ERROR", sprintf("the temporary directory of the Program, %y, is not writable", pgm_dir);
+        }
+        return pgm_dir;
+    }
+
     # TODO: add support for other platforms
     # the environment of the host only for a caller that could read it itself (qore#7586)
     *string dir = SandboxManager::callerMayReadExternalInfo()

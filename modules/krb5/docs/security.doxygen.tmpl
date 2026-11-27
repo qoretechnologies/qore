@@ -98,12 +98,131 @@
     \c DIR backends) honour %Qore filesystem sandboxing: every read, write,
     or create operation passes through
     \c QoreSandboxManagerHelper::checkFilesystemAccess() against the
-    backend's underlying path. Non-filesystem backends (\c MEMORY, \c API,
-    \c KCM, \c KEYRING, \c MSLSA for caches; \c MEMORY for keytabs) are
-    allowed through without a filesystem check. Any backend outside these
-    two allowlists is rejected with a \c KRB5-SANDBOX-ERROR exception so
-    that new MIT Kerberos backends cannot accidentally become
-    sandbox-reachable without review.
+    backend's underlying path. Non-filesystem credential caches and \c MEMORY
+    keytabs are kept per isolation domain (see @ref krb5sec_cache_isolation).
+    Any backend outside these
+    allowlists is rejected with a \c KRB5-SANDBOX-ERROR exception so that new
+    MIT Kerberos backends cannot accidentally become sandbox-reachable without
+    review.
+
+    The library opens a \c FILE keytab by name at every use, following links,
+    and with an acceptor credential made from it at every context that the
+    credential accepts, long after the module checked the name; code that may
+    change the entries on the path of the keytab (the sandboxed code itself,
+    or code of another sandbox) could replace the file in the meantime, for
+    example with a link to another keytab, whose keys the library would then
+    use.  For code that a sandbox governs, the module therefore opens a
+    \c FILE or \c WRFILE keytab itself for each operation and gives the
+    library only the file that it opened:
+    - the file is opened in the directory of its canonical path without
+      following a link at the last component, the filesystem policy is checked
+      for the canonical path of the file opened, and a file that is not a
+      regular file with one link raises \c KRB5-SANDBOX-ERROR (another link to
+      it could be in a directory that the policy does not allow); a file that
+      does not exist raises \c KRB5-KEYTAB-ERROR (\c hasContent() returns
+      \c False), except for \c addEntry(), which creates it with mode 0600
+    - an operation that reads the keytab (\c hasContent(), \c getEntry(),
+      \c listEntries(), \c Krb5Context::acquireCredentialsWithKeytab() and
+      \c GssCredential::fromKeytab()) reads its entries once into a \c MEMORY
+      keytab of the module, which no code that a sandbox governs can open; an
+      acceptor credential keeps the keys that the file had when it was
+      acquired: after a change of the keytab file (a new key version, for
+      example), the credential must be acquired again
+    - an operation that writes the keytab (\c addEntry(), \c removeEntry())
+      writes the file that the module opened, in place
+    - a \c GssCredential that trusted code made from a \c FILE keytab and gives
+      to sandboxed code reads the keytab by name, as for trusted code: no
+      sandbox may be allowed to change the entries on its path
+
+    @section krb5sec_cache_isolation Credential Caches and Keytabs of Sandboxed Code
+
+    Credential caches that are not file based are shared by name: \c MEMORY
+    caches in the process, \c KEYRING caches by the OS user.  The caches of
+    code that a sandbox governs are therefore kept per isolation domain (the
+    domain of its sandbox, see \c SandboxManager::setIsolationDomain(), or its
+    own %Program for a sandbox without one):
+    - a \c MEMORY cache name, or a \c KEYRING cache name in the \c process
+      or \c thread keyring, that such code gives refers to a cache of its
+      domain, which no other code sees; the names that the module gives it back
+      (\c getName(), \c getFullName()) are the names that it gave (other
+      code that opens or lists them sees their real names); a
+      \c MEMORY keytab name refers to a keytab of its domain in the same way
+    - its default cache is the \c MEMORY:default cache of its domain, and its
+      default keytab the \c MEMORY:default keytab of its domain; the default
+      cache and keytab of the process are not visible to it
+    - the caches of other code are not visible to it: a cache object of
+      other code that is given to it, or another domain's cache found in a
+      cache collection, raises \c KRB5-SANDBOX-ERROR
+    - caches that cannot be kept apart per domain, as other processes of the
+      session or of the OS user share them (\c API, \c KCM, \c MSLSA, and the
+      \c KEYRING caches in the \c session, \c user and \c persistent keyrings
+      or with a legacy name), raise \c KRB5-SANDBOX-ERROR
+    - a GSSAPI initiator needs a credential of a cache of its own
+      (\c GssCredential::fromCredentialCache()): the default credentials of
+      the process are not visible to it; its client keytab, with which the
+      library gets a ticket for a cache that has none, is the \c MEMORY:client
+      keytab of its domain, not the client keytab of the process
+      (\c KRB5_CLIENT_KTNAME); this needs \c gss_acquire_cred_from() in the
+      GSSAPI library (MIT Kerberos), and raises \c KRB5-SANDBOX-ERROR without it; a GSSAPI acceptor needs a credential of
+      a keytab of its own (\c GssCredential::fromKeytab()), as the default
+      keytab of the process is not visible to it; a \c GssCredential object that trusted
+      code made and gives to it is a credential that it was given, which it
+      can use
+    - the replay cache of a GSSAPI acceptor, to which the library writes every
+      authenticator that it accepts, is that of its domain, not the replay
+      cache of the process (the default one in the system's temporary
+      directory, or that of \c KRB5RCACHENAME, \c KRB5RCACHETYPE and
+      \c KRB5RCACHEDIR, which do not apply to it): the credential that it gets
+      from a keytab names a \c file2 replay cache in the directory
+      <tt><i>tmp</i>/qore-krb5-rcache-<i>euid</i></tt>, where <i>tmp</i> is
+      the temporary directory of the process (\c TMPDIR, \c TMP, \c TEMP,
+      \c TEMPDIR or \c /tmp, as \c Util::tmp_location() finds it) and
+      <i>euid</i> the effective user ID of the process; the file is named
+      after the isolation domain (and, for a sandbox without one, after its
+      %Program and the process); the replay cache is state of the module, like
+      the \c MEMORY caches of the domain, and needs no filesystem access of
+      the sandbox
+    - the module creates the directory with mode 0700 and refuses (with
+      \c KRB5-SANDBOX-ERROR) a directory that is a link, belongs to another
+      user or that other users can use, a temporary directory that other users
+      can write to without the sticky bit or that belongs to another user
+      than root or the effective user of the process (which can rename the
+      entries of others in it; neither is supported), and a
+      replay cache file that is not a regular file of the effective user with
+      one link, when the credential is acquired and before each acceptor step,
+      as the library opens the file by name for every authenticator
+    - no sandbox may be given access to the directory: code that can create,
+      remove or replace entries on its path could make the library write to
+      other files, and code that can remove a replay cache file turns off the
+      replay protection of its acceptors until the authenticators expire; a
+      grant of write, create or delete access to the temporary directory
+      itself (or to a tree that holds it) is such access, as the entry of the
+      directory in it can be replaced; the acceptor credentials and acceptor
+      steps of code whose own sandbox has such a grant raise
+      \c KRB5-SANDBOX-ERROR, and the grants of the sandboxes of other code
+      cannot be checked by the module
+    - another local user who creates
+      <tt><i>tmp</i>/qore-krb5-rcache-<i>euid</i></tt> first keeps the
+      acceptors of sandboxed code from working (they fail closed with
+      \c KRB5-SANDBOX-ERROR, as the default replay cache of MIT Kerberos
+      does with a file of another user); a temporary-file cleaner that removes
+      the directory or a file in it makes the acceptor credentials of sandboxed
+      code that exist fail in the same way until they are acquired again
+    - the replay cache file of a sandbox without an isolation domain is new
+      for each %Program and process and stays until the files of the
+      temporary directory are cleaned (removing it while the process runs
+      would reopen a replay window)
+    - this needs \c gss_acquire_cred_from() in the GSSAPI library, and raises
+      \c KRB5-SANDBOX-ERROR without it; an acceptor credential of another
+      domain raises \c KRB5-SANDBOX-ERROR in an acceptor of the domain; a
+      temporary directory of its own %Program that no sandbox can access can
+      later replace that of the process
+    - code in several isolation domains at once (the sandboxes of different
+      tenants govern it) has no caches that are not file based
+
+    Code that runs with the system policy (a capability that trusted code made
+    with \c SandboxManager::createSystemPolicyCall()) uses the caches of the
+    process.
 
     Credential-cache collection enumeration also checks each discovered cache
     before reading cache details. If the active filesystem sandbox denies a

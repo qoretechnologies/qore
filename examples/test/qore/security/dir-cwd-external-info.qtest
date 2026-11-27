@@ -1,0 +1,563 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandbox file-system policy checks of opened files and directories (F_GETPATH on macOS) and getcwd() paths
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A Dir object gives code restricted from external information no path that names the process's current directory,
+# which the object starts in (qoretechnologies/qore#7662)
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class DirCwdExternalInfoTest
+
+#! Dir paths and messages that derive from the process's current directory, for restricted and unrestricted code
+/** The test process changes to a directory of its own whose name is unique, so that every string that names the
+    current directory can be found.  Each check runs in top-level code of a %modern Program in each execution mode, so
+    that the JIT compiles it; every string in the results and the exceptions that the code gets (keys and values at
+    any depth) is checked for the current directory.  Code that is not restricted from external information, also
+    sandboxed code, which can call getcwd(), keeps getting the paths of the host.
+*/
+class DirCwdExternalInfoTest inherits QUnit::Test {
+    private {
+        #! the execution modes
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the top-level code of the Programs; %y: an absolute directory outside the current directory
+        /** \c res gets the results (in a fixed order, see Expected), \c errs the exceptions (see ExpectedErrors)
+        */
+        const Code = "our list<auto> res = ();
+our list<hash<ExceptionInfo>> errs = ();
+string other = %y;
+Dir d();
+res += d.path();
+Dir c = d.copy();
+res += c.path();
+c.chdir(\"sub\");
+res += c.path();
+res += c.openDir(\"deeper\").path();
+c.chdir(\"..\");
+res += c.path();
+c.chdir(\"..\");
+res += c.path();
+res += d.openDir(\"sub\").path();
+File f = d.openFile(\"a.txt\");
+res += f.getFileName();
+res += c.listDirs().size() > 0;
+res += d.list().size();
+Dir a();
+a.chdir(other);
+res += a.path();
+a.chdir(\"x\");
+res += a.path();
+Dir m = d.copy();
+m.chdir(\"missing-7662\");
+code try_op = sub (code op) {
+    try {
+        op();
+    } catch (hash<ExceptionInfo> ex) {
+        errs += ex;
+    }
+};
+try_op(sub () { d.openFile(\"missing-7662.txt\"); });
+try_op(sub () { d.rmdir(\"missing-7662\"); });
+try_op(sub () { d.mkdir(\"sub\"); });
+try_op(sub () { m.list(); });
+try_op(sub () { m.stat(); });
+try_op(sub () { m.hstat(); });
+try_op(sub () { m.chmod(0755); });
+try_op(sub () { Dir t = d.copy(); t.chdir(\"a.txt/x\"); t.create(); });
+try_op(sub () { m.statvfs(); });
+list<auto> sub get() {
+    return (res, errs);
+}
+";
+
+        #! the top-level code of the sandboxed Programs; %y: a directory outside the current directory
+        /** \c errs gets the denials (see SandboxDenials)
+        */
+        const SandboxCode = "our list<hash<ExceptionInfo>> errs = ();
+our list<auto> res = ();
+string other = %y;
+code try_op = sub (code op) {
+    try {
+        op();
+    } catch (hash<ExceptionInfo> ex) {
+        errs += ex;
+    }
+};
+Dir d();
+try_op(sub () { d.chdir(\"denied\"); });
+try_op(sub () { d.openDir(\"denied\").list(); });
+try_op(sub () { d.openDir(\"denied\").openFile(\"x.txt\"); });
+try_op(sub () { d.openDir(\"denied\").mkdir(\"new\"); });
+try_op(sub () { d.removeFile(\"a.txt\"); });
+try_op(sub () { d.openDir(\"denied\").hstat(); });
+try_op(sub () { d.openDir(\"denied\").create(); });
+try_op(sub () { d.openFile(\"a.txt\").chown(-1); });
+try_op(sub () { Dir t(); t.chdir(other); t.chdir(\"x\"); });
+res += d.path();
+list<auto> sub get() {
+    return (res, errs);
+}
+";
+
+        #! the top-level code of the Programs with a sandbox root below the current directory
+        const RootCode = "our list<hash<ExceptionInfo>> errs = ();
+code try_op = sub (code op) {
+    try {
+        op();
+    } catch (hash<ExceptionInfo> ex) {
+        errs += ex;
+    }
+};
+Dir d();
+try_op(sub () { d.list(); });
+try_op(sub () { d.exists(); });
+try_op(sub () { d.chdir(\"a.txt\"); });
+try_op(sub () { d.openFile(\"a.txt\"); });
+list<hash<ExceptionInfo>> sub get() {
+    return errs;
+}
+";
+
+        #! the number of entries of the current directory
+        const Entries = 4;
+    }
+
+    public {
+        #! the directory of the test
+        TmpDir dir;
+        #! the current directory of the process
+        string cwd;
+        #! the unique name of the current directory
+        string cwd_name;
+        #! a directory outside the current directory
+        string other;
+        #! the current directory before the test
+        string old_cwd;
+    }
+
+    constructor() : QUnit::Test("DirCwdExternalInfoTest", "1.0", \ARGV) {
+        dir = new TmpDir("dir-cwd-7662-");
+        cwd_name = sprintf("cwd-7662-%d-%d", getpid(), now_us().getEpochSeconds());
+        cwd = realpath(dir.path) + DirSep + cwd_name;
+        mkdir(cwd);
+        mkdir(cwd + DirSep + "sub");
+        mkdir(cwd + DirSep + "sub" + DirSep + "deeper");
+        mkdir(cwd + DirSep + "denied");
+        {
+            File f();
+            f.open2(cwd + DirSep + "a.txt", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("x");
+        }
+        other = realpath(dir.path) + DirSep + "other";
+        mkdir(other);
+        mkdir(other + DirSep + "x");
+        # links: a relative link in the current directory to the other directory, and an absolute link in the other
+        # directory to a subdirectory of the current directory
+        symlink("../other", cwd + DirSep + "lnk");
+        symlink(cwd + DirSep + "sub", other + DirSep + "tocwd");
+        old_cwd = getcwd();
+        chdir(cwd);
+
+        addTestCase("code restricted from external information gets paths relative to the current directory",
+            \testNoExternalInfo());
+        addTestCase("unrestricted code gets the paths of the host", \testUnrestricted());
+        addTestCase("sandboxed code restricted from external information gets denials without the current directory",
+            \testSandboxedNoExternalInfo());
+        addTestCase("sandboxed code that can call getcwd() gets the paths of the host", \testSandboxed());
+        addTestCase("a sandbox root below the current directory", \testSandboxRoot());
+        addTestCase("the receiver of a Dir object decides the form of its path", \testReceiver());
+        addTestCase("relative paths of the host directory", \testRelativeForms());
+        addTestCase("realpath() for code restricted from external information", \testRealpathNoExternalInfo());
+        addTestCase("realpath() for unrestricted code", \testRealpathUnrestricted());
+        addTestCase("realpath() under a policy that allows only the current directory", \testRealpathSandboxed());
+        addTestCase("more errors, link fields and redirected files", \testMoreErrors());
+        addTestCase("closures and module code follow the code that the paths are given to", \testCallers());
+        on_exit {
+            chdir(old_cwd);
+        }
+        set_return_value(main());
+    }
+
+    testNoExternalInfo() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> l = runCode(m.value, PO_NO_EXTERNAL_INFO, sprintf(Code, other), m.key);
+            list<auto> res = l[0];
+            list<hash<ExceptionInfo>> errs = l[1];
+            assertEq((".", ".", "./sub", "./sub/deeper", ".", "..", "./sub", "./a.txt", True, Entries, other,
+                other + DirSep + "x"), res, m.key + ": results");
+            checkErrors(errs, m.key, True);
+            checkNoCwd(l, m.key);
+        }
+    }
+
+    testUnrestricted() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> l = runCode(m.value, 0, sprintf(Code, other), m.key);
+            list<auto> res = l[0];
+            list<hash<ExceptionInfo>> errs = l[1];
+            string parent = dirname(cwd);
+            assertEq((cwd, cwd, cwd + "/sub", cwd + "/sub/deeper", cwd, parent, cwd + "/sub", cwd + "/a.txt", True,
+                Entries, other, other + DirSep + "x"), res, m.key + ": results");
+            checkErrors(errs, m.key, False);
+        }
+    }
+
+    testSandboxedNoExternalInfo() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> l = runSandboxed(m.value, PO_NO_EXTERNAL_INFO, m.key);
+            assertEq((".",), l[0], m.key + ": the path");
+            list<hash<ExceptionInfo>> errs = l[1];
+            assertEq(9, errs.size(), m.key + ": the denials");
+            list<string> paths = map (regex_extract($1.desc, "^Access to '([^']*)'") ?? ("?",))[0], errs;
+            assertEq(("./denied", "./denied", "./denied/x.txt", "./denied/new", "./a.txt", "./denied",
+                "./denied", "./a.txt", other + "/x"), paths, m.key + ": the paths named");
+            map assertEq("FILESYSTEM-ACCESS-DENIED", $1.err, m.key), errs;
+            checkNoCwd(l, m.key + " sandboxed");
+        }
+    }
+
+    testSandboxed() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> l = runSandboxed(m.value, 0, m.key);
+            assertEq((cwd,), l[0], m.key + ": the path");
+            list<hash<ExceptionInfo>> errs = l[1];
+            assertEq(9, errs.size(), m.key + ": the denials");
+            assertEq(sprintf("Access to '%s/a.txt' denied: write access not permitted by security policy", cwd),
+                errs[7].desc, m.key);
+            assertEq(sprintf("Access to '%s/denied' denied by security policy (path is in denied list)", cwd),
+                errs[0].desc, m.key);
+        }
+    }
+
+    testSandboxRoot() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            foreach int po in ((0, PO_NO_EXTERNAL_INFO)) {
+                string label = m.key + (po ? " no-external-info" : "");
+                SandboxManager sm();
+                sm.setFilesystemSandboxRoot(cwd + DirSep + "sub");
+                Program p(PO_MODERN | po);
+                p.setSandboxManager(sm);
+                p.setExecMode(m.value);
+                p.parse(RootCode, "dir-cwd-root-" + m.key);
+                p.run();
+                list<hash<ExceptionInfo>> errs = p.callFunction("get");
+                assertEq(4, errs.size(), label + ": the denials");
+                map assertEq("FILESYSTEM-ACCESS-DENIED", $1.err, label), errs;
+                if (po) {
+                    assertEq(("Access to '.' denied: path is outside the sandbox root",
+                        "Access to '.' denied: path is outside the sandbox root",
+                        "Access to './a.txt' denied: path is outside the sandbox root",
+                        "Access to './a.txt' denied: path is outside the sandbox root"),
+                        map $1.desc, errs, label);
+                    checkNoCwd(errs, label);
+                } else {
+                    # sandboxed code gets the paths that it can get with getcwd(), but not the root
+                    assertEq(sprintf("Access to '%s' denied: path is outside the sandbox root", cwd), errs[0].desc,
+                        label);
+                }
+            }
+        }
+    }
+
+    #! a Dir object that the host lends gives restricted code a relative path; one that such code lends to the host
+    #! gives it the path of the host
+    testReceiver() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+            p.setExecMode(m.value);
+            p.parse("list<auto> sub lent(Dir d, File f) { return (d.path(), f.getFileName()); }
+Dir sub mine() { Dir d(); d.chdir(\"sub\"); return d; }
+File sub file() { return (new Dir()).openFile(\"a.txt\"); }", "dir-cwd-receiver-" + m.key);
+            Dir d();
+            d.chdir("sub");
+            File f = (new Dir()).openFile("a.txt");
+            assertEq(cwd + "/sub", d.path(), m.key);
+            assertEq(cwd + "/a.txt", f.getFileName(), m.key);
+            assertEq(("./sub", "./a.txt"), p.callFunction("lent", d, f), m.key + ": lent");
+            Dir rd = p.callFunction("mine");
+            assertEq(cwd + "/sub", rd.path(), m.key + ": the host receives a Dir");
+            File rf = p.callFunction("file");
+            assertEq(cwd + "/a.txt", rf.getFileName(), m.key + ": the host receives a File");
+            # an absolute path given replaces the current directory
+            d.chdir(other);
+            assertEq((other, "./a.txt"), p.callFunction("lent", d, f), m.key + ": an absolute path");
+            # a file opened again by a name that the code gives
+            f.open2(other + "/x/../../" + cwd_name + "/a.txt");
+            assertEq(other + "/x/../../" + cwd_name + "/a.txt", p.callFunction("lent", d, f)[1], m.key + ": reopened");
+        }
+    }
+
+    #! the forms of the paths above and next to the current directory
+    testRelativeForms() {
+        Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+        p.parse("list<string> sub forms(string name, int depth) {
+    list<string> rv = ();
+    Dir d();
+    d.chdir(\"../other/x\");
+    rv += d.path();
+    d.chdir(\"../../\" + name + \"/sub/./deeper/..\");
+    rv += d.path();
+    Dir r();
+    rv += r.path();
+    # the root itself has no path that chdir() can reach (an existing limit of Dir::chdir())
+    for (int i = 1; i < depth; ++i) {
+        r.chdir(\"..\");
+        rv += r.path();
+    }
+    return rv;
+}", "dir-cwd-forms");
+        # each step up is one more ".." up to the root
+        int depth = (select cwd.split("/"), $1 != "").size();
+        list<string> rv = p.callFunction("forms", cwd_name, depth);
+        assertEq("../other/x", rv[0]);
+        assertEq("./sub", rv[1]);
+        assertEq(".", rv[2]);
+        assertEq(2 + depth, rv.size());
+        for (int i = 1; i < depth; ++i) {
+            assertEq((map "..", xrange(i)).join("/"), rv[2 + i], "step " + i);
+        }
+        checkNoCwd(rv, "forms");
+    }
+
+    #! the code of the realpath() checks
+    const RealpathCode = "list<auto> sub get(string other, string cwd, bool proc) {
+    list<auto> rv = ();
+    foreach string p in ((\".\", \"sub\", \"..\", \"lnk\", other, cwd + \"/sub\", other + \"/tocwd\",
+            other + \"/../\" + cwd.substr(cwd.rfind(\"/\") + 1) + \"/sub/deeper/..\")) {
+        try {
+            rv += realpath(p);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += ex;
+        }
+    }
+    if (proc) {
+        rv += realpath(\"/proc/self/cwd\");
+        rv += realpath(\"/proc/self/cwd/sub\");
+    }
+    return rv;
+}";
+
+    testRealpathNoExternalInfo() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> rv = runRealpath(m.value, PO_NO_EXTERNAL_INFO, False, m.key);
+            # relative paths and absolute paths whose resolution reaches more of the current directory are relative;
+            # an absolute path that names the current directory itself keeps its canonical form
+            list<auto> exp = (".", "./sub", "..", "../other", other, cwd + "/sub", "./sub", cwd + "/sub");
+            if (is_dir("/proc/self")) {
+                exp += (".", "./sub");
+            }
+            assertEq(exp, rv, m.key);
+            # the results other than those for the absolute paths that name the current directory themselves
+            checkNoCwd(rv[0..4] + rv[6] + rv[8..], m.key);
+        }
+    }
+
+    testRealpathUnrestricted() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> rv = runRealpath(m.value, 0, False, m.key);
+            list<auto> exp = (cwd, cwd + "/sub", dirname(cwd), other, other, cwd + "/sub", cwd + "/sub", cwd + "/sub");
+            if (is_dir("/proc/self")) {
+                exp += (cwd, cwd + "/sub");
+            }
+            assertEq(exp, rv, m.key);
+        }
+    }
+
+    testRealpathSandboxed() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            list<auto> rv = runRealpath(m.value, PO_NO_EXTERNAL_INFO, True, m.key);
+            assertEq(".", rv[0], m.key);
+            assertEq("./sub", rv[1], m.key);
+            # the parent and the other directory are denied: the denials name the paths as given
+            assertEq("FILESYSTEM-ACCESS-DENIED", rv[2].err, m.key);
+            assertEq("Access to '..' denied: read access not permitted by security policy", rv[2].desc, m.key);
+            assertEq("FILESYSTEM-ACCESS-DENIED", rv[3].err, m.key);
+            checkNoCwd(rv[0..3], m.key);
+        }
+    }
+
+    private list<auto> runRealpath(ExecMode em, int po, bool sandboxed, string label) {
+        Program p(PO_MODERN | po);
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.addFilesystemAllowedPath(cwd, QSEC_READ);
+            p.setSandboxManager(sm);
+        }
+        p.setExecMode(em);
+        # the checks run in top-level code, so that the JIT compiles them
+        # the links to the current directory in /proc are checked without a policy (a policy decides on /proc)
+        bool proc = !sandboxed && is_dir("/proc/self");
+        p.parse(RealpathCode + "\nour list<auto> res = get(" + sprintf("%y, %y, %y", other, cwd, proc) + ");",
+            "dir-cwd-realpath-" + label);
+        p.run();
+        return p.getGlobalVariable("res");
+    }
+
+    #! errors without a policy, the link field of listings and the name of a redirected file
+    testMoreErrors() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+            p.setExecMode(m.value);
+            p.parse("our list<auto> res = ();
+Dir d();
+Dir m = d.copy();
+m.chdir(\"missing-7662\");
+try { m.chown(0); } catch (hash<ExceptionInfo> ex) { res += ex; }
+try { d.removeFile(\"sub\"); } catch (hash<ExceptionInfo> ex) { res += ex; }
+res += (map $1, d.listInfo(), $1.name == \"lnk\")[0].link;
+*string sub lent(File f) { return f.getFileName(); }", "dir-cwd-more-" + m.key);
+            p.run();
+            list<auto> res = p.getGlobalVariable("res");
+            assertEq("DIR-CHOWN-FAILURE", res[0].err, m.key);
+            assertEq("error in Dir::chown() on './missing-7662'", res[0].desc.substr(0, 41), m.key);
+            assertEq("DIR-REMOVEFILE-FAILURE", res[1].err, m.key);
+            assertEq("error removing file 'sub'", res[1].desc.substr(0, 25), m.key);
+            # the target of a link is given as it is (file-system data)
+            assertEq("../other", res[2], m.key);
+            checkNoCwd(res, m.key);
+
+            # a file redirected to a file opened in the directory takes its name
+            File g();
+            g.open2(other + "/redirected-7662.txt", O_CREAT | O_WRONLY | O_TRUNC);
+            File src = (new Dir()).openFile("a.txt");
+            g.redirect(src);
+            assertEq("./a.txt", p.callFunction("lent", g), m.key + ": redirected");
+            assertEq(cwd + "/a.txt", g.getFileName(), m.key + ": redirected (host)");
+        }
+    }
+
+    #! a closure gets the form of the code that it runs for, as getcwd() is allowed or not for it; module code that
+    #! restricted code calls gets the restricted form
+    testCallers() {
+        string mod = dir.path + DirSep + "DirPath7662.qm";
+        {
+            File f();
+            f.open2(mod, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern
+module DirPath7662 {
+    version = \"1.0\";
+    desc = \"test\";
+    author = \"test\";
+}
+public namespace DirPath7662 {
+    public string sub dir_path(Dir d) { return d.path(); }
+}
+");
+        }
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+            p.setExecMode(m.value);
+            p.parse(sprintf("%%requires %s
+list<auto> sub call_host(code c) { return c(); }
+code sub get_closure() { return auto sub () { Dir d(); return d.path(); }; }
+string sub module_path() { Dir d(); d.chdir(\"sub\"); return dir_path(d); }", mod), "dir-cwd-callers-" + m.key);
+            Dir hd();
+            # a closure of the host called by restricted code
+            list<auto> l = p.callFunction("call_host", auto sub () {
+                bool can_getcwd;
+                try {
+                    *string cwd_str = getcwd();
+                    can_getcwd = exists cwd_str;
+                } catch () {
+                    can_getcwd = False;
+                }
+                return (hd.path(), can_getcwd);
+            });
+            # the closure runs as the code of the host, which may call getcwd()
+            assertEq((cwd, True), l, m.key + ": host closure called by restricted code");
+            # a closure of the restricted code called by the host runs as the restricted code
+            code c = p.callFunction("get_closure");
+            assertEq(".", c(), m.key + ": restricted closure called by the host");
+            # module code called by restricted code
+            assertEq("./sub", p.callFunction("module_path"), m.key + ": module code");
+        }
+    }
+
+    private list<auto> runCode(ExecMode em, int po, string code, string label) {
+        Program p(PO_MODERN | po);
+        p.setExecMode(em);
+        p.parse(code, "dir-cwd-" + label);
+        p.run();
+        return p.callFunction("get");
+    }
+
+    private list<auto> runSandboxed(ExecMode em, int po, string label) {
+        SandboxManager sm();
+        sm.addFilesystemAllowedPath(cwd, QSEC_READ);
+        sm.addFilesystemDeniedPath(cwd + DirSep + "denied");
+        # an absolute path that the code gives is allowed, a relative path below it is denied
+        sm.addFilesystemAllowedPath(other, QSEC_READ);
+        sm.addFilesystemDeniedPath(other + DirSep + "x");
+        Program p(PO_MODERN | po);
+        p.setSandboxManager(sm);
+        p.setExecMode(em);
+        p.parse(sprintf(SandboxCode, other), "dir-cwd-sandbox-" + label);
+        p.run();
+        return p.callFunction("get");
+    }
+
+    #! checks the errors of the Code: their codes and the paths that they name, relative for restricted code
+    private checkErrors(list<hash<ExceptionInfo>> errs, string label, bool restricted) {
+        list<string> codes = ("FILE-OPEN2-ERROR", "DIR-RMDIR-FAILURE", "DIR-MKDIR-FAILURE", "DIR-READ-FAILURE",
+            "DIR-STAT-FAILURE", "DIR-HSTAT-FAILURE", "DIR-CHMOD-FAILURE", "DIR-CREATE-FAILURE", "DIR-STATVFS-FAILURE");
+        assertEq(codes, map $1.err, errs, label + ": the errors");
+        list<string> paths = ("./missing-7662.txt", "./missing-7662", "./sub", "./missing-7662", "./missing-7662",
+            "./missing-7662", "./missing-7662", "./a.txt", "./missing-7662");
+        if (!restricted) {
+            paths = map cwd + $1.substr(1), paths;
+        }
+        list<string> named = map (regex_extract($1.desc, "'([^']*)'") ?? ("?",))[0], errs;
+        assertEq(paths, named, label + ": the paths named");
+    }
+
+    #! checks that no string in the value, in keys or values at any depth, names the current directory
+    private checkNoCwd(auto v, string label) {
+        list<string> found = ();
+        int strings = findStrings(v, label, (cwd_name, cwd), \found);
+        assertGt(3, strings, label + ": the strings checked");
+        assertEq((), found, label + ": the current directory is not named");
+    }
+
+    #! adds each string in the value that contains a needle to \a found; returns the strings checked
+    private int findStrings(auto v, string label, list<string> needles, reference<list<string>> found) {
+        switch (v.typeCode()) {
+            case NT_STRING: {
+                foreach string needle in (needles) {
+                    if (v.find(needle) >= 0) {
+                        found += sprintf("%s: %y names %y", label, v, needle);
+                    }
+                }
+                return 1;
+            }
+            case NT_HASH: {
+                int rv = 0;
+                foreach hash<auto> i in (v.pairIterator()) {
+                    rv += findStrings(i.key, label + " key", needles, \found);
+                    rv += findStrings(i.value, label + "." + i.key, needles, \found);
+                }
+                return rv;
+            }
+            case NT_LIST: {
+                int rv = 0;
+                int n = 0;
+                foreach auto e in (v) {
+                    rv += findStrings(e, sprintf("%s[%d]", label, n++), needles, \found);
+                }
+                return rv;
+            }
+        }
+        return 0;
+    }
+}

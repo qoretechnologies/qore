@@ -22,6 +22,19 @@ sub fail_next_allocation() {
 
 sub disarm() {
     call_function("dbg_fail_allocation", 0);
+    call_function("dbg_fail_allocation", 0, -1);
+}
+
+#! makes the \a n th creation of a hash member that follows in this thread fail; 0: none
+sub fail_hash_member(int n) {
+    if (n) {
+        call_function("dbg_fail_allocation", n, -1);
+    }
+}
+
+#! the number of hashes that exist in the process
+int sub live_hashes() {
+    return call_function("dbg_live_hash_count");
 }
 
 #! the request handler of the server scenario: "/fail" fails for lack of memory in builtin code
@@ -49,9 +62,251 @@ class FailHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! grows a list with an operation of the function itself (no builtin code), in which the allocation fails
+int sub grow_list(int n) {
+    list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += i;
+    }
+    return l.size();
+}
+
+#! grows a string with an operation of the function itself
+int sub grow_string(int n) {
+    string str = "";
+    for (int i = 0; i < n; ++i) {
+        str += "x";
+    }
+    return str.size();
+}
+
+#! grows a list that a closure refers to
+int sub grow_closure_local(int n) {
+    list<int> l = ();
+    code size = int sub () { return l.size(); };
+    for (int i = 0; i < n; ++i) {
+        l += i;
+    }
+    return size();
+}
+
+#! a function between the caller and the function whose allocation fails
+int sub grow_nested(int n) {
+    int rv = grow_list(n);
+    return rv;
+}
+
+#! grows a list of floats with the operation that native code makes without a runtime helper that handles a failed
+#! allocation (qore_rt_list_push_float_in_place_unchecked())
+int sub grow_floats(int n) {
+    list<float> l = ();
+    for (int i = 0; i < n; ++i) {
+        float f = i * 1.5;
+        push l, f;
+    }
+    return l.size();
+}
+
+#! calls grow_floats() directly: native code makes the call without a runtime helper
+int sub grow_floats_nested(int n) {
+    int rv = grow_floats(n);
+    return rv;
+}
+
+#! makes a list with map, which grows it, while holding a lock
+int sub grow_map_locked(Mutex m, int n) {
+    AutoLock al(m);
+    list<int> l = map $1, xrange(n);
+    return l.size();
+}
+
+#! grows a list of floats as grow_floats() while holding a lock
+int sub grow_floats_locked(Mutex m, int n) {
+    AutoLock al(m);
+    list<float> l = ();
+    for (int i = 0; i < n; ++i) {
+        float f = i * 1.5;
+        push l, f;
+    }
+    return l.size();
+}
+
+#! grows a list with an on_exit handler that uses a local
+int sub grow_on_exit(reference<list<string>> log, int n) {
+    string tag = sprintf("on_exit %d", n);
+    on_exit log += tag;
+    list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += i;
+    }
+    return l.size();
+}
+
+#! counts the objects created and destroyed
+class Counted {
+    public {
+        static int created = 0;
+        static int destroyed = 0;
+    }
+
+    constructor() {
+        ++created;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! pushes new objects to a list
+int sub push_objects(int n) {
+    list<Counted> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, new Counted();
+    }
+    return l.size();
+}
+
+#! makes a list of new objects with map
+int sub map_objects(int n) {
+    list<Counted> l = map new Counted(), xrange(n);
+    return l.size();
+}
+
+#! stores new objects past the end of a list
+int sub index_objects(int n) {
+    list<Counted> l = ();
+    for (int i = 0; i < n; ++i) {
+        l[i] = new Counted();
+    }
+    return l.size();
+}
+
+#! stores a new object in a new key of a hash
+int sub hash_objects(int n) {
+    hash<auto> h = {};
+    h."key" = new Counted();
+    return h.size() + n - 1;
+}
+
+#! stores a new object in a new key of a hash that the store creates (qore#7763)
+int sub hash_new_objects(int fail_at) {
+    *hash<auto> h;
+    fail_hash_member(fail_at);
+    h."key" = new Counted();
+    return h.size();
+}
+
+#! as hash_new_objects(), using the value of the assignment
+int sub hash_new_result_objects(int fail_at) {
+    *hash<auto> h;
+    fail_hash_member(fail_at);
+    auto v = (h."key" = new Counted());
+    return h.size() + (v ? 0 : 1);
+}
+
+#! as hash_new_objects() with a key that is not constant
+int sub hash_new_dynamic_objects(int fail_at) {
+    *hash<auto> h;
+    string k = "key";
+    fail_hash_member(fail_at);
+    h{k} = new Counted();
+    return h.size();
+}
+
+#! makes a hash with a key that is not constant
+int sub make_hash_objects(int fail_at) {
+    string k = "key";
+    fail_hash_member(fail_at);
+    hash<auto> h = {k: new Counted()};
+    return h.size();
+}
+
+#! makes hashes with constant keys
+int sub make_hash_1_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted()};
+    return h.size();
+}
+
+int sub make_hash_2_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted(), "b": new Counted()};
+    return h.size();
+}
+
+int sub make_hash_3_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted(), "b": new Counted(), "c": new Counted()};
+    return h.size();
+}
+
+#! makes a hash with the hash map operator
+int sub hash_map_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = map {$1.toString(): new Counted()}, (1, 2);
+    return h.size();
+}
+
+#! changes a copy of a hash, which copies it
+int sub hash_copy_objects(int fail_at) {
+    hash<auto> h = {"a": new Counted(), "b": new Counted()};
+    hash<auto> h2 = h;
+    fail_hash_member(fail_at);
+    h2."c" = h."a";
+    return h.size() + h2.size();
+}
+
+#! holds a hash
+class Box {
+    public {
+        hash<auto> h;
+    }
+}
+
+#! removes a slice of the hash that the object holds
+int sub slice_objects(Box b, int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> r = remove b.h{"a", "b"};
+    return r.size();
+}
+
+#! holds objects in members
+class Pair {
+    public {
+        auto a;
+        auto b;
+    }
+}
+
+#! removes a slice of the object's members
+int sub object_slice_objects(Pair p, int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> r = remove p{"a", "b"};
+    return r.size();
+}
+
+#! grows a list in a method
+class Grower {
+    int grow(int n) {
+        list<int> l = ();
+        for (int i = 0; i < n; ++i) {
+            l += i;
+        }
+        return l.size();
+    }
+}
+
 class AllocFailureChild {
     constructor() {
         switch (ARGV[0]) {
+            case "compiled": compiled(); break;
+            case "locked": locked(); break;
+            case "counts": counts(); break;
+            case "member-counts": memberCounts(); break;
+            case "locked-unhandled": lockedUnhandled(); break;
+            case "unhandled-direct": unhandled(False); break;
+            case "unhandled-nested": unhandled(True); break;
             case "builtin": builtin(); break;
             case "callback": callback(); break;
             case "thread": thread(); break;
@@ -74,7 +329,8 @@ class AllocFailureChild {
         printf("again: %d\n", strmul("x", 100000).size());
     }
 
-    #! a statement whose own allocation fails (no builtin code is called): the AST interpreter fails the statement
+    #! an operation whose own allocation fails (no builtin code is called) in a try block of the same function: the AST
+    #! interpreter fails the statement, the other modes and compiled code the runtime helper of the operation
     static statement() {
         list<int> l = ();
         try {
@@ -110,6 +366,235 @@ class AllocFailureChild {
         printf("string: %y\n", ok && str.size() == n + 1 && str[n] == "y");
         l = ();
         printf("again: %d\n", strmul("x", 100000).size());
+    }
+
+    #! an operation of a called function itself (no builtin code) that cannot allocate its memory fails the call; the
+    #! caller catches the exception, and the function runs again; the calls are direct calls, not calls of closures
+    static compiled() {
+        Grower g();
+        # the functions are called often enough to be compiled in the tiered mode
+        for (int i = 0; i < 50; ++i) {
+            grow_list(10);
+            grow_string(10);
+            grow_closure_local(10);
+            grow_nested(10);
+            g.grow(10);
+        }
+        # a local of the caller, which must keep its value
+        string caller_local = "caller";
+        try {
+            fail_next_allocation();
+            printf("list: no exception: %d\n", grow_list(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("list: caught %s\n", ex.err);
+        }
+        disarm();
+        printf("list: again: %d\n", grow_list(100000));
+        try {
+            fail_next_allocation();
+            printf("string: no exception: %d\n", grow_string(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("string: caught %s\n", ex.err);
+        }
+        disarm();
+        printf("string: again: %d\n", grow_string(100000));
+        try {
+            fail_next_allocation();
+            printf("closure-local: no exception: %d\n", grow_closure_local(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("closure-local: caught %s\n", ex.err);
+        }
+        disarm();
+        printf("closure-local: again: %d\n", grow_closure_local(100000));
+        try {
+            fail_next_allocation();
+            printf("nested: no exception: %d\n", grow_nested(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("nested: caught %s\n", ex.err);
+        }
+        disarm();
+        printf("nested: again: %d\n", grow_nested(100000));
+        try {
+            fail_next_allocation();
+            printf("method: no exception: %d\n", g.grow(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("method: caught %s\n", ex.err);
+        }
+        disarm();
+        printf("method: again: %d\n", g.grow(100000));
+        printf("caller local: %s\n", caller_local);
+    }
+
+    #! the value that an operation of compiled code was storing when its list could not grow is released: as many
+    #! objects are destroyed as were created
+    static counts() {
+        for (int i = 0; i < 50; ++i) {
+            push_objects(10);
+            map_objects(10);
+            index_objects(10);
+            hash_objects(10);
+        }
+        foreach string name in (("push", "map", "index", "hash")) {
+            try {
+                if (name == "hash") {
+                    # the next creation of a hash member fails
+                    call_function("dbg_fail_allocation", 1, -1);
+                } else {
+                    fail_next_allocation();
+                }
+                switch (name) {
+                    case "push": push_objects(100000); break;
+                    case "map": map_objects(100000); break;
+                    case "index": index_objects(100000); break;
+                    case "hash": hash_objects(100000); break;
+                }
+                printf("%s: no exception\n", name);
+            } catch (hash<ExceptionInfo> ex) {
+                printf("%s: caught %s\n", name, ex.err);
+            }
+            disarm();
+            printf("%s: balanced: %y\n", name, Counted::created == Counted::destroyed);
+        }
+    }
+
+    #! the code of each case of memberCounts() with the creation of the hash member to fail (0: none)
+    static int memberCase(string name, int fail_at) {
+        switch (name) {
+            case "hash-new": return hash_new_objects(fail_at);
+            case "hash-new-result": return hash_new_result_objects(fail_at);
+            case "hash-new-dynamic": return hash_new_dynamic_objects(fail_at);
+            case "make-hash": return make_hash_objects(fail_at);
+            case "make-hash-1": return make_hash_1_objects(fail_at);
+            case "make-hash-2": return make_hash_2_objects(fail_at);
+            case "make-hash-3": return make_hash_3_objects(fail_at);
+            case "hash-map": return hash_map_objects(fail_at);
+            case "hash-copy": return hash_copy_objects(fail_at);
+            case "object-slice": {
+                Pair p();
+                p.a = new Counted();
+                p.b = new Counted();
+                on_exit if (fail_at) {
+                    # the member of the result for "a" exists; the one for "b" cannot be created: "b" stays
+                    printf("%s: kept: a: %y b: %y\n", name, exists p.a, exists p.b);
+                }
+                return object_slice_objects(p, fail_at);
+            }
+        }
+        Box b();
+        b.h = {"a": new Counted(), "b": new Counted()};
+        on_exit if (fail_at) {
+            # the member of the result for "a" exists; the one for "b" cannot be created: "b" stays in the hash
+            printf("%s: kept: %y\n", name, keys b.h);
+        }
+        return slice_objects(b, fail_at);
+    }
+
+    #! runs a case of memberCounts() whose hash member cannot be created; returns the number of hashes before
+    static int memberFailure(string name, int fail_at) {
+        int hashes = live_hashes();
+        try {
+            memberCase(name, fail_at);
+            printf("%s: no exception\n", name);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: caught %s\n", name, ex.err);
+        }
+        disarm();
+        return hashes;
+    }
+
+    #! the values and the new hash of an operation that cannot create a hash member are released once, and a value
+    #! that a removal could not store in its result stays in the hash (qore#7763): as many objects are destroyed as
+    #! were created, and as many hashes exist as before
+    static memberCounts() {
+        hash<string, int> cases = {
+            "hash-new": 1,
+            "hash-new-result": 1,
+            "hash-new-dynamic": 1,
+            "make-hash": 1,
+            "make-hash-1": 1,
+            "make-hash-2": 2,
+            "make-hash-3": 3,
+            "hash-map": 2,
+            "hash-copy": 2,
+            "slice": 2,
+            "object-slice": 2,
+        };
+        for (int i = 0; i < 50; ++i) {
+            foreach string name in (keys cases) {
+                memberCase(name, 0);
+            }
+        }
+        foreach hash<auto> c in (cases.pairIterator()) {
+            int hashes = memberFailure(c.key, c.value);
+            printf("%s: balanced: %y\n", c.key, Counted::created == Counted::destroyed);
+            printf("%s: hashes: %d\n", c.key, live_hashes() - hashes);
+        }
+    }
+
+    #! a function that holds a lock and runs an on_exit handler that uses a local fails with the exception: the lock
+    #! is released, the handler runs, and the function runs again
+    static locked() {
+        Mutex m();
+        list<string> log;
+        for (int i = 0; i < 50; ++i) {
+            grow_map_locked(m, 10);
+            grow_on_exit(\log, 10);
+        }
+        log = ();
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_map_locked(m, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("lock free: %y\n", !m.lockOwner() && m.trylock() == 0);
+        m.unlock();
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_on_exit(\log, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("log: %y\n", log);
+        printf("again: %d\n", grow_map_locked(m, 100000));
+    }
+
+    #! a function that holds a lock makes an allocation that no runtime helper handles: in the AST and IR modes the
+    #! call fails with the exception and the lock is released; native code ends the process with the message of the
+    #! terminate handler, as its frames were left without their cleanup
+    static lockedUnhandled() {
+        Mutex m();
+        for (int i = 0; i < 50; ++i) {
+            grow_floats_locked(m, 10);
+        }
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_floats_locked(m, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("lock free: %y\n", !m.lockOwner() && m.trylock() == 0);
+        m.unlock();
+        printf("again: %d\n", grow_floats_locked(m, 100000));
+    }
+
+    #! an allocation of native code that no runtime helper handles: in the AST and IR modes the call fails with the
+    #! exception; native code ends the process with the message of the terminate handler
+    static unhandled(bool nested) {
+        for (int i = 0; i < 50; ++i) {
+            nested ? grow_floats_nested(10) : grow_floats(10);
+        }
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", nested ? grow_floats_nested(100000) : grow_floats(100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("again: %d\n", nested ? grow_floats_nested(100000) : grow_floats(100000));
     }
 
     #! builtin code that calls Qore code (call_function()) whose builtin call fails

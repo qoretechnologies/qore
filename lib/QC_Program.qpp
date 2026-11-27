@@ -54,6 +54,8 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+#include <sys/stat.h>
+
 // returns -1 and raises SANDBOX-ACCESS-ERROR if the calling code may not serialize or deserialize for the Program with
 // the full state of the classes that trusted code declared (qore#7146)
 static int qore_program_check_trusted_serialization(QoreProgram* p, const char* api, ExceptionSink* xsink) {
@@ -1664,7 +1666,9 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     %Program and are not carried into another %Program that its code calls.  Only the runtime policy of a
     @ref Qore::SandboxManager "SandboxManager" follows the caller, and what is created for a sandboxed caller keeps
     its sandbox as provenance (see @ref sandbox_provenance).  A host must therefore not give tenant or sandboxed
-    code a Program object with more freedom than the tenant itself has; see @ref sandbox_program_capability.
+    code a Program object with more freedom than the tenant itself has; see @ref sandbox_program_capability.  The
+    requests of information of the host that the %Program's code makes for code restricted from external information
+    are answered as for that code (see @ref sandbox_lent_program_information).
 
     @ref qore_classes "Classes", @ref constants "constants", @ref qore_namespaces "namespaces", @ref qore_functions "functions", and
     @ref global_variables "global variables" are only inherited into child Program objects if they are declared @ref mod_public "public"
@@ -2237,6 +2241,12 @@ auto Program::callFunction(string name, ...) {
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
@@ -2278,6 +2288,12 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
 auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -2334,6 +2350,12 @@ auto Program::callStaticMethod(string class_name, string method, ...) {
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> call_args(xsink);
     // if there are arguments to pass
     if (num_args(args) > 2) {
@@ -2388,6 +2410,12 @@ auto Program::callStaticMethodArgs(
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     return q_call_static_method_args(p, class_name, method_name, arguments, xsink);
 }
 
@@ -2437,6 +2465,12 @@ pgm.run();
 auto Program::run() {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
         return QoreValue();
     }
     return p->run(xsink);
@@ -2664,7 +2698,10 @@ nothing Program::importGlobalVariable(
     the Program must have @ref Qore::PO_ALLOW_INJECTION set. When the injection relates two classes, a sandboxed
     caller or one restricted from a functional domain may only relate classes declared by its own Program.
     Rebuild older compiled programs with a current compiler so a restricted caller can establish ownership of
-    classes declared in those programs.
+    classes declared in those programs.  The injected class keeps the class that it is injected in place of, with
+    the declarations that that class names, for as long as the injected class exists, also when the
+    @ref Qore::Program "Program" that declares that class is deleted first: the type checks of the injected class's
+    objects still compare it with that class (since %Qore 3.0)
     @param module_visibility see @ref import_visibility_constants for valid values
 
     @par Example:
@@ -2673,7 +2710,8 @@ pgm.importClass("MyNamespace::MyClass");
     @endcode
 
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
+    @throw CLASS-IMPORT-ERROR injection relates classes that the calling %Program did not both declare, and the calling code is restricted: a sandbox that refuses uncontrolled APIs governs it (a sandbox that allows them does not restrict it; see @ref sandbox_manager_classes) or it has parse options that restrict a functional domain; a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The methods of the imported class run in the Program that it is imported from, with that Program's options
@@ -2720,10 +2758,10 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
     // a class re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
-            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
-            "that a Program loads", tmp->c_str());
+            "restricting sandbox governs or whose functional domains are restricted cannot re-export classes to the "
+            "modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
@@ -2741,7 +2779,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2781,10 +2819,10 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
     }
     // a hashdecl re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
-            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
-            "that a Program loads", tmp->c_str());
+            "a restricting sandbox governs or whose functional domains are restricted cannot re-export hashdecls to "
+            "the modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
@@ -3471,6 +3509,96 @@ hash<SerializationInfo> Program::serializeToData(auto value, *int flags) [flags=
     return QoreSerializable::serializeToDataTrusted(value, flags, xsink);
 }
 
+//! Sets or clears the temporary directory of the %Program
+/** @ref Util::tmp_location() "tmp_location()" returns this directory to the code of the %Program, and the library
+    code that creates temporary files and directories for that code without being given a directory
+    (ex: @ref FsUtil::TmpDir "TmpDir") uses it, instead of the directory of the environment (\c TMPDIR) or the
+    platform default; this lets a host choose where code that may not read its environment
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") puts its temporary files (see @ref sandbox_temp_dir)
+
+    @param dir the absolute path of an existing directory, which is kept as given (symbolic links are not resolved,
+    so the code of the %Program learns no other path of the host from it); @ref nothing to clear the directory, so
+    that the directory of the environment or the platform default is used again
+
+    @par Example:
+    @code{.py}
+pgm.setTempDir("/var/lib/myapp/tenant1/tmp");
+    @endcode
+
+    @note A %Program created by the code of this %Program takes its directory when it is created; one created by module
+    code takes none, as the module may keep it for all of its callers
+    @note Setting the directory grants no access to it: for a sandboxed %Program, the host allows it in the file system
+    policy of the %Program's sandbox (see @ref sandbox_temp_dir); if the code of the %Program cannot write to it when
+    it asks for it, @ref Util::tmp_location() "tmp_location()" raises an exception instead of using another directory
+
+    @throw SANDBOX-ACCESS-ERROR sandboxed code, or code whose functional domains are restricted, cannot set the
+    temporary directory of a %Program
+    @throw PROGRAM-TEMP-DIR-ERROR the path is not absolute, contains a NUL character, or is not an existing directory
+
+    @see Program::getTempDir()
+
+    @since Qore 3.0
+ */
+nothing Program::setTempDir(*string dir) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the host chooses the directory: restricted code could otherwise move its own temporary files, or those of a
+    // Program that it can reach (one lent to it included), to a directory of its choice (qore#7656)
+    if (qore_caller_is_sandboxed() || qore_calling_code_is_untrusted()) {
+        return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains are "
+            "restricted, cannot set the temporary directory of a Program");
+    }
+    if (!dir) {
+        qore_program_private::get(*p)->setTempDir(nullptr);
+        return QoreValue();
+    }
+    if (q_check_path(*dir, "PROGRAM-TEMP-DIR-ERROR", xsink)) {
+        return QoreValue();
+    }
+    if (!q_absolute_path(dir->c_str())) {
+        return xsink->raiseException("PROGRAM-TEMP-DIR-ERROR", "the temporary directory of a Program must be an "
+            "absolute path; got: '%s'", dir->c_str());
+    }
+    // the directory is checked without trailing separators, which stat() refuses on Windows (except for a drive's root)
+    std::string check(dir->c_str());
+#ifdef _Q_WINDOWS
+    while (check.size() > 3 && (check.back() == '\\' || check.back() == '/')) {
+        check.pop_back();
+    }
+#endif
+    struct stat sbuf;
+    if (stat(check.c_str(), &sbuf) || !S_ISDIR(sbuf.st_mode)) {
+        return xsink->raiseException("PROGRAM-TEMP-DIR-ERROR", "the temporary directory of a Program must be an "
+            "existing directory; '%s' is not", dir->c_str());
+    }
+    qore_program_private::get(*p)->setTempDir(dir->c_str());
+}
+
+//! Returns the temporary directory of the %Program, if any
+/** @return the directory set with Program::setTempDir() or taken from the %Program that created this %Program, or
+    @ref nothing if it has none
+
+    @par Example:
+    @code{.py}
+*string dir = pgm.getTempDir();
+    @endcode
+
+    @note The code of the %Program gets its directory with @ref Util::tmp_location() "tmp_location()" (see
+    SandboxManager::callerTempDir()); this method gives a path of the host to the holder of the %Program object, so it
+    is not available to code restricted from external information
+
+    @since Qore 3.0
+ */
+*string Program::getTempDir() [dom=EXTERNAL_INFO; flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->getTempDir();
+}
+
 //! Sets the sandbox manager for the program to enforce security restrictions
 /** @param sandbox_manager The sandbox manager to set; the program takes ownership of the reference
 
@@ -3857,6 +3985,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3914,6 +4043,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3966,6 +4096,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -3995,6 +4126,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4021,6 +4156,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -4050,6 +4186,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4077,6 +4217,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -4104,6 +4245,10 @@ Program::loadApplyToPrivateUserModule(
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4128,6 +4273,7 @@ Program::loadApplyToPrivateUserModule(
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -4153,6 +4299,10 @@ Program::loadApplyToPrivateUserModule(
         return QoreValue();
     }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
@@ -4774,8 +4924,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
@@ -4862,7 +5014,10 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)
-    return get_call_reference_intern(nullptr, identifier, xsink);
+    QoreValue rv = get_call_reference_intern(nullptr, identifier, xsink);
+    // the calls of a reference that the Program object gives are recorded as its methods' calls are (qore#7678)
+    qore_call_reference_set_lent_program(rv);
+    return rv;
 }
 
 //! returns an expression object for the given source code
@@ -5007,8 +5162,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details

@@ -135,12 +135,13 @@ public class HashDataType inherits QoreDataType {
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         checkChange("fields");
+        # a type that a frozen type holds is shared as well (qore#7728); one that cannot be is refused before it is
+        # set (qore#7740)
+        if (default_other_field_type && frozen) {
+            freezeHeld(default_other_field_type);
+        }
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
-            # a type that a frozen type holds is shared as well (qore#7728)
-            if (frozen) {
-                default_other_field_type.freeze();
-            }
             has_default_other_field_type = default_other_field_type.hasType();
             if (default_other_field_type.getTags().dynamic) {
                 setDynamicTag();
@@ -238,6 +239,15 @@ auto v = t.getDefaultValue();
         @endcode
 
         @return the default value for the type or @ref nothing if the type has no default value
+
+        @throw STACK-LIMIT-EXCEEDED the stack was exhausted while the default value was checked
+        @throw THREAD-CANCELLED the thread was cancelled while the default value was checked
+
+        @note The default value is checked against the type when it is first read, and the result is kept for every
+        caller of the type: a default value that the type refuses is removed.  A check that fails in the context of
+        its caller (see the exceptions above) is not kept, and neither is a failed check by a caller that a sandbox
+        governs, which gets no default value from that call, as its sandbox can deny something to the code of the
+        type (qore#7734)
     */
     *hash<auto> getDefaultValue() {
         if (default_value && default_value_needs_check) {
@@ -246,6 +256,18 @@ auto v = t.getDefaultValue();
                 acceptsValue(default_value);
                 ok = True;
             } catch (hash<ExceptionInfo> ex) {
+                # the result of the check is recorded for every caller of the type, so an error that the caller's
+                # context can cause fails the caller's call only and is not recorded (qore#7734)
+                if (HashDataType::isContextError(ex.err)) {
+                    rethrow;
+                }
+                # the check of a sandboxed caller can also fail because the sandbox denies something to the code of
+                # a type, with any error (the check of a field reports it as a refusal): such a caller, and one whose
+                # sandbox cannot be resolved, does not get the default value, but does not remove it for the other
+                # callers either
+                if (!SandboxManager::createsSharedObjects() || !SandboxManager::isProcessWideRegistrationAllowed()) {
+                    return;
+                }
             }
             # a type that is a shared object records the result of the check in an update scope, as its reader can
             # be sandboxed (qore#7728)
@@ -263,6 +285,12 @@ auto v = t.getDefaultValue();
             }
         }
         return default_value;
+    }
+
+    #! Returns True if the error raised by the check of the default value means that the check failed in the context
+    #! of its caller, whatever the value: an exhausted stack or a cancelled thread; see getDefaultValue()
+    private:internal static bool isContextError(string err) {
+        return err == "STACK-LIMIT-EXCEEDED" || err == "THREAD-CANCELLED";
     }
 
     #! Returns the value if the value can be assigned to the type
@@ -451,6 +479,15 @@ auto v = t.getDefaultValue();
         return self;
     }
 
+    #! Returns the fields of the type and the default type of its undeclared fields; see AbstractDataProviderType::getHeld()
+    private *list<object> getHeld() {
+        list<object> rv = fields ? (map $1, fields.iterator()) : ();
+        if (default_other_field_type) {
+            push rv, default_other_field_type;
+        }
+        return rv;
+    }
+
     #! Marks the fields of the type and their types as shared; see AbstractDataProviderType::freeze()
     private freezeImpl() {
         map $1.freeze(), fields.iterator();
@@ -505,7 +542,7 @@ node.setFields(fields);
         checkChange("fields");
         # the fields of a frozen type are shared as well (qore#7728)
         if (frozen) {
-            map $1.freeze(), fields.iterator();
+            map freezeHeld($1), fields.iterator();
         }
         self.fields = fields;
         if (type == AutoHashType) {
@@ -755,7 +792,7 @@ response.setFieldList((id_field, name_field));
     private addFieldIntern(AbstractDataField field) {
         # a field added to a frozen type is shared as well (qore#7728)
         if (frozen) {
-            field.freeze();
+            freezeHeld(field);
         }
         postProcessAddedField(fields{field.getName()} = field);
     }

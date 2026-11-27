@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
-          "message": "Send Email"
+          "source": "Send email",
+          "message": "Send email"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
           "source": "Send an email via Mailgun",
@@ -496,8 +496,8 @@
           "message": "Email address for replies"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
-          "message": "Validate Email"
+          "source": "Validate email",
+          "message": "Validate email"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
           "source": "Validate an email address",
@@ -520,8 +520,8 @@
           "message": "The email address to validate"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
-          "message": "Add Mailing List Member"
+          "source": "Add mailing list member",
+          "message": "Add mailing list member"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
           "source": "Add a member to a mailing list",
@@ -604,8 +604,8 @@
           "message": "If `True`, update the member if they already exist (default: `False`)"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
-          "message": "Get Mailing List Member"
+          "source": "Get mailing list member",
+          "message": "Get mailing list member"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
           "source": "Get a member from a mailing list",
@@ -640,8 +640,8 @@
           "message": "The email address of the member to retrieve"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
-          "message": "Delete Mailing List Member"
+          "source": "Delete mailing list member",
+          "message": "Delete mailing list member"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
           "source": "Remove a member from a mailing list",
@@ -676,8 +676,8 @@
           "message": "The email address of the member to remove"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
-          "message": "List Mailing List Members"
+          "source": "List mailing list members",
+          "message": "List mailing list members"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
           "source": "List members of a mailing list",
@@ -724,8 +724,8 @@
           "message": "Maximum number of members to return"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
-          "message": "Create Route"
+          "source": "Create route",
+          "message": "Create route"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
           "source": "Create an inbound email route",
@@ -784,8 +784,8 @@
           "message": "A description of what this route does"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
-          "message": "List Routes"
+          "source": "List routes",
+          "message": "List routes"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
           "source": "List all inbound email routes",
@@ -808,8 +808,8 @@
           "message": "Maximum number of routes to return"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
-          "message": "List Mailing Lists"
+          "source": "List mailing lists",
+          "message": "List mailing lists"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
           "source": "List all mailing lists",
@@ -832,8 +832,8 @@
           "message": "Maximum number of mailing lists to return"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
-          "message": "List Domains"
+          "source": "List domains",
+          "message": "List domains"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
           "source": "List all sending domains",
@@ -880,8 +880,8 @@
           "message": "Maximum number of domains to return"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
-          "message": "Email Link Clicked"
+          "source": "Email link clicked",
+          "message": "Email link clicked"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
           "source": "Trigger when a link in an email is clicked",
@@ -904,8 +904,8 @@
           "message": "Select the domain to monitor for click events"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
-          "message": "Email Delivered"
+          "source": "Email delivered",
+          "message": "Email delivered"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
           "source": "Trigger when an email is delivered",
@@ -928,8 +928,8 @@
           "message": "Select the domain to monitor for delivery events"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
-          "message": "Email Opened"
+          "source": "Email opened",
+          "message": "Email opened"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
           "source": "Trigger when an email is opened",
@@ -952,8 +952,8 @@
           "message": "Select the domain to monitor for open events"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
-          "message": "Permanent Failure"
+          "source": "Permanent failure",
+          "message": "Permanent failure"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
           "source": "Trigger on permanent delivery failure (hard bounce)",
@@ -976,8 +976,8 @@
           "message": "Select the domain to monitor for permanent failure events"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
-          "message": "Temporary Failure"
+          "source": "Temporary failure",
+          "message": "Temporary failure"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
           "source": "Trigger on temporary delivery failure (soft bounce)",
@@ -1000,8 +1000,8 @@
           "message": "Select the domain to monitor for temporary failure events"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
-          "message": "Spam Complaint"
+          "source": "Spam complaint",
+          "message": "Spam complaint"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {
           "source": "Trigger when an email is marked as spam",

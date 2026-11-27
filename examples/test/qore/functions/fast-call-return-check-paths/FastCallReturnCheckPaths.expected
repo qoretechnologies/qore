@@ -1,0 +1,13 @@
+warm-up 3300
+direct: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:62; stack: direct_checked:66 <- call_direct:179; exceptions: RUNTIME-TYPE-ERROR
+direct given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:85; stack: direct_given:91 <- call_direct_given:180; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+recursive: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:100; stack: recursive:97 <- recursive:97 <- recursive:181; exceptions: RUNTIME-TYPE-ERROR
+recursive given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:108; stack: recursive_given:105 <- recursive_given:112 <- call_recursive_given:182; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+closure: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:118; stack: <anonymous closure>:127 <- call_closure:183; exceptions: RUNTIME-TYPE-ERROR
+closure given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:123; stack: <anonymous closure>:131 <- call_closure_given:184; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+method: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:40; stack: C::checked:138 <- call_method:185; exceptions: RUNTIME-TYPE-ERROR
+method given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:45; stack: C::given:142 <- call_method_given:186; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+static: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:50; stack: C::staticChecked:147 <- call_static:187; exceptions: RUNTIME-TYPE-ERROR
+static given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:55; stack: C::staticGiven:151 <- call_static_given:188; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+missing destructor: DESTRUCTOR-ERROR: bad; at: FastCallReturnCheckPaths.q:27; stack: Tmp::destructor:80 <- missing:80 <- call_missing:189; exceptions: DESTRUCTOR-ERROR
+missing: RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: block missing return statement; at: FastCallReturnCheckPaths.q:72; stack: missing:80 <- call_missing:192; exceptions: RUNTIME-TYPE-ERROR

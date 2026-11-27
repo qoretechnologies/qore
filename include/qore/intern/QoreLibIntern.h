@@ -694,7 +694,9 @@ DLLLOCAL int64 q_get_list_create_count();
 
 //! Returns the number of cancellation checks (qore_check_cancel()) that the current thread has made
 /** Code that checks for cancellation at a fixed interval of the work it does makes a number of checks that grows
-    with that work, so tests use the count to verify how the work grows; see dbg_get_cancel_check_count().
+    with that work, so tests use the count to verify how the work grows; see dbg_get_cancel_check_count().  The
+    inline polls of native loops are not counted, only the full checks they make (see "Inline polls of native code"
+    in design/cooperative-cancellation.md).
 */
 DLLLOCAL int64 q_get_cancel_check_count();
 

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List and search orders",
@@ -396,8 +396,8 @@
           "message": "Filter orders by the store they originated from"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
-          "message": "Get Order"
+          "source": "Get order",
+          "message": "Get order"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -420,8 +420,8 @@
           "message": "The unique ShipStation order ID"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
-          "message": "Create Order"
+          "source": "Create order",
+          "message": "Create order"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -1456,8 +1456,8 @@
           "message": "Array of tag IDs to apply to the order"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
-          "message": "Update Order"
+          "source": "Update order",
+          "message": "Update order"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
           "source": "Update an existing order",
@@ -2464,8 +2464,8 @@
           "message": "Array of tag IDs to apply to the order"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
-          "message": "Delete Order"
+          "source": "Delete order",
+          "message": "Delete order"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
           "source": "Delete an order",
@@ -2488,8 +2488,8 @@
           "message": "The ShipStation order ID to delete"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
-          "source": "Mark Order as Shipped",
-          "message": "Mark Order as Shipped"
+          "source": "Mark order as shipped",
+          "message": "Mark order as shipped"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
           "source": "Mark an order as shipped",
@@ -2572,8 +2572,8 @@
           "message": "Whether to notify the sales channel (marketplace) of the shipment"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
-          "source": "Add Tag to Order",
-          "message": "Add Tag to Order"
+          "source": "Add tag to order",
+          "message": "Add tag to order"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
           "source": "Add a tag to an order",
@@ -2608,8 +2608,8 @@
           "message": "Select the tag to add to the order"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
-          "source": "Remove Tag from Order",
-          "message": "Remove Tag from Order"
+          "source": "Remove tag from order",
+          "message": "Remove tag from order"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
           "source": "Remove a tag from an order",
@@ -2644,8 +2644,8 @@
           "message": "Select the tag to remove from the order"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
-          "source": "Assign User to Order",
-          "message": "Assign User to Order"
+          "source": "Assign user to order",
+          "message": "Assign user to order"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
           "source": "Assign a user to an order",
@@ -2680,8 +2680,8 @@
           "message": "Select the user to assign to the order"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
-          "source": "Unassign User from Order",
-          "message": "Unassign User from Order"
+          "source": "Unassign user from order",
+          "message": "Unassign user from order"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
           "source": "Unassign the user from an order",
@@ -2704,8 +2704,8 @@
           "message": "Array of order IDs to unassign the user from"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
-          "source": "List Carriers",
-          "message": "List Carriers"
+          "source": "List carriers",
+          "message": "List carriers"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
           "source": "List connected carriers",
@@ -2716,8 +2716,8 @@
           "message": "Retrieve a list of all carriers connected to your ShipStation account."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
-          "source": "Get Carrier",
-          "message": "Get Carrier"
+          "source": "Get carrier",
+          "message": "Get carrier"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
           "source": "Get carrier details",
@@ -2740,8 +2740,8 @@
           "message": "Select the carrier to retrieve details for"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
-          "source": "List Services",
-          "message": "List Services"
+          "source": "List services",
+          "message": "List services"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
           "source": "List carrier services",
@@ -2764,8 +2764,8 @@
           "message": "Select the carrier to list available services"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
-          "message": "List Packages"
+          "source": "List packages",
+          "message": "List packages"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
           "source": "List carrier package types",
@@ -2788,8 +2788,8 @@
           "message": "Select the carrier to list available package types"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
-          "source": "Add Funds",
-          "message": "Add Funds"
+          "source": "Add funds",
+          "message": "Add funds"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
           "source": "Add funds to carrier account",
@@ -2824,8 +2824,8 @@
           "message": "The amount to add to the carrier account (in USD)"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
-          "message": "List Customers"
+          "source": "List customers",
+          "message": "List customers"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List and search customers",
@@ -2836,8 +2836,8 @@
           "message": "Retrieve a list of customers from ShipStation with optional filtering."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a customer by ID",
@@ -2860,8 +2860,8 @@
           "message": "The unique ShipStation customer ID"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List and search products",
@@ -2872,8 +2872,8 @@
           "message": "Retrieve a list of products from ShipStation with optional filtering by SKU, name, or category."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a product by ID",
@@ -2896,8 +2896,8 @@
           "message": "The unique ShipStation product ID"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update a product",
@@ -3160,8 +3160,8 @@
           "message": "The country of origin code for customs"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
-          "message": "List Shipments"
+          "source": "List shipments",
+          "message": "List shipments"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
           "source": "List and search shipments",
@@ -3184,8 +3184,8 @@
           "message": "Filter shipments by carrier"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
-          "message": "List Fulfillments"
+          "source": "List fulfillments",
+          "message": "List fulfillments"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
           "source": "List fulfillments",
@@ -3196,8 +3196,8 @@
           "message": "Retrieve a list of fulfillments (completed shipments) from ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
-          "source": "Void Label",
-          "message": "Void Label"
+          "source": "Void label",
+          "message": "Void label"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
           "source": "Void a shipping label",
@@ -3220,8 +3220,8 @@
           "message": "The unique ShipStation shipment ID for the label to void"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
-          "source": "List Stores",
-          "message": "List Stores"
+          "source": "List stores",
+          "message": "List stores"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
           "source": "List connected stores",
@@ -3232,8 +3232,8 @@
           "message": "Retrieve a list of all stores (selling channels) connected to your ShipStation account."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
-          "source": "Get Store",
-          "message": "Get Store"
+          "source": "Get store",
+          "message": "Get store"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
           "source": "Get store details",
@@ -3256,8 +3256,8 @@
           "message": "Select the store to retrieve details for"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
-          "source": "Update Store",
-          "message": "Update Store"
+          "source": "Update store",
+          "message": "Update store"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
           "source": "Update store settings",
@@ -3352,8 +3352,8 @@
           "message": "Array of status mappings for syncing order statuses"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Deactivate Store",
-          "message": "Deactivate Store"
+          "source": "Deactivate store",
+          "message": "Deactivate store"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
           "source": "Deactivate a store",
@@ -3376,8 +3376,8 @@
           "message": "Select the store to deactivate"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Reactivate Store",
-          "message": "Reactivate Store"
+          "source": "Reactivate store",
+          "message": "Reactivate store"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
           "source": "Reactivate a store",
@@ -3400,8 +3400,8 @@
           "message": "Select the store to reactivate"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
-          "source": "Refresh Store",
-          "message": "Refresh Store"
+          "source": "Refresh store",
+          "message": "Refresh store"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
           "source": "Refresh store orders",
@@ -3436,8 +3436,8 @@
           "message": "The date from which to start the refresh. If not provided, refreshes recent orders."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
-          "source": "List Marketplaces",
-          "message": "List Marketplaces"
+          "source": "List marketplaces",
+          "message": "List marketplaces"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
           "source": "List available marketplaces",
@@ -3448,8 +3448,8 @@
           "message": "Retrieve a list of all marketplaces that can be connected to ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
-          "message": "List Warehouses"
+          "source": "List warehouses",
+          "message": "List warehouses"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
           "source": "List warehouses",
@@ -3460,8 +3460,8 @@
           "message": "Retrieve a list of all warehouses (ship-from locations) in your ShipStation account."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
-          "message": "Get Warehouse"
+          "source": "Get warehouse",
+          "message": "Get warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
           "source": "Get warehouse details",
@@ -3484,8 +3484,8 @@
           "message": "Select the warehouse to retrieve details for"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
-          "message": "Create Warehouse"
+          "source": "Create warehouse",
+          "message": "Create warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
           "source": "Create a new warehouse",
@@ -3832,8 +3832,8 @@
           "message": "Whether this warehouse should be the default for new orders"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
-          "message": "Update Warehouse"
+          "source": "Update warehouse",
+          "message": "Update warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
           "source": "Update a warehouse",
@@ -4192,8 +4192,8 @@
           "message": "Whether this warehouse should be the default for new orders"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
           "source": "List available tags",
@@ -4204,8 +4204,8 @@
           "message": "Retrieve a list of all tags available for orders."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List account users",
@@ -4216,8 +4216,8 @@
           "message": "Retrieve a list of all users in your ShipStation account."
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
-          "source": "Order Created/Updated",
-          "message": "Order Created/Updated"
+          "source": "Order created/updated",
+          "message": "Order created/updated"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
           "source": "Trigger when an order is created or updated",
@@ -4240,8 +4240,8 @@
           "message": "Optionally filter events to a specific store"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
-          "source": "Order Created/Updated (with Items)",
-          "message": "Order Created/Updated (with Items)"
+          "source": "Order created/updated (with items)",
+          "message": "Order created/updated (with items)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
           "source": "Trigger when an order is created or updated (includes items)",
@@ -4264,8 +4264,8 @@
           "message": "Optionally filter events to a specific store"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
-          "source": "Label Created",
-          "message": "Label Created"
+          "source": "Label created",
+          "message": "Label created"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
           "source": "Trigger when a shipping label is created",
@@ -4288,8 +4288,8 @@
           "message": "Optionally filter events to a specific store"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
-          "source": "Label Created (with Items)",
-          "message": "Label Created (with Items)"
+          "source": "Label created (with items)",
+          "message": "Label created (with items)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {
           "source": "Trigger when a shipping label is created (includes items)",

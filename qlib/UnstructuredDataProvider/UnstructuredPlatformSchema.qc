@@ -96,12 +96,6 @@ public class UnstructuredPlatformSchema {
     }
 
     private {
-        #! The ID of the lazy value of getSchema() (qore#6843)
-        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \UnstructuredPlatformSchema::buildSchemaValue());
-        #! The ID of the lazy value of getActionSet() (qore#6843)
-        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \UnstructuredPlatformSchema::buildActionSetValue());
         #! The parsed schema
         static *OpenApi3::OpenApi3Schema schema;
 
@@ -110,6 +104,12 @@ public class UnstructuredPlatformSchema {
     }
 
     private:internal {
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \UnstructuredPlatformSchema::buildSchemaValue());
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \UnstructuredPlatformSchema::buildActionSetValue());
         #! Serializes construction of the schema and the action set
         static Mutex lck();
     }

@@ -16,7 +16,7 @@
           "message": "통합 및 변환 워크플로를 위해 [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) 구분 기호 기반 헬스케어 메시지를 읽고 씁니다.\n\n**기능**:\n- 고정된 스키마 없이도 메시지 구조와 사용자 정의 `Z` 세그먼트 보존\n- `MSH`에서 사용자 정의 구분 기호를 읽고 HL7 이스케이프 시퀀스 처리\n- DataProvider API를 통해 레코드당 하나의 파싱된 세그먼트 노출\n- 파싱된 메시지 또는 단순 세그먼트 레코드를 HL7 v2 텍스트로 다시 직렬화"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "HL7 v2 메시지 읽기"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "텍스트를 읽은 그대로 검사 없이 입력 인코딩으로 유지합니다"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "HL7 v2 인라인 데이터 읽기"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "인라인 HL7 v2 메시지 데이터입니다. 메시지가 이미 메모리에 있는 경우 이 옵션을 사용합니다."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "HL7 v2 메시지 쓰기"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "직렬화된 HL7 v2 메시지를 쓸 경로입니다."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "HL7 v2 스키마 로드"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "`True`인 경우 인메모리 스키마 캐시를 무시하고 스키마 아티팩트를 다시 로드합니다."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "HL7 v2 스키마 요약"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

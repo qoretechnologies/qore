@@ -1543,7 +1543,7 @@ public:
     //! \a retiring: the declaration being retired, if any; \a skip_key, \a skip1 and \a skip2: the key and the
     //! types of a declaration being destroyed, whose pointers are left; compared without being read, as the
     //! declaration can be partly destroyed
-    DLLLOCAL QoreDerivedTypeOrphaner(QoreTypeOwner* retiring, const void* skip_key = nullptr,
+    QoreDerivedTypeOrphaner(QoreTypeOwner* retiring, const void* skip_key = nullptr,
             const QoreTypeInfo* skip1 = nullptr, const QoreTypeInfo* skip2 = nullptr) : retiring(retiring),
             skip_key(skip_key), skip1(skip1), skip2(skip2) {
         // an enum has no key: its declaration is found in its type, which is destroyed after the purge
@@ -1557,7 +1557,7 @@ public:
     //! the other user declarations that the derived types name, with the derived types
     std::vector<std::pair<QoreTypeOwner*, const QoreTypeInfo*>> named;
 
-    DLLLOCAL void orphan(const QoreTypeInfo* ti, int depth = 0) {
+    void orphan(const QoreTypeInfo* ti, int depth = 0) {
         if (!ti || depth > 4) {
             return;
         }
@@ -1629,12 +1629,12 @@ private:
     const QoreTypeInfo* skip2;
     const QoreEnumDecl* skip_enum = nullptr;
 
-    DLLLOCAL bool isSkipped(const void* p) const {
+    bool isSkipped(const void* p) const {
         return p && p == skip_key;
     }
 
     //! Returns true if the pointer to \a o is orphaned; otherwise it is recorded
-    DLLLOCAL bool isRetiring(QoreTypeOwner* o) {
+    bool isRetiring(QoreTypeOwner* o) {
         if (o == retiring) {
             return true;
         }
@@ -1642,11 +1642,11 @@ private:
         return false;
     }
 
-    DLLLOCAL bool isSkippedType(const QoreTypeInfo* ti) const {
+    bool isSkippedType(const QoreTypeInfo* ti) const {
         return ti && (ti == skip1 || ti == skip2);
     }
 
-    DLLLOCAL const QoreTypeInfo* tombType(const QoreTypeInfo* ti, QoreTypeOwner* o) {
+    const QoreTypeInfo* tombType(const QoreTypeInfo* ti, QoreTypeOwner* o) {
         bool ok;
         const QoreTypeInfo* t = qore_type_tombstone(ti, ok);
         if (!ok || t == ti) {
@@ -1656,7 +1656,7 @@ private:
         return t;
     }
 
-    DLLLOCAL void orphanType(const QoreOrphanablePtr<const QoreTypeInfo>& p) {
+    void orphanType(const QoreOrphanablePtr<const QoreTypeInfo>& p) {
         const QoreTypeInfo* ti = p.get();
         if (isSkippedType(ti)) {
             return;
@@ -1670,7 +1670,7 @@ private:
         }
     }
 
-    DLLLOCAL void orphanSpec(const QoreTypeSpec& spec) {
+    void orphanSpec(const QoreTypeSpec& spec) {
         switch (spec.getTypeSpec()) {
             case QTS_CLASS: {
                 const QoreClass* qc = spec.getClass();
@@ -6499,6 +6499,11 @@ struct DefaultTypeFilterPolicy : DefaultTypeMatchPolicy {
     void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
         accept.map(n, xsink);
     }
+
+    //! returns true if the iterator \a n is not materialized to a new list, with an exception raised
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        return false;
+    }
 };
 
 struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
@@ -6541,7 +6546,75 @@ struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
             accept.map(n, xsink);
         }
     }
+
+    //! returns true if the iterator \a n is not materialized to a new list, with an exception raised
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        return false;
+    }
 };
+
+//! The filter policy of the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
+/** As \a Base, except that a conversion that gives a new list that the reference would designate instead of the
+    value assigned is refused: a softlist type that wraps a value that is not a list in a new list, or converts no
+    value (NOTHING or NULL) to a new empty list, and a list type that materializes an iterator to a new list (see
+    refuseIteratorList()).  Only the conversion of the lvalue's own type is checked: the conversions of the elements of
+    a container use \a Base (see input()), as a container converted to a copy is refused by
+    qore_weak_assignment_conversion().  A value that needs no conversion takes the same path as with \a Base.
+*/
+template <typename Base>
+struct WeakStoreFilterPolicy : Base {
+    //! the type of the lvalue
+    const QoreTypeInfo* target;
+    //! true for a weak assignment, false for an opaque one
+    bool weak;
+
+    WeakStoreFilterPolicy(Base base, const QoreTypeInfo* target, bool weak) : Base(base), target(target), weak(weak) {
+    }
+
+    void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
+        qore_type_t t = n.getType();
+        if (!qore_weak_value_may_wrap(t)) {
+            Base::map(accept, n, xsink);
+            return;
+        }
+        // the type of the value is read before the conversion, which can release the value (ex: a softlist<softint>
+        // type converts a string to the element of its list)
+        const QoreTypeInfo* vti = n.getTypeInfo();
+        Base::map(accept, n, xsink);
+        // the conversion that ran made a new list of a value that is not a list: it is the conversion of a softlist
+        // type, also as the member of a union, which no other conversion does
+        if (n.getType() == NT_LIST && !(xsink && *xsink)) {
+            assert(xsink);
+            // the caller adds the context of the conversion to the error (QoreTypeSpec::acceptInputImpl()); the list
+            // is empty if no value was converted to it, and holds the value otherwise, also NULL for a softlist<T>
+            // whose element type takes it
+            xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_wrap_desc(weak, QoreTypeInfo::getName(vti),
+                QoreTypeInfo::getName(target), n.get<const QoreListNode>()->empty()
+                    ? QoreWeakWrapKind::NoValue
+                    : QoreWeakWrapKind::Value));
+        }
+    }
+
+    //! an iterator that a list type would materialize to a new list is refused before it is iterated
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        assert(xsink);
+        xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_iterator_desc(weak,
+            QoreTypeInfo::getName(n.getTypeInfo()), QoreTypeInfo::getName(target)));
+        return true;
+    }
+};
+}
+
+void QoreTypeInfo::acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+        q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, "lvalue", false, -1, text, n, nullptr, vts,
+        WeakStoreFilterPolicy<DefaultTypeFilterPolicy>(DefaultTypeFilterPolicy{}, this, weak));
+}
+
+void QoreTypeInfo::acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+        LexicalSemanticPolicy policy, q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, "lvalue", false, -1, text, n, nullptr, vts,
+        WeakStoreFilterPolicy<LexicalTypeFilterPolicy>(LexicalTypeFilterPolicy{policy}, this, weak));
 }
 
 void qore_lexical_soft_bool_filter(QoreValue& value, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -6720,6 +6793,11 @@ static bool qore_type_materialize_iterator_to_list(ExceptionSink* xsink, QoreVal
     }
     if (!iterator) {
         return false;
+    }
+    // a weak or opaque assignment would store a reference to the new list (qore#7619)
+    if (policy.refuseIteratorList(n, xsink)) {
+        err = true;
+        return true;
     }
 
     ReferenceHolder<QoreListNode> list(new QoreListNode(value_type), xsink);
@@ -7076,10 +7154,10 @@ template <typename FilterPolicy>
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_record(QoreReferenceBindProbe& probe,
         ReferenceNode* r, const QoreTypeInfo* target_ti, FilterPolicy policy, ExceptionSink* xsink) {
     bool ok;
-    if constexpr (std::is_same<FilterPolicy, LexicalTypeFilterPolicy>::value) {
+    if constexpr (std::is_base_of<LexicalTypeFilterPolicy, FilterPolicy>::value) {
         ok = probe.record(r, target_ti, policy.policy, true);
     } else {
-        static_assert(std::is_same<FilterPolicy, DefaultTypeFilterPolicy>::value, "a filter policy of a check");
+        static_assert(std::is_base_of<DefaultTypeFilterPolicy, FilterPolicy>::value, "a filter policy of a check");
         ok = probe.record(r, target_ti, LexicalSemanticPolicy(), false);
     }
     if (!ok && xsink) {
@@ -7483,6 +7561,23 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             // a union with a member of the value's own type keeps the value as it is (qore#6407)
             if (typeInfo.unionAcceptsExactly(n, typespec == QTS_TYPE && u.t != NT_ALL ? u.t : n.getType())) {
                 return true;
+            }
+            // a deleted object accepted as no value is converted as no value: the conversion of no value (ex: to the
+            // empty list of softlist) replaces the value without releasing it, so the reference to the object is
+            // released here, or it would be leaked (qore#7759)
+            if (typespec == QTS_TYPE && u.t == NT_NOTHING && n.getType() == NT_OBJECT) {
+                assert(!n.get<const QoreObject>()->isValid());
+                QoreValue old = n;
+                n = QoreValue();
+                if (lvhelper) {
+                    // released after the lvalue's lock, as other values that a conversion replaces
+                    lvhelper->saveTemp(old);
+                } else {
+                    old.discard(xsink);
+                    if (xsink && *xsink) {
+                        return true;
+                    }
+                }
             }
             policy.map(accept, n, xsink);
             if (xsink && *xsink) {
@@ -7937,13 +8032,13 @@ namespace {
 struct QoreCallArgWeakTarget {
     AbstractQoreNode* target = nullptr;
 
-    DLLLOCAL ~QoreCallArgWeakTarget() {
+    ~QoreCallArgWeakTarget() {
         if (target) [[unlikely]] {
             release(target);
         }
     }
 
-    DLLLOCAL static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
+    static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
         ExceptionSink xsink;
         target->deref(&xsink);
     }

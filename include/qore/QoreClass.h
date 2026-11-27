@@ -1774,7 +1774,11 @@ class QoreBuiltinClass : public QoreClass {
 public:
     //! Creates the object and marks it as a builtin class
     /** Also marks the source program for the class, however the source program's reference count is not increased
-        in this call, and in the destructor no dereference is made either
+        in this call, and in the destructor no dereference is made either.  The class holds a dependency reference
+        on the Program (see QoreProgram::depRef()) that it releases when the class is destroyed: a class that is not
+        added to a namespace of the Program is held only by its objects, which can outlive the Program, and a call of
+        a method of the class after the Program has been deleted raises a \c PROGRAM-ERROR exception, as it does for
+        a class that the Program declared (qore#7797)
 
         @since %Qore 1.0
     */
