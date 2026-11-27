@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - time zones: zoneinfo region spellings on a file system that does not distinguish the case of names
+# test-platform: macos - time zones: zoneinfo region spellings (case variants on a file system that does not distinguish case)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # Spellings of a time zone region (names that reach a file in the zoneinfo directory but are not the name of the entry
@@ -11,9 +11,9 @@
 # "UTC") always keep their names, and restricted code keeps the canonical names of qore#7442.
 #
 # Spellings are made from the case of the letters of a region on a file system that does not distinguish case (macOS),
-# from a symbolic link to a directory in the zoneinfo directory, or, in a zoneinfo directory that the test can write to
-# (a build configured with -DZONEINFO_LOCATION=<dir>, run with QORE_TEST_ZONEINFO_ROOT=<dir>), from links that the test
-# creates; otherwise the test is skipped.  It needs a debug build of the library (dbg_tz_region_cache()).
+# otherwise from links in a zoneinfo directory that the test creates and makes the runtime read regions from with the
+# debug-build hook dbg_tz_set_zoneinfo_root().  The test needs a debug build of the library (dbg_tz_region_cache());
+# it is skipped in a release build.
 
 %modern
 %no-child-restrictions
@@ -65,25 +65,32 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         string source = "";
         #! directories that the test created
         list<string> created = ();
+        #! the zoneinfo directory that the test made and set, if any
+        *string tree_root;
+        #! an entry name that is a link or a file, which keeps its name
+        string link_entry = "UTC";
+        #! entry names that no spelling reaches
+        list<string> fresh_entries = ("Asia/Tokyo", "Europe/Prague", "UTC");
     }
 
     constructor() : QUnit::Test("time zone region spelling cache", "1.0", \ARGV) {
         addTestCase("spellings beyond the limit get the zone of the entry name", \testBounded());
         addTestCase("concurrent spellings stay within the limit", \testConcurrent());
+        addTestCase("the zoneinfo directory hook is refused for restricted code", \testRootHook());
         set_return_value(main());
     }
 
     globalSetUp() {
-        zroot = ENV.QORE_TEST_ZONEINFO_ROOT;
-        if (!zroot) {
-            foreach string zd in (ZoneinfoDirs) {
-                if (is_file(zd + "/UTC")) {
-                    zroot = zd;
-                    break;
-                }
+        if (!Option::HAVE_LIBRARY_DEBUGGING || PlatformOS == "Windows") {
+            return;
+        }
+        foreach string zd in (ZoneinfoDirs) {
+            if (is_file(zd + "/UTC")) {
+                zroot = zd;
+                break;
             }
         }
-        if (!zroot || !Option::HAVE_LIBRARY_DEBUGGING) {
+        if (!zroot) {
             return;
         }
         if (is_file(zroot + "/utc") && is_file(zroot + "/america/new_york")) {
@@ -98,16 +105,16 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
                     }
                 }
             }
-        } else if (ENV.QORE_TEST_ZONEINFO_ROOT) {
-            source = "links in a writable zoneinfo directory";
-            makeLinkedTree();
         } else {
-            source = "a link to a directory in the zoneinfo directory";
-            findSystemLinks();
+            source = "links in a zoneinfo directory made by the test";
+            makeLinkedTree();
         }
     }
 
     globalTearDown() {
+        if (tree_root) {
+            call_function("dbg_tz_set_zoneinfo_root");
+        }
         foreach string d in (created) {
             try {
                 remove_tree(d);
@@ -116,69 +123,37 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         }
     }
 
-    #! creates a directory of zones in the writable zoneinfo directory, reached through links
+    #! creates a zoneinfo directory with zones reached through links and makes the runtime read regions from it
+    /** AA/R<n> and CC/E<n> are zones (copies of UTC), BB a link to AA, L a link to the directory itself, and U a link
+        to AA/R0 (an entry that is a link, as UTC is a link to Etc/UTC on many systems)
+    */
     private makeLinkedTree() {
-        string subname = "QoreSp" + get_random_string(8, 1);
-        string subdir = zroot + "/" + subname;
-        mkdir(subdir);
-        created += subdir;
-        mkdir(subdir + "/AA");
+        string dir = tmp_location() + DirSep + "qore-tz-spellings-" + get_random_string(10, 1);
+        mkdir(dir, 0700);
+        created += dir;
+        dir = realpath(dir);
+        mkdir(dir + "/AA");
+        mkdir(dir + "/CC");
         binary data = File::readBinaryFile(zroot + "/UTC");
-        for (int i = 0; i < 40; ++i) {
+        list<string> files = (map sprintf("AA/R%d", $1), xrange(0, 40)) + (map sprintf("CC/E%d", $1), xrange(0, 4));
+        foreach string fn in (files) {
             File f();
-            f.open2(sprintf("%s/AA/R%d", subdir, i), O_CREAT | O_WRONLY | O_TRUNC);
+            f.open2(dir + "/" + fn, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(data);
             f.close();
         }
-        # a link to the directory and a link to the directory that holds it
-        symlink("AA", subdir + "/BB");
-        symlink(".", subdir + "/L");
+        symlink("AA", dir + "/BB");
+        symlink(".", dir + "/L");
+        symlink("AA/R0", dir + "/U");
         for (int i = 0; i < 40; ++i) {
-            string entry = sprintf("%s/AA/R%d", subname, i);
-            pool += <TzSpelling>{"spelling": sprintf("%s/BB/R%d", subname, i), "entry": entry};
-            pool += <TzSpelling>{"spelling": sprintf("%s/L/AA/R%d", subname, i), "entry": entry};
+            string entry = sprintf("AA/R%d", i);
+            pool += <TzSpelling>{"spelling": sprintf("BB/R%d", i), "entry": entry};
+            pool += <TzSpelling>{"spelling": sprintf("L/AA/R%d", i), "entry": entry};
         }
-    }
-
-    #! finds the spellings of regions through a symbolic link to a directory in the system zoneinfo directory
-    private findSystemLinks() {
-        string real_root = realpath(zroot);
-        Dir dir();
-        dir.chdir(zroot);
-        foreach string name in (dir.list()) {
-            if (name !~ /^[A-Za-z0-9_+-]+$/) {
-                continue;
-            }
-            *hash<StatInfo> l = hlstat(zroot + "/" + name);
-            *hash<StatInfo> t = hstat(zroot + "/" + name);
-            if (!l || !t || l.type != "SYMBOLIC-LINK" || t.type != "DIRECTORY") {
-                continue;
-            }
-            string target = realpath(zroot + "/" + name);
-            string prefix;
-            if (target == real_root) {
-                prefix = "";
-            } else if (target.substr(0, real_root.size() + 1) == real_root + "/") {
-                prefix = target.substr(real_root.size() + 1) + "/";
-            } else {
-                continue;
-            }
-            Dir td();
-            td.chdir(target);
-            foreach string f in (td.listFiles()) {
-                if (f !~ /^[A-Za-z0-9_+-]+$/) {
-                    continue;
-                }
-                string entry = prefix + f;
-                # only files that are zones
-                try {
-                    TimeZone tz(entry);
-                } catch (hash<ExceptionInfo> ex) {
-                    continue;
-                }
-                pool += <TzSpelling>{"spelling": name + "/" + f, "entry": entry};
-            }
-        }
+        call_function("dbg_tz_set_zoneinfo_root", dir);
+        zroot = tree_root = dir;
+        link_entry = "U";
+        fresh_entries = ("CC/E0", "CC/E1", "CC/E2");
     }
 
     #! returns the spellings of a name with the case of its letters given by the bits of the numbers from 0
@@ -254,7 +229,7 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         on_exit call_function("dbg_tz_set_spelling_limits", 0, 0);
 
         # the name of an entry keeps its name
-        assertEq("UTC", (new TimeZone("UTC")).region());
+        assertEq(link_entry, (new TimeZone(link_entry)).region());
 
         # spellings up to the limit keep their names, each with a zone of its own
         list<hash<TzSpelling>> kept = sps[0..ZoneLimit - 1];
@@ -306,7 +281,7 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         }
 
         # the names of entries loaded after the limit keep their names
-        foreach string region in ("Asia/Tokyo", "Europe/Prague", "UTC") {
+        foreach string region in (fresh_entries + link_entry) {
             assertEq(region, (new TimeZone(region)).region(), "an entry name after the limit: " + region);
         }
 
@@ -380,5 +355,33 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         assertLe(ZoneLimit + entries, st.region_names - st0.region_names, "the region names are bounded");
         assertEq(zone_limit, st.spelling_zones, "the zones of spellings stay within the limit");
         assertLe(NameLimit, st.spelling_names, "the remembered entry names stay within the limit");
+    }
+
+    testRootHook() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_tz_set_zoneinfo_root() is only in debug builds of the library");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("the zoneinfo directory hook is not available on Windows");
+        }
+        # restricted code cannot make the runtime read regions from another directory: a sandbox does not let it call
+        # the hook, and the hook refuses code restricted by its parse options
+        string code = "sub set_root(string d) { call_function(\"dbg_tz_set_zoneinfo_root\", d); }";
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.setSandboxManager(new SandboxManager());
+            p.parse(code, "tenant-root");
+            assertThrows("INVALID-FUNCTION-ACCESS", \p.callFunction(), ("set_root", tmp_location()));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+            p.parse(code, "restricted-root");
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("set_root", tmp_location()));
+        }
+        # a relative directory is refused
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_tz_set_zoneinfo_root", "zoneinfo"));
+        # the directory is unchanged: an entry of the test's directory, or a system region, still loads
+        string region = tree_root ? "CC/E3" : "Asia/Kolkata";
+        assertEq(region, (new TimeZone(region)).region(), "the zoneinfo directory is unchanged");
     }
 }

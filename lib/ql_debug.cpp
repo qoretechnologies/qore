@@ -25301,6 +25301,23 @@ static QoreValue f_dbg_tz_set_spelling_limits(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! Debug-only: sets the zoneinfo directory from which time zone regions that are not cached are read (qore#7592)
+/** NOTHING restores the directory of the build.  Refused for restricted code.  Not on Windows.
+*/
+static QoreValue f_dbg_tz_set_zoneinfo_root(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_zoneinfo_root() is not available on Windows");
+#else
+    const QoreStringNode* dir = get_param_value(params, 0).get<const QoreStringNode>();
+    if (dir && strlen(dir->c_str()) != dir->size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the zoneinfo directory has a NUL character");
+        return QoreValue();
+    }
+    QTZM.dbgSetZoneinfoRoot(dir ? dir->c_str() : nullptr, xsink);
+#endif
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -39457,6 +39474,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
     qns.addBuiltinVariant("dbg_tz_region_cache", f_dbg_tz_region_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_tz_set_zoneinfo_root", f_dbg_tz_set_zoneinfo_root, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "dir");
     qns.addBuiltinVariant("dbg_tz_set_spelling_limits", f_dbg_tz_set_spelling_limits, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "zones", bigIntTypeInfo,
         QORE_PARAM_NO_ARG, "names");
