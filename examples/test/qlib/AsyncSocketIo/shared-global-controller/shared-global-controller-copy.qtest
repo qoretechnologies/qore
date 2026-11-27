@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
+
+%exec-class SharedGlobalControllerCopyTest
+
+#! A tenant's copy of the process-wide AsyncSocketIoController wrapper (issue #7666, AOT3 fault (p))
+/** AsyncSocketIoController::copy() clears the logger of a copy that code that is sandboxed or acts for sandboxed code
+    makes of the shared process-wide wrapper.  It clears the member itself: the copy keeps the provenance of the wrapper
+    (qore#7033), so it is not the tenant's, and the setter, which accepts only the owner of the object (qore#6842),
+    refused it, so that the tenant could not copy the wrapper at all.  The copy succeeds, is not shared, has no logger
+    and stays not the tenant's: the tenant cannot change its level or its logger (with the setter of the class, which
+    refuses first as the logger of a wrapper is also that of the process-wide controller, nor with the setter that it
+    inherits) or delete it.  A copy that trusted code makes keeps the logger.
+*/
+class SharedGlobalControllerCopyTest inherits QUnit::Test {
+    public {
+        #! the code of a tenant
+        const TenantCode = "
+%modern
+%requires AsyncSocketIo
+%requires Logger
+%requires reflection
+
+string sub try_call(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# copies the wrapper and reports what the tenant can do with the copy
+hash<auto> sub copy_wrapper(AsyncSocketIoController c, Logger host_logger) {
+    AsyncSocketIoController copy;
+    hash<auto> rv = {\"copy\": try_call(sub () { copy = c.copy(); })};
+    if (!copy) {
+        return rv;
+    }
+    return rv + {
+        \"shared\": SandboxManager::isSharedObject(copy),
+        \"owned\": SandboxManager::isObjectOwnedByCaller(copy),
+        \"host_logger\": copy.isLogger(host_logger),
+        \"set_level\": try_call(sub () { copy.setLevel(\"ALL\"); }),
+        \"set_logger\": try_call(sub () { copy.setLogger(new Logger(\"tenant\")); }),
+        # the setter that the class inherits, which decides by the owner of the object
+        \"base_set_logger\": try_call(sub () {
+            cast<Reflection::NormalMethod>(Reflection::Class::forName(\"Logger::LoggerWrapper\").getMethod(
+                \"setLogger\")).call(copy, new Logger(\"tenant\"));
+        }),
+        \"delete\": try_call(sub () { delete copy; }),
+    };
+}
+";
+    }
+
+    private {
+        AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+        Logger host_logger("host");
+        Program tenant;
+    }
+
+    constructor() : QUnit::Test("tenant copy of the shared global async I/O controller wrapper", "1.0", \ARGV) {
+        tenant = new Program(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        tenant.setSandboxManager(new SandboxManager());
+        tenant.parse(TenantCode, "tenant");
+
+        addTestCase("tenant copy", \tenantCopy());
+        addTestCase("trusted copy", \trustedCopy());
+        set_return_value(main());
+    }
+
+    tenantCopy() {
+        assertTrue(SandboxManager::isSharedObject(ctrl), "the process-wide wrapper is shared");
+        ctrl.setLogger(host_logger);
+        on_exit ctrl.setLogger();
+
+        hash<auto> rv = tenant.callFunction("copy_wrapper", ctrl, host_logger);
+        assertEq("ok", rv.copy, "the tenant copies the shared wrapper");
+        assertFalse(rv.shared, "the copy is not shared");
+        assertFalse(rv.owned, "the copy keeps the provenance of the wrapper: it is not the tenant's");
+        assertFalse(rv.host_logger, "the copy has no logger");
+        assertEq("SANDBOX-OBJECT-ACCESS-ERROR", rv.set_level, "the tenant cannot change the level of the copy");
+        # the logger of any wrapper is also the logger of the process-wide controller
+        assertEq("SANDBOX-REGISTRATION-ERROR", rv.set_logger, "the tenant cannot give the copy a logger");
+        assertEq("SANDBOX-OBJECT-ACCESS-ERROR", rv.base_set_logger,
+            "the tenant cannot give the copy a logger with the inherited setter");
+        assertEq("SANDBOX-OBJECT-ACCESS-ERROR", rv.delete, "the tenant cannot delete the copy");
+        # the process-wide wrapper keeps its logger
+        assertTrue(ctrl.isLogger(host_logger), "the wrapper keeps the host's logger");
+    }
+
+    trustedCopy() {
+        ctrl.setLogger(host_logger);
+        on_exit ctrl.setLogger();
+
+        AsyncSocketIoController copy = ctrl.copy();
+        assertFalse(SandboxManager::isSharedObject(copy), "a copy of trusted code is not shared");
+        assertTrue(copy.isLogger(host_logger), "a copy of trusted code keeps the logger");
+        copy.setLogger();
+        assertFalse(copy.isLogger(host_logger), "trusted code changes its copy");
+        assertTrue(ctrl.isLogger(host_logger), "the wrapper keeps the host's logger");
+    }
+}
