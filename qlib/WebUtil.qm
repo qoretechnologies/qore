@@ -71,9 +71,30 @@ module WebUtil {
       URL; also uses @ref WebUtil::TemplateFileManager "TemplateFileManager" to automatically manage any template
       files found; supports automatic compilation of and rendering from template files
 
+    @section webutil_template_credentials The Credentials of a Request in Templates
+
+    A template gets the request context as its context argument (\c $ctx).  Template code that is restricted (the
+    @ref Qore::Program "Program" setup code of the template, \c psetup, or the template Program is of a %Program that
+    a sandbox that does not trust its code governs; see
+    @ref WebUtil::FileTemplate::runsRestrictedCode() "FileTemplate::runsRestrictedCode()") gets the context without
+    the credentials of the request, also when a handler of trusted code renders it (see
+    @ref httpserverutil_request_credentials): the keys of the request that the request filter gives
+    (@ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys": the user, the address
+    of the client, the URL and the header fields other than the credentials) and the keys of
+    @ref WebUtil::FileHandler "FileHandler" (\c resource_path, \c url_root, \c file_root, \c isregex and
+    \c file_handler; a subclass names the keys that it adds with
+    @ref HttpServer::AbstractHttpRequestHandler::getDispatchContextKeys() "getDispatchContextKeys()"), but not the
+    \c Proxy-Authorization, \c Cookie and \c Set-Cookie fields, the raw \c Authorization value (\c auth), the
+    objects of the server or the handler's state; the \c Authorization field only when the handler has no
+    authenticator of the platform and trusted code opts in to it with
+    @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()".  A
+    template without setup code runs only the code of its file, which the handler trusts.
+
     @section webutil_relnotes Release Notes
 
     @subsection webutil_v1_8_1 WebUtil v1.8.1
+    - template code that is restricted gets the request context without the credentials of the request (see
+      @ref webutil_template_credentials; <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -469,6 +490,12 @@ public class FileTemplate inherits AbstractTemplate, TextTemplateBase {
 
         #! file's modification time
         *date mtime;
+
+        #! the template function of the current template Program, which tells whether its code is restricted
+        *code tref;
+
+        #! returns the context of template code that is restricted (see runsRestrictedCode())
+        *code ctx_filter;
     }
 
     public {
@@ -476,16 +503,52 @@ public class FileTemplate inherits AbstractTemplate, TextTemplateBase {
 
     #! creates the object based on the pathname and @ref Qore::Program "Program" options
     /** @param resource_path the path to the resource
-        @param parse_opts the @ref parse_options "Program parse options" for the template file @ref Qore::Program "programs"
-        @param pgm_setup an optional @ref closure "closure" or @ref call_reference "call reference" taking a single @ref Qore::Program "Program" argument to be called when initializing template @ref Qore::Program "programs" to set up a custom template API, etc
+        @param parse_opts the @ref parse_options "Program parse options" for the template file
+        @ref Qore::Program "programs"
+        @param pgm_setup an optional @ref closure "closure" or @ref call_reference "call reference" taking a single
+        @ref Qore::Program "Program" argument to be called when initializing template @ref Qore::Program "programs"
+        to set up a custom template API, etc
+        @param context_filter returns the context argument for template code that is restricted (see
+        runsRestrictedCode()): it takes the context argument and returns it without the credentials of the request;
+        without it, such code gets the context filtered with
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()"
+
+        @since WebUtil 1.8.1 the \a context_filter argument
     */
-    constructor(string resource_path, int parse_opts = DefaultProgramOptions, *code pgm_setup) : TextTemplateBase(parse_opts) {
+    constructor(string resource_path, int parse_opts = DefaultProgramOptions, *code pgm_setup,
+            *code context_filter) : TextTemplateBase(parse_opts) {
         po = parse_opts;
         psetup = pgm_setup;
+        ctx_filter = context_filter;
         path = resource_path;
         ct = StaticTextTemplateBase::getContentType(path);
         if (pgm_setup)
             pgm_setup(p);
+    }
+
+    #! Returns @ref True if the template runs the code of a restricted %Program (qore#7303)
+    /** Only the @ref Qore::Program "Program" setup code can give the template Program code other than that of its
+        file: the template runs the code of a restricted %Program when the setup code is of a %Program that a sandbox
+        that does not trust its code governs
+        (@ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()"),
+        or when the template Program is governed so, for example because restricted code committed code in it.  A
+        template without setup code runs only the code of its file.  Fails closed: @ref True if it cannot be decided
+
+        @return @ref True if the template runs the code of a restricted %Program; such code gets the context argument
+        without the credentials of the request (see @ref webutil_template_credentials)
+
+        @since WebUtil 1.8.1
+    */
+    bool runsRestrictedCode() {
+        if (!psetup) {
+            return False;
+        }
+        try {
+            return SandboxManager::isCodeFromRestrictedProgram(psetup)
+                || (tref && SandboxManager::isCodeFromRestrictedProgram(tref));
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
     }
 
     #! explicitly renders the given template with the given argument
@@ -517,6 +580,11 @@ hash<HttpResponseInfo> h = qft.render(ctx);
             setupTemplateIntern(new_mtime);
         }
 
+        # restricted template code gets the context without the credentials of the request (qore#7303)
+        if (runsRestrictedCode()) {
+            ctx = ctx_filter ? ctx_filter(ctx) : AbstractStreamRequest::filterRequest(ctx, ctx.hdr ?? {}).cx;
+        }
+
         return <HttpResponseInfo>{
             "code": http_code,
             "body": p.callFunction(TemplateFunc, ctx),
@@ -530,6 +598,7 @@ hash<HttpResponseInfo> h = qft.render(ctx);
 
         # delete the Program object and create a new one
         if (mtime) {
+            remove tref;
             delete p;
             p = new Program(po);
             p.setScriptPath(sprintf("Qore::WebUtil::%s", self.className()));
@@ -544,6 +613,9 @@ hash<HttpResponseInfo> h = qft.render(ctx);
         }
 
         StaticTextTemplateBase::add(p, TemplateFunc, path, File::readTextFile(path));
+        if (psetup) {
+            tref = p.getCallReference(TemplateFunc);
+        }
         mtime = new_mtime;
     }
 }
@@ -608,9 +680,27 @@ hash<auto> h = tm.render(resource_path, path, mtime, ctx);
         on_exit rwl.writeUnlock();
 
         if (!th{tname})
-            th{tname} = new FileTemplate(path, po, psetup);
+            th{tname} = new FileTemplate(path, po, psetup, psetup
+                ? hash<auto> sub (hash<auto> c) { return getContextForRestrictedTemplate(c); }
+                : NOTHING);
 
         return th{tname}.render(mtime, ctx, code, hdr);
+    }
+
+    #! Returns the context argument for template code that is restricted (qore#7303)
+    /** See @ref WebUtil::FileTemplate::runsRestrictedCode() "FileTemplate::runsRestrictedCode()"; the default
+        implementation filters the context with
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()", which
+        withholds every credential of the request
+
+        @param ctx the context argument
+
+        @return the context argument without the credentials of the request
+
+        @since WebUtil 1.8.1
+    */
+    private hash<auto> getContextForRestrictedTemplate(hash<auto> ctx) {
+        return AbstractStreamRequest::filterRequest(ctx, ctx.hdr ?? {}).cx;
     }
 
     #! this method can be called when a resource is requested that no longer exists in case a template is stored for a file that was deleted
@@ -1869,6 +1959,23 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return {
             "Content-Type": get_mime_type_from_ext(path),
         };
+    }
+
+    #! Returns the context argument for template code that is restricted: the request without its credentials, with
+    #! the keys of this handler (qore#7303)
+    /** See @ref webutil_template_credentials
+    */
+    private hash<auto> getContextForRestrictedTemplate(hash<auto> ctx) {
+        return filterRequestForCode(ctx, ctx.hdr ?? {}).cx;
+    }
+
+    #! Returns the keys of the request context that the handler adds for templates: \c resource_path, \c url_root,
+    #! \c file_root, \c isregex and \c file_handler (qore#7303)
+    /** Template code that is restricted gets them with the request without its credentials (see
+        @ref webutil_template_credentials); a subclass that adds keys for its templates returns them with these
+    */
+    private *list<string> getDispatchContextKeys() {
+        return ("resource_path", "url_root", "file_root", "isregex", "file_handler");
     }
 
     #! this method is called when a directory should be rendered
