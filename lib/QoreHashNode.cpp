@@ -232,7 +232,7 @@ int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
 #endif
 
 // the bodies of createMemberKnownAbsent(const qore_hash_lookup_key&) and addMemberKnownAbsent(), always inlined into
-// the find-or-create functions: GCC inlines a function that is not declared inline by a size limit
+// the find-or-create functions but findCreateMember(const char*): GCC inlines a function not declared inline by a limit
 // (max-inline-insns-auto) that this body exceeds, so that the member's creation was a call of its own in each of them
 // (qore#7763)
 QORE_HASH_ALWAYS_INLINE HashMember* qore_hash_private::addMemberKnownAbsentInline(HashMember* m) {
@@ -259,10 +259,13 @@ QORE_HASH_ALWAYS_INLINE HashMember* qore_hash_private::createMemberKnownAbsentIn
     return addMemberKnownAbsentInline(new HashMember(key));
 }
 
+// the creation is not inlined here: this is the find-or-create of the AST interpreter's lvalues (getLValue()) and of
+// object members, and a fourth inline copy of it made GCC give up inlining elsewhere in the single compilation unit
+// (the key's std::string constructor here, std::vector::reserve() in the AST's remove; bench-lvalue rh/dh ast +12)
 HashMember* qore_hash_private::findCreateMember(const char* key) {
     qore_hash_lookup_key k(key);
-    HashMember* om = findMemberForCreate(k);
-    return om ? om : createMemberKnownAbsentInline(k);
+    HashMember* om = findMember(k);
+    return om ? om : createMemberKnownAbsent(k);
 }
 
 HashMember* qore_hash_private::findCreateMember(const char* key, bool& created) {
