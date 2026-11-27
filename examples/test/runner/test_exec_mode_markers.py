@@ -396,7 +396,11 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode, under a small stack rlimit, as the checks are of the start of the process
         # - AOTStringSplitTrim (#5578 theme F) and StringFastPathFrames (#7711): their checks run in child processes
         #   that set their own execution modes and in qcc executables
+        # - module-hash-deps and module-deps-hash (#7796): their checks load modules from source and compiled with qcc
+        #   in child processes that set their own execution modes, as a module is loaded once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/qore/misc/module-loader/module-hash-deps.qtest",
+                                 "examples/test/module-cpp-api/module-deps/module-deps-hash.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTStringSplitTrim.qtest",
                                  "examples/test/ir/StringFastPathFrames.qtest",

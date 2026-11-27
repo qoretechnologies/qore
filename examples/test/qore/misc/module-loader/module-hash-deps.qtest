@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc compilation of AOT qmods and their loading (dlopen) by the module loader
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class ModuleHashDepsTest
+
+#! Tests the \c reexported-modules and \c required-modules keys of get_module_hash() (issue #7796)
+/** A module that requires one module with reexport, one without, and that tries one that does not exist is loaded
+    from its source and from the qmods that qcc compiled from the same sources, in child processes in each execution
+    mode; both report the same direct requirements and reexports: the modules that its own directives loaded, not
+    the modules that those require, nor the %try-module request that failed.
+*/
+class ModuleHashDepsTest inherits QUnit::Test {
+    public {
+        #! the fixture modules in the order that qcc compiles them (each one's requirements first)
+        const Modules = {
+            "HashDepsLeaf": "%modern
+module HashDepsLeaf {
+    version = \"1.0\";
+    desc = \"module hash dependency test: the requirement of a requirement\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HashDepsLeaf {
+public string sub leaf_name() {
+    return \"leaf\";
+}
+}
+",
+            "HashDepsPlain": "%modern
+module HashDepsPlain {
+    version = \"1.0\";
+    desc = \"module hash dependency test: a plain requirement\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HashDepsPlain {
+public string sub plain_name() {
+    return \"plain\";
+}
+}
+",
+            "HashDepsRe": "%modern
+%requires HashDepsLeaf
+
+module HashDepsRe {
+    version = \"1.0\";
+    desc = \"module hash dependency test: a reexported requirement\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HashDepsRe {
+public string sub re_name() {
+    return \"re:\" + leaf_name();
+}
+}
+",
+            "HashDepsMain": "%modern
+%requires qore >= 2.0
+%requires(reexport) HashDepsRe
+%requires HashDepsPlain
+%try-module HashDepsMissing
+%define NoHashDepsMissing
+%endtry
+
+module HashDepsMain {
+    version = \"1.0\";
+    desc = \"module hash dependency test: the module whose dependencies are checked\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HashDepsMain {
+public string sub main_name() {
+    return \"main:\" + re_name() + \":\" + plain_name();
+}
+}
+",
+        };
+
+        #! the child: loads the module (one of its requirements first) and prints the dependency keys
+        const ChildSource = "%modern
+%requires HashDepsPlain
+%requires HashDepsMain
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"%s\\n\", main_name());
+printf(\"%s\\n\", re_name());
+foreach string m in (\"HashDepsMain\", \"HashDepsRe\", \"HashDepsPlain\", \"HashDepsLeaf\") {
+    printf(\"%s %s reexported: %y required: %y\\n\", m, (basename(mh{m}.filename) =~ x/\\.(qmod|qm)$/)[0],
+        mh{m}.\"reexported-modules\", mh{m}.\"required-modules\");
+}
+";
+
+        #! the execution modes the child runs in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the directory of the fixtures, the child and the qmods
+        TmpDir tmp("qore-module-hash-deps-");
+        string src_dir;
+        string child;
+    }
+
+    constructor() : QUnit::Test("ModuleHashDepsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        src_dir = tmp.path + DirSep + "src";
+        mkdir(src_dir);
+        foreach hash<auto> i in (Modules.pairIterator()) {
+            writeFile(src_dir + DirSep + i.key + ".qm", i.value);
+        }
+        child = tmp.path + DirSep + "child.q";
+        writeFile(child, ChildSource);
+        # the source and the AOT cases are separate so that a failure of one does not hide the other
+        addTestCase("dependency keys of source modules", \sourceTest());
+        addTestCase("dependency keys of AOT modules", \aotTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        checkModes("qm", src_dir);
+    }
+
+    aotTest() {
+        string aot_dir = tmp.path + DirSep + "aot";
+        mkdir(aot_dir);
+        # each qmod is compiled against the sources of its requirements
+        foreach string mod in (keys Modules) {
+            string qmod = aot_dir + DirSep + mod + ".qmod";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module -o %s "
+                "%s 2>&1", libqore_dir, libqore_dir, src_dir, qcc_bin, qmod, src_dir + DirSep + mod + ".qm"));
+            assertTrue(is_file(qmod), "qcc compiled " + mod + ": " + out);
+        }
+        checkModes("qmod", aot_dir);
+    }
+
+    #! runs the child in each execution mode with the modules in the given directory and checks its output
+    /** the direct requirements are in the order of the directives; the requirement of "qore" is not a module and the
+        failed %try-module request is not a requirement; HashDepsLeaf is required by HashDepsRe only
+    */
+    private checkModes(string ext, string mod_dir) {
+        string expected = sprintf("main:re:leaf:plain\n"
+            "re:leaf\n"
+            "HashDepsMain %s reexported: [\"HashDepsRe\"] required: [\"HashDepsRe\", \"HashDepsPlain\"]\n"
+            "HashDepsRe %s reexported: null required: [\"HashDepsLeaf\"]\n"
+            "HashDepsPlain %s reexported: null required: null\n"
+            "HashDepsLeaf %s reexported: null required: null\n", ext, ext, ext, ext);
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s 2>&1", libqore_dir, mod_dir, qore_bin, mode, child));
+            assertEq(expected, out, sprintf("%s: %s", ext, mode));
+        }
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}
