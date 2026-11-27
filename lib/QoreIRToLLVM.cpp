@@ -9618,6 +9618,32 @@ bool QoreIRToLLVM::callRefEntryCallEligible(const QoreIRInstruction* inst) const
 }
 
 // documented in QoreIRToLLVM.h
+llvm::AllocaInst* QoreIRToLLVM::emitCallRefSiteSkip(llvm::Value* ref_boxed, llvm::Function* llvm_func,
+        llvm::BasicBlock* generic_bb) {
+    // the slot, in the function's entry block, holds no value (NOTHING) when the function is entered
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+    llvm::IRBuilder<> ab(&entry, entry.begin());
+    llvm::AllocaInst* not_funcref = ab.CreateAlloca(i64_type, nullptr, "callref_not_funcref");
+    ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), not_funcref);
+    llvm::BasicBlock* try_bb = llvm::BasicBlock::Create(ctx, "callref_try", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpEQ(ref_boxed, builder->CreateLoad(i64_type, not_funcref,
+        "callref_not_funcref_value")), generic_bb, try_bb);
+    builder->SetInsertPoint(try_bb);
+    return not_funcref;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::emitCallRefSiteNote(llvm::AllocaInst* not_funcref, llvm::Value* ref_boxed,
+        llvm::Function* llvm_func, llvm::BasicBlock* generic_bb) {
+    llvm::IRBuilder<>::InsertPointGuard guard(*builder);
+    llvm::BasicBlock* note_bb = llvm::BasicBlock::Create(ctx, "callref_note_not_funcref", llvm_func);
+    builder->SetInsertPoint(note_bb);
+    builder->CreateStore(ref_boxed, not_funcref);
+    builder->CreateBr(generic_bb);
+    return note_bb;
+}
+
+// documented in QoreIRToLLVM.h
 llvm::AllocaInst* QoreIRToLLVM::getCallRefEntryResultSlot(llvm::Function* llvm_func) {
     if (!callref_entry_result_slot) {
         llvm::BasicBlock& entry = llvm_func->getEntryBlock();
@@ -9670,14 +9696,17 @@ bool QoreIRToLLVM::emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llv
     param_types.push_back(ptr_type);
     args.push_back(slot);
     args.push_back(xsink_arg);
-    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
-        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
-
     llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
     llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
-    builder->CreateCondBr(builder->CreateICmpNE(called, llvm::ConstantInt::get(i32_type, 0)), entry_bb, generic_bb,
-        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+    llvm::AllocaInst* not_funcref = emitCallRefSiteSkip(ref_boxed, llvm_func, generic_bb);
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
+        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
+    llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 2,
+        llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1}));
+    sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), entry_bb);
+    sw->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::getSigned(i32_type, QORE_RT_CALL_REF_NOT_FUNCREF)),
+        emitCallRefSiteNote(not_funcref, ref_boxed, llvm_func, generic_bb));
 
     builder->SetInsertPoint(entry_bb);
     llvm::Value* entry_result = builder->CreateLoad(i64_type, slot, "callref_entry_value");
@@ -9810,19 +9839,22 @@ bool QoreIRToLLVM::emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst
     args.push_back(slot);
     args.push_back(xsink_arg);
     std::string helper_name = std::string("qore_rt_call_ref_") + rname + "_" + aname + "_v1";
-    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
-        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
-
     llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
     llvm::BasicBlock* entry_boxed_bb = llvm::BasicBlock::Create(ctx, "callref_entry_boxed", llvm_func);
     llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
     llvm::BasicBlock* check_bb = llvm::BasicBlock::Create(ctx, "callref_check", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
-    // 1: the native value; 2: an entry's NaN-boxed value, converted as the generic call path's; 0: no call
-    llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 2,
-        llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1}));
+    llvm::AllocaInst* not_funcref = emitCallRefSiteSkip(ref_boxed, llvm_func, generic_bb);
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
+        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
+    // 1: the native value; 2: an entry's NaN-boxed value, converted as the generic call path's; 0: no call; not a
+    // function reference: no call, and the value is kept
+    llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 3,
+        llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1, 1}));
     sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), entry_bb);
     sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 2), entry_boxed_bb);
+    sw->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::getSigned(i32_type, QORE_RT_CALL_REF_NOT_FUNCREF)),
+        emitCallRefSiteNote(not_funcref, ref_boxed, llvm_func, generic_bb));
 
     std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> incoming;
     builder->SetInsertPoint(entry_bb);
@@ -9974,15 +10006,18 @@ llvm::Value* QoreIRToLLVM::emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llv
     }
     llvm::AllocaInst* slot = getCallRefEntryResultSlot(llvm_func);
     llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
-    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_v1",
-            llvm::FunctionType::get(i32_type, {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
-        {ref_boxed, args_array, nargs_val, slot, xsink_arg}, "callref_entry_called");
-
     llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
     llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
-    builder->CreateCondBr(builder->CreateICmpNE(called, llvm::ConstantInt::get(i32_type, 0)), entry_bb, generic_bb,
-        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+    llvm::AllocaInst* not_funcref = emitCallRefSiteSkip(ref_boxed, llvm_func, generic_bb);
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_v1",
+            llvm::FunctionType::get(i32_type, {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
+        {ref_boxed, args_array, nargs_val, slot, xsink_arg}, "callref_entry_called");
+    llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 2,
+        llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1}));
+    sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), entry_bb);
+    sw->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::getSigned(i32_type, QORE_RT_CALL_REF_NOT_FUNCREF)),
+        emitCallRefSiteNote(not_funcref, ref_boxed, llvm_func, generic_bb));
 
     builder->SetInsertPoint(entry_bb);
     llvm::Value* entry_result = builder->CreateLoad(i64_type, slot, "callref_entry_value");

@@ -3157,6 +3157,22 @@ private:
     DLLLOCAL llvm::Value* emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
             llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func);
 
+    //! Emits the test of a call site's last value that was not a function reference (qore#5578)
+    /** A call site keeps the last value with which a call-reference helper returned QORE_RT_CALL_REF_NOT_FUNCREF (a
+        closure, for example) in a slot of the function's entry block, which holds NOTHING when the function is
+        entered: a call with that value goes to \a generic_bb, the generic call path, without the helper, which costs a
+        closure called through the site one load and one compare.  The generic call path is always correct, so a value
+        that the slot keeps after it was released, and whose address a reference to a function took, only takes it
+        too.  Leaves the builder in the block of the helper's call.
+
+        @return the slot, which emitCallRefSiteNote() writes
+    */
+    DLLLOCAL llvm::AllocaInst* emitCallRefSiteSkip(llvm::Value* ref_boxed, llvm::Function* llvm_func,
+            llvm::BasicBlock* generic_bb);
+    //! Returns a block that keeps the value in the slot of emitCallRefSiteSkip() and goes to \a generic_bb
+    DLLLOCAL llvm::BasicBlock* emitCallRefSiteNote(llvm::AllocaInst* not_funcref, llvm::Value* ref_boxed,
+            llvm::Function* llvm_func, llvm::BasicBlock* generic_bb);
+
     //! Returns the entry-block slot of the result of a call through a call-reference entry
     DLLLOCAL llvm::AllocaInst* getCallRefEntryResultSlot(llvm::Function* llvm_func);
     //! the slot of getCallRefEntryResultSlot(), or nullptr

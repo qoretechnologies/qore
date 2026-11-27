@@ -2278,8 +2278,11 @@ QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(QoreAOTContext* ctx, int
     in \a result; 0 if nothing was done (\a result is not written), and the caller makes the call through the generic
     call path (qore_rt_call_closure_fast()); 2 (the helpers with a native result only) if the call was made through an
     entry that returns a NaN-boxed value, which the caller owns and converts, in the bits of \a result (NOTHING if the
-    callee raised an exception)
+    callee raised an exception); QORE_RT_CALL_REF_NOT_FUNCREF if nothing was done because the value is not a reference
+    to a function (a closure, for example): the call site keeps the value, and does not call the helper again while
+    its call is made with that same value (the generic call path is always correct)
 */
+#define QORE_RT_CALL_REF_NOT_FUNCREF (-1)
 int qore_rt_call_ref_int_0_v1(uint64_t ref_bits, int64_t* result, ExceptionSink* xsink);
 int qore_rt_call_ref_int_int_v1(uint64_t ref_bits, int64_t a0, int64_t* result, ExceptionSink* xsink);
 int qore_rt_call_ref_int_float_v1(uint64_t ref_bits, double a0, int64_t* result, ExceptionSink* xsink);
