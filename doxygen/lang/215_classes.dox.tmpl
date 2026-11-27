@@ -830,19 +830,29 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
 
     @subsection sandboxed_class_private_access Private Access of Classes Declared by Sandboxed Code
-    A class declared in a @ref Qore::Program "Program" with a @ref sandbox_manager "sandbox manager" (or that sandboxed
-    code creates) has no private access to the private members, methods, static class variables and constants that a class
-    declared by trusted code (a module's code, or a Program without a sandbox manager) declares, on any object, also on
+    A class declared by restricted code (code in a @ref Qore::Program "Program" whose
+    @ref sandbox_manager "sandbox manager" does not trust its code, see
+    @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()", code that such a sandbox governs
+    when it parses or loads the class in another Program, or code that such code calls) has no private access to the
+    private members, methods, static class variables and constants that a class declared by trusted code (a module's
+    code, a Program that no sandbox governs and that sandboxed code did not mark sandboxed, or a Program whose sandbox
+    manager allows uncontrolled APIs) declares, on any object, also on
     the objects of the class itself: for it they are as if they were <tt><b>private:internal</b></tt>.  An access that
     can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
     a member name computed at run time, the conversion of the object to a hash or its keys, a
     @ref call_reference "call reference", or the reflection API) raises the same
-    exception as an access from outside the class hierarchy.
-
-
+    exception as an access from outside the class hierarchy.  This applies to each private variant of a method that
+    also has public variants, to the private constructors of the trusted class (an object of it cannot be created with
+    them, with @ref new "new" or @ref Qore::create_object() "create_object()", nor be constructed with them in the
+    class's own base-class constructor call, <tt>constructor() : Base(args)</tt>), and to the public members and methods
+    that the trusted class inherits privately (<tt><b>inherits private</b></tt>).\n\n
     The class can still use its own members and methods and the public members and methods that it inherits, implement
-    and override the private (abstract) methods of the trusted class, which the trusted class then calls, and call the
-    version of a method that it overrides in a base class (<tt>Base::method()</tt>).  Code of the trusted class keeps
+    and override the private (abstract) methods of the trusted class, which the trusted class then calls, call the
+    version of a method of a base class in its own method that overrides it (<tt>Base::method()</tt> in a variant of
+    the method \c method() whose parameter types are those of a variant of the base class's method, which is the only
+    variant that the call selects, on the object of the override; not from another method, not through a call
+    reference, and not in the call's arguments), and call the public constructors of its base class.  A trusted class
+    that sandboxed code may subclass gives it a public constructor.  Code of the trusted class keeps
     its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
     library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
     need as public members and methods.  The access is decided by the state of the class's Program when the class is
@@ -856,9 +866,8 @@ while (i.next) {}  # parse exception: the call is i.next()
     \c Observable::hasObservers() and \c getObserverCount()), \c FtpPoller (\c setFatal() and \c isFatal()),
     \c HttpServerUtil (\c AbstractStreamRequest::getContext(), \c getHeaders() and \c getBody()) and \c RestHandler
     (\c AbstractRestStreamRequestHandler::getContext() and \c getArgs()); a context that they give is a copy with the
-    request metadata only.  These methods are @ref final_methods "final": a subclass method with the name and the
-    signature of one of them is a parse error (a method of the name with other parameters, or a static method of the
-    name, is a method of its own, which a call with the signature of the final method does not call).  The private methods that change shared state or reach the host's resources stay private:
+    request metadata only.  These methods are @ref final_methods "final": a subclass method with the name of one of
+    them, with any parameters, static or not, is a parse error.  The private methods that change shared state or reach the host's resources stay private:
     a data provider subclass declared by sandboxed code cannot call \c AbstractDataProvider::resolveValue() or
     \c valueNeedsResolution() (the host's dynamic value resolution) or
     \c AbstractWatchDataProviderBase::persistCheckpoint() (see

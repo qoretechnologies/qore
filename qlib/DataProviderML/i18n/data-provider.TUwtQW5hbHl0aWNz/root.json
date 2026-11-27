@@ -3831,6 +3831,18 @@
           "source": "Extract overall sentiment, score, per-aspect breakdown",
           "message": "Extract overall sentiment, score, per-aspect breakdown"
         },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.display_name": {
+          "source": "Custom Schema",
+          "message": "Custom Schema"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.short_desc": {
+          "source": "Custom extraction schema as a hash",
+          "message": "Custom extraction schema as a hash"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.desc": {
+          "source": "Omit `schema_template` and set `name`, `description`, and a nonempty list of `fields`. Each field has a unique `name`, a `description`, and a JSON type (`string`, `number`, `integer`, `boolean`, `array`, or `object`). `required` defaults to true. Array fields can specify `items`, object fields can specify `properties`, and `enum_values` lists the permitted values.",
+          "message": "Omit `schema_template` and set `name`, `description`, and a nonempty list of `fields`. Each field has a unique `name`, a `description`, and a JSON type (`string`, `number`, `integer`, `boolean`, `array`, or `object`). `required` defaults to true. Array fields can specify `items`, object fields can specify `properties`, and `enum_values` lists the permitted values."
+        },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.bGxtX3VybA.display_name": {
           "source": "LLM URL",
           "message": "LLM URL"

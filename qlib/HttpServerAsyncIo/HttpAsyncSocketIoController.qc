@@ -219,6 +219,21 @@ public class HttpAsyncSocketIoController {
         #! ends after its last session has been drained
         hash<string, HttpDrainToken> h3_drain_tokens = {};
 
+        #! The listeners that accept no new connection or session, as their stop has started: listener hash -> True
+        /** Set by stopAccepting(), removed by removeListener(); their connections in progress are served (qore#7690)
+        */
+        hash<string, bool> stopped_accepting = {};
+
+        #! Serializes the submission of an accept operation with stopAccepting()
+        /** A replenishing accept operation checks stopped_accepting and is submitted under this lock, and
+            stopAccepting() cancels the accept operations and closes the listening socket under it after it has set
+            stopped_accepting, so no accept operation is submitted after the cancel or for a closed socket (qore#7690);
+            never acquired with #m held.  A dispatcher worker that replenishes an accept operation while a listener's
+            stop holds it waits for that cancel and close, which take no lock that the worker holds and wait only for
+            the I/O threads, which never take it
+        */
+        Mutex accept_submit_m();
+
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
 
@@ -305,9 +320,15 @@ public class HttpAsyncSocketIoController {
 
         @param new_logger the new logger to use (NOTHING disables logging)
 
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change
+        the logger of an object that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+
         @since Qore 3.0.0
     */
     setLogger(*LoggerInterface new_logger) {
+        # the state can be shared with other owners (issue 7035)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         logger = new_logger;
     }
 
@@ -1614,6 +1635,68 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::INFO, "Added QUIC/HTTP/3 listener %y", lhash);
     }
 
+    #! Stops accepting new connections and sessions on the given listener, whose stop has started (qore#7690)
+    /** A TCP listener's accept operations are canceled and none is submitted again, and its listening socket is
+        closed, so that a client that connects now is refused at once; an HTTP/3 listener refuses new sessions and
+        sends its sessions a \c GOAWAY notice, and its operation ends when its sessions have ended.  The connections in
+        progress of the listener are served; removeListener() removes the listener when its stop ends.
+
+        Does nothing for a listener that is not registered or that stopped accepting already.
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+
+        @since HttpServerAsyncIo 1.0
+    */
+    stopAccepting(Socket listener) {
+        string lhash = listener.uniqueHash();
+        *hash<HttpListenerInfo> linfo;
+        {
+            AutoWriteLock al(m);
+            linfo = listeners{lhash};
+            if (!linfo && quic_listener_hash_by_http_listener.hasKey(lhash)) {
+                lhash = quic_listener_hash_by_http_listener{lhash};
+                linfo = listeners{lhash};
+            }
+            if (!linfo || stopped_accepting{lhash}) {
+                return;
+            }
+            stopped_accepting{lhash} = True;
+        }
+        if (linfo.http_version != HttpVersionMode::H3) {
+            # an accept operation that is being replenished is either submitted before the cancel, or sees the flag set
+            # above and is not submitted (see submitAcceptOp())
+            accept_submit_m.lock();
+            on_exit accept_submit_m.unlock();
+            try {
+                controller.cancelByOwner(lhash);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("canceling the accept operations of listener " + lhash, ex);
+            }
+            try {
+                linfo.listener.shutdown();
+                linfo.listener.close();
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("closing listening socket " + lhash, ex);
+            }
+        } else {
+            # each session is sent a GOAWAY notice and is closed when its requests end; the operation is woken to start
+            # at once
+            try {
+                linfo.listener.drainHttpConnection();
+                wakeSocketIfPresent(linfo.listener, lhash, "drain");
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("refusing the new sessions of HTTP/3 listener " + lhash, ex);
+            }
+        }
+        log(LoggerLevel::INFO, "Listener %y accepts no new connections", lhash);
+    }
+
+    #! Returns True if the listener with the given hash accepts no new connections or sessions (see stopAccepting())
+    private bool stopsAccepting(string lhash) {
+        AutoReadLock al(m);
+        return stopped_accepting{lhash} ?? False;
+    }
+
     #! Removes a listener
     /** @param listener the listener to remove
     */
@@ -1692,6 +1775,7 @@ public class HttpAsyncSocketIoController {
             }
             remove listeners{lhash};
             remove accept_counts{lhash};
+            remove stopped_accepting{lhash};
         }
         log(LoggerLevel::INFO, "Removed listener %y", lhash);
     }
@@ -1951,6 +2035,10 @@ public class HttpAsyncSocketIoController {
     private submitAcceptOp(Socket listener, HttpAsyncTarget target, bool ssl,
             *union<SSLCertificate, string, binary> cert, *union<SSLPrivateKey, string, binary> key,
             string http_version, string owner) {
+        # serialized with stopAccepting(): no accept operation is submitted for a listener whose stop has started
+        # (qore#7690)
+        accept_submit_m.lock();
+        on_exit accept_submit_m.unlock();
         int seq;
         int ssl_verify_flags = SSL_VERIFY_NONE;
         bool ssl_accept_all_certs = True;
@@ -1958,6 +2046,9 @@ public class HttpAsyncSocketIoController {
         int cnt_after;
         {
             AutoWriteLock al(m);
+            if (stopped_accepting{owner}) {
+                return;
+            }
             seq = ++accept_seq;
             cnt_before = accept_counts{owner} ?? 0;
             accept_counts{owner} = cnt_before + 1;
@@ -2057,8 +2148,8 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             has_listener = exists listeners{owner};
             cnt_check = accept_counts{owner} ?? 0;
-            # a draining server accepts no new connections
-            if (has_listener && !draining) {
+            # a draining server, and a listener whose stop has started, accepts no new connections (qore#7690)
+            if (has_listener && !draining && !stopped_accepting{owner}) {
                 if (cnt_check < DefaultAcceptOps) {
                     do_replenish = True;
                 }
@@ -2191,10 +2282,11 @@ public class HttpAsyncSocketIoController {
         }
 
         # Check stopping flag — reject new connections during shutdown; a connection accepted when a drain starts is
-        # served (its requests are answered with Connection: close), as the drain closed the listening socket after it
+        # served (its requests are answered with Connection: close), as the drain closed the listening socket after it;
+        # a connection accepted by a listener whose stop has started is closed as well (qore#7690)
         {
             AutoReadLock al(m);
-            if (stopping) {
+            if (stopping || (linfo.listener && stopped_accepting{linfo.listener.uniqueHash()})) {
                 try { sock.close(); } catch () {}
                 return;
             }
@@ -2209,6 +2301,13 @@ public class HttpAsyncSocketIoController {
         if (linfo.max_request_body_size > 0) {
             sock.setMaxChunkedBodySize(linfo.max_request_body_size);
             sock.setHttp2MaxRequestBodySize(linfo.max_request_body_size);
+        }
+        # the bounds of the connection's HTTP/2 response bodies, which its session takes when it is created: a body
+        # is charged to its client until the client has taken it (qore#7653)
+        {
+            hash<auto> send_settings = getStreamSendSettings(linfo.http_listener);
+            sock.setHttp2InputStreamSendBound(send_settings.stream_send_min_rate,
+                send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
         }
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
@@ -2394,6 +2493,18 @@ public class HttpAsyncSocketIoController {
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
             pool_opts.quic_headers_only ?? True,
             max_request_body_size);
+        # the bounds of the response bodies of the listener's connections: a body is charged to its client until the
+        # client has acknowledged it (qore#7653)
+        {
+            *HttpServer::HttpListenerInterface http_listener;
+            {
+                AutoReadLock al(m);
+                http_listener = listeners{owner}.http_listener;
+            }
+            hash<auto> send_settings = getStreamSendSettings(http_listener);
+            h3op.setStreamSendBound(send_settings.stream_send_min_rate, send_settings.stream_send_min_rate_window,
+                HttpServer::StreamStallTimeout);
+        }
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
@@ -2432,8 +2543,9 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
             }
-            # a draining listener's operation ends when its sessions are drained (qore#5899)
-            if (endH3Drain(owner)) {
+            # a draining listener's operation ends when its sessions are drained (qore#5899), also that of a listener
+            # whose stop has started (qore#7690)
+            if (endH3Drain(owner) || stopsAccepting(owner)) {
                 return;
             }
             submitQuicAcceptOp(listener, target, owner);
@@ -2449,8 +2561,9 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
             }
-            # a draining listener's operation ends when its sessions are drained (qore#5899)
-            if (endH3Drain(owner)) {
+            # a draining listener's operation ends when its sessions are drained (qore#5899), also that of a listener
+            # whose stop has started (qore#7690)
+            if (endH3Drain(owner) || stopsAccepting(owner)) {
                 return;
             }
             submitQuicAcceptOp(listener, target, owner);
@@ -2465,8 +2578,9 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
             }
-            # a draining listener's operation ends when its sessions are drained (qore#5899)
-            if (endH3Drain(owner)) {
+            # a draining listener's operation ends when its sessions are drained (qore#5899), also that of a listener
+            # whose stop has started (qore#7690)
+            if (endH3Drain(owner) || stopsAccepting(owner)) {
                 return;
             }
             submitQuicAcceptOp(listener, target, owner);
@@ -2961,6 +3075,10 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
+                    # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                    hash<auto> send_settings = getStreamSendSettings(cinfo.listener);
+                    cinfo.sock.setQuicInputStreamSendBound(session_id, send_settings.stream_send_min_rate,
+                        send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
@@ -6188,6 +6306,10 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
+                    # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                    hash<auto> send_settings = getStreamSendSettings(cinfo.listener);
+                    cinfo.sock.setHttp2InputStreamSendBound(send_settings.stream_send_min_rate,
+                        send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {

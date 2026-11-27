@@ -1,0 +1,371 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ClassProvenanceAcrossProgramsTest
+
+#! A class of the test's own Program
+class HostBase {
+}
+
+#! A class of the test's own Program that is imported into a sandboxed Program
+class HostOnly {
+}
+
+#! Verifies the object provenance predicates of SandboxManager for classes used across Programs (qore#7576)
+/** SandboxManager::isFromSandboxedProgram() and SandboxManager::getSandboxedProgramId() report the sandbox of the
+    code that declares the class of an object, or of one of its base classes, whichever Program the class is used in
+*/
+class ClassProvenanceAcrossProgramsTest inherits QUnit::Test {
+    public {
+        #! the code of the Program that declares the class and imports it into another Program
+        const DeclaringSource = "%modern
+class Declared inherits Serializable {
+    public {
+        int a = 1;
+    }
+}
+
+sub export_class(Program target) {
+    target.importClass(\"Declared\");
+}
+
+Program sub make_program() {
+    return new Program(PO_NEW_STYLE);
+}
+";
+
+        #! the code of the Program that the class is imported into
+        const UsingSource = "%modern
+class Derived inherits Declared {
+}
+
+object sub make() {
+    return new Declared();
+}
+
+object sub make_derived() {
+    return new Derived();
+}
+
+object sub make_deserialized() {
+    return Serializable::deserialize(Serializable::serialize(new Declared()));
+}
+";
+
+        #! a module that is loaded by its path
+        const ModuleSource = "%modern
+module ClassProvenanceTestModule {
+    version = \"1.0\";
+    desc = \"class provenance test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public class ClassProvenanceTestModuleClass {
+}
+
+public object sub class_provenance_test_module_make() {
+    return new ClassProvenanceTestModuleClass();
+}
+";
+    }
+
+    private {
+        TmpDir tmp("qore-class-provenance-");
+    }
+
+    constructor() : Test("SandboxManager class provenance across Programs", "1.0", \ARGV) {
+        addTestCase("a class imported into a trusted Program", \importedTest());
+        addTestCase("a trusted subclass of a sandboxed class", \subclassTest());
+        addTestCase("a class imported into another tenant's Program", \siblingTest());
+        addTestCase("a deserialized object", \deserializedTest());
+        addTestCase("a sandbox set on the declaring Program later", \laterTest());
+        addTestCase("a module loaded into a Program that sandboxed code created", \moduleTest());
+        addTestCase("classes of the host", \hostTest());
+        addTestCase("multiple inheritance", \multipleInheritanceTest());
+        addTestCase("a class imported again from the Program it was imported into", \importChainTest());
+        addTestCase("classes of two tenants", \tenantsTest());
+        addTestCase("a hierarchy with many paths to its base classes", \latticeTest());
+        addTestCase("a sandbox that trusts its code", \trustingSandboxTest());
+        set_return_value(main());
+    }
+
+    importedTest() {
+        Program s = getSandboxed();
+        Program t = getUsing(s);
+        object o = t.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    subclassTest() {
+        Program s = getSandboxed();
+        Program t = getUsing(s);
+        object o = t.callFunction("make_derived");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    siblingTest() {
+        Program s1 = getSandboxed();
+        Program s2(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s2.setSandboxManager(new SandboxManager());
+        Program t = getUsing(s1, s2);
+        object o = t.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        # the tenant whose code declares the class, not the one whose Program uses it
+        assertEq(s1.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    deserializedTest() {
+        Program s = getSandboxed();
+        Program t = getUsing(s);
+        object o = t.callFunction("make_deserialized");
+        assertEq("Declared", o.className());
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    laterTest() {
+        Program s(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.parse(DeclaringSource, "declaring");
+        Program t = getUsing(s);
+        object o = t.callFunction("make");
+        assertFalse(SandboxManager::isFromSandboxedProgram(o), "before the sandbox is set");
+        assertFalse(SandboxManager::isFromRestrictedProgram(o), "before the sandbox is set");
+        assertNothing(SandboxManager::getSandboxedProgramId(o), "before the sandbox is set");
+        s.setSandboxManager(new SandboxManager());
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "after the sandbox is set");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "after the sandbox is set");
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o), "after the sandbox is set");
+        int id = s.getProgramId();
+        delete s;
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "the declaring Program deleted");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "the declaring Program deleted");
+        assertEq(id, SandboxManager::getSandboxedProgramId(o), "the declaring Program deleted");
+        delete t;
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "both Programs deleted");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "both Programs deleted");
+        assertEq(id, SandboxManager::getSandboxedProgramId(o), "both Programs deleted");
+    }
+
+    moduleTest() {
+        string path = tmp.path + DirSep + "ClassProvenanceTestModule.qm";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ModuleSource);
+        f.close();
+
+        # the sandbox may read the module's directory: its file-system policy applies to the module sources that the
+        # code that it governs loads
+        Program s = getSandboxed(tmp.path);
+        # a Program that sandboxed code created: its sandbox is that of its creator, not one of its own
+        Program p = s.callFunction("make_program");
+        p.parse(sprintf("%%requires %s\nobject sub make() { return class_provenance_test_module_make(); }\n"
+            "object sub make_here() { return new ClassProvenanceTestModuleClass(); }\n", path), "loader");
+        assertTrue(SandboxManager::isFromSandboxedProgram(p.callFunction("make")), "made by the module's code");
+        assertTrue(SandboxManager::isFromRestrictedProgram(p.callFunction("make")), "made by the module's code");
+        assertTrue(SandboxManager::isFromSandboxedProgram(p.callFunction("make_here")), "made by the loader's code");
+        assertTrue(SandboxManager::isFromRestrictedProgram(p.callFunction("make_here")), "made by the loader's code");
+        assertEq(Type::Int, SandboxManager::getSandboxedProgramId(p.callFunction("make")).type());
+    }
+
+    hostTest() {
+        Program s(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.importClass("HostBase");
+        s.importClass("HostOnly");
+        s.setSandboxManager(new SandboxManager());
+        s.parse("%modern
+class SandboxedDerived inherits HostBase {
+}
+object sub make_derived() {
+    return new SandboxedDerived();
+}
+object sub make_host() {
+    return new HostOnly();
+}
+", "host-classes");
+        assertTrue(SandboxManager::isFromSandboxedProgram(s.callFunction("make_derived")), "a sandboxed subclass");
+        assertTrue(SandboxManager::isFromRestrictedProgram(s.callFunction("make_derived")), "a sandboxed subclass");
+        # an object of a class imported into a sandboxed Program has that Program
+        assertTrue(SandboxManager::isFromSandboxedProgram(s.callFunction("make_host")), "imported into the sandbox");
+        assertTrue(SandboxManager::isFromRestrictedProgram(s.callFunction("make_host")), "imported into the sandbox");
+        assertFalse(SandboxManager::isFromSandboxedProgram(new HostOnly()), "the host's object");
+        assertFalse(SandboxManager::isFromRestrictedProgram(new HostOnly()), "the host's object");
+        assertNothing(SandboxManager::getSandboxedProgramId(new HostBase()), "the host's object");
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.parse(DeclaringSource, "trusted");
+        Program u = getUsing(t);
+        assertFalse(SandboxManager::isFromSandboxedProgram(u.callFunction("make_derived")), "trusted Programs");
+        assertFalse(SandboxManager::isFromRestrictedProgram(u.callFunction("make_derived")), "trusted Programs");
+        assertNothing(SandboxManager::getSandboxedProgramId(u.callFunction("make")), "trusted Programs");
+    }
+
+    multipleInheritanceTest() {
+        Program s = getSandboxed();
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.callFunction("export_class", t);
+        t.parse("%modern
+class TrustedBase {
+}
+class TrustedMiddle inherits TrustedBase {
+}
+# the sandboxed code's class is the second base class
+class Multi inherits TrustedMiddle, Declared {
+}
+class Top inherits Multi {
+}
+object sub make() {
+    return new Top();
+}
+", "multiple");
+        object o = t.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    importChainTest() {
+        Program s = getSandboxed();
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.callFunction("export_class", t);
+        t.parse(UsingSource + "
+sub export_classes(Program target) {
+    target.importClass(\"Declared\");
+    target.importClass(\"Derived\");
+}
+", "reexport");
+        Program u(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.callFunction("export_classes", u);
+        u.parse("%modern
+class Further inherits Derived {
+}
+object sub make() {
+    return new Declared();
+}
+object sub make_further() {
+    return new Further();
+}
+", "chain");
+        foreach string func in ("make", "make_further") {
+            object o = u.callFunction(func);
+            assertTrue(SandboxManager::isFromSandboxedProgram(o), func);
+            assertTrue(SandboxManager::isFromRestrictedProgram(o), func);
+            assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o), func);
+        }
+    }
+
+    tenantsTest() {
+        Program a = getSandboxed();
+        Program b(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        b.setSandboxManager(new SandboxManager());
+        a.callFunction("export_class", b);
+        b.parse("%modern
+class OwnDerived inherits Declared {
+}
+object sub make() {
+    return new Declared();
+}
+object sub make_own() {
+    return new OwnDerived();
+}
+", "tenant-b");
+        # the class of tenant A, used by tenant B
+        assertEq(a.getProgramId(), SandboxManager::getSandboxedProgramId(b.callFunction("make")));
+        # tenant B's own class, which inherits tenant A's
+        assertEq(b.getProgramId(), SandboxManager::getSandboxedProgramId(b.callFunction("make_own")));
+    }
+
+    #! each class is looked at once, however many paths lead to it: the walk ends also for a lattice with 2^41 paths
+    latticeTest() {
+        int levels = 40;
+        string src = "%modern\nclass L0A {\n}\nclass L0B {\n}\n";
+        for (int i = 1; i <= levels; ++i) {
+            src += sprintf("class L%dA inherits L%dA, L%dB {\n}\nclass L%dB inherits L%dA, L%dB {\n}\n", i, i - 1,
+                i - 1, i, i - 1, i - 1);
+        }
+        src += sprintf("object sub make() {\n    return new L%dA();\n}\n", levels);
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.parse(src, "lattice");
+        object o = t.callFunction("make");
+        assertFalse(SandboxManager::isFromSandboxedProgram(o));
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+        assertNothing(SandboxManager::getSandboxedProgramId(o));
+    }
+
+    trustingSandboxTest() {
+        # a sandbox that allows uncontrolled APIs governs its code for limits only: the code is sandboxed, not
+        # restricted
+        Program s(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        s.setSandboxManager(sm);
+        s.parse(DeclaringSource, "trusting");
+        Program t = getUsing(s);
+        foreach string func in ("make", "make_derived") {
+            object o = t.callFunction(func);
+            assertTrue(SandboxManager::isFromSandboxedProgram(o), func);
+            assertFalse(SandboxManager::isFromRestrictedProgram(o), func);
+        }
+        # a restricting sandbox set on the declaring Program later makes its classes restricted
+        object o = t.callFunction("make_derived");
+        SandboxManager sm2();
+        Program s2(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s2.setSandboxManager(sm2);
+        s2.parse(DeclaringSource, "restricting");
+        Program t2 = getUsing(s2);
+        object o2 = t2.callFunction("make_derived");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o2));
+        delete s2;
+        delete t2;
+        # the state of the declaring Program when it released the class
+        assertTrue(SandboxManager::isFromRestrictedProgram(o2), "released");
+        delete s;
+        delete t;
+        # the sandboxes of a deleted Program are gone: whether they trusted its code is not known, which fails closed
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "released");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "released");
+    }
+
+    #! returns a sandboxed Program with the declaring code
+    #! returns a sandboxed Program that declares the class
+    /** @param read_dir a directory that the sandbox may read, if any (a sandbox's file-system policy also applies to
+        the module sources that its code loads)
+    */
+    private static Program getSandboxed(*string read_dir) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        if (read_dir) {
+            sm.addFilesystemAllowedPath(read_dir, QSEC_READ);
+        }
+        p.setSandboxManager(sm);
+        p.parse(DeclaringSource, "declaring");
+        return p;
+    }
+
+    #! returns a Program into which the code of \a declaring imports its class
+    /** @param declaring the Program that declares the class
+        @param target the Program to use; if not given, a trusted Program
+    */
+    private static Program getUsing(Program declaring, *Program target) {
+        if (!target) {
+            target = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        }
+        declaring.callFunction("export_class", target);
+        target.parse(UsingSource, "using");
+        return target;
+    }
+}

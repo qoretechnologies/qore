@@ -269,9 +269,20 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     The keys that the REST classes get besides those are set with
     @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"; only trusted code can
     call either setter: they refuse restricted callers.
-    A stream request that a REST class creates is handed the raw request, which only its own code reads.  The filter
-    applies to the REST classes that the base class dispatches; a handler class of restricted code that overrides
-    @ref RestHandler::RestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
+    The filter applies to the REST classes that the base class dispatches; a handler class of restricted code that
+    overrides @ref RestHandler::RestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.  The
+    trusted code of a subclass of the REST handler gets the raw request with
+    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()".
+
+    The \c socketobject key of the request context gives the socket of the request: for an HTTP/2 or HTTP/3 request
+    the handler socket of its own stream; for an HTTP/1.x request the socket that the server gives the handler: a
+    socket of the request alone when the handler hosts the code of a restricted Program (see
+    @ref httpserver_handler_socket), or the socket of the connection, which only a REST class of a Program that no
+    restricted sandbox governs gets: the key is not set for a REST class of a restricted Program
+    (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), which cannot
+    read a request that the client sends after its own on the connection, nor close the connection.  A
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "data stream request handler" of a class of a
+    restricted Program that gets no socket refuses an HTTP/1.x request when it is created.
 */
 /** @page resthierarchy Implementing Object Hierarchies
 
@@ -455,10 +466,6 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
-    - added @ref RestHandler::AbstractRestStreamRequestHandler::getContext() "AbstractRestStreamRequestHandler::getContext()"
-      and @ref RestHandler::AbstractRestStreamRequestHandler::getArgs() "getArgs()" for subclasses, which cannot use
-      the private members of the class when sandboxed code declares them; the context is a copy with the request
-      metadata only (issue #6843)
     - the REST classes of restricted code, and all of them with the handler's
       @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()", get the request without
       the objects of the server and the credentials of the request: the
@@ -467,6 +474,12 @@ Content-Length: 16
       declares is kept, and trusted code that adds keys to the request context for the REST classes names them with
       @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (see @ref rest_request_credentials;
       issue #6843)
+    - the \c socketobject key of the request context of an HTTP/1.x request, the socket of the connection, is set only
+      for a REST class that trusted code declared (see @ref rest_request_credentials; issue #6843)
+    - added @ref RestHandler::AbstractRestStreamRequestHandler::getContext() "AbstractRestStreamRequestHandler::getContext()"
+      and @ref RestHandler::AbstractRestStreamRequestHandler::getArgs() "getArgs()" for subclasses, which cannot use
+      the private members of the class when sandboxed code declares them; the context is a copy with the request
+      metadata only (issue #6843)
     - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
       Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
       class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
@@ -1082,20 +1095,22 @@ public namespace RestHandler {
     }
 
     #! The classes of the sockets of a request that the server gives a handler: the socket of an HTTP/1.x request,
-    #! or of an HTTP/2 or HTTP/3 stream (qore#7305); an open socket of another class is the connection's
+    #! or of an HTTP/2 or HTTP/3 stream (qore#7305); the decisions of the REST handler use
+    #! AbstractHttpRequestHandler::isRequestSocket(), which also accepts the classes that a host registers
     const RestRequestSocketClasses = {
         "Http1HandlerSocket": True,
         "Http2HandlerSocket": True,
         "Http3HandlerSocket": True,
     };
 
-    #! The response that refuses a request whose dispatch path has code of a sandboxed Program while the handler has
-    #! the connection's socket (qore#7305)
+    #! The response that refuses a request whose dispatch path has code of a restricted Program while the handler has
+    #! the connection's socket (qore#7305, qore#7577)
     hash<HttpServer::HttpHandlerResponseInfo> sub rest_refuse_connection_socket(object obj) {
         return <HttpServer::HttpHandlerResponseInfo>{
             "code": 500,
-            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket "
-                "(see HttpServer::AbstractHttpRequestHandler::setHandlerSocketView())", obj.className()),
+            "body": sprintf("the REST request is refused: %s of a restricted Program would get the connection's socket; "
+                "a trusted handler that hands its requests to code that is not trusted calls "
+                "HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() in its constructor", obj.className()),
             "close": True,
         };
     }
@@ -1174,7 +1189,16 @@ public namespace RestHandler {
             if (!args && cx.body.typeCode() == NT_HASH) {
                 args = cx.body - "action";
             }
-            cx.socketobject = s;
+            # the raw socket of an HTTP/1.1 request is given only to the code of a REST class of a Program that no
+            # restricted sandbox governs (qore#6843; qore#7305; qore#7577): a handler socket of the server is a view
+            # of its own request, and a socket that is not open is no connection's; an open socket of another class
+            # is the connection's
+            if (HttpServer::AbstractHttpRequestHandler::isRequestSocket(s) || !s.isOpen()
+                    || !SandboxManager::isFromRestrictedProgram(self)) {
+                cx.socketobject = s;
+            } else {
+                remove cx.socketobject;
+            }
             if (cl) {
                 string cname = shift cl;
                 cx += {
@@ -1204,11 +1228,11 @@ public namespace RestHandler {
                         mn, rh.getMaskedLogString(args));
                 }
 
-                # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided
+                # a class of a restricted Program never gets the connection's socket of an HTTP/1.x request: decided
                 # when the class is handed the request, whatever the handler hosted when the request started
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(cls) && !RestRequestSocketClasses{s.className()}
-                        && s.isOpen()) {
+                if (SandboxManager::isFromRestrictedProgram(cls)
+                        && !HttpServer::AbstractHttpRequestHandler::isRequestSocket(s) && s.isOpen()) {
                     return rest_refuse_connection_socket(cls);
                 }
                 return cls.handleRequest(listener, rh, s, cl, mn,
@@ -1330,10 +1354,10 @@ public namespace RestHandler {
                         && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {
                     sb = cx."orig-request-body";
                 }
-                # a stream handler of a sandboxed Program never gets the connection's socket of an HTTP/1.x request
+                # a stream handler of a restricted Program never gets the connection's socket of an HTTP/1.x request
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(rsh) && !RestRequestSocketClasses{s.className()}
-                        && s.isOpen()) {
+                if (SandboxManager::isFromRestrictedProgram(rsh)
+                        && !HttpServer::AbstractHttpRequestHandler::isRequestSocket(s) && s.isOpen()) {
                     return rest_refuse_connection_socket(rsh);
                 }
                 RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
@@ -2019,11 +2043,8 @@ public namespace RestHandler {
                 checkAccess(cx);
                 # the REST classes of restricted code get the request without the server's objects and the
                 # credentials of the request, with the keys that this handler adds (qore#6843; see
-                # @ref rest_request_credentials), and so do all of them if the handler asks for it; a stream
-                # request that a REST class creates is handed the raw request
-                *object handoff;
-                withholdRequestCredentials(cx, hdr, \handoff);
-                on_exit delete handoff;
+                # @ref rest_request_credentials), and so do all of them if the handler asks for it; the HTTP
+                # server's dispatch makes the raw request current
                 hash<auto> rcx = filtersRequestsFor() ? getRestClassContext(cx) : cx;
                 # the server's body reader of an HTTP/1.x request is read by the code of this module only
                 push rest_body_readers, cx."header-info".body_reader;
@@ -2250,10 +2271,10 @@ public namespace RestHandler {
                 }
             }
 
-            # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided when
+            # a class of a restricted Program never gets the connection's socket of an HTTP/1.x request: decided when
             # the class is handed the request, whatever the handler hosted when the request started (qore#7305)
-            if (SandboxManager::isFromSandboxedProgram(rcls) && !RestRequestSocketClasses{s.className()}
-                    && s.isOpen()) {
+            if (SandboxManager::isFromRestrictedProgram(rcls)
+                    && !HttpServer::AbstractHttpRequestHandler::isRequestSocket(s) && s.isOpen()) {
                 return rest_refuse_connection_socket(rcls);
             }
             return rcls.handleRequest(listener, self, s, class_list, method_name,

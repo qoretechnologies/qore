@@ -336,6 +336,9 @@ nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::open", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::open", xsink))
+        return QoreValue();
+
     if (q_check_path(*path, "READONLYFILE-OPEN-ERROR", xsink)) {
         return QoreValue();
     }
@@ -363,6 +366,10 @@ if (f.close())
 */
 int ReadOnlyFile::close() {
     if (check_terminal_io(self, "ReadOnlyFile::close", xsink)) {
+        return QoreValue();
+    }
+
+    if (check_system_object_change(self, "ReadOnlyFile::close", xsink)) {
         return QoreValue();
     }
 
@@ -893,6 +900,9 @@ nothing ReadOnlyFile::setEncoding(*string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEncoding", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::setEncoding", xsink))
+        return QoreValue();
+
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
     f->setEncoding(qe, xsink);
 }
@@ -930,6 +940,9 @@ f.setEncodingErrors(ENCODING_ERRORS_LATIN1);
  */
 nothing ReadOnlyFile::setEncodingErrors(*string encoding_errors) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEncodingErrors", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setEncodingErrors", xsink))
         return QoreValue();
 
     qore_encoding_errors_t ee;
@@ -972,6 +985,9 @@ f.setPos(0); # go to the beginning of the file
  */
 int ReadOnlyFile::setPos(int position = 0) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setPos", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setPos", xsink))
         return QoreValue();
 
     return f->setPos(position, xsink);
@@ -1080,6 +1096,9 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto argument, *bool wit
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::setEventQueue", xsink))
+        return QoreValue();
+
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, "
             "which could cause internal I/O to freeze in the File object if used; use a Queue object with no maximum "
@@ -1101,6 +1120,9 @@ f.setEventQueue();
  */
 nothing ReadOnlyFile::setEventQueue() {
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
     qore_file_ops(f).setEventQueue(xsink, nullptr, QoreValue(), false);
@@ -1240,12 +1262,15 @@ bool ReadOnlyFile::isForegroundTty() [flags=CONSTANT] {
 *string fn = f.getFileName();
     @endcode
 
-    @return the file path/name used to open the file if the file is open, otherwise @ref nothing
+    @return the file path/name used to open the file if the file is open, otherwise @ref nothing; code restricted
+    from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets the name of a file opened
+    with @ref Qore::Dir::openFile() "Dir::openFile()" in a directory that derives from the current directory of the
+    process relative to that directory; a file opened by an absolute path keeps its name (see @ref sandbox_fs_dir_cwd)
 
     @since %Qore 0.8.6
  */
 *string ReadOnlyFile::getFileName() [flags=CONSTANT] {
-   return f->getFileName();
+   return qore_qf_private::get(*f)->getFileNameForCaller();
 }
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem

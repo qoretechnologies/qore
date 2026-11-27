@@ -37,6 +37,10 @@
 #include <iterator>
 #include <limits>
 
+// returns 0 if the current code may delete the object, otherwise raises an exception and returns -1 (qore#6842); see
+// QoreObjectIntern.h
+DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
+
 #include <unordered_map>
 #include "qore/intern/xxhash.h"
 #include "qore/intern/qore_container_free.h"
@@ -755,6 +759,12 @@ public:
             return;
         }
 
+        // an object is deleted only if the current code may delete it (not a system constant object); otherwise the
+        // key is left as it is (qore#6842)
+        if (om->val.getType() == NT_OBJECT
+            && qore_check_object_delete(*om->val.get<const QoreObject>(), "delete", xsink)) {
+            return;
+        }
         // the value is taken and the member deleted before the value is released, as releasing it can run code
         // that changes the hash
         AbstractQoreNode* n = om->val.assignNothing();

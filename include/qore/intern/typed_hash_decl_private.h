@@ -193,8 +193,13 @@ public:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys && !copied;
+        return sys && !copied && !program_local.load(std::memory_order_acquire);
     }
+
+    //! Marks an original builtin hashdecl as owned by the Program to whose namespace it is added, with the instances of
+    //! a generic hashdecl made before; returns true if it was marked now and adds the types of the hashdecls marked to
+    //! \a marked_types (qore#7540)
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners);
 
     //! An original builtin hashdecl that is not one of the static system namespace (Qore::) or a tombstone (nor a
     //! concrete declaration of one): a binary module's (qore#7533)
@@ -237,6 +242,11 @@ public:
     //! Nothing: a Program names a copy of a module's hashdecl, which keeps what its members name itself
     //! (copy_module_names); an original that a module class's types name is not walked in turn (qore#7533)
     DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
+    }
+
+    //! The namespace of the declaration (QoreTypeOwner::getTypeOwnerNamespace(), qore#7680)
+    DLLLOCAL const qore_ns_private* getTypeOwnerNamespace() const {
+        return ns;
     }
 
     //! The parent and the source of a copy
@@ -1057,6 +1067,14 @@ protected:
     mutable std::atomic<int8_t> hier_code_init{-1};
     //! true if the hashdecl is a copy of a hashdecl of \a src_pgm in another Program (inherited or imported)
     bool copied = false;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
 
     // original declaration
     const typed_hash_decl_private* orig;

@@ -346,6 +346,9 @@ h->setKeyValue(name.c_str(), value, xsink);
     //! performs a delete operation on the value of the given key
     /** The delete operation means a simple dereference for all types except QoreObject, on this type the destructor will be run immediately.
         A Qore-language exception could occur eitherin converting the key string's encoding to QCS_DEFAULT, or in the destructor of a deleted object.
+        An object that the current code may not delete is not deleted, and the key is left as it is: a system constant
+        object (\c SYSTEM-OBJECT-ERROR), and for sandboxed code at the enforcement level of tenant isolation, an object
+        that its sandbox does not own (\c SANDBOX-OBJECT-ACCESS-ERROR).
         @param key the key of the value to delete
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
@@ -353,6 +356,9 @@ h->setKeyValue(name.c_str(), value, xsink);
 
     //! performs a delete operation on the value of the given key
     /** the delete operation means a simple dereference for all types except QoreObject, on this type the destructor will be run immediately
+        An object that the current code may not delete is not deleted, and the key is left as it is: a system constant
+        object (\c SYSTEM-OBJECT-ERROR), and for sandboxed code at the enforcement level of tenant isolation, an object
+        that its sandbox does not own (\c SANDBOX-OBJECT-ACCESS-ERROR).
         @param key the key of the value to delete
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */

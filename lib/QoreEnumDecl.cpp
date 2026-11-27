@@ -172,8 +172,9 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
         member_map[new_member->getName()] = new_member;
     }
     // last, as nothing is thrown from here on: the copy keeps a binary module's original, which its module can free
-    // before the copy (qore#7533)
-    if (orig->type_owner.isTypeOwnerModule()) {
+    // before the copy (qore#7533), and an original that a binary module added to a Program at run time, which is
+    // freed with its Program (qore#7680)
+    if (orig->type_owner.isTypeOwnerModule() || (orig->sys && orig->program_local.load(std::memory_order_acquire))) {
         orig->ref();
         orig_ref = true;
     }

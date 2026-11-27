@@ -43,12 +43,32 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QC_SandboxManager.h"
+#include "qore/intern/QC_Serializable.h"
+#include "qore/intern/BinaryInputStream.h"
+#include "qore/intern/StringInputStream.h"
+#include "qore/intern/BinaryOutputStream.h"
 #include "qore/ParseOptionMap.h"
 #include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+
+// returns -1 and raises SANDBOX-ACCESS-ERROR if the calling code may not serialize or deserialize for the Program with
+// the full state of the classes that trusted code declared (qore#7146)
+static int qore_program_check_trusted_serialization(QoreProgram* p, const char* api, ExceptionSink* xsink) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return -1;
+    }
+    if (!qore_serialization_calling_code_trusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "Program::%s() can only be called by trusted code: sandboxed "
+            "code, and code that acts for it, cannot get or set the non-public state of classes declared by trusted "
+            "code", api);
+        return -1;
+    }
+    return 0;
+}
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -2644,7 +2664,10 @@ nothing Program::importGlobalVariable(
     the Program must have @ref Qore::PO_ALLOW_INJECTION set. When the injection relates two classes, a sandboxed
     caller or one restricted from a functional domain may only relate classes declared by its own Program.
     Rebuild older compiled programs with a current compiler so a restricted caller can establish ownership of
-    classes declared in those programs.
+    classes declared in those programs.  The injected class keeps the class that it is injected in place of, with
+    the declarations that that class names, for as long as the injected class exists, also when the
+    @ref Qore::Program "Program" that declares that class is deleted first: the type checks of the injected class's
+    objects still compare it with that class (since %Qore 3.0)
     @param module_visibility see @ref import_visibility_constants for valid values
 
     @par Example:
@@ -2653,7 +2676,8 @@ pgm.importClass("MyNamespace::MyClass");
     @endcode
 
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
+    @throw CLASS-IMPORT-ERROR injection relates classes that the calling %Program did not both declare, and the calling code is restricted: a sandbox that refuses uncontrolled APIs governs it (a sandbox that allows them does not restrict it; see @ref sandbox_manager_classes) or it has parse options that restrict a functional domain; a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The methods of the imported class run in the Program that it is imported from, with that Program's options
@@ -2700,10 +2724,10 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
     // a class re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
-            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
-            "that a Program loads", tmp->c_str());
+            "restricting sandbox governs or whose functional domains are restricted cannot re-export classes to the "
+            "modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
@@ -2721,7 +2745,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2761,10 +2785,10 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
     }
     // a hashdecl re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
-            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
-            "that a Program loads", tmp->c_str());
+            "a restricting sandbox governs or whose functional domains are restricted cannot re-export hashdecls to "
+            "the modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
@@ -3252,6 +3276,205 @@ TimeZone Program::getTimeZone() [flags=CONSTANT] {
    return new QoreObject(QC_TIMEZONE, 0, new TimeZoneData(p->currentTZ()));
 }
 
+//! Deserializes data produced with @ref Qore::Serializable::serialize() "Serializable::serialize()" into this %Program for trusted code
+/** @par Example:
+    @code{.py}
+auto val = pgm.deserialize(bin);
+    @endcode
+
+    @param binary_data binary data representing serialized data as generated by
+    @ref Qore::Serializable::serialize() "Serializable::serialize()"
+
+    The data is deserialized as @ref Qore::Serializable::deserialize() "Serializable::deserialize()" would in the
+    %Program: classes, @ref hashdecl "type declarations" and enums are resolved in this %Program, the objects get the
+    %Program of their class (or this %Program), and the code of the classes (\c deserializeMembers() methods and the
+    initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
+    rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
+    @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data (of an object or of static variables) that names a class declared by sandboxed code in this %Program and a
+    class with non-public state declared by trusted code in the calling code's %Program or in the %Program of its class
+    (such as a library module's) is refused, as the sandboxed code's class would get that state; the classes of the
+    data must otherwise be the ones that this %Program sees by their names.  The method cannot be invoked by sandboxed
+    code, also not through a call reference that trusted code created.
+
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
+    @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+auto Program::deserialize(binary binary_data, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(binary_data), xsink);
+    return QoreSerializable::deserializeForProgram(xsink, p, **stream, flags);
+}
+
+//! Deserializes data produced with @ref Qore::Serializable::serialize() "Serializable::serialize()" into this %Program for trusted code
+/** @par Example:
+    @code{.py}
+auto val = pgm.deserialize(str);
+    @endcode
+
+    @param string_data string data representing serialized data as generated by
+    @ref Qore::Serializable::serialize() "Serializable::serialize()"
+
+    The data is deserialized as @ref Qore::Serializable::deserialize() "Serializable::deserialize()" would in the
+    %Program: classes, @ref hashdecl "type declarations" and enums are resolved in this %Program, the objects get the
+    %Program of their class (or this %Program), and the code of the classes (\c deserializeMembers() methods and the
+    initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
+    rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
+    @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data (of an object or of static variables) that names a class declared by sandboxed code in this %Program and a
+    class with non-public state declared by trusted code in the calling code's %Program or in the %Program of its class
+    (such as a library module's) is refused, as the sandboxed code's class would get that state; the classes of the
+    data must otherwise be the ones that this %Program sees by their names.  The method cannot be invoked by sandboxed
+    code, also not through a call reference that trusted code created.
+
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
+    @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+auto Program::deserialize(string string_data, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<StringInputStream> stream(new StringInputStream(string_data), xsink);
+    return QoreSerializable::deserializeForProgram(xsink, p, **stream, flags);
+}
+
+//! Deserializes data produced with @ref Qore::Serializable::serializeToData() "Serializable::serializeToData()" into this %Program for trusted code
+/** @par Example:
+    @code{.py}
+auto val = pgm.deserialize(h);
+    @endcode
+
+    @param serialization_info the data representing the value as generated by
+    @ref Qore::Serializable::serializeToData() "Serializable::serializeToData()"
+
+    The data is deserialized as @ref Qore::Serializable::deserialize() "Serializable::deserialize()" would in the
+    %Program: classes, @ref hashdecl "type declarations" and enums are resolved in this %Program, the objects get the
+    %Program of their class (or this %Program), and the code of the classes (\c deserializeMembers() methods and the
+    initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
+    rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
+    @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data (of an object or of static variables) that names a class declared by sandboxed code in this %Program and a
+    class with non-public state declared by trusted code in the calling code's %Program or in the %Program of its class
+    (such as a library module's) is refused, as the sandboxed code's class would get that state; the classes of the
+    data must otherwise be the ones that this %Program sees by their names.  The method cannot be invoked by sandboxed
+    code, also not through a call reference that trusted code created.
+
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
+    @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+auto Program::deserialize(hash<SerializationInfo> serialization_info, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
+        return QoreValue();
+    }
+    return QoreSerializable::deserializeForProgram(xsink, p, *serialization_info, flags);
+}
+
+//! Serializes a value of this %Program with all of its state for trusted code and returns the serialized data as a binary object
+/** @par Example:
+    @code{.py}
+binary bin = pgm.serialize(val);
+    @endcode
+
+    The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
+    for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
+    declared by trusted code, for which @ref Qore::Serializable "Serializable" raises a \c SERIALIZATION-ERROR
+    exception when sandboxed code is in the chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    for example the arguments of a call that the %Program makes through the host, that it delivers with
+    @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
+    code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_SERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+binary Program::serialize(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "serialize", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
+    QoreSerializable::serializeTrusted(value, **stream, flags, xsink);
+    return *xsink ? QoreValue() : stream->getData(xsink);
+}
+
+//! Serializes a value of this %Program with all of its state for trusted code and returns the serialization data
+/** @par Example:
+    @code{.py}
+hash<SerializationInfo> h = pgm.serializeToData(val);
+    @endcode
+
+    The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
+    for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
+    declared by trusted code, for which @ref Qore::Serializable "Serializable" raises a \c SERIALIZATION-ERROR
+    exception when sandboxed code is in the chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    for example the arguments of a call that the %Program makes through the host, that it delivers with
+    @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
+    code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_SERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+hash<SerializationInfo> Program::serializeToData(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "serializeToData", xsink)) {
+        return QoreValue();
+    }
+    return QoreSerializable::serializeToDataTrusted(value, flags, xsink);
+}
+
 //! Sets the sandbox manager for the program to enforce security restrictions
 /** @param sandbox_manager The sandbox manager to set; the program takes ownership of the reference
 
@@ -3638,6 +3861,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3695,6 +3919,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3747,6 +3972,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -3776,6 +4002,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -3802,6 +4032,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -3831,6 +4062,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -3858,6 +4093,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -3885,6 +4121,10 @@ Program::loadApplyToPrivateUserModule(
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -3909,6 +4149,7 @@ Program::loadApplyToPrivateUserModule(
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -3934,6 +4175,10 @@ Program::loadApplyToPrivateUserModule(
         return QoreValue();
     }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
@@ -4555,8 +4800,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
@@ -4788,8 +5035,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details

@@ -10,6 +10,7 @@
 
 class AbstractQoreNode;
 class ResolvedCallReferenceNode;
+class QoreObject;
 class QoreSandboxContext;
 
 //! Immutable intersections; the constituent managers remain live, referenced policies.
@@ -88,6 +89,49 @@ class QoreObject;
 */
 DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr,
     bool spans = false, bool* capability = nullptr);
+//! Returns true if the sandboxes that govern the current code governed the creation of an object (qore#6842)
+/** For sandboxed code: true if every sandbox manager that governs the current code (the members of a composition) is
+    one of those that governed the creation of the object, as recorded in its provenance \a creation (the
+    provenance that an object created now would record is compared, see qore_capture_sandbox_provenance()).  False if
+    no manager governs the current code (code that is sandboxed only by its Program's flag), if \a creation is
+    nullptr, or if \a owned is false (an object that no sandbox owns: one that trusted code created, also while it
+    served sandboxed code), and if the sandboxes cannot be resolved: it fails closed.  The caller decides that the
+    code is sandboxed.
+*/
+DLLLOCAL bool qore_sandbox_current_code_created(const QoreSandboxContext* creation, bool owned);
+//! Returns true if the owner rules apply to the code that \a sm governs: its enforcement level is tenant isolation
+/** The owner rules are the rules that keep the objects that a sandbox's code created apart from the code of other
+    sandboxes: the sandboxed write and read rules of non-public members and the owner checks of
+    SandboxManager::checkObjectOwnedByCaller().  qore_sandbox_current_code_created() decides with the governing managers
+    that the rules apply to only, and code that no such manager governs owns every object.  The one place that decides
+    which sandboxes the rules apply to (QoreSandboxManager::setEnforcementLevel())
+*/
+DLLLOCAL bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm);
+//! Returns true if the calling code may change an object as its owner: trusted code, or sandboxed code whose
+//! sandbox created the object (qore#6842)
+/** The caller is sandboxed as decided by qore_caller_is_sandboxed(); see qore_sandbox_current_code_created()
+*/
+DLLLOCAL bool qore_caller_created_object(const QoreObject& obj);
+//! Returns the context of the current code that an object whose provenance is \a creation is transferred to, or
+//! nullptr (qore#6842)
+/** Only for code that a sandbox at the enforcement level of tenant isolation governs, every such sandbox of which
+    \a creation names (the object was created while that code was served); the context is referenced for the caller
+    and keeps the functional-domain restrictions of \a creation.  Fails closed (nullptr) if the sandboxes cannot be
+    compared
+*/
+DLLLOCAL QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext* creation);
+//! Returns the provenance of an object that trusted class code creates in a method of an object that a sandbox owns
+//! (qore#6842)
+/** The object is owned as the object whose method creates it, whose owner context is \a owner: the result names the
+    sandboxes of \a owner and also those of \a creation, the provenance captured for the creating code, that \a owner
+    does not name (such as a sandbox at the enforcement level of code safety), so that the restrictions of the creating
+    code keep governing the object; the sandboxes at the enforcement level of tenant isolation of \a creation are
+    those of \a owner already (the rule applies only then), so the owner of the object is the same.  Keeps the
+    functional-domain restrictions of \a creation (qore#6520).  Returns \a owner referenced if it names every sandbox
+    of \a creation and has the same restrictions, otherwise a new referenced context; nullptr if an allocation fails
+*/
+DLLLOCAL QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
+    const QoreSandboxContext* creation);
 //! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
 /** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
     is the code of a module (a library module or one loaded by its path, also when module code creates it), whose
@@ -117,10 +161,13 @@ DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode
 */
 DLLLOCAL bool qore_closure_note_execution_program(const ResolvedCallReferenceNode* closure,
     const QoreProgram* exec_pgm);
-//! Returns true if a sandbox governs the Program of the class of the object, now (qore#7305)
-/** The object holds a dependency reference to the Program of its class (the Program in whose context it was created,
-    see qore_class_private::execConstructor()), not that of the code that created it; the Program's own sandbox and
-    that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
+//! Returns true if a sandbox governs the Program of the class of the object, now (qore#7305, qore#7576)
+/** The Program whose code declares the class (its source Program, also for a class imported into another Program)
+    or one of its base classes, or the Program that the object holds a dependency reference to: that of its class's
+    namespace, into which the class may have been imported (see qore_class_private::execConstructor()), not that of
+    the code that created it.  A Program counts if it is sandboxed (qore_program_is_sandboxed(): its own sandbox,
+    that of the code that created it or committed code in it, now or at any time before); a source Program that has
+    released the class counts as it was then (fails closed)
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
 //! Returns true if a sandbox that does not trust its code governs the Program of the class of the object, now
@@ -131,9 +178,17 @@ DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
     marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
 */
 DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the given Program; fails closed (qore#7303)
+/** As qore_object_program_is_restricted(), for a Program; false for nullptr (builtin code)
+*/
+DLLLOCAL bool qore_program_is_restricted(const QoreProgram* pgm);
+//! As qore_program_is_restricted(), but returns -1 if the sandboxes cannot be resolved for lack of memory, so that
+//! each caller fails closed in its own direction (qore#7737)
+DLLLOCAL int qore_program_restricted_state(const QoreProgram* pgm);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
-    object (SandboxManager::getSandboxedProgramId(); qore#7110)
+    object (SandboxManager::getSandboxedProgramId(); qore#7110): the Program that declares the class, or else the first
+    of its base classes that a sandboxed Program declares, or else the Program of the class's namespace
 */
 DLLLOCAL bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)

@@ -27,7 +27,12 @@
     class, which the trusted class calls, and call the base class's version of a method that it overrides; trusted
     code keeps its private access to the objects of the sandboxed class.  A class that sandboxed code declares with
     the name and the declarations of a trusted class has no private access to the trusted class's objects either
-    (lookalike.q; its private:internal declarations: lookalike-internal.q, which depends on qore#7036).  The uses of
+    (lookalike.q, and lookalike-internal.q for its private:internal declarations, qore#7036).  The private variants of
+    a method and the private constructors of a trusted class are refused too, also in the class's own base-class
+    constructor call (variants-ctors.q); the version of a base class of a method can be
+    called only by its override (super-call.q); the members and methods that a trusted class inherits privately are
+    refused (private-inheritance.q); the copy of an object of a trusted class keeps its private members private, also
+    in the copy() method of a sandboxed subclass (copy.q).  The uses of
     the private hooks of library classes that stay allowed (overrides, private and public, a recursive call of the own
     override, the implementation of private abstract hooks, the call of the library class's version of an overridden
     method) and the call of another private method of a library class, which is refused, are in library-hooks.q; the
@@ -42,19 +47,40 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         string dir = get_script_dir() + "/sandbox-trusted-private-access";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe", "lookalike", "library-hooks", "public-hooks", "stream-request", "final-hooks");
+        const Programs = ("probe", "lookalike", "lookalike-internal", "library-hooks", "public-hooks", "stream-request",
+            "final-hooks", "variants-ctors", "super-call", "super-call-variant", "private-inheritance", "copy");
 
-        #! the private:internal declarations of a look-alike class (lookalike-internal.q) are refused once qore#7036
-        #! is fixed: until then the program is not run
-        const InternalRequires7036 = True;
+        #! the programs that need the sqlite3 driver, which they leave out when it cannot be loaded
+        const Sqlite3Programs = ("library-hooks",);
+
+        #! the reason why the programs that need the sqlite3 driver are left out, if they are
+        *string sqlite3_missing;
     }
 
     constructor() : QUnit::Test("SandboxTrustedPrivateAccessTest", "1.0", \ARGV) {
+        # the driver is loaded in a child process, as the programs load it
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b -l sqlite3 -e 'exit(0);'",
+            qore_bin));
+        if (r.rc) {
+            sqlite3_missing = sprintf("the sqlite3 driver cannot be loaded (%s): %y are not run",
+                trim(r.out) ?: sprintf("exit status %d", r.rc), Sqlite3Programs);
+        }
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
-        addTestCase("the private:internal declarations of a look-alike class (qore#7036)", \testInternal());
         set_return_value(main());
+    }
+
+    #! the programs that can run here
+    private list<string> programs() {
+        return sqlite3_missing ? (select Programs, !inlist($1, Sqlite3Programs)) : Programs;
+    }
+
+    #! ends a test case with a skip when programs were left out
+    private skipIfLeftOut() {
+        if (sqlite3_missing) {
+            testSkip(sqlite3_missing);
+        }
     }
 
     private string expected(string name) {
@@ -72,28 +98,21 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
     }
 
     testAst() {
-        foreach string name in (Programs) {
+        foreach string name in (programs()) {
             assertEq(expected(name), run(name, "ast"), name + " ast");
         }
+        skipIfLeftOut();
     }
 
     testModes() {
-        foreach string name in (Programs) {
+        foreach string name in (programs()) {
             foreach string mode in (Modes) {
                 assertEq(expected(name), run(name, mode), name + " " + mode);
             }
             # the IR tier of tiered execution runs the calls in the IR interpreter
             assertEq(expected(name), run(name, "tiered", True), name + " " + ExecModeHarness::IRTierName);
         }
-    }
-
-    testInternal() {
-        if (InternalRequires7036) {
-            testSkip("the private:internal declarations of a look-alike class are refused once qore#7036 is fixed");
-        }
-        foreach string mode in (Modes) {
-            assertEq(expected("lookalike-internal"), run("lookalike-internal", mode), "lookalike-internal " + mode);
-        }
+        skipIfLeftOut();
     }
 
     testCompiled() {
@@ -102,7 +121,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
             qcc_bin = "qcc";
         }
         TmpDir tmp("qore-sandbox-trusted-private-access-");
-        foreach string name in (Programs) {
+        foreach string name in (programs()) {
             foreach string opt in (("0", "3")) {
                 string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
                 int rc;
@@ -116,5 +135,6 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
                 assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
             }
         }
+        skipIfLeftOut();
     }
 }

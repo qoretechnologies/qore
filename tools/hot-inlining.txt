@@ -16,6 +16,7 @@ execJITWithDeopt QoreJITStackLocation::QoreJITStackLocation
 # the parameters of a fast call (JIT runtime) and of a call of a user variant
 instantiateFastCallParams QoreTypeInfo::acceptInputParam
 instantiateFastCallParams LocalVar::applyNoNarrowContainerType
+instantiateFastCallParams qore_substitute_type_params_if_needed
 UserVariantBase::setupCall QoreTypeInfo::acceptInputParam
 # the eligibility of a method for a fast call (JIT runtime)
 MethodVariantBase::isStaticallyFastMethodCallEligible UserVariantBase::isStaticallyFastCallEligible

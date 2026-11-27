@@ -361,6 +361,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
         # - foreign-call-at-exit (#6904): its checks run in child processes that set their own --exec-mode and as qcc
         #   executables, as the end of the process is checked
+        # - stdio-sandbox-change (#7670): its checks run in child interpreters that set their own --exec-mode, as the
+        #   calls can close or redirect the standard streams of the process that makes them
         # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
@@ -377,6 +379,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   mode
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
+        # - HttpServerControllerCallbackError (#7698): each server whose controller callback raises runs in a child
+        #   process of the qore interpreter started without an execution mode, whose output the test checks
         # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
@@ -387,6 +391,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
         #   started with a module directory of library code, as a module's initialization runs once in a process
+        # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
+        #   execution mode, under a small stack rlimit, as the checks are of the start of the process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
@@ -421,6 +427,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
+                                 "examples/test/qore/security/stdio-sandbox-change.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
@@ -434,6 +441,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
+                                 "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
@@ -444,6 +452,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
@@ -488,6 +497,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
                                  "examples/test/qore/security/sandbox-timezone-paths-library.qtest",
+                                 "examples/test/qore/misc/small-main-stack-startup.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",
@@ -509,6 +519,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
                                  "examples/test/qlib/HttpServer/HttpServerRecvGrowFailure.qtest",
+                                 "examples/test/qlib/HttpServer/HttpServerControllerCallbackError.qtest",
                                  "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",

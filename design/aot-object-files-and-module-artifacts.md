@@ -1144,12 +1144,11 @@ compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
 writer. The reader checks that a `.qo` is within its supported version
-range. Each format bump sets the minimum to the version that it writes: v53,
-whose format changes the second AOT-identity batch shares (among them the typed
-ReleaseOwnedTemp of a replaced pending return in debug IR, qore#7022, class
-signature hashes with the namespace path of their class, qore#7397, and debugger
-statement spans with source columns, qore#7490), is the minimum, so artifacts
-from v52 and earlier require recompilation; a qcc executable checks the version of the
+range. Each format bump sets the minimum to the version that it writes: v54,
+whose format changes the AOT3 batch shares (among them the release of what a
+handler compiled as a function of its own handed over on the paths of a
+debugger's requests in debug IR, qore#7625), is the minimum, so artifacts from
+v53 and earlier require recompilation; a qcc executable checks the version of the
 program image that it embeds when it starts, before it reads anything else. A reader change within the supported range
 still needs to invalidate cached artifacts when it changes their interpretation.
 

@@ -1313,7 +1313,13 @@ AbstractDataProviderType output_type = action.output_type;
     never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
     thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
     registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
-    way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    way; getLazyValue() gives a value only to the code of the %Program that registered it (the module's code, also
+    when it serves a caller of the module), not to the code of a caller, of another module or of a tenant, also when
+    the module's code calls that code back.  The check identifies the code that makes the call of getLazyValue(): a
+    call that the module's code makes for a caller, with a callable and arguments that the caller gives it (a call
+    reference to getLazyValue() itself, for example), is the module's call, so a module does not call a callable of a
+    caller with the caller's arguments if they can include the ID of one of its values (issue #7601).  Every such
+    decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
     loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
@@ -1663,13 +1669,11 @@ public class DataProviderActionCatalog {
         */
         static *code lazy_worker_start = DataProviderActionCatalog::initLazyWorker();
 
-        #! Lazy values: ID -> \c builder, \c value and \c built; see buildLazyValue()
-        /** See registerLazyValue()
+        #! Lazy values: ID -> \c builder, \c value, \c built and \c owner; see buildLazyValue()
+        /** See registerLazyValue(); \c owner is the ID of the Program of the code that registered the value, the only
+            code that getLazyValue() gives it to
         */
         static hash<string, hash<auto>> lazy_values = {};
-
-        #! The last lazy value ID
-        static int lazy_value_seq = 0;
 
 %ifdef QoreDebug
         #! The number of jobs queued for the catalog worker since the process started; for tests (debug builds only)
@@ -2039,17 +2043,23 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         The API is for modules: a value can only be registered while a module is being loaded, and lives until the
         end of the process, as the module's Program does.
 
+        The value belongs to the code that registers it: getLazyValue() gives it only to code of the same %Program
+        (the module's code, also when it reads the value for a caller of the module), and the ID is a random number,
+        which the module keeps in a \c private:internal static member, so that no other code can name or read the
+        value (qore#6843).
+
         @param builder the code that builds the value; it takes no arguments.  An exception that it raises is raised
         to the reader, and the next reader builds the value again
 
         @return the ID of the value, for getLazyValue()
 
-        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no module is being loaded
+        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no module is being loaded, or the %Program of the calling code cannot be
+        identified
 
         @par Example:
         @code{.py}
 class MyProvider {
-    private {
+    private:internal {
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
             \MyProvider::buildRequestType());
         static *MyRequestType request_type;
@@ -2073,8 +2083,13 @@ class MyProvider {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "a lazy value can only be registered while a module is being "
                 "loaded";
         }
+        # the value belongs to the Program of the code that registers it; fails closed if it cannot be identified
+        int owner = DataProviderActionCatalog::getDirectCallerProgramId();
+        if (!owner) {
+            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "the code that registers a lazy value cannot be identified";
+        }
         # a hash of any values: the value replaces the builder's entry when it is built
-        hash<auto> v;
+        hash<auto!> v = {"owner": owner};
         # without a catalog worker, and for a module that sandboxed code loaded by path, the value is built now, as it was when
         # it was not lazy: no code registered under a sandbox runs later, on another thread
         if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
@@ -2086,13 +2101,31 @@ class MyProvider {
         int id;
         {
             AutoLock al(lazy_worker_lck);
-            id = ++lazy_value_seq;
+            # a random ID, which no other code can guess
+            do {
+                id = get_random_bytes(8).toHex().substr(0, 15).toInt(16);
+            } while (!id || lazy_values{id.toString()});
             lazy_values{id.toString()} = v;
         }
         # a module whose load fails removes its values with its other registrations (see ImplicitModuleTransaction)
         string key = id.toString();
         ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::removeLazyValue(key); });
         return id;
+    }
+
+    #! Returns the ID of the Program of the code that called the method of this class that calls this method, or 0 if
+    #! it cannot be identified
+    /** The frame of the call of that method on the thread's call stack is the frame of the code that called it; its
+        Program is the Program of that code (a module's, also when a module's code calls it for a caller of the
+        module, and in the initialization of a module loaded at run time; a tenant's for a tenant's code, also in a
+        subclass of a module's class and in a closure of the tenant that a module's code calls), as every execution
+        mode records it (qore#7289, qore#7394)
+    */
+    private:internal static int getDirectCallerProgramId() {
+        # the innermost frames are the call of get_caller_program_id(), the call of this method and the call of the
+        # method, whose Program is that of the code that made the call: only the Program ID of that frame is read,
+        # without building a CallStackInfo hash (qore#7564, qore#7581); fails closed if it has none
+        return get_caller_program_id(2) ?? 0;
     }
 
     #! Removes a lazy value of a module whose load failed; a build running ends without storing its value
@@ -2106,17 +2139,30 @@ class MyProvider {
 
         @return the value
 
-        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID
+        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID by the code of the %Program of the
+        calling code (only the code of the %Program that registered a value can read it), or the %Program of the
+        calling code cannot be identified
         @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader, the value is not built, and there is no
         catalog worker, or the reader is loading a module
+
+        @note The calling code is the code that makes the call of this method: a call that the code of the registering
+        module makes with a callable and arguments that another caller gives it, such as a call reference to this
+        method, is the module's call (see @ref dataprovider_lazy_actions)
 
         @since %DataProvider 3.11
     */
     static auto getLazyValue(int id) {
         string key = id.toString();
         *hash<auto> v = lazy_values{key};
-        if (!v) {
-            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d", id);
+        # only the code of the Program that registered the value can read it; fails closed if the calling code cannot
+        # be identified, and gives the same error as for an unknown ID; the Program ID of the frame of the call of this
+        # method is read here, as reading it costs much less than the call of a helper (see
+        # getDirectCallerProgramId())
+        # (the owner of a registered value is never 0: registerLazyValue() refuses code that it cannot identify, and
+        # the ID of a frame without a Program is NOTHING, which no owner equals)
+        if (!v || v.owner != get_caller_program_id(1)) {
+            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d for the calling "
+                "code", id);
         }
         if (v.built) {
             return v.value;

@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedGlobalControllerTest
+
+#! Regression test for issue #7666: the process-wide AsyncSocketIoController wrapper is a shared object
+/** The wrapper that AsyncSocketIo::getGlobalAsyncIoController() gives trusted code is used for every Program of the
+    process; sandboxed code that obtains it (here from its host, as a callback argument) cannot change its state
+    through any of its methods or members, also the ones that it inherits (called through Reflection), or delete it
+    (SHARED-OBJECT-ERROR), nor log through or change the level of the logger that trusted code set on it, also when a
+    sandboxed Program is the first to load the module.  The wrapper that sandboxed code gets itself is its own and is
+    not shared, and trusted code still sets the logger of the process-wide wrapper and logs through it.
+
+    SharedGlobalController.q makes the checks; its output must be the one in SharedGlobalController.expected in every
+    execution mode.
+*/
+class SharedGlobalControllerTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedGlobalController.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedGlobalController.expected");
+    }
+
+    constructor() : QUnit::Test("shared global async I/O controller wrapper", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, which choose their own execution
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

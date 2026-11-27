@@ -6195,10 +6195,36 @@ bool QoreIRLowering::setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction
         builder.setBlock(entry);
         if (goes_on(rc)) {
             if (cont) {
-                builder.createBranch(cont, loc);
+                // in the body of a handler compiled as a function of its own, a break or a continue leaves the
+                // function, whose return was handed over to the function that the handler runs for: the run of the
+                // handler decides whether the request abandons it, and the request ends the handler with the
+                // scope's path, after the release of the handler's own value of the return, as where the request
+                // abandons it (below): the value of the handler's function is not used (qore#7625)
+                if (rc != RC_RETURN && handler_body && builder.getFunction()->hasDebugFlowPaths()) {
+                    if (pending_return.isValid()) {
+                        builder.createReleaseOwnedTemp(pending_return, loc);
+                        if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
+                            builder.createReleaseOwnedTemp(pending_return_base, loc);
+                        }
+                    }
+                    emitHandlerAbandonReturn(rc, false, loc, se->exception_target);
+                    builder.createCheckException(loc)->exception_target = se->exception_target;
+                    builder.createBranch(path, loc);
+                } else {
+                    builder.createBranch(cont, loc);
+                }
             } else {
                 // a value handed over in the run replaced the value of the return, which the return of the value
                 // gives; otherwise the request goes on in the handler's body
+                // The entries of a break or a continue that goes on and of the return request are then the same
+                // conditional branch, which QoreIRDebugFlowTargets::leavesFunction() relies on: a break or a continue
+                // that inlineHandlerRequestEndsFunction() lets go on ends the function as a return request does, and
+                // the paths of the handler whose body has the scope share the end of both (getInlineHandlerFlowEndAt():
+                // the join of its exit in the cleanups of a return statement, or the end of the scope's return path);
+                // only the body of a handler compiled as a function of its own has an end of its own for a break or a
+                // continue (debug.flow.handler.abandon), and its ScopeExits past the cap take this form only outside
+                // it (the !handler_body cases of lowerHandlersAtExit()) (qore#7625)
+                assert(!handler_body);
                 builder.createBranchIf(se->result, handed_over_return, path, loc);
             }
         } else {
@@ -6216,6 +6242,11 @@ bool QoreIRLowering::setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction
                 if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
                     builder.createReleaseOwnedTemp(pending_return_base, loc);
                 }
+            }
+            // in the body of a handler compiled as a function of its own, the return was handed over to the function
+            // that the handler runs for, which releases it too (qore#7625)
+            if (cont) {
+                emitHandlerAbandonReturn(rc, true, loc, se->exception_target);
             }
             // an exception that a destructor raises goes where the exceptions of the handlers that the ScopeExit ran
             // go, where the later handlers are still registered (bug 380, qore#7022)
@@ -6337,6 +6368,19 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
         scope_paths_restore.done = true;
     }
     return &paths;
+}
+
+void QoreIRLowering::emitHandlerAbandonReturn(int rc, bool taken, const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target) {
+    assert(rc == RC_BREAK || rc == RC_CONTINUE);
+    // only the debug IR of a handler body has the paths of a debugger's requests, and only a handler run out of line
+    // hands the values of its returns over to the function that it runs for (QoreIROpcode::HandlerReturn)
+    if (!handler_body || !builder.getFunction()->hasDebugFlowPaths()) {
+        return;
+    }
+    // an exception that a destructor raises goes where the release of the frame's own value of the return would raise
+    // it
+    builder.createHandlerAbandonReturn(taken ? 0 : rc, loc)->exception_target = exception_target;
 }
 
 void QoreIRLowering::pushFlowTarget(FlowTarget target) {
@@ -7414,11 +7458,13 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                         return true;
                     }
                     se_inst->result = builder.getFunction()->createValue();
-                    // in the code of a debugger's request (a handler that can return in the blocks that it leaves,
-                    // past the budget of the paths), a request in the handlers is that of the block (qore#7008); not
-                    // where their values replace that of a return (replaces), nor where a value handed over to a
-                    // return is held, which the release at the paths' entries would take
-                    if (debug_flow_path_depth && !replaces && !pending_return_handed_over
+                    // a request in the handlers is that of the block, in the code of a debugger's request (a handler
+                    // that can return in the blocks that it leaves, past the budget of the paths, qore#7008) and at the
+                    // normal end of a block in the body of a handler lowered inline, where a loop or a switch statement
+                    // of the function can take the request of a handler that hands a value over and abandon it
+                    // (qore#7625); not where their values replace that of a return (replaces), nor where a value handed
+                    // over to a return is held, which the release at the paths' entries would take
+                    if (!replaces && !pending_return_handed_over
                             && !try_replaced_handed_over && barrier_depth != SIZE_MAX
                             && !setHandOverScopeExitFlowTargets(se_inst, barrier_depth - 1, scope_loc, error)) {
                         return false;
@@ -7853,6 +7899,41 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
             if (!join && !(join = createBlock("handler.inline.join"))) {
                 error = "IR builder failed to create the join block of a handler";
             }
+            // a break or a continue in the body of a handler compiled as a function of its own leaves the function,
+            // whose return, which the request leaves, was handed over to the function that the handler runs for: the
+            // block of the handler decides whether the request abandons it, when its handlers have run, as the AST
+            // interpreter's block does (StatementBlock::requestTakenInFunction()): the run of the handler decides, and
+            // the request ends the handler with the scope's return path, which releases the handler's own value of the
+            // return: the value of the handler's function is not used (qore#7625)
+            if (join && rc != RC_RETURN && handler_body && builder.getFunction()->hasDebugFlowPaths()) {
+                QoreIRBasicBlock* abandon = createBlock("debug.flow.handler.abandon");
+                if (!abandon) {
+                    error = "IR builder failed to create the block of a debugger flow request";
+                    return nullptr;
+                }
+                abandon->debug_flow = true;
+                QoreIRBasicBlock* saved_block = builder.getBlock();
+                builder.setBlock(abandon);
+                emitHandlerAbandonReturn(rc, false, nullptr, inline_handler_flow_stack[hf_index].exception_target);
+                // the handler's own value of the return, which the return path releases only when the handler ends:
+                // also that of a return in a try statement of the block, which the try statement handed over when it
+                // ended (see emitHandlerReturn()), as at the entries of the paths of a ScopeExit past the cap in these
+                // cleanups (setReplacingScopeExitFlowTargets())
+                if (pending_return_active && pending_return.isValid()) {
+                    builder.createReleaseOwnedTemp(pending_return, nullptr);
+                    if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
+                        builder.createReleaseOwnedTemp(pending_return_base, nullptr);
+                    }
+                    builder.createCheckException(nullptr)->exception_target
+                        = inline_handler_flow_stack[hf_index].exception_target;
+                }
+                // the handlers still registered in the scope do not run: the last one ran
+                builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+                builder.createBranch(paths->return_path, nullptr);
+                builder.setBlock(saved_block);
+                ends()[end_index] = abandon;
+                return abandon;
+            }
             return join;
         }
         // the scope is in the body of the handler around this one (its top block or a block in it), which is lowered
@@ -7875,13 +7956,23 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
             return lowerInlineHandlerOuterRequest(hf_index, outer_index, rc, error);
         }
     }
+    // in the cleanups of a return statement in the body of a handler compiled as a function of its own, a break or a
+    // continue that a loop or a switch statement of the body takes abandons the return, which was handed over to the
+    // function that the handler runs for: the block of the handler releases it when its handlers have run, as the AST
+    // interpreter's block does (StatementBlock::requestTakenInFunction(), qore#7625)
+    const bool abandons = rc != RC_RETURN && scope_path != paths->return_path
+        && inline_handler_flow_stack[hf_index].return_walk && handler_body
+        && builder.getFunction()->hasDebugFlowPaths();
     // the requests whose paths after the handler are the same (a break or a continue that no loop or switch
-    // statement takes is a return) share the end
+    // statement takes is a return) share the end; one that abandons the return shares it only with another one
     for (size_t i = 0; i < 3; ++i) {
         QoreIRBasicBlock* other = ends()[i];
         if (other && !other->instructions.empty()) {
             const auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(other->instructions.back().get());
-            if (br && br->target == scope_path) {
+            if (br && br->target == scope_path
+                    && abandons == (other->instructions.size() > 1
+                        && other->instructions[other->instructions.size() - 2]->opcode
+                            == QoreIROpcode::HandlerAbandonReturn)) {
                 ends()[end_index] = other;
                 return other;
             }
@@ -7897,6 +7988,9 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
     builder.setBlock(end);
     // the handlers still registered in the scope do not run: the last one ran
     builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+    if (abandons) {
+        emitHandlerAbandonReturn(rc, true, nullptr, inline_handler_flow_stack[hf_index].exception_target);
+    }
     builder.createBranch(scope_path, nullptr);
     builder.setBlock(saved_block);
     ends()[end_index] = end;
@@ -11471,11 +11565,13 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // - Binary: binary + string = string (not binary), needs in-place append
     // Using AddAssignLValue goes through QorePlusEqualsOperatorNode which does
     // proper in-place modification via lvalue semantics.
-    if (left_var) {
+    // An untyped local keeps the load-compute-store path, which leaves it IR-only: the load of an "auto" local that
+    // only the operation uses borrows the local's value, and the operation changes a list or a hash that the local
+    // holds alone in place, as the AST interpreter does (qore_ir_mark_auto_string_appends(),
+    // qore_rt_add_assign_local_any(); qore#7421)
+    if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
-        // An untyped variable can also hold a list or hash. An extra reference to compute the sum
-        // would force a copy even when the variable owns the container (#7421).
-        if (!QoreTypeInfo::hasType(ti) || QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
+        if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
                 || QoreTypeInfo::isListType(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_BINARY

@@ -163,6 +163,8 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-gen.q` | `gr` `gc` `cr` `cc` `gn` `gl` `gh` `gk` `gm` `gx` `gv` | generic code at runtime (qore#6126): generic locals, closures, calls, classes, casts, with concrete controls (`cr`, `cc`) |
 | `bench-weak-assignment.q` | `member` `hash` `list` `variable` | a weak assignment (`:=`) from a public member, a hash key, a list element and a local (qore#7301) |
 | `bench-ref.q` | `rf` `ru` `rw` `rh` `rm` `rs` | calls with reference parameters (qore#7271): a function with a `reference<int>` parameter, an untyped `reference` parameter, one that assigns through its `reference<int>` parameter, one with a `reference<hash<auto>>` parameter, a method and a static method with a `reference<int>` parameter |
+| `bench-temporary.q` | `tl` `th` `thc` | a temporary `list<int>` pair read with an index of `(x & 1)`, a temporary `hash<string, int>` read with a key that a conditional chooses from two literals, and with a constant key (qore#5578) |
+| `bench-owning.q` | `sf_try_w` `s_try_w` `m_try_w` `mf_try_w` `sf_w` `sf_try_r` | a call that owns a temporary list argument that the method writes: a final static, a static, an instance and a final instance method in a try block, a final static method outside one, a final static method that only reads it (qore#7043, #6860) |
 
 A new bench script follows the same form, which `examples/test/runner/test_cgrows_tool.py` checks: its first line is
 `%modern`; it defines `int sub f(int a)` (which the dead statements call); each loop function starts with

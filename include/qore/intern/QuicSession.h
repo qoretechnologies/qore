@@ -35,6 +35,7 @@
 #include "qore/common.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/SendRateWindow.h"
 #include <qore/InputStream.h>
 #include <qore/QoreQueue.h>  // includes Queue class (AbstractPrivateData + QoreQueue)
 
@@ -642,6 +643,10 @@ public:
         with the session's next write, for example when a packet of the peer is processed.
     */
     DLLLOCAL static void dbgResumeHeldStreams();
+
+    //! Returns the nanoseconds until the session's earliest ngtcp2 timer (the pacing of its next send, for example),
+    //! 0 if it is due, or INT64_MAX if it has none (debug builds only; qore#7638)
+    DLLLOCAL int64_t dbgNsUntilExpiry();
 #endif
 
     //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
@@ -1561,6 +1566,13 @@ public:
     */
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
+    //! Returns true if a pumped body can be read now and has no descriptor to wait for
+    /** A body read from memory or from a regular file, whose staging buffer has room, is read in timed passes; a
+        body whose staging buffer is full waits for the peer's credit, and one read from a descriptor that can wait
+        is woken by it (see getExtraFds()), so neither needs a timed pass (qoretechnologies/qore#7654)
+    */
+    DLLLOCAL bool needsTimedInputStreamPass() const;
+
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** An error of one stream ends that stream only: it is logged and the stream is reset for the client; no error
         is raised in \a xsink, which is unused (qore#7434)
@@ -1568,6 +1580,24 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Sets the bounds of the response bodies that the I/O thread sends from InputStreams (qore#7280)
+    /** @param min_rate the minimum rate in bytes per second at which the connection's client must take the data of
+        all its streams together while one of them waits for it; 0 disables the check
+        @param window_ms the window of the minimum rate in milliseconds
+        @param stall_ms the time in milliseconds after which a body that the client acknowledges nothing of is ended
+
+        @param listener_default true for the default of the listener that the session was accepted on: it applies
+        only until the bounds are set by a call without it (qore#7653)
+
+        The bounds of a connection are set once, with its first such body; later calls are ignored, except that a
+        call without \a listener_default replaces a listener's default.
+    */
+    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms,
+        bool listener_default = false);
+
+    //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
+    DLLLOCAL int getInputStreamPollTimeoutMs() const;
 
     //! Reads and sends the next chunk of one stream's InputStream; an error is the stream's alone (qore#7434)
     DLLLOCAL void processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
@@ -2248,6 +2278,47 @@ private:
     /** @since %Qore 3.0
     */
     std::unordered_map<int64_t, StreamInputStreamInfo> stream_input_streams_;
+    //! the bytes that the client has acknowledged on all its streams, which never decreases (qore#7280)
+    uint64_t conn_acked_total_ = 0;
+    //! the minimum send rate of the connection's pumped bodies, across its streams (qore#7280)
+    SendRateWindow pump_send_rate_;
+    //! the no-progress bound of a pumped body in milliseconds
+    int64_t pump_stall_ms_ = 30 * 60 * 1000;
+    //! true once the bounds of the response bodies have been set
+    bool pump_bound_set_ = false;
+    //! true if the bounds were set by a call that is not a listener's default (qore#7653)
+    bool pump_bound_explicit_ = false;
+
+    //! A response body that the bounds charge to its client until the client has acknowledged it (qore#7653)
+    struct BoundBody {
+        //! the size of a buffered body, whose acknowledged bytes are counted in acked; 0 for a pumped body, whose
+        //! acknowledged bytes are those of its streaming_body_data_ entry
+        uint64_t buffered_size = 0;
+        uint64_t acked = 0;
+        //! the body's acknowledged bytes when it last made progress, and the time of it on the monotonic clock in ms
+        //! (0: not seen waiting yet)
+        int64_t bound_acked = -1;
+        int64_t bound_progress_ms = 0;
+    };
+    //! the response bodies charged to their clients by stream ID, registered while the bounds are set; a body is
+    //! removed when its client has acknowledged all its data, when its stream is cancelled or closes, and when a bound
+    //! ends it (qore#7653)
+    std::unordered_map<int64_t, BoundBody> bound_bodies_;
+
+    //! Registers a response body for the bounds if they are set; \a buffered_size is 0 for a pumped body (qore#7653)
+    DLLLOCAL void addBoundBody(int64_t stream_id, uint64_t buffered_size);
+    //! Removes a body from the bounds (qore#7653)
+    DLLLOCAL void eraseBoundBody(int64_t stream_id);
+    //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under mtx_
+    DLLLOCAL void updateActiveInputStreams();
+    //! Returns the bytes of a bounded body that its client has acknowledged
+    DLLLOCAL uint64_t getBoundBodyAcked(int64_t stream_id, const BoundBody& b) const;
+
+    //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
+    DLLLOCAL void checkInputStreamSendBound();
+
+    //! Returns true if a bounded body has data that its client has not acknowledged (qore#7653)
+    DLLLOCAL bool isBoundBodyWaiting(int64_t stream_id, const BoundBody& b) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};

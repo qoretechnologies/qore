@@ -814,7 +814,8 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                 m = qore_class_private::get(*const_cast<QoreClass*>(n_qc))->parseFindAnyMethod(method.c_str(),
                     class_ctx);
                 // as for a call of the method (qore#6843)
-                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false) && !err) {
+                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false,
+                        qore_class_private::get(*n_qc)) && !err) {
                     err = -1;
                 }
                 if (m) {
@@ -961,7 +962,7 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, meth);
@@ -1005,7 +1006,7 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, method);
@@ -1680,9 +1681,9 @@ static const UserVariantBase* qore_call_reference_function_variant(const Resolve
 }
 
 int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink, bool* sandboxed) {
-    if (sandboxed) {
-        *sandboxed = false;
+        ExceptionSink* xsink, bool* restricted) {
+    if (restricted) {
+        *restricted = false;
     }
     // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
     // can have been deleted: it is taken with a reference while its options are read
@@ -1697,8 +1698,8 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
                 return -1;
             }
             po = pgm->getParseOptions();
-            if (sandboxed) {
-                *sandboxed = qore_program_is_sandboxed(pgm);
+            if (restricted) {
+                *restricted = qore_program_is_restricted(pgm);
             }
             return 1;
         }
@@ -1711,8 +1712,8 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
         return 0;
     }
     po = pgm->getParseOptions();
-    if (sandboxed) {
-        *sandboxed = qore_program_is_sandboxed(pgm);
+    if (restricted) {
+        *restricted = qore_program_is_restricted(pgm);
     }
     return 1;
 }
@@ -1768,7 +1769,7 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
             // as for a call of the method (qore#6843)
-            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), true)) {
+            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), false)) {
                 return -1;
             }
             if (m) {
@@ -2565,11 +2566,11 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         return -1;
     }
 
-    // as for a call of the method (qore#6843): a reference to a normal method is a reference to the method of the
-    // object of the code
+    // as for a call of the method (qore#6843); a reference is not a call of the version of a base class by its
+    // override: the method is called when the reference is called, which may be anywhere
     if (qore_class_private::parseCheckSandboxMethodAccess(loc, qm, parse_context.oflag
             ? qore_class_private::get(*QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
-            : parse_get_class_priv(), !qm->isStatic())) {
+            : parse_get_class_priv(), false)) {
         return -1;
     }
 
@@ -3141,11 +3142,11 @@ const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQ
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
         ExceptionSink* xsink) {
     if (trusted) {
-        // any governing sandbox, whatever policy barrier is active: a capability is registered by trusted code only
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing) {
+        // a capability is registered by trusted code only: restricted code, whatever policy barrier is active, fails
+        // closed; code that a trusted (governed) sandbox governs is trusted (qore#7737)
+        if (qore_caller_is_restricted()) {
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must be registered "
-                "outside sandbox execution and must not have sandbox provenance");
+                "outside restricted sandbox execution and must not have restricted sandbox provenance");
             return nullptr;
         }
         // Do not accumulate forwarding chains when an already bound callback is registered again.
@@ -3153,10 +3154,13 @@ ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNod
         while (true) {
             auto* creation = qore_get_call_reference_provenance(callback);
             if (creation) {
+                const bool restricted = qore_sandbox_context_is_restricted(creation);
                 creation->deref();
-                xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must not have "
-                    "sandbox provenance");
-                return nullptr;
+                if (restricted) {
+                    xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must not have "
+                        "restricted sandbox provenance");
+                    return nullptr;
+                }
             }
             const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
             if (!bound) {
@@ -3227,29 +3231,34 @@ private:
 
 ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
         ExceptionSink* xsink) {
-    // code that any sandbox governs, whatever policy barrier is active, and sandboxed code that no manager governs (a
-    // Program sandboxed by its flag): the capability removes the caller's sandbox from what its callback builds
-    if (qore_caller_is_sandboxed()) {
+    // restricted code, whatever policy barrier is active, and sandboxed code that no manager governs (a Program
+    // sandboxed by its flag): the capability removes the caller's sandbox from what its callback builds; code that a
+    // trusted (governed) sandbox governs is trusted, and its sandbox still governs the build as that of the Program
+    // that created the capability (qore#7737)
+    if (qore_caller_is_restricted()) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by code "
-            "that a sandbox governs or that is sandboxed");
+            "that a restricting sandbox governs or that is restricted");
         return nullptr;
     }
     if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {
+        const bool restricted = qore_sandbox_context_is_restricted(creation);
         creation->deref();
-        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must not have "
-            "sandbox provenance");
-        return nullptr;
+        if (restricted) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must not "
+                "have restricted sandbox provenance");
+            return nullptr;
+        }
     }
     if (qore_get_sandbox_bound_callback(callback) || dynamic_cast<const SystemThreadCallReference*>(callback)) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must be a plain "
             "callback, not a bound callback or a capability");
         return nullptr;
     }
-    // the code of the callback must not be sandboxed code either (a function of a Program that sandboxed code
+    // the code of the callback must not be restricted code either (a function of a Program that restricted code
     // created, imported into a trusted Program)
     QoreParseOptions code_po;
-    bool code_sandboxed;
-    int rc = qore_call_reference_code_parse_options(callback, code_po, xsink, &code_sandboxed);
+    bool code_restricted;
+    int rc = qore_call_reference_code_parse_options(callback, code_po, xsink, &code_restricted);
     if (*xsink) {
         return nullptr;
     }
@@ -3258,9 +3267,9 @@ ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallRefe
             "has been deleted");
         return nullptr;
     }
-    if (rc > 0 && code_sandboxed) {
+    if (rc > 0 && code_restricted) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability belongs to a "
-            "sandboxed Program");
+            "restricted Program");
         return nullptr;
     }
     return new SandboxBoundCallReference(callback, true, true);
@@ -3268,20 +3277,21 @@ ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallRefe
 
 ResolvedCallReferenceNode* qore_create_system_thread_call(const ResolvedCallReferenceNode* callback,
         ExceptionSink* xsink) {
-    // any governing sandbox, whatever policy barrier is active: the capability escapes every sandbox
-    {
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing) {
-            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability cannot be created by code "
-                "that a sandbox governs");
-            return nullptr;
-        }
+    // restricted code, whatever policy barrier is active: the capability escapes every sandbox, which trusted code
+    // that a trusted (governed) sandbox governs may do, as it may use uncontrolled APIs (qore#7737)
+    if (qore_caller_is_restricted()) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability cannot be created by code "
+            "that a restricting sandbox governs");
+        return nullptr;
     }
     if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {
+        const bool restricted = qore_sandbox_context_is_restricted(creation);
         creation->deref();
-        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a system thread capability must not have "
-            "sandbox provenance");
-        return nullptr;
+        if (restricted) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a system thread capability must not "
+                "have restricted sandbox provenance");
+            return nullptr;
+        }
     }
     if (qore_get_sandbox_bound_callback(callback) || dynamic_cast<const SystemThreadCallReference*>(callback)) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a system thread capability must be a plain "

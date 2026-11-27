@@ -94,7 +94,7 @@ public:
    DLLLOCAL ~QoreGetOpt();
    // returns 0 for OK
    DLLLOCAL int add(const char* name, char short_opt, const char* long_opt, qore_type_t argtype = -1, int option = QGO_OPT_NONE);
-   DLLLOCAL QoreHashNode* parse(QoreListNode* l, bool ml, ExceptionSink* xsink);
+   DLLLOCAL QoreHashNode* parse(QoreListNode* l, bool modify, ExceptionSink* xsink, bool leading_only = false);
 };
 
 #endif // _QORE_QOREGETOPT_H

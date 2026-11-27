@@ -101,6 +101,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a response body of the media type \c application/x-ndjson (newline-delimited JSON) is returned as text, which
+      the caller splits into its records, as it is a sequence of JSON values and not one JSON document
+      (<a href="https://github.com/qoretechnologies/qore/issues/6503">issue 6503</a>)
     - a schema that is shared by every Program keeps what it derives from the data of its caller, such as the types
       with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
       fields that its type builds cache (see
@@ -444,7 +447,7 @@ public namespace RestSchemaValidator {
             @param oh deserialized hash from the source schema description
         */
         public initialize(hash<auto> oh) {
-            vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
+            vendorExtensions = map {$1: oh{$1}}, keys oh, $1.startsWith("x-");
         }
 
         #! Returns True if this object has the x-deprecated extension set
@@ -1685,6 +1688,9 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         static string schemaIdentityToken(string token) {
+            if (token !~ /[~\/]/) {
+                return token;
+            }
             return replace(replace(token, "~", "~0"), "/", "~1");
         }
 
@@ -2212,12 +2218,21 @@ public namespace RestSchemaValidator {
         /** A copy is not known to the schema, which releases the opaque type caches of the objects it knows (see
             releaseTypeCaches()), so a copy of an object holding such caches builds its own types.
 
+            A copy is a new object: it is shared only if code that no sandbox governs makes it, whatever the object
+            copied was (see @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"); code that
+            is sandboxed or acts for sandboxed code can copy a shared object because this class declares a copy
+            method, which resets what the class guards for a shared object (qore#7667): a copy of a shared object that
+            is not shared itself caches none of the types and fields of the object copied, as a shared object that is
+            deserialized restores none (see deserializeMembers()), and builds its own.  Its document is the document of
+            the object copied, as for a schema object that such code creates for the document.
+
             @param old the object copied
 
             @since RestSchemaValidator 2.5
         */
         copy(AbstractRestSchemaObject old) {
-            if (holds_opaque_type_caches) {
+            shared_object = SandboxManager::createsSharedObjects();
+            if (holds_opaque_type_caches || (!shared_object && SandboxManager::isSharedObject(old))) {
                 releaseTypeCaches();
             }
         }
@@ -3215,7 +3230,20 @@ public namespace RestSchemaValidator {
         }
 
         #! A copy is shared only if code that no sandbox governs makes it, as for a schema that such code creates
+        /** The copy starts with no type build state of its own: its type build lock, undo records and the schema
+            objects holding types through opaque references are its own, not those of the schema copied, as for a
+            deserialized schema; code that is sandboxed or acts for sandboxed code can copy a shared schema because
+            this class declares a copy method (qore#7667)
+        */
         copy() {
+            type_build_lock = new Mutex();
+            type_build_undo = ();
+            type_build_undoing = False;
+            opaque_type_caches = False;
+            opaque_type_cache_holders = {};
+            release_opaque_type_caches = False;
+            type_build_id = 0;
+            type_build_cached = ();
             AbstractObjectBase::markShared(self);
         }
 
@@ -4261,6 +4289,13 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
 %endif
                 MimeTypeText: (
                     "code": "text",
+                    "in": data sub (data s) { return s; },
+                ),
+
+                # newline-delimited JSON is a sequence of JSON values, one per line, and not one JSON document: it
+                # is returned as text, which the caller splits into its records (qore#6503)
+                "application/x-ndjson": (
+                    "code": "ndjson",
                     "in": data sub (data s) { return s; },
                 ),
 

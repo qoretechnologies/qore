@@ -209,6 +209,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreUnshiftOperatorNode::evalImplInternal(bo
     QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
+    // the operand is referenced before the lvalue is taken: if it is the lvalue's own value, the lvalue's list is then
+    // copied before it is changed, so the value added is the one that the operand had, not the changed list
+    // (qore#7622)
+    res.ensureReferencedValue();
+
+    // the operand is referenced before the lvalue is taken: if it is the lvalue's own value, the lvalue's list is then
+    // copied before it is changed, so the value added is the one that the operand had, not the changed list
+    res.ensureReferencedValue();
 
     QoreValue rv;
     // the operation on the lvalue that the helper holds, inline on the normal path (unshiftOn()); made again in a

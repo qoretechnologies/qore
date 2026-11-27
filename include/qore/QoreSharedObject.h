@@ -41,6 +41,11 @@
     for binary modules that create objects that every Program can reach (a registry, a cache, a client shared between
     Programs).  Included by qore/Qore.h; available if \c _QORE_HAS_SHARED_OBJECT_API is defined.
 
+    Restricted code is code that a restricting sandbox governs (one that does not trust its code: it refuses
+    uncontrolled APIs, see QoreSandboxManager::trustsUncontrolledApis()), the code of a Program sandboxed without a
+    manager, and code that acts for such code; code that a trusted (governed) sandbox governs is sandboxed but not
+    restricted, and creates and changes shared objects as trusted code does (qore#7737).
+
     No C++ exception leaves these functions: a failure is raised in the ExceptionSink given, and the predicates fail
     closed.
 
@@ -55,9 +60,9 @@ class ExceptionSink;
 class QoreValue;
 
 //! Returns true if what the calling code creates may be shared by every Program of the process
-/** As SandboxManager::createsSharedObjects(): true if the calling code is not sandboxed; fails closed in the other
+/** As SandboxManager::createsSharedObjects(): true if the calling code is not restricted; fails closed in the other
     direction than the sandbox checks: true if the sandbox that governs the code cannot be resolved, so that the object
-    is treated as shared and sandboxed code cannot change it.  It reveals only whether the calling code is sandboxed.
+    is treated as shared and restricted code cannot change it.  It reveals only whether the calling code is restricted.
 
     A module calls it where it creates an object for its caller (for example in the constructor of a builtin class),
     and marks the object with qore_share_object() if it returns true.
@@ -67,16 +72,16 @@ class QoreValue;
 DLLEXPORT bool qore_caller_creates_shared_objects();
 
 //! Returns true if the calling code may mark objects as shared with qore_share_object()
-/** As SandboxManager::canShareObjects(): code that no sandbox governs may, and so may code in an update scope of a
-    shared object (see qore_update_shared_object() and SandboxManager::updateSharedObject()), as long as it does not
-    run for sandboxed code that the scope's code called.  Fails closed: false if it cannot be decided
+/** As SandboxManager::canShareObjects(): code that no restricting sandbox governs may, and so may code in an update
+    scope of a shared object (see qore_update_shared_object() and SandboxManager::updateSharedObject()), as long as it
+    does not run for restricted code that the scope's code called.  Fails closed: false if it cannot be decided
 
     @since %Qore 3.0
 */
 DLLEXPORT bool qore_caller_can_share_objects();
 
-//! Marks an object as shared by every Program of the process, so that sandboxed code cannot change or delete it
-/** As SandboxManager::shareObject(): code that is sandboxed or acts for sandboxed code then cannot change the
+//! Marks an object as shared by every Program of the process, so that restricted code cannot change or delete it
+/** As SandboxManager::shareObject(): code that is restricted or acts for restricted code then cannot change the
     object's members or delete it (\c SHARED-OBJECT-ERROR); the C++ methods of its class that change its private
     data check the caller with qore_check_shared_object_change() first.  The mark is permanent; only code that may
     share objects (qore_caller_can_share_objects()) can set it.
@@ -99,7 +104,7 @@ DLLEXPORT int qore_share_object(QoreObject* obj, ExceptionSink* xsink);
 */
 DLLEXPORT bool qore_object_is_shared(const QoreObject* obj);
 
-//! Raises \c SHARED-OBJECT-ERROR if the calling code is sandboxed and the object is shared by every Program
+//! Raises \c SHARED-OBJECT-ERROR if the calling code is restricted and the object is shared by every Program
 /** As SandboxManager::checkSharedObjectChange(): a C++ method of a builtin class that changes the private data of a
     shared object on behalf of its caller calls it before it changes anything.  It decides by the calling code only,
     also in an update scope (see qore_update_shared_object()), and fails closed: the change is refused if the sandbox
@@ -115,14 +120,14 @@ DLLEXPORT bool qore_object_is_shared(const QoreObject* obj);
 */
 DLLEXPORT int qore_check_shared_object_change(const QoreObject* obj, const char* what, ExceptionSink* xsink);
 
-//! Raises \c SHARED-OBJECT-ERROR if sandboxed code gives a shared object code to run while the object is changed
+//! Raises \c SHARED-OBJECT-ERROR if restricted code gives a shared object code to run while the object is changed
 /** As SandboxManager::checkSharedObjectCallback(): for a C++ method that runs code that its caller gives while it
-    holds the object's state (such as a lock), code that is sandboxed or acts for sandboxed code can only give a
+    holds the object's state (such as a lock), code that is restricted or acts for restricted code can only give a
     closure that a method of a class that trusted code declared created.  Nothing is checked for an object that is not
-    shared or a caller that no sandbox governs; fails closed.
+    shared or a caller that no restricting sandbox governs; fails closed.
 
     @param obj the object that the caller changes; nothing is checked for null
-    @param callback the code that the caller gives; where the callback is checked (a shared object and a sandboxed
+    @param callback the code that the caller gives; where the callback is checked (a shared object and a restricted
     caller), null is refused as code that is not a closure of a trusted class; otherwise 0 is returned for null too,
     so the caller still handles a null callback itself
     @param what what is done, for the exception (ex: \c "run code locked")
@@ -153,30 +158,30 @@ typedef QoreValue (*q_shared_object_update_t)(QoreObject* obj, void* arg, Except
     - code of the scope's Program that the update calls, such as a closure of the object's class, can change the
       object's members
 
-    The scope is allowed for a sandboxed caller with no open scope, so that a builtin method of a shared object can
-    build its state on first use in a call for sandboxed code, as a closure of a trusted class can.  The update must
+    The scope is allowed for a restricted caller with no open scope, so that a builtin method of a shared object can
+    build its state on first use in a call for restricted code, as a closure of a trusted class can.  The update must
     compute the new state from the object itself, never from data that its caller gives.
 
     The checks of SandboxManager::updateSharedObject() that do not concern a closure apply:
     - \a obj must be shared
-    - the scope's Program is the object's Program (see QoreObject::getProgram()), which must not be sandboxed; for an
+    - the scope's Program is the object's Program (see QoreObject::getProgram()), which must not be restricted; for an
       object that has no Program (an object of a builtin class that C++ code created), the Program of the calling
       code, if the calling code may share objects (qore_caller_can_share_objects()) and that Program is not
-      sandboxed; else the scope is refused (fails closed)
-    - code that sandboxed code called in an open update scope cannot open a scope
+      restricted; else the scope is refused (fails closed)
+    - code that restricted code called in an open update scope cannot open a scope
 
     The update changes the object's private data directly; qore_check_shared_object_change() decides by the calling
-    code only and refuses a sandboxed caller also in the scope.  Code that the update calls is subject to the normal
-    rules, as code that a closure calls in an update scope: code that runs in a sandboxed Program (a callback of a
-    sandboxed caller, a method of a class of a sandboxed Program), and any code that it calls, acts for sandboxed code,
-    so it cannot change the object, open another update scope or share objects.  Code that runs in a Program that no
-    sandbox governs is the scope's code, whoever supplied it: a closure or method reference of a trusted class, or a
-    reference to a builtin function or method, that the caller gives runs with the rights of the scope, and a name
-    that the caller gives resolves in the scope's Program.  The update therefore never calls code, or resolves names,
-    that its caller supplied; the restrictions of SandboxManager::updateSharedObject() on its closure (created by a
-    class of the object in the calling code, run once) have no counterpart here, as the update is the module's own
-    C++ code.  Use it for the objects of the module's own classes.  The scope ends on every path out of this
-    function; a thread that the update starts does not inherit it.
+    code only and refuses a restricted caller also in the scope.  Code that the update calls is subject to the normal
+    rules, as code that a closure calls in an update scope: code that runs in a restricted Program (a callback of a
+    restricted caller, a method of a class of a restricted Program), and any code that it calls, acts for restricted
+    code, so it cannot change the object, open another update scope or share objects.  Code that runs in a Program
+    that no restricting sandbox governs is the scope's code, whoever supplied it: a closure or method reference of a
+    trusted class, or a reference to a builtin function or method, that the caller gives runs with the rights of the
+    scope, and a name that the caller gives resolves in the scope's Program.  The update therefore never calls code,
+    or resolves names, that its caller supplied; the restrictions of SandboxManager::updateSharedObject() on its
+    closure (created by a class of the object in the calling code, run once) have no counterpart here, as the update
+    is the module's own C++ code.  Use it for the objects of the module's own classes.  The scope ends on every path
+    out of this function; a thread that the update starts does not inherit it.
 
     @param obj the shared object to update
     @param update the update to run
@@ -194,7 +199,7 @@ static QoreValue build_cache(QoreObject* obj, void* arg, ExceptionSink* xsink) {
     return QoreValue();
 }
 
-// a builtin method that builds the cache on first use, also in a call for sandboxed code
+// a builtin method that builds the cache on first use, also in a call for restricted code
 if (!priv->hasCache()) {
     if (qore_object_is_shared(self)) {
         qore_update_shared_object(self, build_cache, priv, xsink);

@@ -421,7 +421,10 @@ acts for sandboxed code, with `SANDBOX-REGISTRATION-ERROR`:
 
 Both decide with `qore_caller_is_sandboxed()`: the code of a sandboxed Program or of a Program that sandboxed code
 created, code that such a Program calls, and code that a sandbox governs, also through a policy barrier or a
-system-policy capability; fails closed.  The initialization of library code is not refused, so registrations made in
+system-policy capability; fails closed.  Unlike the rules that restrict what code may do, which use the restricted
+classification (`qore_caller_is_restricted()`: only a sandbox that refuses uncontrolled APIs counts, qore#7737), a
+registration is refused also to code that a trusted (governed) sandbox governs, as what it registers carries that
+sandbox (its interrupts and limits) to every later user.  The initialization of library code is not refused, so registrations made in
 a module's `init` closure or static initializers work whatever code loads the module first.  A registry that is an
 object the caller can also create for itself (`YamlTagHandlerRegistry`) refuses only on the process-wide instance,
 which it creates in its module's initialization, so that it carries no caller's sandbox.
@@ -432,6 +435,32 @@ exception for this rule (`DataProvider`: `DATA-PROVIDER-CALLBACK-ERROR`, `DATA-P
 as do the registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules,
 which use `DataProvider::checkSharedRegistration()` / `mayRegisterShared()` or a check of their own (qore#6747; see
 `examples/test/runner/test_shared_registry_checks.py`).
+
+#### Process-wide state built on first use
+
+A module that builds process-wide state lazily, the first time a caller needs it (`static *T v; ... v ?? (v =
+build())`, a registry or cache filled on demand, a schema loaded on first use), builds it on whichever caller's thread
+needs it first: for a sandboxed caller, `SandboxManager::createsSharedObjects()` is `False` there and the objects
+are not marked as shared, and for a restricted caller what the build creates records its restrictions, for every
+later caller (issues #7684, #7002).  Use `Qore::Thread::LazySharedValue` (one value) or `Qore::Thread::LazySharedMap`
+(values by key) instead, created in a `private:internal static` member during module initialization: the builder runs
+once, as trusted code (a trusted build when the caller is sandboxed, acts for sandboxed code or is restricted), and
+its value is published to every caller.  Rules:
+
+- an object that the module creates later than its initialization, for whichever caller needs it first, is private
+  (`isProcessShared()` is `False`) if that caller is sandboxed or acts for sandboxed code, and builds its value as that
+  caller's code; to have a process-shared object, create it in the module's initialization (a static member
+  initializer), or check `isProcessShared()`, or give the constructor `require_shared: True`, which refuses to create
+  a private object;
+- the builder builds only from the module's own, trusted data; a map's builder raises an exception for a key that it
+  does not know (a failed key leaves no entry), and never uses the key as code, a module name or an unchecked path;
+- the value is returned as it is: mark (`SandboxManager::shareObject()`) or freeze what it shares; the check before
+  publishing refuses only objects and callables that sandboxed or restricted code created, in lists and hashes, not
+  in object members;
+- lock order: a caller that waits for a value built by another thread keeps its locks, so the builder must not take a
+  lock that a caller of `get()` can hold while it calls `get()`; the two threads would wait for each other (a wait
+  that would close a cycle of builders' waits raises `SHARED-INIT-ERROR` instead, but locks of the module's own are
+  not seen).
 
 ### Destructors of Builtin Classes in the Uncontrolled-API Domain
 
@@ -525,7 +554,7 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 | What the handler gets | Where it comes from |
 |---|---|
 | `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v37; the options the program is declared with before that), and for a library module loaded compiled only those |
-| `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
+| `isSandboxed()` | a restricting sandbox governs the issuing code, or it runs in a restricted Program (`qore_caller_is_restricted()`; a trusted, governed, sandbox does not count, qore#7737) |
 | `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
 
 Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is

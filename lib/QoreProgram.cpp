@@ -1102,7 +1102,7 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
         // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
         // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
         // registered, so that nothing has to be undone if the lookup fails (std::bad_alloc: no Program is created)
@@ -1121,6 +1121,11 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
                 xsink->raiseException("SANDBOX-ISOLATION-ERROR", "code that the sandboxes of more than one isolation "
                     "domain govern together cannot create a Program");
             }
+        }
+        // restricted code that no restricting sandbox governs that the Program could keep (a Program restricted by its
+        // flag alone): the Program is restricted for good (qore#7737)
+        if ((!creator_sm || creator_sm->trustsUncontrolledApis()) && qore_caller_has_restricted_code()) {
+            restricted_marked.store(true, std::memory_order_release);
         }
         if (creator_sm || creator_policy) {
             try {
@@ -1144,8 +1149,9 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // documents; a failure is reported in xsink, and the caller deletes the Program (issue #6786)
     copyExternalData(xsink);
     // a Program that code that is not trusted creates has no host: none of its defines was set by one (its parse
-    // option defines included); the library modules that it loads have their own platform defines
-    if (qore_caller_is_untrusted()) {
+    // option defines included); the library modules that it loads have their own platform defines; code that a
+    // trusted (governed) sandbox governs is the host (qore#7737)
+    if (qore_caller_is_restricted_or_untrusted()) {
         for (const auto& i : dmap) {
             source_defines.insert(i.first);
         }
@@ -1163,7 +1169,7 @@ void qore_program_private::markSandboxedParse() {
     // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
     // is parsed is attached when the code is committed (see getParseCreatorSandbox())
     if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
     }
 }
 
@@ -2333,6 +2339,10 @@ void qore_program_private_base::newProgram() {
     dmap["QORE_HAVE_DBI_SENSITIVE_OPTIONS"] = true;
     // DBI drivers declare a database name that can hold credentials (qore#7275)
     dmap["QORE_HAVE_DBI_SENSITIVE_DBNAME"] = true;
+    // Program::deserialize() exists (qore#7146)
+    dmap["QORE_HAS_PROGRAM_DESERIALIZE"] = true;
+    // Program::serialize() and Program::serializeToData() exist (qore#7146)
+    dmap["QORE_HAS_PROGRAM_SERIALIZE"] = true;
 
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
@@ -2341,6 +2351,11 @@ void qore_program_private_base::newProgram() {
     for (auto& i : dmap) {
         builtin_defines.insert(i.first);
     }
+
+    // the sandbox features that Qore code can test for, named as their C++ feature macros
+    dmap["QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL"] = true;
+    dmap["QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK"] = true;
+    dmap["QORE_HAVE_SANDBOX_OBJECT_TRANSFER"] = true;
 
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
     assert(ns);
@@ -3275,6 +3290,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
+                    pp.clearCommitRestrictedCaller();
                     pp.clearParseTidsIntern();
                 }
             private:
@@ -3599,8 +3615,10 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
                 const bool owns_classes = caller && frame->getCallType() == CT_BUILTIN
                     && frame->getCallName() == "Program::importClass" && (!previous || previous->getCallType() == CT_USER)
                     && qore_class_private::get(*c)->declaredBy(caller) && qore_class_private::get(*oc)->declaredBy(caller);
-                if (!owns_classes && (qore_program_code_is_untrusted(caller) || qore_caller_is_sandboxed()
-                        || qore_caller_is_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
+                // only restricted code is refused: code that a trusted (governed) sandbox governs relates classes as
+                // trusted code (qore#7737)
+                if (!owns_classes && (qore_program_code_is_restricted_or_untrusted(caller)
+                        || qore_caller_is_restricted_or_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
                     xsink->raiseException("CLASS-IMPORT-ERROR", "only the declaring Program or trusted code may "
                         "relate these classes by injection");
                     return;
@@ -5174,8 +5192,10 @@ QoreParseOptions qore_program_private_base::restrictForCreator(const QoreProgram
         creator_locked = creator->priv->po_locked;
     }
     QoreParseOptions creator_restrictions = getCreatorRestrictions(creator_po);
-    // sandboxed code cannot create a Program that is free of its restrictions
-    const bool sandboxed = qore_caller_is_sandboxed();
+    // restricted code cannot create a Program that is free of its restrictions; code that a trusted (governed)
+    // sandbox governs can, as trusted code (the Program still keeps its sandbox for its interrupts and limits, see the
+    // constructor) (qore#7737)
+    const bool sandboxed = qore_caller_is_restricted();
     // code without restrictions that is not locked has none that the Program could escape; such code creates an
     // independent Program with the options it gives, as before (QoreRepl, for example, creates one with
     // PO_ALLOW_REPARSE); a locked Program has no positive options that it cannot have, which the new Program does not

@@ -94,6 +94,11 @@ http.waitStop();
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
 
     @subsection jsonrpchandler_2_0_2 JsonRpcHandler v2.0.2
+    - the method and the log message callback of a restricted %Program get the request without its credentials,
+      with the keys that the handler adds for the dispatch of a call
+      (@ref JsonRpcHandler::JsonRpcHandler::JsonRpcHandlerContextKeys "JsonRpcHandlerContextKeys") and those that a
+      subclass names with @ref JsonRpcHandler::JsonRpcHandler::getRpcContextKeys() "getRpcContextKeys()"
+      (issues #7303, #7724)
     - the \c "name" pattern of a method is compiled when the method is added, which raises
       \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request, and one that is
       not valid failed the requests after it (issue #6603)
@@ -136,6 +141,16 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
     public {
         #! implementation of the handler
         const Version = "2.0";
+
+        #! The keys of the request context that the handler adds for the dispatch of a call, which the code of a
+        #! restricted %Program gets also when the request is filtered for it (qore#7724)
+        /** The method (\c method), the request ID (\c jsonid), the JSON-RPC version (\c jsonrpc_version), and the
+            context marker (\c cmark) and function (\c function) of the method; see getRpcContextKeys() for keys that a
+            subclass adds
+
+            @since JsonRpcHandler 2.0.2
+        */
+        const JsonRpcHandlerContextKeys = ("cmark", "function", "jsonid", "jsonrpc_version", "method");
 
         #! internal methods of the handler (introspection)
         const InternalMethods = (
@@ -448,6 +463,76 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         }
     }
 
+    #! Returns the request context for the given code: without the credentials of the request for code of a
+    #! restricted %Program (qore#7303)
+    /** The code of a method or of the log message callback that a handler of trusted code calls with the request
+        context gets it filtered (see @ref HttpServer::AbstractHttpRequestHandler::filtersRequestsFor() "the request
+        filter of the handler") when it is of a %Program that a sandbox that does not trust its code governs
+        (@ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()",
+        failing closed)
+    */
+    private hash<auto> getContextForCode(code c, hash<auto> cx) {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isCodeFromRestrictedProgram(c);
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return cx;
+        }
+        return getFilteredContext(cx);
+    }
+
+    #! Returns the names of more keys of the request context that the code of a restricted %Program gets when the
+    #! request is filtered for it (qore#7724)
+    /** The code of a method or of the log message callback that is of a restricted %Program gets the request without
+        its credentials (see getContextForCode()): the keys of the request that the filter gives, the keys of
+        @ref JsonRpcHandlerContextKeys, and the keys that this method returns.  A subclass that adds keys to the
+        request context for its methods (in its handleRequest() before it calls the handleRequest() method of this
+        class, or in preprocessRequest()) returns their names here.  The keys must hold plain data and no credentials:
+        the code of a restricted %Program gets them.  A name of a key of the request that the filter gives
+        (@ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys") is not copied from
+        the raw request context, and the server's objects
+        (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "AbstractStreamRequest::ServerContextKeys") and
+        values that are objects or hold one at any depth are not given in any case.
+
+        The default implementation returns no names.
+
+        @return the names of more keys of the request context that the code of a restricted %Program gets
+
+        @par Example:
+        @code{.py}
+private *list<string> getRpcContextKeys() {
+    return ("api_version", "api_extensions");
+}
+        @endcode
+
+        @since JsonRpcHandler 2.0.2
+    */
+    private *list<string> getRpcContextKeys() {
+    }
+
+    #! Returns the request context without its credentials, with the handler's own keys
+    private:internal hash<auto> getFilteredContext(hash<auto> cx) {
+        hash<auto> rcx = filterRequestForHandler(cx, cx.hdr ?? {}).cx;
+        # the handler's own keys for the dispatch of the call
+        foreach string key in (JsonRpcHandlerContextKeys) {
+            if (cx.hasKey(key)) {
+                rcx{key} = cx{key};
+            }
+        }
+        # the keys that a subclass adds: plain data only, never the request keys or the server's objects
+        foreach string key in (getRpcContextKeys()) {
+            if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ContextKeys)
+                    && !inlist(key, AbstractStreamRequest::ServerContextKeys)
+                    && !AbstractStreamRequest::holdsObject(cx{key})) {
+                rcx{key} = cx{key};
+            }
+        }
+        return rcx;
+    }
+
     private hash<HttpResponseInfo> callMethod(hash<auto> cx0, auto params) {
         # to ensure that cx remains "hash<auto>"
         hash<auto> cx += cx0;
@@ -475,7 +560,9 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         cx.cmark = found.cmark;
         cx.function = found.function;
 
-        *string msg = exists getLogMessage ? call_function(getLogMessage, cx, found - "name_re", \params) : NOTHING;
+        *string msg = exists getLogMessage
+            ? call_function(getLogMessage, getContextForCode(getLogMessage, cx), found - "name_re", \params)
+            : NOTHING;
         if (exists msg)
             log(cx, msg);
 
@@ -483,8 +570,12 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
 
         *softlist<auto> args;
         if (found.include_context) {
-            # add the context hash as the first argument
-            args = (cx,) + params;
+            # add the context hash as the first argument; the code of a restricted Program gets it without the
+            # credentials of the request (qore#7303)
+            # a method that is not code (an internal method, which takes no context) gets it filtered as well
+            args = (found.function.typeCode() == NT_STRING
+                ? getFilteredContext(cx)
+                : getContextForCode(found.function, cx),) + params;
         } else {
             args = params;
         }

@@ -1161,6 +1161,12 @@ active and stays).  So no deferral reaches sandboxed code:
   the host's cancellation, interrupt or limit like any other sandboxed code.  Refusing it would break
   such code without protecting anything that the neutralisation does not.
 
+"Sandboxed" here means restricted (qore#7737): the Program test is `qore_program_is_restricted()`, and a
+class's destructor is judged by `qore_class_private::isRestrictedDestructorCode()`.  The code of a Program that a
+trusted (governed) sandbox governs (one that allows uncontrolled APIs, which a host attaches to trusted code for its
+interrupts and limits) keeps the deferral of trusted code, so that its cleanup invariants hold; an interrupt or a
+limit of its sandbox is delivered at its next cancellation point after the deferral.
+
 Trusted code keeps every deferral.  `AbstractWatchDataProviderBase::notifyObservers()` still runs the
 observers in `defer_thread_cancel()`, so a trusted observer's notification completes when polling is
 stopped (`WatchDataProviderShutdown.qtest`, "notification not interrupted by cancellation"); a sandboxed

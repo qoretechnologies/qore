@@ -187,6 +187,18 @@
           "source": "One or more `Bcc:` addresses for the email",
           "message": "Uno o più indirizzi `Bcc:` per l'email"
         },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "Alternativa in testo normale"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "Rappresentazione in testo normale del corpo HTML"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "Con un corpo stringa text/html non vuoto, invia prima questo testo normale non vuoto in un messaggio multipart/alternative. Omettilo per inviare solo il corpo."
+        },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "Codifica corpo"
@@ -226,6 +238,14 @@
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
           "source": "The MIME type of the message body",
           "message": "Il tipo MIME del corpo del messaggio"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Testo normale"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "Testo HTML"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
           "source": "CC",

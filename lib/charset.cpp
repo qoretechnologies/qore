@@ -824,7 +824,8 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     }
     // a name that is not known: code that is not trusted registers only a bounded set of names, as data that is not
     // trusted does (qore_find_untrusted_encoding()), and the encodings that iconv converts by their plain names
-    if (qore_caller_is_untrusted()) {
+    // code that a trusted (governed) sandbox governs is trusted (qore#7737)
+    if (qore_caller_is_restricted_or_untrusted()) {
         if (const QoreEncoding* rv = qore_find_untrusted_encoding(name)) {
             return rv;
         }

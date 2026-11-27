@@ -725,6 +725,17 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!        of an earlier format refuses the kind
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
+//! v54 (the AOT3 batch; the reader refuses v53 and older images, also those that a qcc executable embeds):
+//!      - IR can encode HandlerAbandonReturn (opcode 447, Base group, no result; QoreIROpcode::HandlerAbandonReturn),
+//!        only on the paths of a debugger's requests in the debug IR of the body of a handler compiled as a function
+//!        of its own: the release of what the handler run has handed over to the function that it runs for when a
+//!        break or a continue request abandons the return of the block that it leaves, where the block decides it, as
+//!        the AST interpreter's block releases the return (qore#7625); no operand: the function takes the request;
+//!        one operand, the request (an integer constant): the run decides; the maximum opcode in the AOT header is 447
+//! The shared format version for the changes of the AOT3 batch (see v54 above).
+constexpr uint16_t QORE_AOT_BATCH_AOT3_VERSION = 54;
+//! First format version whose debug IR can have HandlerAbandonReturn (see v54 above, qore#7625).
+constexpr uint16_t QORE_AOT_HANDLER_ABANDON_RETURN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -765,8 +776,11 @@ constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AO
 //! METHODS record (qore#7169), the callee of each background helper (qore#7087), the exit restorations of its IR
 //! functions (qore#7379), the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022) and class signature
 //! hashes with the namespace path of their class (qore#7397), the declared types of their members, static variables
-//! and method return types (qore#7457) and their methods in the order of their names (qore#7458)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+//! and method return types (qore#7457) and their methods in the order of their names (qore#7458).
+//! Old compiled artifacts must be rebuilt (see v54 above): the reader refuses v53 and older images the same way; the
+//! debug IR of a v54 image has the release of what a handler compiled as a function of its own handed over on the
+//! paths of a debugger's requests that abandon its return (qore#7625)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -915,12 +929,14 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 static_assert(QORE_AOT_EXIT_RESTORE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
-    "the format changes of the second AOT-identity batch share one format version (v53), which the reader requires");
+    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
+    "the format changes of the second AOT-identity batch share one format version (v53)");
+static_assert(QORE_AOT_HANDLER_ABANDON_RETURN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT3_VERSION,
+    "the format changes of the AOT3 batch share one format version (v54), which the reader requires");
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -4518,6 +4534,22 @@ public:
     //! Resolve bases, types, and hashdecl defaults after constant-shell registration.
     bool resolveTypes(std::string& error);
 
+    //! Refuses a class injected in place of a class that reaches it through the classes that it references (the
+    //! classes that they are injected in place of, their base classes and import sources; qore#7664)
+    /** Run once base classes are attached, whatever the result of the type resolution, which can fail after
+        attaching some of them: after resolveTypes() for a single blob (resolveTypesAndMembers()); after the type
+        resolution of all the sessions of a batch, as a class of one blob can reach the class that it is injected in
+        place of through the classes of another one; and, when a source is parsed with the blobs preloaded, again
+        after the source is committed, which attaches the base classes of the source's classes that an AOT class can
+        inherit (QoreAOTBinaryMultiDeserializer::finalizeAfterSourceParse()).  Every class that leads back to itself
+        releases its reference before the image is refused, so that none of them keeps its classes alive.  The walk
+        follows the base classes attached so far: a class whose own base classes are not attached yet, because the
+        type resolution failed before reaching it, is still found as the end of a cycle that the base classes attached
+        before it form.  A compile that ends between the source-parse resolution and finalizeAfterSourceParse() checks
+        them with QoreAOTBinaryMultiDeserializer::checkSourceParseClassInjections().
+    */
+    bool checkClassInjectionCycles(std::string& error);
+
     //! Register constant names before resolving types and hashdecl defaults.
     /** Run across all sessions before resolveTypes(): defaults can refer to
         constants in sibling fragments. Constant types and values are resolved
@@ -5018,6 +5050,40 @@ public:
     }
 
 private:
+    //! Checks the class injections of every session once the base classes of all of them are attached (qore#7664)
+    /** A class of one blob can reach the class that it is injected in place of through the classes of another one,
+        whose base classes are attached by its own session's type resolution.  Every session is checked, also after
+        one has failed, so that each releases the references of its refused classes.
+    */
+    bool checkClassInjectionCycles(std::string& error) {
+        bool ok = true;
+        for (auto& sess : sessions) {
+            std::string sess_error;
+            if (!sess->checkClassInjectionCycles(sess_error) && ok) {
+                error = std::move(sess_error);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
+    //! Runs the type resolution of every session, then checks the class injections of all of them (qore#7664)
+    /** The injections are checked also if the type resolution of a session failed, as the base classes that it and
+        the sessions before it attached can close a cycle; the error of the type resolution is reported then.
+    */
+    template <typename F>
+    bool resolveTypesAndCheckInjections(F& runSessionPhase, std::string& error) {
+        bool ok = runSessionPhase("AOT type resolution",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.resolveTypes(error);
+            });
+        std::string injection_error;
+        if (!checkClassInjectionCycles(ok ? error : injection_error)) {
+            ok = false;
+        }
+        return ok;
+    }
+
     bool addBlobIntern(QoreAOTBinaryReader&& reader, std::string& error, uint64_t t0) {
         // Apply this blob's %prepend-module-path / %append-module-path lists to
         // the target Program BEFORE shell deserialization runs — so any module
@@ -5132,10 +5198,7 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.registerConstantShellsPhase(error);
                     })) return false;
-            if (!runSessionPhase("AOT type resolution",
-                    [&error](QoreAOTBinaryDeserializer& sess) {
-                        return sess.resolveTypes(error);
-                    })) return false;
+            if (!resolveTypesAndCheckInjections(runSessionPhase, error)) return false;
             if (!runSessionPhase("AOT namespace constant resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveNamespaceConstantsPhase(error);
@@ -5333,10 +5396,7 @@ public:
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT type resolution",
-                [&error](QoreAOTBinaryDeserializer& sess) {
-                    return sess.resolveTypes(error);
-                })) {
+        if (!resolveTypesAndCheckInjections(runSessionPhase, error)) {
             return false;
         }
         if (!runSessionPhase("AOT namespace constant resolution",
@@ -5441,8 +5501,23 @@ public:
             });
     }
 
+    //! Checks the class injections of every session after resolveForSourceParse() (qore#7664)
+    /** For a compile that ends before finalizeAfterSourceParse(), which checks them itself: the commit of the source
+        can have attached base classes that close a cycle.  A class whose reference was already released is skipped.
+    */
+    bool checkSourceParseClassInjections(std::string& error) {
+        return checkClassInjectionCycles(error);
+    }
+
     //! Finish AOT-only post-commit work after source parseCommit().
     bool finalizeAfterSourceParse(std::string& error) {
+        // an AOT class can have a base class of the source parsed, whose own base classes are attached when the
+        // source is committed: the class injections are checked again once it is, before anything else, so that
+        // nothing that can fail before skips the check (qore#7664)
+        if (!checkClassInjectionCycles(error)) {
+            return false;
+        }
+
         auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
             size_t i = 0;
             for (auto& sess : sessions) {

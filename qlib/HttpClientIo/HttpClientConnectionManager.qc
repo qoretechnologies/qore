@@ -197,6 +197,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         */
         const AsyncQueueSafetyGraceMs = 30000;
 
+        #! a wait of a happy-eyeballs race that takes this much longer than asked is logged (qore#7694)
+        const HappyEyeballsLateWaitMs = 2000;
+
         #! Race-phase recheck interval for async happy eyeballs
         /** Once H2 has joined the race, this bounds how long the nonblocking
             caller can wait before re-reading both candidates' authoritative
@@ -468,6 +471,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             for its borrower
         */
         *HttpClientCreatorProof lent_proof;
+
+        #! The ID of the Program whose code owns the manager, if known (qore#7544)
+        /** The creator of the manager, or the code that took the proof that it was created with: the code of that
+            Program takes the sockets of the manager's connections, which other code that the manager is lent to and
+            that a sandbox restricts does not (see @ref HttpClientIo::HttpClientConnection::getSocket()
+            "HttpClientConnection::getSocket()")
+        */
+        *int owner_pgm_id;
     }
 
     #! Creates a new connection manager with the given options
@@ -478,6 +489,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         HttpClientConnectionManager::checkCreator(opts);
+        owner_pgm_id = SandboxManager::getCallerProgramId();
         initManager(opts);
     }
 
@@ -518,6 +530,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # the manager is the creator's: its creator is not bound, but a restricted borrower of the client is
             lent_proof = proof;
         }
+        # the manager is the code's that took the proof: the client's creator (qore#7544)
+        owner_pgm_id = proof.getOwnerProgramId();
         initManager(opts);
     }
 
@@ -713,7 +727,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "locations";
             }
         }
-        return new HttpClientCallerExemption();
+        # the connection is the owner's of the manager (qore#7544)
+        return new HttpClientCallerExemption(owner_pgm_id);
     }
 
     #! Destructor - closes all connections
@@ -826,18 +841,52 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         session-scoped (not per request) so it works no matter which thread issues a request.  This
         manager is per remote connection, so the pin only affects that connection's own traffic.
 
+        The pin carries every request of the manager, so code that a sandbox restricts and whose %Program does not
+        own the manager cannot set it, and a connection that restricted code took out of the pool is never pinned
+        (qore#7544).
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager, or
+        restricted code took the connection
+
         @since HttpClientIo 1.0
     */
     pinConnection(HttpClientConnection conn) {
+        checkPinCaller();
+        if (conn.isTaken()) {
+            throw "PERMISSION-DENIED", "a connection that code that a sandbox restricts took out of the pool cannot be "
+                "pinned";
+        }
         AutoLock al(pin_lock);
         pinned_conn = conn;
     }
 
     #! Clears the persistent-session connection pin
-    /** @since HttpClientIo 1.0 */
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7544)
+
+        @since HttpClientIo 1.0
+    */
     unpinConnection() {
+        checkPinCaller();
         AutoLock al(pin_lock);
         remove pinned_conn;
+    }
+
+    #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
+    private:internal checkPinCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot change the pinned connection of a "
+                "connection manager that it does not own";
+        }
     }
 
     #! Returns the pinned persistent-session connection, or @ref nothing
@@ -3391,7 +3440,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getPollOperation().getSocket().setUserTimeout(opts.tcp_user_timeout);
+                (HttpClientIoSocketAccess::socketOf(conn.getPollOperation())).setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -3773,6 +3822,10 @@ printf("%d connection(s) migrated\n", migrated);
 
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H3 + H2 race for %s", key);
 
+        # the timings of the waits of the race, for the argument of a timeout (qore#7694)
+        int race_start_us = clock_get_monotonic_us();
+        list<hash<auto>> stages = ();
+
         hash<auto> h3_url_info = prepareH3Probe(url_info, key);
 
         # Create H3 connection (non-blocking — constructor sets up QUIC poll op)
@@ -3836,8 +3889,10 @@ printf("%d connection(s) migrated\n", migrated);
             if (deadline) {
                 stagger_ms = min(stagger_ms, ceilMs(deadline - clock_get_monotonic_us()));
             }
-            controller.waitForNotifier(h3_notifier, stagger_ms,
+            int wait_start_us = clock_get_monotonic_us();
+            bool signaled = controller.waitForNotifier(h3_notifier, stagger_ms,
                 opts.connect_timeout + AsyncQueueSafetyGraceMs);
+            heNoteWait(\stages, key, "h3-stagger", stagger_ms, wait_start_us, race_start_us, signaled);
             h3_notifier.acknowledge();
             *HttpClientConnection w = hePickReady(h3conn);
             if (w) {
@@ -3867,7 +3922,7 @@ printf("%d connection(s) migrated\n", migrated);
         int race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
         bool expired = False;
         *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier, \race_deadline,
-            deadline, \expired, claim);
+            deadline, \expired, claim, \stages, race_start_us);
         if (w) {
             return w;
         }
@@ -3880,11 +3935,44 @@ printf("%d connection(s) migrated\n", migrated);
             handed_over = True;
             heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline, claim);
             log(LoggerLevel::DEBUG, "happy eyeballs: handed the race for %s over to the background", key);
-            throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race");
+            throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race", {
+                "stages": stages,
+                "total_ms": (clock_get_monotonic_us() - race_start_us) / 1000,
+            });
         }
 
         # No candidate connected: collect error details, clean up all of them, and throw
         heThrowConnectError(h3conn, h2conn, h1conn, key);
+    }
+
+    #! Internal: records the timing of one wait of a happy-eyeballs race, and logs a wait that overran (qore#7694)
+    /** The controller delivers the timeout of the wait's operation at once; a wait that took much longer than asked
+        means that the controller delivered it late, or that its safety bound ended the wait (the controller logs that
+        too).  The timings are in the argument of the timeout that the race may end with.
+
+        @param stages the timings of the waits of the race
+        @param key the host:port pool key
+        @param stage the name of the wait
+        @param asked_ms the time the wait was asked to take in milliseconds
+        @param wait_start_us the start of the wait on the monotonic clock in microseconds
+        @param race_start_us the start of the race on the monotonic clock in microseconds
+        @param signaled the result of the wait (@ref True if the notifier was signaled in time)
+    */
+    private heNoteWait(reference<list<hash<auto>>> stages, string key, string stage, int asked_ms, int wait_start_us,
+            int race_start_us, bool signaled) {
+        int now = clock_get_monotonic_us();
+        int took_ms = (now - wait_start_us) / 1000;
+        stages += {
+            "stage": stage,
+            "start_ms": (wait_start_us - race_start_us) / 1000,
+            "asked_ms": asked_ms,
+            "took_ms": took_ms,
+            "signaled": signaled,
+        };
+        if (took_ms > asked_ms + HappyEyeballsLateWaitMs) {
+            log(LoggerLevel::WARN, "happy eyeballs: the %s wait for %s took %d ms, %d ms were asked: the I/O "
+                "controller delivered the timeout late", stage, key, took_ms, asked_ms);
+        }
     }
 
     #! Internal: runs a synchronous happy-eyeballs race until a candidate wins, all of them settle, or a bound passes
@@ -3900,13 +3988,16 @@ printf("%d connection(s) migrated\n", migrated);
         @param expired set to @ref True if \a deadline passed before an outcome
         @param claim the creation claim of the race, which identifies it in @ref bg_races if it goes on in the
         background
+        @param stages the timings of the waits of the race, to which each wait is added (see heNoteWait())
+        @param race_start_us the start of the race on the monotonic clock in microseconds
 
         @return the committed winner, or @ref nothing if no candidate won (all of them settled, the race's bound
         passed, the caller's deadline passed, or the manager is shutting down)
     */
     private *HttpClientConnection heRunRace(hash<auto> url_info, string key, Http3ClientConnection h3conn,
             Http2ClientConnection h2conn, reference<*Http1ClientConnection> h1conn, EventNotifier race_notifier,
-            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim) {
+            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim,
+            reference<list<hash<auto>>> stages, int race_start_us) {
         while (True) {
             *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
             if (w) {
@@ -3949,7 +4040,9 @@ printf("%d connection(s) migrated\n", migrated);
             # Socket::poll syscall).  See the h3_notifier path above; the
             # explicit Queue-level safety bound is the same belt-and-suspenders
             # guard against a lost controller completion.
-            controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
+            int wait_start_us = clock_get_monotonic_us();
+            bool signaled = controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
+            heNoteWait(\stages, key, "race", remaining, wait_start_us, race_start_us, signaled);
             race_notifier.acknowledge();
         }
     }
@@ -4852,7 +4945,7 @@ printf("%d connection(s) migrated\n", migrated);
         HttpClientPollOperation op = conn.getPollOperation();
         # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
         # a caller takes over with it after a 101 response (qore#7500)
-        Socket sock = conn.getPollOperation().getSocket();
+        Socket sock = HttpClientIoSocketAccess::socketOf(conn.getPollOperation());
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -5575,7 +5668,7 @@ printf("%d connection(s) migrated\n", migrated);
         }
         # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
         # protocol is switched over from its stream (qore#7500)
-        if (!conn.getPollOperation().getSocket().isOpen()) {
+        if (!HttpClientIoSocketAccess::socketOf(conn.getPollOperation()).isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;
@@ -5671,9 +5764,9 @@ printf("%d connection(s) migrated\n", migrated);
 
         @throw HTTPCLIENT-TIMEOUT always
     */
-    private static throwAcquireTimeout(string key, string reason) {
+    private static throwAcquireTimeout(string key, string reason, *hash<auto> arg) {
         throw "HTTPCLIENT-TIMEOUT", sprintf("no connection to %s was acquired within the request's time: %s", key,
-            reason);
+            reason), arg;
     }
 
     #! The number of closed connections kept for getStats() (see recordClose())
@@ -5867,7 +5960,13 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Sets the logger for this connection manager
+    /** @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the logger
+        of a connection manager that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+    */
     setLogger(*LoggerInterface logger) {
+        # the manager can be shared by the clients of several owners (issue 6842)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         self.logger = logger;
     }
 

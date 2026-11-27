@@ -305,6 +305,32 @@ DLLLOCAL QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& 
 DLLLOCAL QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink);
 
+//! Adds \a right in place to a list or hash that only an "auto" local holds (qore#7421)
+/** As qore_compound_assign_value() with LVCompoundOp::AddAssign, except that the container is changed itself, as the
+    AST interpreter changes the lvalue: \a container is the local's value, borrowed by the load that only the operation
+    uses (qore_ir_mark_auto_string_appends()), and its single reference is the local's.  The store of the result back
+    to the local follows.
+
+    @param container a list or hash held as an ordinary pointer, whose only reference is the local's
+    @param right the operand
+    @param xsink for exceptions raised by the operation
+
+    @return \a container with a new reference, or no value if an exception was raised (the container keeps what the
+    operation added before it)
+*/
+DLLLOCAL QoreValue qore_add_assign_unique_container(QoreValue container, const QoreValue& right,
+        ExceptionSink* xsink);
+
+//! Adds \a right to the lvalue that the reference \a ref, held by an "auto" local, designates (qore#7421)
+/** The lvalue is changed under its lock once, as the AST interpreter changes it, so that a list or a hash that it
+    holds is changed in place; the store paired with the operation stores nothing then
+    (QoreIRInstruction::paired_auto_add_store).
+
+    @return the value of the lvalue after the operation, holding a reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_add_assign_through_reference(const ReferenceNode& ref, const QoreValue& right,
+        ExceptionSink* xsink);
+
 //! Execute a previously resolved direct-call descriptor when its cached IR is
 //! a supported native scalar leaf. Returns false without side effects when the
 //! body or runtime argument types require normal call semantics.

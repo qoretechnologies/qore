@@ -12,13 +12,13 @@ public namespace AwsTextractDataProvider {
     Native operations and wire conversion use the pinned official AWS JSON 1.1 model.
 */
 public class AwsTextractSchema {
-    private {
-        #! The ID of the lazy value of the imported types (qore#6843); see getType()
-        static int types_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \AwsTextractSchema::buildTypesValue());
+    private:internal {
         #! The ID of the lazy value of the compatible document action types (qore#6843); see getLegacyRequestType()
         static int legacy_types_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
             \AwsTextractSchema::buildLegacyTypesValue());
+        #! The ID of the lazy value of the imported types (qore#6843); see getType()
+        static int types_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \AwsTextractSchema::buildTypesValue());
     }
 
     public {

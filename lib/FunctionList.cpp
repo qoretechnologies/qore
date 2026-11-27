@@ -66,6 +66,10 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             }
             f->ref();
             FunctionEntry* fe = new FunctionEntry(i->first, f, ns);
+            fe->setSharedUnowned(i->second->isSharedUnowned() || !i->second->getNamespace()->ownedByProgram());
+            // both entries share the function (qore#7588)
+            fe->setSharesFunction();
+            i->second->setSharesFunction();
             fe->setDeclSeq(i->second->getDeclSeq());
             insert(std::make_pair(fe->getName(), fe));
             continue;
@@ -85,7 +89,13 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             && (f->getModuleName() || !get_module_context_name())) {
             QoreFunction* func = i->second->getFunction();
             func->ref();
-            fe = new FunctionEntry(i->first, func, ns);;
+            fe = new FunctionEntry(i->first, func, ns);
+            // a variant that a binary module adds to the function at run time is added to the namespaces that share
+            // it (qore#7540)
+            fe->setSharedUnowned(i->second->isSharedUnowned() || !i->second->getNamespace()->ownedByProgram());
+            // both entries share the function (qore#7588)
+            fe->setSharesFunction();
+            i->second->setSharesFunction();
         } else {
             // otherwise we have to make a new function object with only the desired visible variants
             // pass po.getLo() until QoreFunction is migrated to QoreParseOptions

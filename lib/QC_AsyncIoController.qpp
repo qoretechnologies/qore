@@ -512,16 +512,25 @@ AsyncIoController::copy() {
     the initialization of library code (also in a callback); an operation submitted by a callback of an operation
     belongs to that operation's application, unless the callback is the sandboxed code of an application Program,
     whose operations belong to its own application; the trusted code of another Program that runs in such a callback
-    runs for the operation's application as well.  The code of a trusted Program that runs for sandboxed code in
-    another way (a method of an object of the trusted Program that sandboxed code calls, or a thread or a task that
-    trusted code in a callback starts) runs for the trusted Program's application, as when the trusted Program calls
-    it itself: trusted code that serves sandboxed code checks the keys and owners that it is given (see
-    <a href="https://github.com/qoretechnologies/qore/issues/7148">issue #7148</a>).  Code that is sandboxed, or acts
+    runs for the operation's application as well.  The trusted code of the host that runs for sandboxed code in
+    another way (a function, call reference or method of the host that sandboxed code calls, or a thread or a
+    @ref Qore::Thread::ThreadPool "ThreadPool" task that such code or the code of such a callback starts) runs for the
+    sandboxed code's application, restricted to it (sandboxed code that it calls in a callback acts for its own), and
+    in a thread that module code starts for no application, unless it elevates explicitly with a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or with
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" and then acts for its
+    own %Program's application (see @ref sandbox_host_code_application).  Code that is sandboxed, or acts
     for sandboxed code, does not replace the operation of another application with \a replace_existing, nor, if it
     runs for no known application, any operation other than its own operation object: on the I/O thread of the key, the submission raises
     \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a canceled result whose
     \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
     (\c ASYNC-IO-ERROR).  The operation with the key is not affected
+
+    A key is unique in the controller, not only on an I/O thread: operations are routed to an I/O thread by their
+    socket, and a submission whose key is in use by an operation on the I/O thread of another socket is refused, or
+    replaces that operation, exactly as a submission whose key is in use on its own thread is (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7624">issue #7624</a>).  The replaced operation is
+    canceled on its thread, so its canceled result can follow the return of the replacing call
 
     @since %Qore 3.0
 */
@@ -805,14 +814,16 @@ static bool AsyncIoController::running() {
 //! Returns the number of cached operations on the global singleton
 /** @return the number of active operations in the cache, which counts the operations of every caller in the process
 
-    @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which counts
-    the operations of every caller in the process (see @ref sandbox_process_wide_registries)
+    @throw PERMISSION-DENIED code that is restricted or acts for restricted code cannot call this method, which counts
+    the operations of every caller in the process (see @ref sandbox_process_wide_registries and
+    @ref sandbox_manager_classes)
 
     @since %Qore 3.0
 */
 static int AsyncIoController::getCacheSize() {
-    // the operations of every caller of the process-wide controller: not disclosed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the operations of every caller of the process-wide controller: not disclosed to restricted code (issue #6836,
+    // qore#7737)
+    if (qore_caller_is_restricted()) {
         xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
             "number of operations of the global async I/O controller, which counts the operations of every caller in "
             "the process");
@@ -887,7 +898,7 @@ static bool AsyncIoController::getAutostop() {
       behind, which is a bug in %Qore); called from an I/O thread, only that thread is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
-    @note code that is sandboxed or acts for sandboxed code gets the settings of the controller only (\c running,
+    @note code that is restricted or acts for restricted code gets the settings of the controller only (\c running,
     \c autostop, \c shutting_down and \c io_threads): the other keys give the operations of every caller in the
     process (see @ref getCacheSize())
 
@@ -902,8 +913,8 @@ static hash<auto> AsyncIoController::getInfo() {
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     // the keys and counts of the operations of every caller of the process-wide controller are not disclosed to
-    // sandboxed code (qore#7010), as getCacheSize(); its settings are
-    if (qore_caller_is_sandboxed()) {
+    // restricted code (qore#7010, qore#7737), as getCacheSize(); its settings are
+    if (qore_caller_is_restricted()) {
         return ctrl->getSettingsInfo(xsink);
     }
     return ctrl->getInfo(xsink);
@@ -916,15 +927,17 @@ static hash<auto> AsyncIoController::getInfo() {
     @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
     logger, which is process-wide (see @ref sandbox_process_wide_registries)
 
-    @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
-    unless the logger has been replaced since; a server that sandboxed code creates does not
+    @note an \c HttpServer created with a logger sets it here while it runs and gives back the logger it replaced
+    when it stops, unless the logger has been replaced since; a server created without a logger or by sandboxed code
+    does not
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
     callback, for example) is logged by this logger at the error level, or else by the async I/O logger
-    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
-    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
-    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, or when the logger cannot take the
+    message because its Program is being destroyed, it is reported as an unhandled exception on the standard error
+    output, so that the failure of a callback is never silent.  An exception raised by a task (@ref submitTask()) is
+    always reported as an unhandled exception on the standard error output
 
     @see getLogger()
 
@@ -947,8 +960,8 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
 
 //! Returns the logger of the global singleton
 /** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set or if the caller is code
-    that is sandboxed or acts for sandboxed code, which does not get the logger of the process (see
-    @ref sandbox_process_wide_registries)
+    that is restricted or acts for restricted code, which does not get the logger of the process (see
+    @ref sandbox_process_wide_registries and @ref sandbox_manager_classes)
 
     @par Example:
     @code{.py}
@@ -960,8 +973,8 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     @since %Qore 3.0
 */
 static *LoggerInterfaceBase AsyncIoController::getLogger() {
-    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the logger is process-wide and configured by the host: not handed to restricted code (issue #6836, qore#7737)
+    if (qore_caller_is_restricted()) {
         return QoreValue();
     }
     QoreObject* obj;

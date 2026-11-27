@@ -312,6 +312,23 @@ Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(r
     val.v.setPtr(ref, ro);
 }
 
+void qore_delete_type_decl_refs(QoreTypeDeclRefs* refs) {
+    delete refs;
+}
+
+void Var::refTypeDecls() {
+    assert(!type_decl_refs);
+    if (!typeInfo) {
+        return;
+    }
+    // released with the partial references if an allocation fails
+    std::unique_ptr<QoreTypeDeclRefs> refs(new QoreTypeDeclRefs);
+    refs->addMortal(typeInfo);
+    if (!refs->empty()) {
+        type_decl_refs = refs.release();
+    }
+}
+
 const Var* Var::parseGetVar() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
     return is_ref ? val.v.getPtr()->parseGetVar() : this;
@@ -3548,8 +3565,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         clearPathContainers();
         clearPtr();
 
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
+        // a member of self (see qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -3685,8 +3703,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         clearPtr();
 
         const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
+        // a member of self, also of a reference's: the object and class of the code that created it (see
+        // qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -4007,8 +4027,9 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             clearPathContainers();
             clearPtr();
-            // getLValue() sets the object context: the object is on the path once (qore#7348)
-            if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
+            // a member of self (see qore_object_private::getSelfLValue())
+            // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+            if (qore_object_private::getSelfLValue(*obj, root.name.c_str(), *this,
                     runtime_get_class(), for_remove, vl.xsink)) {
                 // object already cleared above
                 return -1;
@@ -6269,7 +6290,7 @@ void LValueRemoveHelper::deleteLValue() {
                 if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                     continue;
                 }
-                o->doDelete(xsink);
+                qore_operator_delete_object(o, xsink);
             }
         }
 
@@ -6288,7 +6309,7 @@ void LValueRemoveHelper::deleteLValue() {
         return;
     }
 
-    o->doDelete(xsink);
+    qore_operator_delete_object(o, xsink);
 }
 
 void LValueRemoveHelper::doRemove(QoreValue lvalue) {
@@ -7302,6 +7323,12 @@ QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref,
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
+    // a pre-instantiated local that the compiled tiers cleared at the end of its block (del()) stays on the stack
+    // marked as cleared, which reflection leaves out; the variable is assigned or changed again only when its block
+    // runs again, so it is active again, as the AST interpreter's instantiation of the variable makes it (qore#7640)
+    if (block_cleared) {
+        const_cast<LocalVarValue*>(this)->block_cleared = false;
+    }
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,
     //    val.getTypeName(), val.getType(), val.assigned, QoreTypeInfo::getName(typeInfo),
     //    QoreTypeInfo::getName(refTypeInfo), refTypeInfo);

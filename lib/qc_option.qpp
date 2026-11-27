@@ -432,4 +432,19 @@ const HAVE_ALLOC_TRACKING = bool(QORE_CONST_HAVE_ALLOC_TRACKING);
 /** @since %Qore 3.0
 */
 const HAVE_SANDBOX_CALL_GOVERNED = bool(true);
+
+//! Indicates that the HttpServer module isolates the listeners that serve their own handlers (qore#7690)
+/** When this option is available:
+    - a listener with @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "own_handlers_only" never serves the
+      handlers, the dynamic handlers, the default handler or the fast routes of the server: with no handler of its
+      own, a request gets a 503 response
+    - @ref HttpServer::HttpServer::stopListenerID() "stopping a listener" refuses new connections (and new sessions on
+      its paired QUIC listener) before it waits for the requests in progress, and the stop ends also when an error is
+      raised during it
+    - the QUIC listener paired with a TLS listener gets its \c handler_info (with the \c "-h3" handler names) and its
+      \c own_handlers_only setting
+
+    @since %Qore 3.0
+*/
+const HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION = bool(true);
 ///@}

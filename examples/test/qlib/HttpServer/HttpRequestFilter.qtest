@@ -28,8 +28,8 @@
     SandboxManager::isFromRestrictedProgram()), with the platform's authorization context that the authenticator
     declares, and trusted code when its handler asks for it (setFilterRequests()); trusted code, also trusted code
     that a sandbox governs only to interrupt or limit it, gets the request as before otherwise; the stream request
-    itself serves the request with the raw request, which the request handler (or the HTTP server) hands to the first
-    stream request created for the request only, and which no other code reaches
+    itself serves the request with the raw request, which the dispatch of the request (the HTTP server's, or a host's
+    with claimHostDispatch(), as this test dispatches its direct calls) makes current, and which no other code reaches
 */
 
 %modern
@@ -45,6 +45,18 @@
 %requires reflection
 
 %exec-class HttpRequestFilterTest
+
+#! a socket of the request alone, as a host that dispatches requests itself gives a handler
+class ViewSocket inherits Socket {
+}
+
+#! a socket of a class of its own that is not a socket of a request alone: connected, it is the connection's
+class OtherSocket inherits Socket {
+}
+
+#! a socket of a class of its own that the test registers as a socket of a request alone, as a host does
+class RegisteredViewSocket inherits Socket {
+}
 
 #! a listener for the direct calls of a handler
 class TestListener inherits HttpListenerInterface {
@@ -138,8 +150,7 @@ class TestStreamHandler inherits AbstractHttpRequestHandler {
                 throw "TEST-ERROR", "the factory fails";
             case "nested":
                 # a handler dispatches another request on the thread before it creates its own stream request
-                inner.handleRequest(listener, new Socket(), HttpRequestFilterTest::rawContext(2), HttpRequestFilterTest::header(),
-                    NOTHING);
+                HttpRequestFilterTest::serve(inner, HttpRequestFilterTest::rawContext(2), HttpRequestFilterTest::header());
                 break;
         }
         RecordRequest a(listener, self, s, cx, hdr, body);
@@ -191,8 +202,63 @@ class TrustedAuth inherits AbstractAuthenticator {
     }
 }
 
+#! an authenticator that accepts every request and counts the reads of its platform context keys
+class CountingAuth inherits AbstractAuthenticator {
+    public {
+        int calls = 0;
+    }
+
+    bool requiresAuthentication() {
+        return False;
+    }
+
+    *list<string> getPlatformContextKeys() {
+        ++calls;
+        return ("group_namespace",);
+    }
+}
+
+#! a handler that answers a request without a stream request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "plain"};
+    }
+}
+
+#! a trusted router that opts in to Authorization for its own endpoint and hands each request to another handler
+class RouterHandler inherits AbstractHttpRequestHandler {
+    private {
+        AbstractHttpRequestHandler target;
+    }
+
+    constructor(AbstractHttpRequestHandler target) : AbstractHttpRequestHandler(NOTHING, True) {
+        self.target = target;
+        # it runs the code of the handler that it hands the requests to
+        setHostsCode();
+        setRequestCredentialHeaders("Authorization");
+    }
+
+    private list<object> hostedObjects() {
+        return (target,);
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return target.handleRequest(listener, s, cx, hdr, body);
+    }
+}
+
 #! a trusted stream handler whose factory calls the given code, and that can run the code of another object
 class DelegatingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the socket that the factory got
+        *Socket last_socket;
+    }
+
     private {
         code make;
         *object hosted;
@@ -215,6 +281,7 @@ class DelegatingHandler inherits AbstractHttpRequestHandler {
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
+        last_socket = s;
         return make(listener, self, s, cx, hdr, body);
     }
 }
@@ -266,7 +333,11 @@ class TenantRequest inherits AbstractStreamRequest {
             'code': 200,
             'hdr': {'Content-Type': 'application/json'},
             'body': make_json({'size': size, 'trailers': trailers, 'seen': seen,
-                'ctx': getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx'}}),
+                'ctx': getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx'},
+                # what the accessors give: the header fields and the paths
+                'headers': getHeaders(){'x-api-key', 'authorization', 'cookie', 'path'},
+                'paths': getContext(){'orig_path', 'raw_path', 'url'},
+                'headers-raw': getContext().'header-info'.'headers-raw'}),
         };
     }
 }
@@ -296,6 +367,58 @@ class TenantStreamHandler inherits AbstractHttpRequestHandler {
                 cx.hasKey($1)) ?? (),
         };
         return new TenantRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a stream request handler of the tenant whose factory gives its stream request a credential header field of its own
+class TenantAddingStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new TenantRequest(listener, self, s, cx, hdr + {'authorization': 'Bearer tenant-own'}, body);
+    }
+}
+
+#! a handler of the tenant that tries to create a stream request for its request after its handleRequest() returned
+class TenantLateStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the result of each attempt made after handleRequest() returned
+        list<string> late = ();
+    }
+
+    private:internal {
+        *HttpListenerInterface listener;
+        *Socket s;
+        *hash<auto> cx;
+        *hash<auto> hdr;
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        self.listener = listener;
+        self.s = s;
+        self.cx = cx;
+        self.hdr = hdr;
+        return <HttpResponseInfo>{'code': 200, 'body': 'served'};
+    }
+
+    bool isPersistent() {
+        if (cx) {
+            try {
+                # the request filtered, as the code of a stream request of restricted code is given it
+                hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(cx, hdr);
+                new TenantRequest(listener, self, s, f.cx, f.hdr, NOTHING);
+                late += 'OK';
+            } catch (hash<ExceptionInfo> ex) {
+                late += ex.err + ': ' + ex.desc;
+            }
+        }
+        return False;
     }
 }
 
@@ -384,6 +507,27 @@ AbstractStreamRequest sub make_request(HttpListenerInterface listener, AbstractH
     return new TenantRequest(listener, handler, s, cx, hdr, body);
 }
 
+AbstractStreamRequest sub make_request_adding(HttpListenerInterface listener, AbstractHttpRequestHandler handler,
+        Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+    return new TenantRequest(listener, handler, s, cx, hdr + {'authorization': 'Bearer tenant-own'}, body);
+}
+
+AbstractHttpRequestHandler sub adding_stream_handler() {
+    return new TenantAddingStreamHandler();
+}
+
+string sub register_view(object cap) {
+    return attempt(sub () { cap.registerStreamViewClass('OtherSocket'); });
+}
+
+AbstractHttpRequestHandler sub late_stream_handler() {
+    return new TenantLateStreamHandler();
+}
+
+list<string> sub late_results(AbstractHttpRequestHandler h) {
+    return cast<TenantLateStreamHandler>(h).late;
+}
+
 bool sub restricted() {
     return SandboxManager::isRestricted();
 }
@@ -404,8 +548,8 @@ bool sub child_restricted() {
     return SandboxManager::isFromRestrictedProgram(c.callFunction('mk'));
 }
 
-string sub push_raw() {
-    return attempt(sub () { AbstractHttpRequestHandler::pushRawRequest({'id': 1}, {'method': 'GET'}); });
+string sub claim_host() {
+    return attempt(sub () { AbstractHttpRequestHandler::claimHostDispatch(); });
 }
 
 AbstractRestClass sub rest_class() {
@@ -426,18 +570,21 @@ string sub stop_filter(AbstractHttpRequestHandler h) {
 
 string sub reflect() {
     return attempt(sub () {
-        Reflection::GlobalVar v = Reflection::GlobalVar::forName('http_request_handoffs');
+        Reflection::GlobalVar v = Reflection::GlobalVar::forName('http_raw_requests');
         v.getValue();
     });
 }
 
 int sub reflect_all() {
-    return Reflection::GlobalVar::findAllRegex('handoff').size();
+    return Reflection::GlobalVar::findAllRegex('raw_request').size();
 }
 ";
 
 class HttpRequestFilterTest inherits QUnit::Test {
     private {
+        #! the dispatch capability of the test; see host()
+        static *object dispatch_capability;
+
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
 BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
@@ -495,9 +642,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the code that serves a stream request gets the filtered request", \factoryTest());
         addTestCase("trusted code gets the request as before", \trustedTest());
         addTestCase("a stream handler of a sandboxed Program", \tenantStreamTest());
-        addTestCase("the raw request is handed to the first stream request only", \handoffTest());
+        addTestCase("every stream request of the dispatch gets the raw request", \scopeTest());
         addTestCase("nested dispatches and a failing factory", \nestingTest());
-        addTestCase("a stream request created otherwise uses what it is given", \fallbackTest());
+        addTestCase("a stream request created outside a dispatch is refused", \outsideTest());
         addTestCase("the REST classes get the filtered request", \restTest());
         addTestCase("HTTP/1.1: a chunked body with a credential trailer", \chunkedTest());
         addTestCase("HTTP/2: concurrent streams each get their own raw request", \http2Test());
@@ -508,7 +655,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("a trusted handler and a stream request of restricted code", \restrictedRequestTest());
         addTestCase("a request target with user information", \userInfoTest());
         addTestCase("the trailer fields for trusted code", \trustedTrailerTest());
-        addTestCase("the HTTP server hands the raw request", \pushTest());
+        addTestCase("a host's dispatch gives the handler the filtered request", \hostDispatchTest());
+        addTestCase("the socket of the connection for trusted code only", \placeholderTest());
+        addTestCase("the accessors of a stream request give the request as the platform filtered it",
+            \platformFilterAccessorsTest());
+        addTestCase("the credential trailer fields come from the trusted options of the handler",
+            \trailerKeepTest());
+        addTestCase("the raw request is current only while the handler serves the request", \lateScopeTest());
+        addTestCase("a socket of a request alone is of an allowed class, or not open", \viewClassTest());
+        addTestCase("the dispatch of a request that is not filtered reads no option of the filter",
+            \lazyTrailerKeepTest());
+        addTestCase("a router that opts in hands its request to a handler that does not", \nestedTrailerKeepTest());
         set_return_value(main());
     }
 
@@ -631,7 +788,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         p.parse(Tenant, "tenant");
         object h = p.callFunction("stream_handler");
         # the tenant's handler gets no socket of a connection; a handler socket view
-        hash<auto> rv = h.handleRequest(new TestListener(), new Socket(), rawContext(1, "hello"), header(), NOTHING);
+        hash<auto> rv = serve(h, rawContext(1, "hello"), header());
         hash<auto> result = parse_json(rv.body);
         assertEq({"authorization": False, "cookie": False, "server objects": ()}, h.factory_seen);
         assertEq({"authorization": False, "cookie": False, "server objects": ()}, result.seen);
@@ -659,44 +816,42 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertFalse(result.seen.authorization);
     }
 
-    handoffTest() {
-        # the first stream request created gets the raw request; a second one created for the same request does not
+    scopeTest() {
+        # every stream request created in the dispatch of the request serves it with the raw request, which is current
+        # while the request is dispatched (see HttpServerDispatchCapability.qtest for the scope itself: its nesting,
+        # its order and its depth)
         TestStreamHandler h();
         call(h, "second", 1);
-        # the second one, which the factory returned, falls back to the filtered request: it gets no body
-        assertEq(0, h.made[1].size, "the second one");
-        # the first one, which the factory did not return, took the raw request
-        h.made[0].handleRequest();
-        assertEq(5, h.made[0].size, "the first one");
-        h = new TestStreamHandler();
-        call(h, "first", 1);
-        assertEq(5, h.made[0].size);
+        assertEq(5, h.made[1].size);
+        assertFalse(h.made[1].seen.authorization);
     }
 
     nestingTest() {
-        # a nested dispatch on the thread has its own handoff; the outer one is handed after it ends
+        # a nested dispatch on the thread has its own raw request; the outer one is current again after it ends
         TestStreamHandler outer();
         outer.mode = "nested";
         outer.inner = new TestStreamHandler();
         # the inner request's body reader is in its own context
         call(outer, "nested", 1);
         assertEq(5, outer.made[0].size, "the outer stream request");
-        # a factory that fails ends its handoff: a stream request created afterwards on the thread for the same
-        # request does not get it
+        # a factory that fails ends the dispatch: a stream request created afterwards on the thread for the same
+        # request is refused
         TestStreamHandler h();
         assertThrows("TEST-ERROR", \HttpRequestFilterTest::call(), (h, "throw", 7));
-        RecordRequest r(new TestListener(), h, new Socket(), rawContext(7) - "header-info", header(), NOTHING);
-        r.handleRequest();
-        assertEq(0, r.size);
+        assertThrows("HTTP-SERVER-ERROR", "dispatch of the HTTP server", sub () {
+            RecordRequest r(new TestListener(), h, new Socket(), rawContext(7, "hello"), header(), NOTHING);
+        });
     }
 
-    fallbackTest() {
-        # created without a dispatch, the stream request uses its arguments as they are
+    outsideTest() {
+        # created without a dispatch, a stream request is refused, also with the raw request as its arguments
         TestStreamHandler h();
-        RecordRequest r(new TestListener(), h, new Socket(), rawContext(3, "hello"), header(), NOTHING);
-        r.handleRequest();
-        assertEq(5, r.size);
-        assertTrue(r.seen.authorization);
+        assertThrows("HTTP-SERVER-ERROR", "dispatch of the HTTP server", sub () {
+            RecordRequest r(new TestListener(), h, new Socket(), rawContext(3, "hello"), header(), NOTHING);
+        });
+        # as is a direct call of a stream handler
+        assertThrows("HTTP-SERVER-ERROR", "dispatch of the HTTP server", \h.handleRequest(),
+            (new TestListener(), new Socket(), rawContext(3, "hello"), header(), NOTHING));
     }
 
     #! sends a GET request for the REST class to the handler directly
@@ -821,17 +976,19 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("REQUEST-ERROR", p.callFunction("set_credentials", new TestStreamHandler()));
         assertEq("REST-ERROR", p.callFunction("set_keys", new RestHandler()));
         assertEq("REQUEST-ERROR", p.callFunction("stop_filter", new TestStreamHandler()));
-        # the handoff cannot be named or reached
+        # the raw requests cannot be named or reached
         assertEq("UNKNOWN-GLOBAL-VAR", p.callFunction("reflect"));
+        # nor can it claim a dispatch capability
+        assertEq("HTTP-SERVER-ERROR", p.callFunction("claim_host"));
         assertEq(0, p.callFunction("reflect_all"));
         foreach hash<auto> i in ({
-            "http_request_handoffs": "auto sub f() { return http_request_handoffs; }",
-            "HttpRequestHandoff": "auto sub f() { return HttpRequestHandoff::take({}, {}); }",
+            "http_raw_requests": "auto sub f() { return http_raw_requests; }",
+            "HttpRawRequestScope": "auto sub f() { return HttpRawRequestScope::current(); }",
             "raw_cx": "class T inherits HttpServer::AbstractStreamRequest { auto f() { return raw_cx; } }",
             # the filter of a handler cannot be replaced
             "withholdRequestCredentials": "class T inherits HttpServer::AbstractHttpRequestHandler { "
-                "private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr, "
-                "reference<*object> h) { return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",
+                "private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr) { "
+                "return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",
             "filterRequestForHandler": "class T inherits HttpServer::AbstractHttpRequestHandler { "
                 "private hash<HttpFilteredRequestInfo> filterRequestForHandler(hash<auto> cx, hash<auto> hdr) { "
                 "return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",
@@ -896,7 +1053,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         Program p = tenantProgram(permissiveManager());
         # its stream handler gets the request as the server made it
         object h = p.callFunction("stream_handler");
-        hash<auto> rv = h.handleRequest(new TestListener(), new Socket(), rawContext(1, "hello"), header(), NOTHING);
+        hash<auto> rv = serve(h, rawContext(1, "hello"), header());
         hash<auto> result = parse_json(rv.body);
         assertTrue(h.factory_seen.authorization);
         assertTrue(h.factory_seen.cookie);
@@ -910,11 +1067,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         rv = restCall(rest, "tenant");
         assertTrue(rv.authorization);
         assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(rv."server objects"));
-        # the setters and the server's push accept it
+        # the setters accept it
         assertEq("OK", p.callFunction("set_credentials", new TestStreamHandler()));
         assertEq("OK", p.callFunction("stop_filter", new TestStreamHandler()));
         assertEq("OK", p.callFunction("set_keys", new RestHandler()));
-        assertEq("OK", p.callFunction("push_raw"));
+        # a dispatch capability is for code that no sandbox governs
+        assertEq("HTTP-SERVER-ERROR", p.callFunction("claim_host"));
     }
 
     platformKeysTest() {
@@ -925,15 +1083,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         # the keys that a trusted authenticator declares are kept for restricted code; never the server's objects
         # or a value that holds an object at any depth
         object h = t.callFunction("stream_handler_auth", new TrustedAuth());
-        hash<auto> srv = h.handleRequest(new TestListener(), new Socket(), pcx, header(), NOTHING);
+        hash<auto> srv = serve(h, pcx, header());
         assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "plain": {"a": (1, "two")},
             "socket": False, "obj": False, "nested": False, "listed": False}, h.platform_seen);
         # the stream request of restricted code gets them from getContext() as well
         assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2}, parse_json(srv.body).ctx);
         # an authenticator of restricted code declares none
         h = t.callFunction("stream_handler_auth", t.callFunction("tenant_auth"));
-        h.handleRequest(new TestListener(), new Socket(), rawContext(1, "hello") + {"group_namespace": 42,
-            "sandboxed": True, "user_flags": 2}, header(), NOTHING);
+        serve(h, rawContext(1, "hello") + {"group_namespace": 42, "sandboxed": True, "user_flags": 2}, header());
         assertEq({"socket": False, "obj": False, "nested": False, "listed": False}, h.platform_seen);
         # the REST class of restricted code of a trusted REST handler with the trusted authenticator
         RestHandler rest(new TrustedAuth());
@@ -961,18 +1118,16 @@ l50Xb2GWQesIt9k5jF5IOw==
         # a trusted handler that does not filter its requests cannot give a stream request of restricted code the raw
         # request: it is refused
         DelegatingHandler d(make);
-        assertThrows("HTTP-SERVER-ERROR", "restricted Program", \d.handleRequest(), (new TestListener(), new Socket(),
-            rawContext(1, "hello"), header(), NOTHING));
+        assertThrows("HTTP-SERVER-ERROR", "restricted Program", \HttpRequestFilterTest::serve(), (d,
+            rawContext(1, "hello"), header()));
         # with the filter, the stream request serves the request with the raw request
         d = new DelegatingHandler(make, NOTHING, True);
-        hash<auto> result = parse_json(d.handleRequest(new TestListener(), new Socket(), rawContext(2, "hello"),
-            header(), NOTHING).body);
+        hash<auto> result = parse_json(serve(d, rawContext(2, "hello"), header()).body);
         assertEq(5, result.size);
         assertEq({"authorization": False, "cookie": False, "server objects": ()}, result.seen);
         # a trusted handler that runs the code of an object of restricted code (setHostsCode()) filters the request
         d = new DelegatingHandler(make, t.callFunction("rest_class"));
-        result = parse_json(d.handleRequest(new TestListener(), new Socket(), rawContext(3, "hello"), header(),
-            NOTHING).body);
+        result = parse_json(serve(d, rawContext(3, "hello"), header()).body);
         assertEq(5, result.size);
         assertEq({"authorization": False, "cookie": False, "server objects": ()}, result.seen);
     }
@@ -985,7 +1140,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> cx = rawContext(21, "hello") + {"orig_path": "http://user:pass@x/stream?token=secret"};
         hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(cx, header());
         assertNeq(cx.orig_path, f.cx.orig_path);
-        h.handleRequest(new TestListener(), new Socket(), cx, header(), NOTHING);
+        serve(h, cx, header());
         assertEq(5, h.made[0].size);
     }
 
@@ -1002,10 +1157,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             "Transfer-Encoding: chunked\r\nTrailer: Authorization, X-Checksum\r\n\r\n"
             "5\r\nhello\r\n0\r\nAuthorization: Bearer trailer\r\nX-Checksum: 1\r\n\r\n");
         hash<auto> resp = s.readHTTPHeader(10s);
-        assertEq(200, resp.status_code);
         string body = resp."transfer-encoding" == "chunked"
             ? s.readHTTPChunkedBody(10s).body
             : s.recv(resp."content-length".toInt(), 10s);
+        assertEq(200, resp.status_code, body);
         return parse_json(body);
     }
 
@@ -1024,22 +1179,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertFalse(rv.seen.cookie);
     }
 
-    pushTest() {
+    hostDispatchTest() {
+        # a host's dispatch makes the raw request current and gives the handler the request filtered: the stream request
+        # serves the request with the raw request
         hash<auto> raw = rawContext(31, "hello");
         hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, header());
-        # given the filtered request without the server's push, the handler hands that on: no body reader
         TestStreamHandler h();
         h.mode = "one";
-        h.handleRequest(new TestListener(), new Socket(), f.cx, f.hdr, NOTHING);
-        assertEq(0, h.made[0].size);
-        # with the server's push, the handler keeps the raw request for the stream request
-        h = new TestStreamHandler();
-        h.mode = "one";
-        {
-            object scope = AbstractHttpRequestHandler::pushRawRequest(raw, header());
-            on_exit delete scope;
-            h.handleRequest(new TestListener(), new Socket(), f.cx, f.hdr, NOTHING);
-        }
+        serve(h, raw, header(), f.cx, f.hdr);
         assertEq(5, h.made[0].size);
         assertFalse(h.made[0].seen.authorization);
         assertEq((), h.made[0].seen."server objects");
@@ -1048,25 +1195,229 @@ l50Xb2GWQesIt9k5jF5IOw==
         AbstractHttpRequestHandler th = t.callFunction("stream_handler");
         raw = rawContext(32, "hello");
         f = AbstractStreamRequest::filterRequest(raw, header());
-        hash<auto> rv;
-        {
-            object scope = AbstractHttpRequestHandler::pushRawRequest(raw, header());
-            on_exit delete scope;
-            rv = th.handleRequest(new TestListener(), new Socket(), f.cx, f.hdr, NOTHING);
-        }
+        hash<auto> rv = serve(th, raw, header(), f.cx, f.hdr);
         assertEq(5, parse_json(rv.body).size);
-        # a push for another request is ignored: the handler hands the request that it got
+        # the raw request of another request is not this request's: refused
         h = new TestStreamHandler();
         h.mode = "one";
-        {
-            object scope = AbstractHttpRequestHandler::pushRawRequest(rawContext(33, "hellohello"), header());
-            on_exit delete scope;
-            f = AbstractStreamRequest::filterRequest(rawContext(34, "hello"), header());
-            h.handleRequest(new TestListener(), new Socket(), f.cx, f.hdr, NOTHING);
+        f = AbstractStreamRequest::filterRequest(rawContext(34, "hello"), header());
+        assertThrows("HTTP-SERVER-ERROR", "dispatch of the HTTP server", \HttpRequestFilterTest::serve(),
+            (h, rawContext(33, "hellohello"), header(), f.cx, f.hdr));
+        # restricted code cannot claim a dispatch capability
+        assertEq("HTTP-SERVER-ERROR", t.callFunction("claim_host"));
+    }
+
+    placeholderTest() {
+        Program t = tenantProgram();
+        code make = AbstractStreamRequest sub (HttpListenerInterface listener, AbstractHttpRequestHandler handler,
+                Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+            return new RecordRequest(listener, handler, s, cx, hdr, body);
+        };
+        # a trusted handler gets the socket of the connection of an HTTP/1.x request as before
+        Socket given();
+        DelegatingHandler d(make);
+        serve(d, rawContext(41, "hello"), header(), NOTHING, NOTHING, given);
+        assertTrue(d.last_socket == given, "a trusted handler");
+        # one that runs the code of restricted code gives the code that serves the request a placeholder; the stream
+        # request serves the request with the socket of the connection
+        d = new DelegatingHandler(make, t.callFunction("rest_class"));
+        serve(d, rawContext(42, "hello"), header(), NOTHING, NOTHING, given);
+        assertFalse(d.last_socket == given, "a handler that runs restricted code");
+        assertEq("Socket", d.last_socket.className());
+        assertFalse(d.last_socket.isOpen());
+    }
+
+    platformFilterAccessorsTest() {
+        # a platform that hands a request to the code of a tenant filters it with the options of its own
+        # authentication: the header field and the query parameter that it read are withheld; the tenant's stream
+        # request, which serves the request with the raw request, gives neither from getHeaders() and getContext()
+        hash<auto> raw = rawContext(51, "hello") + {"orig_path": "/stream?token=secret"};
+        raw."header-info"."headers-raw"."X-Api-Key" = "platform-key";
+        hash<auto> hdr = header() + {"x-api-key": "platform-key"};
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, hdr, <HttpRequestFilterOptions>{
+            "platform_headers": "X-Api-Key",
+            "platform_query_params": "token",
+        });
+        assertFalse(f.hdr.hasKey("x-api-key"));
+        Program t = tenantProgram();
+        hash<auto> result = parse_json(serve(t.callFunction("stream_handler"), raw, hdr, f.cx, f.hdr).body);
+        assertEq(5, result.size, "the stream request read its body through the raw request");
+        assertFalse(result.headers.hasKey("x-api-key"), "the platform's header field");
+        assertFalse(result.headers.hasKey("authorization"));
+        assertFalse(result.headers.hasKey("cookie"));
+        assertEq("stream", result.headers.path, "the path without the platform's query parameter");
+        assertFalse(result."headers-raw".hasKey("X-Api-Key"), "the raw header fields of the context");
+        assertFalse(result.paths.orig_path =~ /token/, "the request target of the context");
+        assertFalse(result.paths.raw_path =~ /token/, "the raw path of the context");
+        assertFalse(result.paths.url.path =~ /token/, "the URL of the context");
+        assertFalse(result.paths.url.hasKey("password"), "the user information of the URL");
+        # a trusted handler that does not filter its requests: its stream request gives the request without the
+        # credentials of the request, as before
+        TestStreamHandler h(False);
+        serve(h, rawContext(52, "hello"), header());
+        assertEq(5, h.made[0].size);
+        hash<auto> th = h.made[0].getHeaders();
+        assertFalse(th.hasKey("authorization"));
+        assertFalse(th.hasKey("cookie"));
+        assertEq("stream?token=secret", th.path, "no platform options: the query parameters are kept");
+    }
+
+    trailerKeepTest() {
+        # a handler of restricted code whose factory gives its stream request an Authorization header field of its
+        # own: the client's Authorization trailer field is not given to it, as no trusted option keeps it
+        Program t = tenantProgram();
+        hash<auto> rv = chunkedCall(t.callFunction("adding_stream_handler"));
+        assertEq(5, rv.size);
+        assertEq({"x-checksum": "1"}, rv.trailers, "the tenant's own header field keeps no trailer field");
+        # nor through a trusted handler that hosts restricted code (setHostsCode()), which gets a socket of the request
+        # and filters its requests for a stream request of restricted code
+        code make = AbstractStreamRequest sub (HttpListenerInterface listener, AbstractHttpRequestHandler handler,
+                Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+            return t.callFunction("make_request_adding", listener, handler, s, cx, hdr, body);
+        };
+        rv = chunkedCall(new DelegatingHandler(make, t.callFunction("rest_class")));
+        assertEq({"x-checksum": "1"}, rv.trailers, "a trusted handler with no option for the field");
+        # a trusted handler that opts in to Authorization: its stream request of restricted code gets it
+        DelegatingHandler d(make, t.callFunction("rest_class"));
+        d.setRequestCredentialHeaders("Authorization");
+        rv = chunkedCall(d);
+        assertEq("Bearer trailer", rv.trailers.authorization, "the trusted handler opted in");
+        # a host's dispatch without the handler gives none; with the handler, those that its options keep (the body
+        # is given to the handler, with the trailer fields of the raw request)
+        TestStreamHandler h();
+        h.setRequestCredentialHeaders("Authorization");
+        hash<auto> raw = rawContext(61);
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, header());
+        serve(h, raw, header(), f.cx, f.hdr, NOTHING, False, binary("hello"));
+        assertEq(5, h.made[0].size);
+        assertEq({"x-checksum": "1"}, h.made[0].trailers, "a host's dispatch without the handler");
+        h.made = ();
+        raw = rawContext(62);
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        serve(h, raw, header(), f.cx, f.hdr, NOTHING, True, binary("hello"));
+        assertEq({"authorization": "Bearer trailer", "x-checksum": "1"}, h.made[0].trailers,
+            "a host's dispatch with the handler");
+    }
+
+    lateScopeTest() {
+        # the server calls the handler's isPersistent() after its handleRequest() returned: a stream request that the
+        # handler's code creates there for its request gets no raw request, which is no longer current
+        Program t = tenantProgram();
+        AbstractHttpRequestHandler h = t.callFunction("late_stream_handler");
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit server.stop();
+        server.setHandler("late", "^late", NOTHING, h);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send("GET /late HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code);
+        list<string> late = t.callFunction("late_results", h);
+        assertTrue(late.size() > 0, "isPersistent() was called after handleRequest()");
+        assertEq((), (select late,
+            !$1.equalPartial("HTTP-SERVER-ERROR: a stream request can only be served in the dispatch")),
+            "no raw request is current after handleRequest()");
+    }
+
+    viewClassTest() {
+        # a connected socket of a class that is neither a handler socket of the server nor registered by the host is
+        # the socket of a connection: a handler of restricted code is refused it, whatever its class name
+        Socket l();
+        l.bindINET("127.0.0.1", 0);
+        l.listen();
+        on_exit l.close();
+        int port = l.getSocketInfo().port;
+        OtherSocket other();
+        other.connect("127.0.0.1:" + port);
+        on_exit other.close();
+        Socket a1 = l.accept();
+        on_exit a1.close();
+        Program t = tenantProgram();
+        hash<auto> raw = rawContext(71, "hello");
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, header());
+        assertThrows("HTTP-HANDLER-ERROR", "socket of the connection", \HttpRequestFilterTest::serve(),
+            (t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, other));
+        # a socket that is not open is no connection's: a placeholder or a socket of the host's own
+        raw = rawContext(72, "hello");
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        hash<auto> rv = serve(t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, new OtherSocket());
+        assertEq(5, parse_json(rv.body).size);
+        # a class that the host registers with its capability is a socket of a request alone
+        RegisteredViewSocket view();
+        view.connect("127.0.0.1:" + port);
+        on_exit view.close();
+        Socket a2 = l.accept();
+        on_exit a2.close();
+        host().registerStreamViewClass("RegisteredViewSocket");
+        raw = rawContext(73, "hello");
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        rv = serve(t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, view);
+        assertEq(5, parse_json(rv.body).size);
+        # restricted code that a host capability reaches by mistake registers no class
+        assertEq("HTTP-SERVER-ERROR", t.callFunction("register_view", host()));
+    }
+
+    lazyTrailerKeepTest() {
+        # the credential trailer fields of a filtered stream request are read when one is created: the server's
+        # dispatch of a request that no stream request serves does not read the options of the filter, such as the
+        # authenticator's platform context keys
+        CountingAuth auth();
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit server.stop();
+        PlainHandler h(auth);
+        h.setRequestCredentialHeaders("Authorization");
+        server.setHandler("plain", "^plain", NOTHING, h);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        for (int i = 0; i < 3; ++i) {
+            Socket s();
+            s.connect("127.0.0.1:" + port);
+            on_exit s.close();
+            s.send("GET /plain HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+            assertEq(200, s.readHTTPHeader(10s).status_code);
         }
-        assertEq(0, h.made[0].size);
-        # restricted code cannot push a raw request
-        assertEq("HTTP-SERVER-ERROR", t.callFunction("push_raw"));
+        assertEq(0, auth.calls);
+    }
+
+    nestedTrailerKeepTest() {
+        # the server dispatches a trusted router that opts in to Authorization, which hands the request to a handler
+        # of restricted code that does not: the code of that handler gets the request filtered with its handler's
+        # options, without the Authorization header field, and its stream request does not get the client's
+        # Authorization trailer field either
+        Program t = tenantProgram();
+        hash<auto> rv = chunkedCall(new RouterHandler(t.callFunction("stream_handler")));
+        assertEq(5, rv.size);
+        assertFalse(rv.seen.authorization, "the header field");
+        assertEq({"x-checksum": "1"}, rv.trailers, "the trailer field");
+        # a trusted handler that opts in as well, behind the router: both keep the field
+        TestStreamHandler h();
+        h.setRequestCredentialHeaders("Authorization");
+        rv = chunkedCall(new RouterHandler(h));
+        assertTrue(rv.seen.authorization, "the header field");
+        assertEq("Bearer trailer", rv.trailers.authorization, "the trailer field");
+        # and one that does not
+        rv = chunkedCall(new RouterHandler(new TestStreamHandler()));
+        assertFalse(rv.seen.authorization, "the header field");
+        assertEq({"x-checksum": "1"}, rv.trailers, "the trailer field");
+    }
+
+    #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
+    static object host() {
+        if (!dispatch_capability) {
+            dispatch_capability = AbstractHttpRequestHandler::claimHostDispatch();
+        }
+        return dispatch_capability;
+    }
+
+    #! calls the handler directly in a dispatch of the raw request, as a host does; the handler gets the request as
+    #! given, or the raw request, and the body if given; with \a with_handler the dispatch is given the handler
+    static hash<auto> serve(AbstractHttpRequestHandler h, hash<auto> raw, hash<auto> hdr, *hash<auto> given_cx,
+            *hash<auto> given_hdr, *Socket s, bool with_handler = False, *binary body) {
+        Socket rs = s ?? new ViewSocket();
+        object scope = with_handler ? host().enter(raw, hdr, rs, h) : host().enter(raw, hdr, rs);
+        on_exit delete scope;
+        return h.handleRequest(new TestListener(), rs, given_cx ?? raw, given_hdr ?? hdr, body);
     }
 
     #! calls the handler directly with a request whose body is given through the body reader of the raw request
@@ -1075,8 +1426,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         if (h.inner) {
             h.inner.mode = "one";
         }
-        h.handleRequest(new TestListener(), new Socket(), HttpRequestFilterTest::rawContext(id, "hello"),
-            HttpRequestFilterTest::header(), NOTHING);
+        HttpRequestFilterTest::serve(h, HttpRequestFilterTest::rawContext(id, "hello"), HttpRequestFilterTest::header());
         return h.made[0];
     }
 }

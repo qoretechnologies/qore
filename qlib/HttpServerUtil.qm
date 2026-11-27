@@ -103,7 +103,7 @@ module HttpServerUtil {
     |!Key|!Type|!Description
     |\c auth|*string|the original \c Authorization header value, if any
     |\c char_encoding|string|the character encoding of the Socket object handling the request
-    |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request
+    |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request; not given to the code of a handler of restricted code
     |\c close|*bool|set to @ref True "True" if the connection should be closed after responding (as derived from request headers)
     |\c compression-levels|hash<string, int>|the compression level of each content encoding for response bodies compressed on the fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a handler that compresses its own response uses the level of the encoding it selects
     |\c debug|*bool|@ref True "True" if the debug flag is enabled on the HTTP server
@@ -114,11 +114,11 @@ module HttpServerUtil {
     |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers); its \c body_reader key is the @ref HttpServer::Http1BodyReader "Http1BodyReader" of an HTTP/1.x body with a \c Content-Length that a stream handler wants as a stream (see @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
-    |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
+    |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server; not given to the code of a handler of restricted code
     |\c masked_path|string|the URI path after URL decoding the resource path and masking sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding the resource path; the query string remains percent-encoded until parsed
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
-    |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required
+    |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required; not given to the code of a handler of restricted code
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|the response encoding chosen from any \c "Accept-Charset" in the request (see @ref Qore::get_http_accept_charset() "get_http_accept_charset()")
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
@@ -173,8 +173,20 @@ module HttpServerUtil {
     sandbox governs only to interrupt or limit it, gets the request as the server made it, unless its handler asks
     for the filter (@ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"), as a
     trusted handler that hands its requests to other code does.  The filter applies to the code that the base class
-    dispatches a stream request to and to the REST classes; a handler class of restricted code that overrides
-    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
+    dispatches a stream request to and to the REST classes.  The methods of a handler of restricted code
+    (@ref HttpServer::AbstractHttpRequestHandler::handlerCodeIsRestricted() "handlerCodeIsRestricted()") that the
+    HTTP server calls for a request (handleExpectHeader(), wantsBodyStreaming(), preprocessRequest(),
+    authenticateRequest(), canHandleInline(), handleInlineRequest() and
+    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()") get the request without its
+    credentials
+    (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()")
+    and without the objects of the server (the logger, the listener, the future of the peer information and the
+    peer's certificate); the rest of the context is the handler's: its request, its stream (\c header-info), the
+    listener's address (\c socket, \c socket-info), its session (\c sock_key) and its user thread context
+    (\c uctx).  The trusted authenticator of such a handler authenticates the raw
+    request first (@ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "authenticateRestrictedRequest()"),
+    and the handler's code gets the platform context keys that it sets, but not the other keys that it adds, such as
+    a session token; an authenticator of restricted code gets the request without its credentials.
     A stream request of a class of a restricted %Program that a trusted handler creates without filtering the request
     for it is refused (\c HTTP-SERVER-ERROR): a trusted handler that creates the stream requests of restricted code
     filters its requests (setFilterRequests() or setHostsCode()).  The refusal recognizes the request context that
@@ -216,12 +228,34 @@ module HttpServerUtil {
       which only trusted code can call: it refuses restricted callers); a credential that the platform consumed is
       never given
 
-    A request handler that dispatches requests to the code of other components withholds their credentials with
-    @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()".  The
-    stream request itself serves the request with the raw request, which it keeps in members that only its own code
-    reads: the request handler gives it to the stream request that it creates in the HTTP server's dispatch; a stream
-    request created otherwise, for example by code that calls a handler directly, serves the request with the context
-    and the header fields that it is given.  The socket of the request is given as before.
+    The trusted code of the hierarchy of a request handler gets the raw request of the request that it serves with
+    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()", and a handler that dispatches
+    requests to the code of other components withholds their credentials with
+    @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()"; both
+    are private, and getRawRequest() refuses restricted callers.  The raw request is the request being served on the
+    thread while the code that serves it runs, which only the HTTP server's own dispatch makes current, or the
+    trusted code of a host that dispatches requests to handlers itself with the capability that it claims
+    (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"): a handler that other code
+    calls directly, also with a request that the caller made, has no raw request, and its stream requests are refused
+    (\c HTTP-SERVER-ERROR).  The request context that the serving code gets has no reference to
+    it, and the concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads of their own.  At most
+    @ref HttpServer::HttpRawRequestScope::MaxDepth "8" requests can be dispatched in the dispatch of others on a
+    thread; a further one is refused with \c HTTP-SERVER-ERROR.
+
+    The socket of an HTTP/1.x request is the socket of the connection, which also carries the requests that the
+    client sends after it: when the handler serves restricted code (the code is restricted, the handler is of a
+    restricted %Program or runs the code of one), the code that serves a stream request
+    (@ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()", and the code that
+    it hands the socket to) gets a placeholder that is not connected, whose every operation fails, while the stream
+    request uses the socket of the connection, and trusted code gets it in the \c "s" key of
+    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a handler of trusted code gets
+    the socket of the connection as before.  A handler socket, a socket of the
+    request alone, is given to that code as it is: the HTTP server gives one to a handler of a restricted %Program
+    (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; see
+    @ref httpserver_handler_socket), and to every handler of an HTTP/2 or HTTP/3 request; a stream handler of a
+    restricted %Program that gets the socket of the connection refuses the request (\c HTTP-HANDLER-ERROR).  A socket
+    of the request alone is a handler socket of the HTTP server, or of a class that a host registers with its
+    dispatch capability; an open socket of any other class is the socket of a connection.
 
     See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
 */
@@ -232,24 +266,39 @@ module HttpServerUtil {
     - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses neither the hostname nor the
       addresses of the network interfaces for code restricted from external information (see
       @ref sandbox_ambient_host_data)
+    - added @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only": a
+      listener that serves only its own handlers, never those of the server (issue #7690)
+    - the methods of a handler of restricted code that the HTTP server calls for a request get the request without its
+      credentials, and the handler's trusted authenticator authenticates the raw request first
+      (@ref httpserverutil_request_credentials; issue #7303)
     - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
       @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
       members of the class when sandboxed code declares them; the context is a copy with the request metadata only
       (@ref HttpServer::AbstractStreamRequest::ContextKeys "ContextKeys",
-      @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"; issue #6843)
+      @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"), and neither gives the credentials
+      of the request (@ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders"; issue #6843)
     - the code that serves a stream request gets the request without the objects of the server and the credentials
       of the request, also in the arguments of the stream request's constructor, when the code is restricted (a
       sandbox that does not trust its code governs it; a stream request of restricted code that a trusted handler
       creates without filtering the request is refused), or when the handler asks for it with
-      @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"; a handler that authenticates its own
-      endpoint opts in to receive its \c Authorization field
+      @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"; the platform's
+      authorization context that the authenticator declares is kept
+      (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()");
+      a handler that authenticates its own endpoint opts in to receive its \c Authorization field
       (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"),
-      and a platform filters a request for the code of a tenant with
+      and the trusted code of a handler gets the raw request, which only the HTTP server's own dispatch makes
+      current, with @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a platform filters a
+      request for the code of a tenant with
       @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" (see
       @ref httpserverutil_request_credentials; issue #6843)
-    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" preserves the user name and optional
-      password from the bind address (issue #7595)
+    - the code that serves a stream request of a handler that serves restricted code gets a placeholder that is not
+      connected in place of the socket of an HTTP/1.x request (the connection's), which the stream request uses:
+      trusted handler code that used the socket
+      in @ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()" gets it from
+      @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a handler that gets a socket of
+      its own request (see @ref httpserver_handler_socket) gives it to that code (see
+      @ref httpserverutil_request_credentials; issue #6843)
     - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
       the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
       connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
@@ -478,6 +527,81 @@ module HttpServerUtil {
     - implemented support for custom timeout values in stream handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
 */
+
+#! The requests that the server authenticated with the trusted authenticator of their handler (qore#7303)
+/** Not exported: only this module's code can create one, and it never leaves the method that creates it (see
+    @ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "AbstractHttpRequestHandler::authenticateRestrictedRequest()").
+    It marks the request of a handler on its thread, by the ID of the request, while the handler's own
+    authenticateRequest() runs; the marks of a thread are a stack, so a request dispatched while another is
+    authenticated on the thread does not take its mark
+*/
+class HttpPlatformAuthentication {
+    private:internal {
+        #! the token of this mark
+        object token = new Mutex();
+
+        #! the key of this mark's thread
+        string tid = string(gettid());
+
+        #! the marks, by thread: the token, the handler and the ID of the request
+        static hash<string, list<hash<auto>>> marks = {};
+
+        #! the lock of \c marks
+        static Mutex lock();
+    }
+
+    #! Marks the request of the handler on this thread
+    constructor(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        push marks{tid}, {"token": token, "handler": handler.uniqueHash(), "id": cx.id};
+    }
+
+    #! Removes the mark
+    destructor() {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{tid};
+        for (int i = l.size() - 1; i >= 0; --i) {
+            if (l[i].token === token) {
+                splice l, i, 1;
+                break;
+            }
+        }
+        if (l) {
+            marks{tid} = l;
+        } else {
+            remove marks{tid};
+        }
+    }
+
+    #! Returns @ref True if the innermost mark of this thread is that of the request of the handler
+    static bool active(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{string(gettid())};
+        if (!l) {
+            return False;
+        }
+        hash<auto> top = l.last();
+        return top.handler == handler.uniqueHash() && top.id == cx.id;
+    }
+
+    #! Returns the raw value with the changes that a handler made to its copy without the credentials of the request
+    /** A key whose value the handler did not change keeps its raw value, a key that it changed or added gets its
+        value, a key that it removed is removed, and a key that its copy did not have (a credential that was withheld)
+        keeps its raw value
+    */
+    static hash<auto> merge(hash<auto> raw, hash<auto> filtered, hash<auto> changed) {
+        hash<auto> rv = {};
+        foreach string key in (keys changed) {
+            rv{key} = (filtered.hasKey(key) && changed{key} === filtered{key}) ? raw{key} : changed{key};
+        }
+        foreach string key in (keys raw) {
+            if (!filtered.hasKey(key)) {
+                rv{key} = raw{key};
+            }
+        }
+        return rv;
+    }
+}
 
 #! the main namespace for the HttpServer and HttpServerUtil modules
 /** To use this module, use \c "%requires HttpServerUtil" in your code.
@@ -1103,6 +1227,20 @@ public hashdecl HttpListenerOptionInfo {
     #! handler info
     *hash<string, hash<HttpHandlerConfigInfo>> handler_info;
 
+    #! the listener serves only its own handlers (qore#7690)
+    /** When set, a request that the listener receives is served only by the handlers of the listener (\c handler_info
+        and those added with @ref HttpServer::HttpServer::addHandlerToListenerID() "HttpServer::addHandlerToListenerID()");
+        never by the handlers, the dynamic handlers, the default handler or the fast routes of the server: while the
+        listener has no handler
+        (before its first handler is added), a request gets a 503 response; a listener whose last handler is removed
+        with @ref HttpServer::HttpServer::removeHandlerFromListenerID() "HttpServer::removeHandlerFromListenerID()" is
+        stopped.  The QUIC listener that is paired with a TLS listener gets the same setting.  Set it for a listener
+        that is opened for the handlers of one client, such as a service or a tenant of an application.
+
+        @since HttpServerUtil 1.6
+    */
+    bool own_handlers_only = False;
+
     #! logger interface
     *LoggerInterface logger;
 
@@ -1220,9 +1358,14 @@ public hashdecl HttpListenerOptionInfo {
         client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
-        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
-        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
-        pumps directly holds no thread and is not checked.
+        body that the HTTP/1 controller sends.  On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends, for each stream, and to a buffered body or one that the I/O thread sends from an
+        @ref Qore::InputStream "InputStream", for the connection, until the client has taken it (on HTTP/2, until its
+        \c END_STREAM frame has been written to the socket; on HTTP/3, until the client has acknowledged all its data):
+        the bodies that wait for a client whose streams together take less are ended, and so is one that the client
+        takes nothing of for @ref HttpServer::StreamStallTimeout "StreamStallTimeout".  The rest of an HTTP/2 body
+        whose \c END_STREAM frame has been sent is in the connection's send buffer, which a reset does not free: a
+        client that does not take it has its connection closed.
 
         @since HttpServerUtil 1.6
     */
@@ -2312,7 +2455,9 @@ public class AbstractAuthenticator {
     #! Returns the keys of the request context that this authenticator sets: the platform's authorization context
     /** The code that a restricted sandbox governs gets the request context filtered (see
         @ref httpserverutil_request_credentials); the keys returned here, which the authentication of the platform
-        sets (for example the identity and the authorization flags of the user), are kept for it.  The server's
+        sets (for example the identity and the authorization flags of the user), are kept for it.  An authenticator
+        must not put credentials into the keys of the request context that the filter gives (such as \c user or
+        \c hdr) either, as they are given to such code as well.  The server's
         objects, the keys of the request that the filter handles itself and values that are objects or hold one are
         not kept in any case.  The keys must hold plain data and no credentials (such as an authentication token):
         the code that a restricted sandbox governs gets them.  Only the keys of an authenticator of trusted code are
@@ -2834,59 +2979,258 @@ public class Http1BodyReader {
     }
 }
 
-#! The raw requests that the request handlers on the thread hand to the stream requests that they create, the
-#! innermost last (qore#6843); see HttpRequestHandoff
-thread_local *list<*hash<auto>> http_request_handoffs;
+#! The raw requests being served on the thread, the innermost last (qore#6843); see HttpRawRequestScope
+thread_local *list<hash<auto>> http_raw_requests;
 
-#! The last token of a handoff on the thread; see HttpRequestHandoff
-thread_local int http_request_handoff_seq;
+#! The last token of a raw request scope on the thread; see HttpRawRequestScope
+thread_local int http_raw_request_seq;
 
-#! Hands the raw request of a request to the stream request that a request handler creates for it (qore#6843)
-/** Not public: only the code of this module uses it.  A request handler creates it with
-    AbstractHttpRequestHandler::withholdRequestCredentials() while it dispatches a request to the code that serves
-    it, which gets the request filtered, and trusted host code that gives a handler the request filtered with
-    AbstractHttpRequestHandler::pushRawRequest(); the
-    first stream request created on the thread for the request (with its ID and method, which the filter does not
-    change) takes the raw request, which then is no longer handed to another one.  The handoffs of a thread end in
-    the reverse order of their creation; one that does not fails closed: no raw request is handed on the thread any
-    more.
+#! The state of the entry of a raw request scope in the raw requests of its thread (qore#6843)
+/** Not public: a scope that ends on another thread than the one that created it invalidates its entry, which then
+    gives no raw request (see HttpRawRequestScope::current())
 */
-class HttpRequestHandoff {
-    private:internal {
-        bool active;
-        int token;
+class HttpRawRequestState {
+    public {
+        #! False once the scope ended on another thread
+        bool valid = True;
+    }
+}
+
+#! Keeps the raw request of a request current on the thread while the code that serves it runs (qore#6843)
+/** Not public: only the code of this module creates it, for the HTTP server's own dispatch of a request
+    (HttpServerDispatchCapability), so that no other code can make a request current, such as a request that it
+    forged with the fields that the server sets (the user, the socket) to call a handler with.  The raw request is the
+    request being served on the thread until the object is destroyed, which happens on every path out of the scope
+    that holds it (a return, an exception, the end of a stream, the stop of the server).  A stream request of this
+    module reads its raw request with current(), as does the trusted code of a request handler with
+    AbstractHttpRequestHandler::getRawRequest().  The request context that the serving code gets has no reference to
+    it.
+*/
+class HttpRawRequestScope {
+    public {
+        #! the most raw requests that can be current on a thread at once: requests dispatched in the dispatch of others
+        const MaxDepth = 8;
+
+        #! the classes of the sockets of a request alone that the HTTP server gives a handler: the socket of an
+        #! HTTP/1.x request, or of an HTTP/2 or HTTP/3 stream (qore#7305)
+        const ServerViewClasses = {
+            "Http1HandlerSocket": True,
+            "Http2HandlerSocket": True,
+            "Http3HandlerSocket": True,
+        };
     }
 
-    #! hands the raw request to the next stream request created for it on the thread
+    private:internal {
+        #! the classes of the sockets of a request alone that hosts registered (see
+        #! HttpServerDispatchCapability::registerStreamViewClass())
+        static hash<string, bool> host_view_classes;
+        #! protects host_view_classes
+        static Mutex host_view_lck();
+    }
+
+    private:internal {
+        bool active;
+        #! the token of the scope's entry in the raw requests of the thread
+        int token;
+        #! the thread that created the scope, on which it ends
+        int tid;
+        #! the state of the scope's entry
+        HttpRawRequestState state();
+    }
+
+    #! makes the raw request current on the thread
     /** @param cx the raw request context
         @param hdr the raw request header fields
-        @param trailer_keep the credential trailer fields that the stream request gives the code that serves it
+        @param s the socket of the request, if any
+        @param keep_for the code of the dispatch capability that reads the credential trailer fields that the options
+        of a handler keep (see AbstractHttpRequestHandler::setRequestCredentialHeaders())
+        @param handler the handler that the request is dispatched to: the code that serves a filtered request gets
+        the credential trailer fields that its trusted options keep; none without it (see trailerKeepFor())
+
+        @throw HTTP-SERVER-ERROR @ref MaxDepth raw requests are current on the thread already
     */
-    constructor(hash<auto> cx, hash<auto> hdr, *hash<string, bool> trailer_keep) {
-        token = ++http_request_handoff_seq;
-        http_request_handoffs += ({"cx": cx, "hdr": hdr, "trailer_keep": trailer_keep, "token": token},);
+    constructor(hash<auto> cx, hash<auto> hdr, *Socket s, *code keep_for, *AbstractHttpRequestHandler handler) {
+        HttpRawRequestScope::dropInvalid();
+        if (http_raw_requests.size() >= MaxDepth) {
+            throw "HTTP-SERVER-ERROR", sprintf("more than %d requests cannot be dispatched in the dispatch of other "
+                "requests on a thread", MaxDepth);
+        }
+        token = ++http_raw_request_seq;
+        tid = gettid();
+        # the handlers whose options the credential trailer fields of a filtered request must all keep: the dispatched
+        # handler first (see trailerKeepFor()); a list of the base class, as handlers of other classes are added
+        *list<AbstractHttpRequestHandler> keep_handlers;
+        if (keep_for && handler) {
+            keep_handlers = cast<list<AbstractHttpRequestHandler>>(());
+            keep_handlers += handler;
+        }
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "keep_for": keep_for, "keep_handlers": keep_handlers,
+            "token": token, "state": state},);
         active = True;
     }
 
-    #! a handoff cannot be copied: a copy would end the entry of the original
+    #! a scope cannot be copied: a copy would end the entry of the original
+    /** @throw HTTP-SERVER-ERROR always
+    */
     copy() {
         active = False;
-        throw "HTTP-SERVER-ERROR", "a request handoff cannot be copied";
+        throw "HTTP-SERVER-ERROR", "a raw request scope cannot be copied";
     }
 
-    #! the raw request is no longer handed on the thread
+    #! returns @ref True if the socket is a socket of the request alone (a view), not the socket of a connection
+    /** An allowlist: a socket of a class that the HTTP server gives as a socket of a request alone
+        (@ref ServerViewClasses), or of a class that a host registered for the sockets of a request alone that it
+        gives (HttpServerDispatchCapability::registerStreamViewClass()); a socket of any other class is treated as the
+        socket of a connection (see isConnectionSocket())
+    */
+    static bool isStreamView(*Socket s) {
+        if (!s) {
+            return False;
+        }
+        string cls = s.className();
+        if (ServerViewClasses{cls}) {
+            return True;
+        }
+        AutoLock al(host_view_lck);
+        return host_view_classes{cls} ?? False;
+    }
+
+    #! returns @ref True if the socket is an open socket that is not a socket of the request alone (see isStreamView())
+    /** A socket that is not open is the socket of no connection (a placeholder)
+    */
+    static bool isConnectionSocket(*Socket s) {
+        return exists s && !HttpRawRequestScope::isStreamView(s) && s.isOpen();
+    }
+
+    #! returns the credential trailer fields that the code serving a filtered request gets (qore#6843)
+    /** Computed when a filtered stream request is created, not when the request is dispatched: the fields that the
+        trusted options (AbstractHttpRequestHandler::setRequestCredentialHeaders()) of the dispatched handler, of each
+        handler that filters the request for the code that serves it in the dispatch (see pushFilteringHandler()), and
+        of the stream request's own handler all keep: each can only narrow them, so that the code that serves the
+        request gets a credential trailer field only where the filter that it got its header fields from gives the
+        field too.  None without a dispatched handler, and none if they cannot be read (fails closed).
+
+        @param raw the raw request, as current() gives it
+        @param handler the handler of the stream request
+    */
+    static *hash<string, bool> trailerKeepFor(hash<auto> raw, *AbstractHttpRequestHandler handler) {
+        if (!raw.keep_for || !raw.keep_handlers) {
+            return;
+        }
+        try {
+            list<AbstractHttpRequestHandler> handlers = raw.keep_handlers;
+            if (handler) {
+                handlers += handler;
+            }
+            *hash<string, bool> keep = raw.keep_for(handlers[0]);
+            foreach AbstractHttpRequestHandler h in (handlers[1..]) {
+                if (!keep) {
+                    break;
+                }
+                *hash<string, bool> k = raw.keep_for(h);
+                keep = map {$1: True}, keys keep, k{$1};
+            }
+            return keep ?? NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! records a handler that filters the request for the code that serves it in the innermost dispatch of the
+    #! thread, until popFilteringHandler(): the credential trailer fields are narrowed to those that it keeps
+    /** See trailerKeepFor()
+    */
+    static pushFilteringHandler(AbstractHttpRequestHandler handler) {
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        int i = http_raw_requests.size() - 1;
+        if (http_raw_requests[i].keep_handlers) {
+            http_raw_requests[i].keep_handlers += handler;
+        }
+    }
+
+    #! removes the handler that pushFilteringHandler() recorded last in the innermost dispatch of the thread
+    static popFilteringHandler(AbstractHttpRequestHandler handler) {
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        int i = http_raw_requests.size() - 1;
+        if (http_raw_requests[i].keep_handlers.size() > 1 && http_raw_requests[i].keep_handlers.last() == handler) {
+            pop http_raw_requests[i].keep_handlers;
+        }
+    }
+
+    #! registers the name of a class of the sockets of a request alone that a host gives (see isStreamView())
+    static registerHostViewClass(string cls) {
+        AutoLock al(host_view_lck);
+        host_view_classes{cls} = True;
+    }
+
+    #! the raw request is no longer current
+    /** The scopes end in the reverse order of their creation on the thread that created them; a scope that is not the
+        innermost one of the thread when it ends fails closed: no raw request is current on the thread any more; a
+        scope that ends on another thread fails closed as well: its entry gives no raw request on the thread that
+        created it, and the raw requests of the thread on which it ends are not changed
+
+        @throw HTTP-SERVER-ERROR the scope is not the innermost one of the thread, or it ends on another thread
+    */
     destructor() {
         if (!active) {
             return;
         }
         active = False;
-        if (http_request_handoffs && http_request_handoffs.last().token == token) {
-            pop http_request_handoffs;
+        if (gettid() != tid) {
+            state.valid = False;
+            throw "HTTP-SERVER-ERROR", "a raw request scope ended on another thread than the one that created it; its "
+                "raw request is no longer current";
+        }
+        HttpRawRequestScope::dropInvalid();
+        if (http_raw_requests && http_raw_requests.last().token == token) {
+            pop http_raw_requests;
             return;
         }
-        remove http_request_handoffs;
-        throw "HTTP-SERVER-ERROR", "a request handoff ended that is not the innermost one of the thread; no raw request "
-            "is handed on the thread any more";
+        remove http_raw_requests;
+        throw "HTTP-SERVER-ERROR", "a raw request scope ended that is not the innermost one of the thread; no raw "
+            "request is current on the thread any more";
+    }
+
+    #! returns the raw request of the request being served on the thread, if any
+    /** The innermost entry of the thread; none if its scope ended on another thread (fails closed)
+    */
+    static *hash<auto> current() {
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        hash<auto> h = http_raw_requests.last();
+        if (!h.state.valid) {
+            return;
+        }
+        return h - ("token", "state");
+    }
+
+    #! returns the number of the raw requests current on the thread
+    static int depth() {
+        HttpRawRequestScope::dropInvalid();
+        return http_raw_requests.size();
+    }
+
+    #! drops the entries of the scopes that ended on another thread from the raw requests of this thread
+    private:internal static dropInvalid() {
+        if (http_raw_requests && (select http_raw_requests, !$1.state.valid)) {
+            http_raw_requests = select http_raw_requests, $1.state.valid;
+        }
+    }
+
+    #! returns @ref True if the calling code is sandboxed; fails closed: @ref True if it cannot be decided
+    static bool callerIsSandboxed() {
+        try {
+            return SandboxManager::isSandboxed();
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
     }
 
     #! returns @ref True if a sandbox that does not trust the calling code governs it (see
@@ -2910,29 +3254,171 @@ class HttpRequestHandoff {
             return True;
         }
     }
+}
 
-    #! Returns @ref True if the innermost handoff of the thread hands the request given and no stream request took it
-    /** The request is identified by its ID and method, which the filter does not change, so that the raw and the
-        filtered request match alike
-    */
-    static bool isActiveFor(hash<auto> cx, hash<auto> hdr) {
-        if (!http_request_handoffs) {
-            return False;
-        }
-        *hash<auto> h = http_request_handoffs.last();
-        return h.cx && h.cx.id == cx.id && h.hdr.method == hdr.method;
+#! The capability of a dispatch of requests to make the raw request of a request current (qore#6843)
+/** Not public: AbstractHttpRequestHandler::claimServerDispatch() gives it to the initialization of the HttpServer
+    module only, and AbstractHttpRequestHandler::claimHostDispatch() to the trusted code of a host that dispatches
+    requests to handlers itself; each keeps it in a \c private:internal member; no other code can create an object of
+    the class.
+*/
+class HttpServerDispatchCapability {
+    private:internal {
+        #! the canonical path of the file of the module whose initialization claimed the capability, if claimed by
+        #! the HttpServer module
+        *string path;
+        #! True once the path was checked against the record of the loaded HttpServer module
+        bool checked;
+        #! True if the check found that the module that claimed the capability is not the loaded HttpServer module:
+        #! the capability makes no request current (fails closed for stream requests only)
+        bool unusable;
+        #! True once a check that could not be made was reported (see takeWarning())
+        bool transient_reported;
+        #! the message about the check that the dispatch logs once (see takeWarning())
+        *string warning;
+        #! a lock for the check
+        Mutex lck();
+        #! resolves the file of the loaded HttpServer module with the system policy (see check())
+        *code resolve;
+        #! returns the credential trailer fields that the trusted options of a handler keep; code of
+        #! AbstractHttpRequestHandler, which reads the handler's private options
+        code trailer_keep_for;
     }
 
-    #! Returns and takes the raw request of the innermost handoff of the thread if it is the request given, else NOTHING
-    static *hash<auto> take(hash<auto> cx, hash<auto> hdr) {
-        if (!isActiveFor(cx, hdr)) {
+    #! creates the object for the HttpServer module at the given canonical path, or for a host without a path
+    /** Created by trusted code only (see AbstractHttpRequestHandler::claimServerDispatch() and claimHostDispatch())
+    */
+    constructor(*string path, code trailer_keep_for) {
+        self.path = path;
+        self.trailer_keep_for = trailer_keep_for;
+        # a host's capability is not checked against the HttpServer module
+        checked = !path;
+        if (path) {
+            # the check runs on the thread of the first request, which can be the thread of a listener that sandboxed
+            # code added, whose filesystem policy is not this module's: the file of the loaded module is resolved
+            # with the system policy, with a call made here, in the trusted initialization of the HttpServer module
+            resolve = SandboxManager::createSystemPolicyCall(*string sub () {
+                *string filename = get_module_hash().HttpServer.filename;
+                return filename ? realpath(filename) : NOTHING;
+            });
+        }
+    }
+
+    #! Makes the raw request of a request current on the thread until the object returned is destroyed
+    /** @param cx the request context as the server made it
+        @param hdr the request header fields
+        @param s the socket that the handler gets
+        @param handler the handler that the request is dispatched to: the credential trailer fields that the code
+        serving a filtered request of it gets are those that its trusted options keep
+        (AbstractHttpRequestHandler::setRequestCredentialHeaders()); without a handler, none
+
+        @return the object that keeps the raw request current; nothing if the capability of the server does not
+        belong to the loaded HttpServer module (see claimServerDispatch()), or this cannot be decided: no raw request
+        is current then, so the stream requests of the dispatch are refused (fails closed) while its other requests
+        are served
+
+        The capability of a host (claimHostDispatch()) refuses sandboxed callers, so that a host capability that
+        trusted code exposes by mistake makes no request current for sandboxed code.  The capability of the HTTP
+        server (claimServerDispatch()), which only the HTTP server's own dispatch holds, works on the thread of every
+        listener, also of a listener that sandboxed code added, whose threads a sandbox governs: the request is
+        filtered for the restricted code that serves it there (see @ref httpserverutil_request_credentials), and
+        AbstractHttpRequestHandler::getRawRequest() refuses restricted callers.
+
+        @throw HTTP-SERVER-ERROR the capability of a host is used by sandboxed code (fails closed: also if this cannot
+        be decided), or too many requests are dispatched in the dispatch of others on the thread
+    */
+    *object enter(hash<auto> cx, hash<auto> hdr, *Socket s, *AbstractHttpRequestHandler handler) {
+        # a host's capability that trusted code exposes by mistake still makes no request current for sandboxed code
+        if (!path && HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
+        }
+        # a check that cannot be made now makes no request current for this request, and is made again for the next
+        if (checked ? unusable : !check()) {
             return;
         }
-        int i = http_request_handoffs.size() - 1;
-        hash<auto> h = http_request_handoffs[i];
-        # used up: no other stream request gets it
-        http_request_handoffs[i] = {"token": h.token};
-        return h - "token";
+        # the credential trailer fields of a filtered request: from the trusted options of the dispatched handler,
+        # never from the header fields that the code creating a stream request gives it; read only when a filtered
+        # stream request is created (see HttpRawRequestScope::trailerKeepFor())
+        return new HttpRawRequestScope(cx, hdr, s, trailer_keep_for, handler);
+    }
+
+    #! Registers a class of the sockets of a request alone that the host gives the handlers that it calls
+    /** For the capability of a host (AbstractHttpRequestHandler::claimHostDispatch()): a socket of the class is a
+        socket of its request alone (a view), not the socket of a connection, in the decisions about the socket that
+        restricted code gets (see @ref httpserver_handler_socket); a socket of another class than the handler sockets
+        of the HTTP server is the socket of a connection otherwise, unless it is not open.  The host registers only a
+        class of its own code whose every socket carries the I/O of one request alone, never an operation on another
+        request of the connection.
+
+        The registry is a host-only API: it is process-wide (it applies to every dispatch of the process, also of the
+        HTTP server), it is keyed by the unqualified name of the class (see
+        @ref Qore::Object::className() "Object::className()"), so that a class of another %Program with the same
+        name counts as well, and a registration cannot be removed.  A class of restricted code cannot be relied on:
+        the sockets that a handler gets come from the dispatch, which the trusted code of the server or the host makes.
+
+        @param cls the name of the class
+
+        @throw HTTP-SERVER-ERROR the capability is the HTTP server's, or the caller is sandboxed (fails closed: also if
+        this cannot be decided)
+    */
+    registerStreamViewClass(string cls) {
+        if (path) {
+            throw "HTTP-SERVER-ERROR", "only the capability of a host registers the classes of its sockets";
+        }
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "sandboxed code cannot register a class of the sockets of a request";
+        }
+        HttpRawRequestScope::registerHostViewClass(cls);
+    }
+
+    #! Returns the message about the check of the capability that its holder logs, once
+    /** The message of a check that found that the module that claimed the capability is not the loaded HttpServer
+        module, or of the first check that could not be made; @ref nothing if there is none, or it was returned already
+    */
+    *string takeWarning() {
+        AutoLock al(lck);
+        return remove warning;
+    }
+
+    #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
+    /** A capability whose module is not the loaded HttpServer module is unusable: it makes no request current, so that
+        the stream requests of its dispatch are refused (fails closed) while its other requests are served.  A check
+        that cannot be made (the file of the module cannot be resolved now) makes no request current for the request
+        being dispatched, and is made again for the next one.  Each is reported once (see takeWarning()).
+
+        @return @ref True if the capability makes the request current
+    */
+    private:internal bool check() {
+        AutoLock al(lck);
+        if (checked) {
+            return !unusable;
+        }
+        # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
+        # checked against the record of the HttpServer module loaded in the process, if any
+        *hash<auto> rec;
+        *string rp;
+        try {
+            rec = get_module_hash().HttpServer;
+            if (rec.filename) {
+                rp = resolve();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # not decided: the stream requests of this request are refused, and the check is made again
+            if (!transient_reported) {
+                transient_reported = True;
+                warning = sprintf("the dispatch capability of the HTTP server cannot be checked against the loaded "
+                    "HttpServer module now (%s: %s); stream requests are refused until it can", ex.err, ex.desc);
+            }
+            return False;
+        }
+        checked = True;
+        if (rec && rp != path) {
+            unusable = True;
+            warning = sprintf("the dispatch capability of the HTTP server was claimed by the initialization of a module "
+                "(%y) that is not the loaded HttpServer module (%y): its stream requests are refused", path, rp);
+            return False;
+        }
+        return True;
     }
 }
 
@@ -2992,11 +3478,14 @@ public hashdecl HttpFilteredRequestInfo {
 #! abstract class for streaming HTTP chunked requests/responses
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
 
-    The code that serves a stream request, and the stream request's subclasses, get the request without the objects
-    of the server and the credentials of the request (see @ref httpserverutil_request_credentials); the stream request
-    itself serves the request with the raw request, which only its own code reads: the request handler hands it to the
-    first stream request that is created for the request in the HTTP server's dispatch.  A stream request created
-    otherwise serves the request with the context and the header fields that it is given.
+    An object of the class is created only in the dispatch of an HTTP server
+    (@ref HttpServer::HttpServer "HttpServer"), or of a host with a dispatch capability
+    (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"), which makes the raw
+    request of the request current: the constructor raises \c HTTP-SERVER-ERROR for a request that was not
+    dispatched so (see @ref httpserverutil_request_credentials).  A stream request of a class of a restricted
+    %Program, or that restricted code creates, cannot serve an HTTP/1.x request on the socket of the connection
+    (\c HTTP-HANDLER-ERROR): a handler that hands its requests to such code asks for a socket of each request with
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()".
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
@@ -3030,7 +3519,7 @@ public hashdecl HttpFilteredRequestInfo {
 */
 public class AbstractStreamRequest {
     public {
-        #! The keys of the request context that getContext(), filterContext() and filterRequest() give
+        #! The keys of the request context that getContext() and filterContext() give
         /** The request metadata of @ref httpserverutil_request_context, without the objects of the server (its
             logger, the client certificate, the listener's socket information, the user thread context of the
             listener) and the original \c Authorization header; an allowlist: other keys, including those that the
@@ -3045,6 +3534,12 @@ public class AbstractStreamRequest {
         #! The keys of the request context with the objects and the credentials of the server, which the filter never
         #! gives, also not as the keys of the platform's authorization context
         /** (see @ref HttpServer::HttpRequestFilterOptions::platform_context_keys "HttpRequestFilterOptions.platform_context_keys")
+
+            The user thread context (\c uctx) and the session key (\c sock_key) are the state of the handler that
+            serves the request (see HttpListenerInterface::addUserThreadContext()), which a handler of restricted code
+            keeps for its own code (see AbstractHttpRequestHandler::withholdCredentialsForDispatch()); the code that a
+            trusted handler dispatches a request to (a stream request or a REST class of restricted code) does not get
+            the trusted handler's state.
 
             @since HttpServerUtil 1.6
         */
@@ -3082,8 +3577,7 @@ public class AbstractStreamRequest {
         */
         const OwnCredentialHeaders = ("authorization",);
 
-        #! The keys of the \c "header-info" hash of the request context that getContext(), filterContext() and
-        #! filterRequest() give
+        #! The keys of the \c "header-info" hash of the request context that getContext() and filterContext() give
         /** The request metadata that @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" gives, without
             the socket, the stream and session IDs, the closures and the other server state that the server adds; an
             allowlist, as @ref ContextKeys
@@ -3112,7 +3606,7 @@ public class AbstractStreamRequest {
 
     private {
         #! the call context variable, without the server's objects and the credentials of the request
-        /** See @ref httpserverutil_request_credentials
+        /** See @ref httpserverutil_request_credentials and getContext()
         */
         hash<auto> cx;
         #! a hash of request headers, without the credentials of the request
@@ -3126,7 +3620,8 @@ public class AbstractStreamRequest {
         hash<auto> raw_hdr;
         #! the request is filtered for the code that serves it: so are the trailer fields (see trailersFor())
         bool filter_trailers;
-        #! the credential trailer fields that the code serving the request gets when the request is filtered
+        #! the credential trailer fields that the code serving the request gets when the request is filtered: those
+        #! that the trusted options of the dispatched handler keep
         *hash<string, bool> trailer_keep;
     }
 
@@ -3150,40 +3645,106 @@ public class AbstractStreamRequest {
         self.listener = listener;
         self.handler = handler;
         self.s = s;
-        # what subclasses read: as the code that created the object gives it, which the request handler filtered
-        self.cx = cx;
-        self.hdr = hdr;
-        self.body = body;
-        # the code of this class serves the request with the raw request, which the request handler hands to the
-        # first stream request created for it on the thread (see AbstractHttpRequestHandler::withholdRequestCredentials());
-        # a stream request created otherwise serves the request with what it is given
-        *hash<auto> raw = HttpRequestHandoff::take(cx, hdr);
+        # the code of this class serves the request with the raw request, which the code that created the object did
+        # not get (see AbstractHttpRequestHandler::getStreamRequest())
+        # the raw request being served on the thread; the comparison is a sanity check that the object is created
+        # for the request being served, not a security boundary: the boundary is the scope, which only the HTTP
+        # server's dispatch creates and only the code of this module reads
+        *hash<auto> raw = HttpRawRequestScope::current();
+        # fails closed: a stream request is served only in the HTTP server's dispatch, which alone makes the raw
+        # request current (qore#6843)
+        # (the request ID and method, which the filter does not change, so that the raw and the filtered request
+        # match alike)
+        if (!raw || raw.cx.id != cx.id || raw.hdr.method != hdr.method) {
+            throw "HTTP-SERVER-ERROR", "a stream request can only be served in the dispatch of the HTTP server, which "
+                "makes its raw request current; none is current for this request: the request was not dispatched by "
+                "the HTTP server, or the server's dispatch has no capability to make it current";
+        }
+        # the socket of the connection of an HTTP/1.x request is not driven by a stream request that restricted code
+        # creates or declares, as the handler of a restricted Program does not get it either (qore#7305)
+        # (restricted code only, as for the handler socket decisions: trusted code that a sandbox governs only for its
+        # resource limits, interrupts or I/O policy gets the connection's socket, qore#7577)
+        if (HttpRawRequestScope::isConnectionSocket(raw.s) && (HttpRawRequestScope::isRestricted(self)
+                || HttpRawRequestScope::callerIsRestricted())) {
+            throw "HTTP-HANDLER-ERROR", "a stream request of a class of a restricted Program, or that restricted code "
+                "creates, cannot serve an HTTP/1.x request on the socket of the connection; the handler gets a socket "
+                "of its request with setHandlerSocketView()";
+        }
+        raw_cx = raw.cx;
+        raw_hdr = raw.hdr;
+        # a body that the code that created the object gives deserialized (a REST stream request) is not decoded again;
+        # only that body: what the server reads is never marked deserialized by the code that created the object
+        if (cx.deserialized && exists body) {
+            raw_cx.deserialized = True;
+        }
+        # the socket of the request, which the code that created the object did not get for an HTTP/1.x request
+        if (raw.s) {
+            self.s = raw.s;
+        }
         # a stream request of a class of a restricted Program, or that restricted code creates, is never given the
         # raw request: a trusted handler that creates one without filtering the request (setFilterRequests(),
         # setHostsCode()) is refused; fails closed
-        if (!raw && (HttpRequestHandoff::isRestricted(self) || HttpRequestHandoff::callerIsRestricted())) {
-            if (AbstractStreamRequest::isRawRequest(cx)) {
-                throw "HTTP-SERVER-ERROR", sprintf("a stream request of class %y of a restricted Program cannot be "
-                    "given the raw request: the request handler must filter the request for it (see "
-                    "AbstractHttpRequestHandler::setFilterRequests() and setHostsCode())", self.className());
-            }
-            filter_trailers = True;
+        bool restricted = HttpRawRequestScope::isRestricted(self) || HttpRawRequestScope::callerIsRestricted();
+        bool raw_args = AbstractStreamRequest::isRawRequest(cx);
+        if (restricted && raw_args) {
+            throw "HTTP-SERVER-ERROR", sprintf("a stream request of class %y of a restricted Program cannot be given "
+                "the raw request: the request handler must filter the request for it (see "
+                "AbstractHttpRequestHandler::setFilterRequests() and setHostsCode())", self.className());
         }
-        if (raw) {
-            raw_cx = raw.cx;
-            raw_hdr = raw.hdr;
+        # the trailer fields are filtered when the request is filtered for the code that serves it, with the
+        # credential fields that the trusted options of the dispatched handler keep (setRequestCredentialHeaders()),
+        # which the dispatch gives with the raw request: never from the header fields that the code that created the
+        # object gives, which restricted code chooses
+        if (restricted || !raw_args) {
             filter_trailers = True;
-            trailer_keep = raw.trailer_keep;
-            # a body that the code that created the object gives deserialized (a REST stream request) is not decoded
-            # again; only that body: what the server reads is never marked deserialized by the code that created the
-            # object
-            if (cx.deserialized && exists body) {
-                raw_cx.deserialized = True;
-            }
-        } else {
-            raw_cx = cx;
-            raw_hdr = hdr;
+            trailer_keep = HttpRawRequestScope::trailerKeepFor(raw, handler);
         }
+        # what subclasses read: as the code that created the object gives it, which the request handler filtered for
+        # restricted code
+        self.cx = cx;
+        self.hdr = hdr;
+        self.body = body;
+    }
+
+    #! Returns a copy of the request context of the request without the server's objects and the credentials
+    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them: a
+        request context that the request handler filtered for the code that serves the request (see
+        @ref httpserverutil_request_credentials) is given as filterRequest() gave it, with the platform's
+        authorization context that it kept; else the request metadata of the request (see filterContext())
+
+        @note The request context that a filtered stream request gives is the one that the code that created the
+        object gave its constructor: for a stream request that restricted code created, values that the code chose.
+        A platform does not base decisions (authorization, accounting) on the getContext() of a stream request that
+        other code created: it reads the request that it dispatched itself
+
+        @return a copy of the request context without the server's objects and the credentials
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<auto> getContext() {
+        # filter_trailers: the request is filtered for the code that serves it, which got the context filtered
+        return filter_trailers ? cx : AbstractStreamRequest::filterContext(raw_cx);
+    }
+
+    #! Returns a copy of the request headers without the credentials of the request
+    /** For subclasses, as getContext(): the header fields that the request handler filtered for the code that serves
+        the request (see @ref httpserverutil_request_credentials) are given as filterRequest() gave them, without the
+        credentials that the platform's options withheld as well (its header fields, the query parameters of its
+        paths); else the header fields of the request without its credentials (see removeCredentialHeaders())
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<auto> getHeaders() {
+        # filter_trailers: the request is filtered for the code that serves it, which got the header fields filtered
+        # with the options of the platform and the handler, which the raw header fields do not know
+        return filter_trailers ? hdr : AbstractStreamRequest::removeCredentialHeaders(raw_hdr);
+    }
+
+    #! Returns any message body received with the request
+    /** @since HttpServerUtil 1.6
+    */
+    final auto getBody() {
+        return body;
     }
 
     #! Returns the request without the server's objects and the credentials of the request
@@ -3310,6 +3871,25 @@ public class AbstractStreamRequest {
         };
     }
 
+    #! Returns trailer fields without the credentials of the request
+    /** The trailer fields that a client sends after a chunked or an HTTP/2 or HTTP/3 body are header fields: the
+        fields of @ref CredentialHeaders are removed, compared without regard to case
+
+        @param trailers the trailer fields
+
+        @return \a trailers without the fields of @ref CredentialHeaders
+
+        @since HttpServerUtil 1.6
+    */
+    static *hash<auto> filterTrailers(*hash<auto> trailers) {
+        if (!trailers) {
+            return trailers;
+        }
+        hash<string, bool> withheld = {};
+        hash<string, bool> names = map {$1: True}, keys CredentialHeaders;
+        return AbstractStreamRequest::removeHeaders(trailers, names, \withheld);
+    }
+
     #! Returns @ref True if the value is an object or a hash or list that holds one at any depth
     /** The keys of the platform's authorization context and the keys that a REST handler names
         (@ref HttpServer::HttpRequestFilterOptions::platform_context_keys "HttpRequestFilterOptions.platform_context_keys",
@@ -3374,23 +3954,31 @@ public class AbstractStreamRequest {
         return AbstractStreamRequest::removeHeaders(trailers, names, \withheld);
     }
 
-    #! Returns trailer fields without the credentials of the request
-    /** The trailer fields that a client sends after a chunked or an HTTP/2 or HTTP/3 body are header fields: the
-        fields of @ref CredentialHeaders are removed, compared without regard to case
+    #! Returns a copy of a request context without the server's objects and the credentials of the request
+    /** As filterRequest() gives it without options
 
-        @param trailers the trailer fields
+        @param cx the request context
 
-        @return \a trailers without the fields of @ref CredentialHeaders
+        @return a copy of \a cx without the server's objects and the credentials of the request
 
         @since HttpServerUtil 1.6
     */
-    static *hash<auto> filterTrailers(*hash<auto> trailers) {
-        if (!trailers) {
-            return trailers;
-        }
-        hash<string, bool> withheld = {};
-        hash<string, bool> names = map {$1: True}, keys CredentialHeaders;
-        return AbstractStreamRequest::removeHeaders(trailers, names, \withheld);
+    static hash<auto> filterContext(hash<auto> cx) {
+        return AbstractStreamRequest::filterRequest(cx, {}).cx;
+    }
+
+    #! Returns a copy of a hash of request header fields without the credentials of the request
+    /** As filterRequest() gives it without options: the fields of @ref CredentialHeaders, compared without regard to
+        case, also in a \c "headers" hash in \a hdr, and the user information of the paths
+
+        @param hdr the header fields
+
+        @return a copy of \a hdr without the credentials of the request
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<auto> removeCredentialHeaders(hash<auto> hdr) {
+        return AbstractStreamRequest::filterRequest({}, hdr).hdr;
     }
 
     #! removes the withheld fields from the header fields and their "headers" hash, and the user information and the
@@ -3460,66 +4048,6 @@ public class AbstractStreamRequest {
             kept += param;
         }
         return uri.substr(0, q) + (kept ? "?" + join("&", kept) : "") + frag;
-    }
-
-    #! Returns a copy of the request context of the request without the objects of the server
-    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them.  The
-        context of the server holds objects of the server, its listener and the process (for example the listener's
-        socket and the process-wide I/O controller), which are not given: only the keys in @ref ContextKeys, and of
-        its \c "header-info" hash only the keys in @ref HeaderInfoKeys (see filterContext()); a request context that
-        the request handler filtered for the code that serves the request (see @ref httpserverutil_request_credentials)
-        is given as filterRequest() gave it, with the platform's authorization context that it kept
-
-        @return a copy of the request context without the objects of the server
-
-        @since HttpServerUtil 1.6
-    */
-    final hash<auto> getContext() {
-        # filter_trailers: the request is filtered for the code that serves it, which got the context filtered
-        return filter_trailers ? cx : AbstractStreamRequest::filterContext(cx);
-    }
-
-    #! Returns a copy of the request headers
-    /** @since HttpServerUtil 1.6
-    */
-    final hash<auto> getHeaders() {
-        return hdr;
-    }
-
-    #! Returns any message body received with the request
-    /** @since HttpServerUtil 1.6
-    */
-    final auto getBody() {
-        return body;
-    }
-
-    #! Returns a copy of a request context with the keys in @ref ContextKeys only
-    /** The \c "header-info" key of the copy has only the keys in @ref HeaderInfoKeys.  The keys are an allowlist: a
-        key that the server adds to the context is not given unless it is added to the list
-
-        @param cx the request context
-
-        @return a copy of \a cx with the keys in @ref ContextKeys that it has
-
-        @since HttpServerUtil 1.6
-    */
-    static hash<auto> filterContext(hash<auto> cx) {
-        hash<auto> rv;
-        foreach string key in (ContextKeys) {
-            if (cx.hasKey(key)) {
-                rv{key} = cx{key};
-            }
-        }
-        if (cx."header-info".typeCode() == NT_HASH) {
-            hash<auto> info;
-            foreach string key in (HeaderInfoKeys) {
-                if (cx."header-info".hasKey(key)) {
-                    info{key} = cx."header-info"{key};
-                }
-            }
-            rv."header-info" = info;
-        }
-        return rv;
     }
 
     #! returns @ref True if the server should apply content encoding (compression) to the response body
@@ -4888,19 +5416,21 @@ public class AbstractHttpRequestHandler {
     }
 
     #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
-    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
-        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
-        that created the object: see
-        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
-        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+    /** True if the handler object is declared by restricted code (the call of this method on the object is
+        restricted: see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()", or a restricting
+        sandbox governs the Program of its class or of one of its base classes: see
+        @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  Code that a sandbox governs only for
+        its resource limits, interrupts or I/O policy, and that may use uncontrolled APIs, is trusted: it gets the
+        connection's socket (qore#7577).  The method is final, so that a subclass cannot change the
         decision; the server calls it when the handler is registered
 
         @since HttpServerUtil 1.6
     */
     final bool needsHandlerSocketView() {
         try {
-            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
-                || hostsSandboxedCode();
+            return handler_socket_view || SandboxManager::isRestricted()
+                || SandboxManager::isFromRestrictedProgram(self) || hostsSandboxedCode();
         } catch (hash<ExceptionInfo> ex) {
             # the decision fails closed
             return True;
@@ -4918,10 +5448,11 @@ public class AbstractHttpRequestHandler {
     }
 
     #! Returns @ref True "True" if an object whose code the handler runs (see hostedObjects()) is of a class of a
-    #! sandboxed Program (qore#7305)
-    /** Also True if this cannot be decided
+    #! restricted Program (qore#7305)
+    /** A Program that a sandbox governs only for its resource limits, interrupts or I/O policy, and that may use
+        uncontrolled APIs, is trusted and does not count (qore#7577).  Also True if this cannot be decided
 
-        @see @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"
+        @see @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"
 
         @since HttpServerUtil 1.6
     */
@@ -4931,7 +5462,7 @@ public class AbstractHttpRequestHandler {
                 return False;
             }
             foreach object obj in (hostedObjects()) {
-                if (SandboxManager::isFromSandboxedProgram(obj)) {
+                if (SandboxManager::isFromRestrictedProgram(obj)) {
                     return True;
                 }
             }
@@ -5328,6 +5859,11 @@ public class AbstractHttpRequestHandler {
             listener.log("Handler %y: no authentication required", cx.handler_name);
             return;
         }
+        # the server authenticated the request with the handler's trusted authenticator on the raw request (see
+        # authenticateRestrictedRequest()); the code of the handler gets the request without its credentials (qore#7303)
+        if (HttpPlatformAuthentication::active(self, cx) && handlerClassIsRestricted()) {
+            return;
+        }
         if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
             return ah;
         }
@@ -5654,9 +6190,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! top-level request handling method
-    /** The code that serves a stream request (getStreamRequestImpl() and the code that it calls) gets the request
-        without the server's objects and the credentials of the request; the stream request that it creates is handed
-        the raw request (see @ref httpserverutil_request_credentials)
+    /** A stream request (a handler created with \c stream set) is served only in the dispatch of an HTTP server
+        (@ref HttpServer::HttpServer "HttpServer"), which makes the raw request current for the stream request; a call
+        of this method by other code for a stream request raises \c HTTP-SERVER-ERROR (see
+        @ref httpserverutil_request_credentials)
     */
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
@@ -5670,18 +6207,42 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
+            # the handleRequest() of a handler of restricted code gets the request without its credentials
+            # (qore#7303)
+            if (handlerCodeIsRestricted()) {
+                hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr);
+                return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(filtered.cx, filtered.hdr,
+                    msg_body));
+            }
             return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
         # the code that serves the request gets it without the server's objects and the credentials of the request
-        # (see AbstractStreamRequest::filterRequest()) when a sandbox governs it, or the handler runs code that a
-        # sandbox governs, or it asks for it; the stream request that it creates is handed the raw request
+        # (see AbstractStreamRequest::filterRequest()); the HTTP server's dispatch makes the raw request current on the
+        # thread while the request is served (see getRawRequest()): the concurrent streams of an HTTP/2 or HTTP/3
+        # connection are served on threads of their own
+        # the HTTP server gives the handler of a restricted Program a socket of its own request (qore#7305); the socket
+        # of the connection, which a stream request needs, never reaches its code (qore#6843)
+        if (HttpRawRequestScope::isConnectionSocket(s) && HttpRawRequestScope::isRestricted(self)) {
+            throw "HTTP-HANDLER-ERROR", "a stream request handler of a class of a restricted Program cannot serve an "
+                "HTTP/1.x request on the socket of the connection, which is not given to the code of such a class";
+        }
         AbstractStreamRequest req;
-        if (filtersRequestsFor() || hostsRestrictedCode()) {
-            *object handoff;
-            hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \handoff);
-            on_exit delete handoff;
-            req = getStreamRequestImpl(listener, s, filtered.cx, filtered.hdr, body);
+        # the code that serves the request gets it without the server's objects and the credentials of the request
+        # when restricted code serves it, or the handler asks for it (see filtersRequestsFor())
+        bool restricted_code = servesRestrictedCode();
+        if (restricted_code || filter_requests) {
+            hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr);
+            # the credential trailer fields of the stream request are narrowed to those that this handler's filter
+            # keeps, as its header fields are: in a nested dispatch, the dispatched handler's own options are not this
+            # handler's (qore#6843)
+            HttpRawRequestScope::pushFilteringHandler(self);
+            on_exit HttpRawRequestScope::popFilteringHandler(self);
+            # the socket of an HTTP/1.x request is the connection's: the restricted code that serves the request gets
+            # a placeholder, which is not connected, and the stream request takes the socket from the raw request
+            # (qore#6843); the handler socket of an HTTP/2 or HTTP/3 request is a view of its own stream
+            Socket rs = (!restricted_code || HttpRawRequestScope::isStreamView(s)) ? s : new Socket();
+            req = getStreamRequestImpl(listener, rs, filtered.cx, filtered.hdr, body);
         } else {
             req = getStreamRequestImpl(listener, s, cx, hdr, body);
         }
@@ -5693,42 +6254,216 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! Returns the request without the server's objects and the credentials of the request for the code that serves
-    #! it, and hands the raw request to the stream request created for it
+    #! it
     /** For the code of the hierarchy of this class that hands a request to code that serves it, such as a request
         handler that dispatches requests to the classes of another component: the request is filtered with
         AbstractStreamRequest::filterRequest(), with the options of this handler (its authenticator and
-        setRequestCredentialHeaders()); the first stream request created on the thread for the request
-        (@ref AbstractStreamRequest) takes the raw request, which only its own code reads, until \a handoff is
-        destroyed, which the caller does when the request has been served.
+        setRequestCredentialHeaders()).  It does not make the raw request current: only the HTTP server's own dispatch
+        does (see getRawRequest()).
 
         @param cx the raw request context
         @param hdr the raw request header fields
-        @param handoff set to the object that hands the raw request; it is no longer handed when it is destroyed
 
         @return the filtered request
 
         @since HttpServerUtil 1.6
     */
-    private final hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr,
-            reference<*object> handoff) {
-        hash<HttpRequestFilterOptions> opts = getRequestFilterOptions();
-        hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr, opts);
-        # the code that dispatched the request handed the raw request already (pushRawRequest()) when it gave the
-        # handler the request filtered: the handler keeps it rather than handing the request that it got
-        if (!HttpRequestHandoff::isActiveFor(cx, hdr)) {
-            # the credential trailer fields that the handler opts in to receive, as for the header fields
-            *hash<string, bool> trailer_keep;
-            if (!opts.platform_authenticated) {
-                foreach string name in (opts.own_headers) {
-                    name = name.lwr();
-                    if (inlist(name, AbstractStreamRequest::OwnCredentialHeaders)) {
-                        trailer_keep{name} = True;
-                    }
+    private final hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr) {
+        return AbstractStreamRequest::filterRequest(cx, hdr, getRequestFilterOptions());
+    }
+
+    #! Returns @ref True if the code of this handler is restricted by a sandbox (qore#7303)
+    /** The calling code is restricted (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"),
+        or the class of the handler is of a restricted %Program
+        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"); fails
+        closed.  The server then gives the handler's own methods the request without its credentials (see
+        withholdCredentialsForDispatch())
+
+        @since HttpServerUtil 1.6
+    */
+    final bool handlerCodeIsRestricted() {
+        try {
+            return SandboxManager::isRestricted() || SandboxManager::isFromRestrictedProgram(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns @ref True if the class of this handler is of a restricted %Program (qore#7303)
+    /** (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"); fails
+        closed.  The server authenticates the requests of such a handler with its trusted authenticator first (see
+        authenticateRestrictedRequest())
+
+        @since HttpServerUtil 1.6
+    */
+    final bool handlerClassIsRestricted() {
+        try {
+            return SandboxManager::isFromRestrictedProgram(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Authenticates a request of a handler whose class is of a restricted %Program (qore#7303)
+    /** The server calls it for such a handler (see handlerClassIsRestricted()) instead of the handler's
+        authenticateRequest(): the authenticator of the handler (@ref auth), if its class is not of a restricted
+        %Program (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()",
+        failing closed), authenticates the raw request first, consuming its credentials and adding its context keys;
+        then the handler's own authenticateRequest() is called with the request without its credentials and without
+        what the authenticator added that is not among its platform context keys (see
+        withholdCredentialsForDispatch()), and does not authenticate the request again in the authenticateRequest() of
+        this class.  The changes that the handler's code makes to its copy of the context are taken over, and the
+        credentials of the raw request are kept in \a cx.  An authenticator of restricted code gets the request
+        without its credentials in authenticateRequest(), as the handler's own code does.
+
+        The mark of the authenticated request exists only while this method calls the handler's authenticateRequest(),
+        so no other code can keep it.  Calling it with other request header fields than those of a request gives
+        nothing that sending such a request does not give, so it is not restricted.
+
+        @param listener the listener
+        @param hdr the raw request header fields
+        @param cx the raw request context, which the authenticator and the handler change
+        @param changes set to the keys of \a cx that the trusted authenticator added (\c added) and the values before
+        the authentication of those that it changed (\c changed), other than the keys of the request context that the
+        request filter gives and the authenticator's platform context keys, for withholdCredentialsForDispatch()
+
+        @return the response of a failed authentication, if any
+
+        @since HttpServerUtil 1.6
+    */
+    final *hash<HttpResponseInfo> authenticateRestrictedRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<*hash<auto>> changes) {
+        *HttpPlatformAuthentication mark;
+        on_exit delete mark;
+        bool trusted;
+        if (auth) {
+            try {
+                trusted = !SandboxManager::isFromRestrictedProgram(auth);
+            } catch (hash<ExceptionInfo> ex) {
+                trusted = False;
+            }
+        }
+        if (trusted) {
+            if (*hash<HttpResponseInfo> ah = authenticateTrusted(listener, hdr, \cx, \changes)) {
+                return ah;
+            }
+            mark = new HttpPlatformAuthentication(self, cx);
+        }
+        # the handler's own code gets the request without its credentials
+        hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr, changes);
+        hash<auto> fcx = filtered.cx;
+        *hash<HttpResponseInfo> ah = authenticateRequest(listener, filtered.hdr, \fcx);
+        cx = HttpPlatformAuthentication::merge(cx, filtered.cx, fcx);
+        return ah;
+    }
+
+    #! Authenticates the raw request with the handler's trusted authenticator; returns the response of a failure
+    private:internal *hash<HttpResponseInfo> authenticateTrusted(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<*hash<auto>> changes) {
+        hash<auto> before = cx;
+        if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
+            return ah;
+        }
+        # the keys that the handler's code gets: those that the request filter gives and the platform's keys
+        hash<string, bool> kept = map {$1: True}, AbstractStreamRequest::ContextKeys;
+        try {
+            map kept{$1} = True, auth.getPlatformContextKeys();
+        } catch (hash<ExceptionInfo> ex) {
+            # fails closed: none of the authenticator's keys is kept
+        }
+        hash<auto> ch = {"added": (), "changed": {}};
+        foreach hash<auto> i in (cx.pairIterator()) {
+            if (kept{i.key}) {
+                continue;
+            }
+            if (!before.hasKey(i.key)) {
+                push ch.added, i.key;
+            } else if (before{i.key} !== i.value) {
+                ch.changed{i.key} = before{i.key};
+            }
+        }
+        changes = ch;
+        if (exists cx.user) {
+            listener.log("Handler %y: authenticated request with user %y", cx.handler_name, cx.user);
+        } else {
+            listener.log("Handler %y: authenticated request without a user context", cx.handler_name);
+        }
+    }
+
+    #! Returns the request without its credentials for the handler's own code (qore#7303)
+    /** The server gives the handleRequest() of a handler of restricted code (see filtersRequestsFor()) the request
+        without its credentials, as the request filter withholds them (see
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()", with the
+        options of this handler): the credential header fields (also in \c cx.hdr), the credential trailer fields,
+        those of the raw header fields and of the request URI in \c cx."header-info", the user information of the URL
+        and the credential query parameters of the paths, and the raw \c Authorization value (\c cx.auth).  The objects
+        of the server are withheld too, as the request filter withholds them (see
+        @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys"): the server's logger
+        (\c cx.logger), the listener (\c cx.listener), the future of the peer information (\c cx."peer-info-future")
+        and the peer's certificate (\c cx."client-cert").  The rest of the context is the handler's, as before: the
+        stream of its request (\c cx."header-info"), the address of the listener (\c cx.socket, \c cx."socket-info"),
+        its session (\c cx.sock_key) and its user thread context (\c cx.uctx), which the server keeps apart for each
+        handler; the code that the handler dispatches the request to gets it filtered further by the code of this class
+        (see withholdRequestCredentials()).
+
+        It returns only a copy of the request that it is given, so it is not restricted.
+
+        The keys of the context that the handler's trusted authenticator added or changed when it authenticated the
+        raw request (see authenticateRestrictedRequest()), other than the keys of the request context that the filter gives and
+        the authenticator's platform context keys
+        (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()"),
+        such as the platform's session token, are withheld as well: an added key is removed, a changed key gets its
+        value from before the authentication.
+
+        @param cx the raw request context
+        @param hdr the raw request header fields
+        @param platform_changes the keys that the handler's trusted authenticator added (\c added) and the values
+        before the authentication of those that it changed (\c changed), as authenticateRestrictedRequest() returns them in its
+        \a changes argument
+
+        @return the request without its credentials; \c withheld lists what was withheld
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<HttpFilteredRequestInfo> withholdCredentialsForDispatch(hash<auto> cx, hash<auto> hdr,
+            *hash<auto> platform_changes) {
+        hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, hdr);
+        # the raw Authorization value
+        hash<auto> rcx = cx - "auth";
+        # the parts of the context that hold the credentials of the request, as the filter has them
+        foreach string key in ("hdr", "trailers", "masked_path", "orig_path", "raw_path", "url") {
+            if (filtered.cx.hasKey(key)) {
+                rcx{key} = filtered.cx{key};
+            } else {
+                remove rcx{key};
+            }
+        }
+        if (cx."header-info".typeCode() == NT_HASH) {
+            hash<auto> info = cx."header-info";
+            foreach string key in ("headers-raw", "request-uri") {
+                if (filtered.cx."header-info".hasKey(key)) {
+                    info{key} = filtered.cx."header-info"{key};
+                } else {
+                    remove info{key};
                 }
             }
-            handoff = new HttpRequestHandoff(cx, hdr, trailer_keep);
+            rcx."header-info" = info;
         }
-        return rv;
+        # what the handler's trusted authenticator added or changed and is not given to the handler's code
+        foreach string key in (platform_changes.added) {
+            remove rcx{key};
+        }
+        map rcx{$1.key} = $1.value, platform_changes.changed.pairIterator();
+        # the raw Authorization value is never given back, also not as a value from before the authentication
+        remove rcx.auth;
+        # the objects of the server and of its host, as the request filter withholds them; the handler's own request
+        # (its socket, the socket's information and its session key) stays (qore#7303)
+        remove rcx{"logger", "listener", "peer-info-future", "client-cert"};
+        return <HttpFilteredRequestInfo>{
+            "cx": rcx,
+            "hdr": filtered.hdr,
+            "withheld": filtered.withheld,
+        };
     }
 
     #! Returns the request filtered with the options of this handler (its authenticator and
@@ -5747,7 +6482,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             "own_headers": request_credential_headers,
         };
         # the authorization context that the authenticator of trusted code sets
-        if (auth && !HttpRequestHandoff::isRestricted(auth)) {
+        if (auth && !HttpRawRequestScope::isRestricted(auth)) {
             try {
                 opts.platform_context_keys = auth.getPlatformContextKeys();
             } catch (hash<ExceptionInfo> ex) {
@@ -5757,31 +6492,49 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         return opts;
     }
 
-    #! Hands the raw request to the stream request that the handler creates for it in a dispatch of the request
-    /** @internal for trusted host code that gives a handler the request filtered (the HTTP server's own dispatch
-        uses it once it filters the request for the handler classes of restricted code; until then trusted host code
-        that dispatches requests to handlers itself can use it): the first stream request created
-        for the same request (the same \c id in the context and \c method in the header fields, which the filter does
-        not change) on the thread while the returned object exists serves the request with the raw request; the
-        handler keeps it (see withholdRequestCredentials()).  Only trusted code can hand a raw request: a caller that
-        a sandbox that does not trust its code governs is refused
-        (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()").
+    #! returns the credential trailer fields that the code serving a filtered request of this handler gets: those
+    #! that its options keep (setRequestCredentialHeaders(), with no authenticator that consumed them)
+    /** The same options as getRequestFilterOptions() for the handler's own credentials, without the authenticator's
+        platform context keys, which it does not need
+    */
+    private:internal *hash<string, bool> getTrailerKeep() {
+        # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
+        if ((exists auth && !(auth instanceof PermissiveAuthenticator)) || !request_credential_headers) {
+            return;
+        }
+        hash<string, bool> rv;
+        foreach string name in (request_credential_headers) {
+            name = name.lwr();
+            if (inlist(name, AbstractStreamRequest::OwnCredentialHeaders)) {
+                rv{name} = True;
+            }
+        }
+        return rv ?? NOTHING;
+    }
 
-        @param cx the raw request context
-        @param hdr the raw request header fields
+    #! returns the code of a dispatch capability that reads the credential trailer fields of a handler (see
+    #! getTrailerKeep())
+    private:internal static code trailerKeepReader() {
+        return *hash<string, bool> sub (AbstractHttpRequestHandler handler) {
+            return handler.getTrailerKeep();
+        };
+    }
 
-        @return an object that hands the raw request until it is deleted; delete it on the same thread, in the reverse
-        order of the calls (for example with \c on_exit)
+    #! Returns @ref True if the socket is a socket of its request alone, not the socket of a connection
+    /** A handler socket of the HTTP server (of an HTTP/1.x request, or of an HTTP/2 or HTTP/3 stream; see
+        @ref httpserver_handler_socket), or a socket of a class that a host registered with its dispatch capability
+        (see claimHostDispatch()); any other socket is not (an open one is the socket of a connection).  The decisions
+        about the socket that restricted code gets use it: those of this module, of the REST handler and of the data
+        stream handler.
 
-        @throw HTTP-SERVER-ERROR the calling code is restricted
+        @param s the socket
+
+        @return @ref True if the socket is a socket of its request alone
 
         @since HttpServerUtil 1.6
     */
-    static object pushRawRequest(hash<auto> cx, hash<auto> hdr) {
-        if (HttpRequestHandoff::callerIsRestricted()) {
-            throw "HTTP-SERVER-ERROR", "restricted code cannot hand a raw request";
-        }
-        return new HttpRequestHandoff(cx, hdr);
+    static bool isRequestSocket(*Socket s) {
+        return HttpRawRequestScope::isStreamView(s);
     }
 
     #! Returns @ref True if the code that serves the request of this handler gets it filtered
@@ -5807,10 +6560,14 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
     }
 
-    #! returns @ref True if an object whose code the handler runs (see setHostsCode()) is of a class of a restricted
-    #! Program; fails closed: @ref True if it cannot be decided
-    private:internal bool hostsRestrictedCode() {
+    #! returns @ref True if restricted code serves the request: the calling code or the handler's class is restricted,
+    #! or an object whose code the handler runs (see setHostsCode()) is of a class of a restricted Program; fails
+    #! closed: @ref True if it cannot be decided
+    private:internal bool servesRestrictedCode() {
         try {
+            if (SandboxManager::isRestricted() || SandboxManager::isFromRestrictedProgram(self)) {
+                return True;
+            }
             if (!hostsCode()) {
                 return False;
             }
@@ -5837,10 +6594,109 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.6
     */
     setFilterRequests(bool filter = True) {
-        if (!filter && HttpRequestHandoff::callerIsRestricted()) {
+        if (!filter && HttpRawRequestScope::callerIsRestricted()) {
             throw "REQUEST-ERROR", "restricted code cannot stop the filter of a handler's requests";
         }
         filter_requests = filter;
+    }
+
+    #! Returns the capability of trusted host code that dispatches requests to handlers itself to make the raw request
+    #! of each request current
+    /** A host that serves the requests of an HTTP server in a process of its own, and calls the handlers itself (a
+        handler's handleRequest()) instead of an @ref HttpServer::HttpServer "HttpServer", makes the raw request of each
+        request current with the object returned while it calls the handler, so that the handler serves stream
+        requests: \c enter(cx, hdr, s, handler) returns an object that keeps the raw request current until it is
+        destroyed; with the handler that the request is dispatched to, the code that serves a filtered request of the
+        handler gets the credential trailer fields that the handler's trusted options keep
+        (setRequestCredentialHeaders()), and none without it.  A host that gives the handlers sockets of a request
+        alone of a class of its own registers the class with \c registerStreamViewClass(name), so that restricted code
+        gets them (see @ref httpserver_handler_socket); an open socket of another class than the handler sockets of the
+        HTTP server is otherwise the socket of a connection.  The
+        host keeps the capability in a \c private:internal member and never gives it to other code, as the capability
+        lets its holder make a request of its own making current for the handlers that it calls (qore#6843).
+
+        @return the capability, which is of a class that is not public
+
+        @throw HTTP-SERVER-ERROR the caller is sandboxed: only trusted code that no sandbox governs can claim the
+        capability of a host, and use it (unlike the capability of the HTTP server, see claimServerDispatch()), as a
+        host capability that its holder exposes by mistake could otherwise make a request of its own making current
+
+        @since HttpServerUtil 1.6
+    */
+    static object claimHostDispatch() {
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "a dispatch capability cannot be claimed by sandboxed code";
+        }
+        return new HttpServerDispatchCapability(NOTHING, AbstractHttpRequestHandler::trailerKeepReader());
+    }
+
+    #! Internal: for the initialization of the HttpServer module only
+    /** @internal
+        Gives the initialization of the HttpServer module the capability of its dispatch to make the raw request of a
+        request current, which only the HTTP server's own dispatch does (see getRawRequest(); qore#6843).  Every other
+        caller is refused: restricted code
+        (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), also a module named HttpServer
+        that restricted code loads by its path, and code that is not the initialization of a module named HttpServer.
+        Trusted code that a sandbox governs only to interrupt or limit it is not refused for its sandbox, as the
+        decisions of the HTTP server about sandboxed code apply to restricted code only (qore#7577); the
+        initialization of the module's static members, which claims it, does not run under the sandbox of the code
+        that loads the module.  The capability is checked
+        against the record of the loaded HttpServer module when it is first used: the file of the module that claimed
+        it must be the file of that module.  A trusted initialization of the HttpServer module that runs again in the
+        process (a private copy of the module, Program::loadApplyToPrivateUserModule()) gets a capability of its own,
+        checked against the record of the HttpServer module loaded in the process if there is one: a copy loaded from
+        another file then has no current raw request, and its stream requests are refused.
+
+        @return the capability, which is of a class that is not public
+
+        @throw HTTP-SERVER-ERROR the caller is not the trusted initialization of the HttpServer module (fails closed:
+        also if it cannot be decided whether the caller is restricted)
+
+        @since HttpServerUtil 1.6
+    */
+    static object claimServerDispatch() {
+        if (HttpRawRequestScope::callerIsRestricted()) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server cannot be claimed by restricted code";
+        }
+        *string name;
+        *string path;
+        try {
+            name = get_module_context_name();
+            path = realpath(get_module_context_path());
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        if (name != "HttpServer" || !path) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server can only be claimed by the "
+                "initialization of the HttpServer module";
+        }
+        return new HttpServerDispatchCapability(path, AbstractHttpRequestHandler::trailerKeepReader());
+    }
+
+    #! Returns the raw request context and header fields of the request being served on the thread
+    /** For the trusted code of the hierarchy of this class: the code serving a request gets the request without the
+        server's objects and the credentials of the request (see AbstractStreamRequest::filterRequest()) when it is
+        restricted; this method gives the values as the server made them, while the request is served.  It is
+        private, and refuses restricted callers
+        (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), so that only trusted code can
+        call it.
+
+        @return a hash with the raw request context in \c "cx", the raw header fields in \c "hdr" and the socket of
+        the request, if any, in \c "s" (the raw socket of an HTTP/1.x request)
+
+        @throw REQUEST-ERROR the calling code is restricted, or no request is being served on the thread by the HTTP
+        server's dispatch, which alone makes a raw request current
+
+        @since HttpServerUtil 1.6
+    */
+    private hash<auto> getRawRequest() {
+        if (HttpRawRequestScope::callerIsRestricted()) {
+            throw "REQUEST-ERROR", "restricted code cannot get the raw request";
+        }
+        *hash<auto> rv = HttpRawRequestScope::current();
+        if (!rv) {
+            throw "REQUEST-ERROR", "no request is being served on the thread";
+        }
+        return rv{"cx", "hdr", "s"};
     }
 
     #! Sets the credential header fields addressed to this handler that the code serving its requests gets
@@ -5858,7 +6714,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.6
     */
     setRequestCredentialHeaders(*softlist<string> names) {
-        if (HttpRequestHandoff::callerIsRestricted()) {
+        if (HttpRawRequestScope::callerIsRestricted()) {
             throw "REQUEST-ERROR", "restricted code cannot set the credentials that a handler's code gets";
         }
         request_credential_headers = names;

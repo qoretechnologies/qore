@@ -1434,6 +1434,18 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! Sets @ref sandboxed, and records that sandboxed code exists in the process (qore_sandboxed_code_present)
+    DLLLOCAL void setSandboxedFlag() {
+        qore_sandboxed_code_present.store(true, std::memory_order_release);
+        sandboxed.store(true, std::memory_order_release);
+    }
+
+    //! true if restricted code created the Program or committed code in it with no restricting sandbox that the
+    //! Program keeps; set when the Program is created or the code is committed, never cleared once set (see
+    //! qore_program_is_restricted(); qore#7737)
+    std::atomic<bool> restricted_marked{false};
+
+
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
         that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
@@ -1485,6 +1497,19 @@ public:
     QoreSandboxManager* pending_creator_sandbox = nullptr;
     //! the policy manager of \c pending_creator_sandbox (referenced), or nullptr
     QoreSandboxManager* pending_creator_policy = nullptr;
+    //! true if restricted code was on the call stack of the code that parsed the pending code (qore#7635); with the
+    //! parse lock held
+    /** The parsing code acts for the restricted code, also when a manager that trusts its code governs it, which is
+        attached to the Program for it: the private access of its classes is decided with this flag (see
+        qore_caller_has_restricted_code() and pendingCreatorSandboxIsRestricted())
+    */
+    bool pending_restricted_caller = false;
+    //! pending_restricted_caller of the code being committed, for the classes that the commit commits; with the parse
+    //! lock held
+    bool commit_restricted_caller = false;
+    //! true if the pending code was parsed by restricted code with no restricting sandbox that the Program keeps: the
+    //! Program is marked restricted (restricted_marked) when the code is committed (qore#7737); with the parse lock held
+    bool pending_restricted_mark = false;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -2357,6 +2382,14 @@ struct QoreParseCreatorSandbox {
     QoreSandboxManager* sm = nullptr;
     //! the manager for policy checks (referenced), or nullptr
     QoreSandboxManager* policy = nullptr;
+    //! true if the parsing code is sandboxed, also when no manager of its sandbox was found (qore#7635)
+    bool sandboxed = false;
+    //! true if restricted code is on the parsing code's call stack, also when a manager of a Program that trusts its
+    //! code governs the parsing code (see qore_caller_has_restricted_code()) (qore#7635)
+    bool restricted = false;
+    //! true if the Program is to be marked restricted when the code is committed: restricted code parses it with no
+    //! restricting sandbox that the Program keeps (qore#7737)
+    bool mark_restricted = false;
 
     DLLLOCAL QoreParseCreatorSandbox() = default;
     DLLLOCAL ~QoreParseCreatorSandbox();
@@ -2727,6 +2760,13 @@ public:
 
     //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
     DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
+
+    //! Returns references to both managers of the sandbox of the code that created the Program, read together
+    /** \c creator_sandbox_manager and \c creator_policy_manager under one lock, so that a concurrent
+        addCreatorSandbox() cannot give a mismatched pair; the caller must call deref() on each pointer returned that
+        is not nullptr
+    */
+    DLLLOCAL void getCreatorSandboxRefs(QoreSandboxManager*& creator, QoreSandboxManager*& policy);
 
     //! Sets the Program's own sandbox manager for Program::setSandboxManager()
     /** The manager and \c own_manager_additive are changed together under \c sm_lock, after the check that code that
@@ -3613,6 +3653,26 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! Returns true if the sandbox of the code that parses the pending code does not trust its code (qore#7635)
+    /** As qore_program_is_restricted() for the sandbox that internParseCommit() attaches to the Program when it
+        commits the code (pending_creator_sandbox); also true if code that restricted code calls parses it
+        (pending_restricted_caller), or committed it (commit_restricted_caller); false if trusted code parses it.  To
+        be called only if the calling thread holds the parse lock (parsingLocked()), as the pending sandbox can be read
+        only with it
+    */
+    DLLLOCAL bool pendingCreatorSandboxIsRestricted() const;
+
+    //! Returns true if the code that the calling thread commits was parsed by code that restricted code called
+    //! (qore#7635); false if the calling thread does not hold the parse lock
+    DLLLOCAL bool commitParsedByRestrictedCaller() const {
+        return parsingLocked() && commit_restricted_caller;
+    }
+
+    //! Clears commit_restricted_caller when the commit ends; called with plock held
+    DLLLOCAL void clearCommitRestrictedCaller() {
+        commit_restricted_caller = false;
     }
 
     //! Waits for the parse lock that another thread holds; called by lockParsing() with plock held
@@ -5904,7 +5964,8 @@ public:
         if (checkDefine(loc, str, xsink))
             return;
 
-        const bool untrusted = qore_caller_is_untrusted();
+        // code that a trusted (governed) sandbox governs is the host (qore#7737)
+        const bool untrusted = qore_caller_is_restricted_or_untrusted();
         // the value replaced is released after plock (see runTimeUnDefine())
         ValueHolder old(xsink);
         AutoLocker al(plock);
@@ -8477,6 +8538,9 @@ DLLEXPORT void qore_set_default_exec_mode(qore_exec_mode_t mode);
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
+
+//! Writes and consumes the exceptions or warnings of a top-level parse as compiler diagnostics on stderr.
+DLLEXPORT void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings);
 
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.

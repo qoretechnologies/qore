@@ -13,7 +13,8 @@
 
 #include "normalizers/AbstractNormalizer.h"
 
-#include <regex>
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 namespace QoreTokenizer {
 
@@ -24,7 +25,8 @@ public:
     /** @param config the Qore hash containing "pattern" and "content" (replacement)
         @param xsink exception sink
     */
-    ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* xsink);
+    ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* xsink,
+        const char* error = "TOKENIZER-NORMALIZER-ERROR");
 
     std::string normalize(const std::string& input) const override;
 
@@ -33,13 +35,13 @@ private:
     std::string pattern;
 
     //! Compiled regular expression when the HuggingFace pattern is {"Regex": "..."}
-    std::regex regex_pattern;
+    std::unique_ptr<pcre2_code, decltype(&pcre2_code_free)> regex_pattern{nullptr, pcre2_code_free};
 
     //! The replacement string
     std::string replacement;
 
-    //! True if regex_pattern should be used instead of literal string replacement
-    bool regex_mode = false;
+    //! Exception code of the component that uses the replacement
+    const char* error;
 };
 
 } // namespace QoreTokenizer

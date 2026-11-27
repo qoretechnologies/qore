@@ -588,6 +588,13 @@ bool qore_has_debug() {
 }
 
 int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    // the library's initialization finalizes its builtin classes with no Program (qore_init()): there is no parse to
+    // report the error to, and their hierarchies are fixed and shallow; with a small main thread stack (RLIMIT_STACK
+    // of 192K or less), whose limit leaves less than QORE_PARSE_STACK_RESERVE above the depth of the initialization,
+    // the error crashed the process instead of letting the parse of the program's code fail (qore#7663)
+    if (!getProgram()) {
+        return 0;
+    }
     parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
 }
@@ -1280,7 +1287,7 @@ public:
             case NT_OBJECT: {
                 // any exception here is ignored; the format pass reports it
                 ExceptionSink xs;
-                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false));
+                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyDataForCaller(&xs, false));
                 xs.clear();
                 if (data) {
                     hash_iter.reset(new ConstHashIterator(data.get()));
@@ -1367,7 +1374,7 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
         case NT_OBJECT: {
             // any exception here is ignored; the format pass reports it
             ExceptionSink xs;
-            QoreHashNodeHolder h(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false),
+            QoreHashNodeHolder h(qore_object_private::get(*val.get<const QoreObject>())->copyDataForCaller(&xs, false),
                 &xs);
             xs.clear();
             if (h) {
@@ -3934,7 +3941,8 @@ int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink) {
     // verify that the path exists
     if (!q_get_mode(rv)) {
         if (xsink)
-            xsink->raiseException("REALPATH-ERROR", "path '%s' does not exist", rv.getBuffer());
+            // the path can include the current directory: named in the form for the caller (qore#7662)
+            xsink->raiseException("REALPATH-ERROR", "path '%s' does not exist", qore_msg_path(rv.getBuffer()).c_str());
         return -1;
     }
     return 0;

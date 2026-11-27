@@ -35,10 +35,19 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
 
+#include <charconv>
 #include <cstdlib>
 
-#define Q_MAX_EXCEPTIONS 10
+// Read once per report so a running host can adjust its next report without changing a report in progress.
+static unsigned exception_report_limit() {
+    QoreEnvironmentValue setting("QORE_EXCEPTION_REPORT_LIMIT");
+    const std::string& text = setting.str();
+    unsigned limit;
+    auto result = std::from_chars(text.data(), text.data() + text.size(), limit);
+    return result.ec == std::errc{} && result.ptr == text.data() + text.size() && limit ? limit : 10;
+}
 
 void qore_es_private::assimilate(qore_es_private& xs) {
     if (xs.thread_exit) {
@@ -562,7 +571,9 @@ bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id) {
         }
         return true;
     }
-    return qore_caller_is_sandboxed(pgm_id);
+    // only restricted code: the exceptions of code that a trusted (governed) sandbox governs are the host's
+    // (qore#7737)
+    return qore_caller_is_restricted(pgm_id);
 }
 
 //! the mark of the first exception of the chain that code that is sandboxed or acts for sandboxed code raised
@@ -715,6 +726,58 @@ void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, b
     qore_append_escaped_utf8(out, text, len, true, double_percent);
 }
 
+void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
+    const QoreException* first = qore_es_private::get(sink)->head;
+    QoreString mark;
+    if (qore_exception_chain_mark(first, mark)) {
+        // Use the existing origin-marked report for the whole chain.
+        if (warnings) {
+            sink.handleWarnings();
+        } else {
+            sink.handleExceptions();
+        }
+        return;
+    }
+    auto append_value = [](QoreString& out, QoreValue value) {
+        QoreStringValueHelper text(value);
+        if (text->getEncoding() == QCS_UTF8 || text->getEncoding() == QCS_USASCII) {
+            qore_append_line_safe_text(out, text->c_str(), text->size(), false);
+        } else {
+            qore_append_escaped_report_text(out, *text);
+        }
+    };
+    // the report stops at the same number of diagnostics as the legacy report (QORE_EXCEPTION_REPORT_LIMIT), read once
+    // per report, with a one-line notice of its own
+    const unsigned limit = exception_report_limit();
+    unsigned count = 0;
+    for (const QoreException* e = first; e; e = e->next) {
+        QoreString out(QCS_UTF8);
+        if (e->file.empty() || e->isBuiltin()) {
+            out.concat("qore");
+        } else {
+            qore_append_line_safe_text(out, e->file.data(), e->file.size(), false);
+        }
+        if (e->start_line >= 0) {
+            out.sprintf(":%d", e->start_line);
+            if (e->start_column >= 0) {
+                out.sprintf(":%d", e->start_column + 1);
+            }
+        }
+        out.concat(warnings ? ": warning: " : ": error: ");
+        append_value(out, e->err);
+        out.concat(": ");
+        append_value(out, e->desc);
+        out.concat('\n');
+        if (e->next && ++count == limit) {
+            out.sprintf("qore: note: maximum exception count reached (%u); suppressing further output\n", count);
+            write_report(out);
+            break;
+        }
+        write_report(out);
+    }
+    sink.clear();
+}
+
 void qore_append_escaped_report_text(QoreString& out, const char* text) {
     if (text) {
         qore_append_escaped_utf8(out, text, strlen(text));
@@ -792,6 +855,7 @@ static void qore_write_sandboxed_report(const QoreException* e, const QoreString
             line.sprintf(":" QLLD ")", start_line + offset);
         }
     };
+    const unsigned limit = exception_report_limit();
     unsigned ecnt = 0;
     for (; e; e = e->next) {
         QoreString line(mark);
@@ -842,9 +906,9 @@ static void qore_write_sandboxed_report(const QoreException* e, const QoreString
             }
         }
         if (e->next) {
-            if (++ecnt == Q_MAX_EXCEPTIONS) {
+            if (++ecnt == limit) {
                 out.concat(mark.c_str(), mark.size());
-                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+                out.sprintf("*** maximum exception count reached (%u); suppressing further output\n", ecnt);
                 break;
             }
             out.concat(mark.c_str(), mark.size());
@@ -880,6 +944,7 @@ void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
         }
     }
 
+    const unsigned limit = exception_report_limit();
     unsigned ecnt = 0;
 
     while (e) {
@@ -1045,8 +1110,8 @@ void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
         e = e->next;
         if (e) {
             ++ecnt;
-            if (ecnt == Q_MAX_EXCEPTIONS) {
-                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+            if (ecnt == limit) {
+                out.sprintf("*** maximum exception count reached (%u); suppressing further output\n", ecnt);
                 break;
             }
             out.sprintf("chained exception:\n");

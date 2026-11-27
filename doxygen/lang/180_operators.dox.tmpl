@@ -2744,6 +2744,12 @@ if (x || y)
     @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
     released, including after a partial merge fails; their destructors can read or modify the target.
 
+    An object \a expression gives the \a lvalue the members that the code of the operator may read, as the other reads
+    of a whole object do (such as the @ref keys "keys operator" and a conversion to a hash): its public members, and
+    its private members only in the code of its class or of a class with private access to it (a
+    \c private:internal member, which is kept in storage of its class's own, is not merged into an object of another
+    class); see @ref sandbox_object_ownership for the code of a sandbox.
+
     A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
     \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended
     the string, and an \a lvalue with no value is assigned it; code-point addition takes \c int()

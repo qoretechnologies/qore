@@ -278,12 +278,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         # than blocking the caller forever.  (Queue::get(0) blocks forever, so
         # a non-positive value is treated as "not given".)
         if (exists queue_safety_timeout && queue_safety_timeout > 0ms) {
+            int wait_start = clock_get_monotonic_us();
             try {
                 q.get(queue_safety_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "QUEUE-TIMEOUT") {
                     rethrow;
                 }
+                # the controller delivers the operation's timeout (to) long before this bound: reaching it means that a
+                # completion was lost or late, which is a controller bug (qore#7694)
+                log(Qore::Logger::LoggerLevel::WARN, "AsyncSocketIoController::waitForNotifier(): the safety bound of "
+                    "%d ms passed after %d ms without a completion from the controller (the operation's own timeout "
+                    "was %d ms; owner %y); the operation is canceled", int(queue_safety_timeout),
+                    (clock_get_monotonic_us() - wait_start) / 1000, int(to), owner);
                 # Controller did not deliver within the explicit safety bound:
                 # cancel the (possibly orphaned) operation and treat the wait
                 # as timed out / not signaled.
@@ -394,6 +401,40 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         SandboxManager::checkProcessWideRegistration("set the logger of the async I/O controller");
         LoggerWrapper::setLogger(logger);
         Qore::AsyncIoController::setLogger(logger: logger);
+    }
+
+    #! Returns the logger that the methods of LoggerWrapper log through and change the level of
+    /** The process-wide wrapper (see @ref getGlobalAsyncIoController()) has no logger for code that is sandboxed or
+        acts for sandboxed code, which therefore can neither log through the logger that trusted code set nor change
+        its level (issue #7666)
+    */
+    private *LoggerInterface getLogger() {
+        if (SandboxManager::isSharedObject(self) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return LoggerWrapper::getLogger();
+    }
+
+    #! Returns @ref True if the passed logger is the logger used to log, @ref False if not
+    /** For code that is sandboxed or acts for sandboxed code, the process-wide wrapper has no logger (issue #7666);
+        such code can only compare a logger that it already holds, through the base class method, but it can neither
+        get, use nor change the logger
+    */
+    bool isLogger(LoggerInterface logger) {
+        if (SandboxManager::isSharedObject(self) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            return False;
+        }
+        return LoggerWrapper::isLogger(logger);
+    }
+
+    #! A copy of the process-wide wrapper that code that is sandboxed or acts for sandboxed code makes has no logger
+    /** The copy is not shared, so it would otherwise give its caller the logger that trusted code set on the
+        process-wide wrapper (issue #7666)
+    */
+    copy(AsyncSocketIoController old) {
+        if (SandboxManager::isSharedObject(old) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            LoggerWrapper::setLogger();
+        }
     }
 
     #! Sets the maximum number of callback and task worker threads
@@ -565,7 +606,8 @@ int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
     logger of the process-wide controller: code that is sandboxed or acts for sandboxed code gets a new wrapper of the
     same controller with each call instead, which has no logger (see @ref sandbox_process_wide_registries), so that
     it cannot log through the process's logger or test which logger it is, and a logger that it gives its wrapper is
-    not used by any other caller.  Creating that wrapper leaves the autostop setting of the controller as it is.
+    not used by any other caller; the new wrapper is transferred to the sandboxed caller (see
+    @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()").  Creating that wrapper leaves the autostop setting of the controller as it is.
 
     @return the process-wide AsyncSocketIoController singleton, or for code that is sandboxed or acts for sandboxed
     code, a new wrapper without a logger
@@ -576,7 +618,10 @@ public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
     # the logger of the global wrapper is process-wide: not reachable by sandboxed code, which gets a wrapper of its
     # own, as a shared one could be given a logger through a subclass or reflection (issue #6836)
     if (!SandboxManager::isProcessWideRegistrationAllowed()) {
-        return new AsyncSocketIoController();
+        # the new wrapper is the caller's own, so that it can give it a logger
+        AsyncSocketIoController rv();
+        SandboxManager::transferObjectToCaller(rv);
+        return rv;
     }
     # the controller is created when the module is initialized, for no caller (issue #6996); autostop is enabled when
     # it is first returned, as when it was created here
@@ -591,12 +636,24 @@ public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
 #! (issue #6996)
 /** An object that library code creates while it serves a restricted caller runs its code for that caller (its
     provenance): the process-wide controller is shared by every caller, so it is created when the module is
-    initialized, which is not a call by any caller; the constructor used changes no process-wide setting
+    initialized, which is not a call by any caller; the constructor used changes no process-wide setting.  It is
+    marked as shared by every Program (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"),
+    so that code that is sandboxed or acts for sandboxed code cannot change its state (its logger) if it obtains it
+    (issue #7666)
 */
 class GlobalAsyncIoControllerHolder {
     public {
         #! the process-wide controller
-        static AsyncSocketIoController controller = new AsyncSocketIoController();
+        static AsyncSocketIoController controller = GlobalAsyncIoControllerHolder::create();
+    }
+
+    #! Creates the process-wide controller and marks it as shared when trusted code creates it
+    private:internal static AsyncSocketIoController create() {
+        AsyncSocketIoController ctrl();
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(ctrl);
+        }
+        return ctrl;
     }
 }
 

@@ -250,6 +250,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
     lib/QC_Counter.qpp
+    lib/QC_LazySharedValue.qpp
+    lib/QC_LazySharedMap.qpp
     lib/QC_Channel.qpp
     lib/QC_ChannelIterator.qpp
     lib/QC_Future.qpp
@@ -353,6 +355,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_StdoutOutputStream.qpp
     lib/QC_StderrOutputStream.qpp
     lib/QC_Serializable.qpp
+    lib/QC_SandboxSerializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
     lib/QC_SendRateMonitor.qpp
@@ -997,6 +1000,35 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
+# The thread-local variables of libqore are accessed through TLS descriptors on x86_64 Linux (issue #7006).  libqore
+# is a shared library that is also loaded with dlopen() (the Python module loads it so), so it cannot use the
+# initial-exec TLS model; with the general-dynamic model of -fPIC, every access of a thread-local variable called
+# __tls_get_addr(), about 5% of the instructions of code that runs mostly in the library (AOT-compiled modules).  A
+# TLS descriptor (-mtls-dialect=gnu2, the default on aarch64) resolves to a few instructions when the library's TLS
+# block is in the static TLS area, as it is when the library is linked, and keeps working when it is loaded with
+# dlopen().  glibc and musl support them on x86_64; only Linux is enabled, as the other ELF systems (FreeBSD and the
+# like) are not tested with them.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the AOT
+# identity (qcc-format-config.txt).  It is decided here, before the jemalloc build below, which is compiled with it
+# too: jemalloc's thread-specific data (je_tsd_tls), accessed by every malloc() and free(), is linked into libqore,
+# and would otherwise keep the general-dynamic model.  get_qore_library_info() reports it (TlsDescriptors).  The LLVM
+# libraries linked into libqore are taken as the distribution built them; a general-dynamic thread-local variable in
+# them would keep an R_X86_64_DTPMOD64 relocation in libqore, which qore/misc/tls-descriptors.qtest reports.
+option(QORE_TLS_DESCRIPTORS "access libqore's thread-local variables through TLS descriptors on x86_64 Linux" ON)
+set(QORE_TLS_DESCRIPTORS_USED FALSE)
+if (QORE_TLS_DESCRIPTORS AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"
+        AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-mtls-dialect=gnu2 QORE_HAVE_TLS_DIALECT_GNU2)
+    if (QORE_HAVE_TLS_DIALECT_GNU2)
+        set(QORE_TLS_DESCRIPTORS_USED TRUE)
+    endif()
+endif()
+if (QORE_TLS_DESCRIPTORS_USED)
+    set(QORE_LIB_TLS_DESCRIPTORS_VALUE 1)
+else()
+    set(QORE_LIB_TLS_DESCRIPTORS_VALUE 0)
+endif()
+
 set(QORE_JEMALLOC_LIBRARY)
 if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
@@ -1037,6 +1069,12 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     set(QORE_JEMALLOC_URL "" CACHE STRING
         "Local path or URL of the pinned jemalloc source archive, instead of the mirror or upstream source")
     qore_third_party_source_args(jemalloc _qore_jemalloc_source OVERRIDE "${QORE_JEMALLOC_URL}")
+    # jemalloc's thread-specific data is accessed as libqore's own thread-local variables are (QORE_TLS_DESCRIPTORS
+    # above); EXTRA_CFLAGS is appended to jemalloc's own flags (CFLAGS would replace its optimization flags)
+    set(_qore_jemalloc_extra_cflags)
+    if (QORE_TLS_DESCRIPTORS_USED)
+        set(_qore_jemalloc_extra_cflags "EXTRA_CFLAGS=-mtls-dialect=gnu2")
+    endif()
     ExternalProject_Add(jemalloc_ext
         ${_qore_jemalloc_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
@@ -1050,6 +1088,7 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
             --disable-shared
             --enable-static
             "CC=${CMAKE_C_COMPILER}"
+            ${_qore_jemalloc_extra_cflags}
         BUILD_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) build_lib_static
         INSTALL_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) install_lib_static install_include
         BUILD_BYPRODUCTS ${QORE_JEMALLOC_STATIC_LIBRARY}
@@ -1867,6 +1906,7 @@ set(LIBQORE_CPP_SRC
     lib/SystemEnvironment.cpp
     lib/QoreForkHandlers.cpp
     lib/QoreCounter.cpp
+    lib/QoreLazyShared.cpp
     lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
@@ -2233,6 +2273,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreForkHandlers.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLazyShared.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
@@ -2423,6 +2464,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Channel.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedValue.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedMap.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FutureImpl.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
@@ -2469,6 +2512,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_StdoutOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StderrOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxSerializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"
@@ -2816,6 +2860,11 @@ endif (APPLE)
 if (ADDRESS_SANITIZER)
     target_compile_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
+
+# the TLS descriptors of libqore's own code (QORE_TLS_DESCRIPTORS_USED, decided before the jemalloc build above)
+if (QORE_TLS_DESCRIPTORS_USED)
+    target_compile_options(libqore PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-mtls-dialect=gnu2>)
 endif()
 
 # warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions

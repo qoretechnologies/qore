@@ -10,47 +10,32 @@
 
 #include "PunctuationPreTokenizer.h"
 
-#include <cctype>
+#include "BertPreTokenizer.h"
+#include <utf8proc.h>
 
 namespace QoreTokenizer {
-
-static bool isPunctuation(char c) {
-    // ASCII punctuation characters
-    return (c >= '!' && c <= '/') || (c >= ':' && c <= '@')
-        || (c >= '[' && c <= '`') || (c >= '{' && c <= '~');
-}
 
 std::vector<PreToken> PunctuationPreTokenizer::pretokenize(
         const std::string& text) const {
     std::vector<PreToken> result;
-    if (text.empty()) return result;
-
-    std::string current;
-    size_t current_start = 0;
-
-    for (size_t i = 0; i < text.size(); ++i) {
-        if (isPunctuation(text[i])) {
-            // Flush current non-punctuation segment
-            if (!current.empty()) {
-                result.push_back({current, current_start});
-                current.clear();
+    size_t start = 0;
+    for (size_t pos = 0; pos < text.size();) {
+        utf8proc_int32_t cp;
+        auto length = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t*>(text.data() + pos),
+            text.size() - pos, &cp);
+        size_t end = pos + (length > 0 ? length : 1);
+        if (BertPreTokenizer::isUnicodePunctuation(cp)) {
+            if (start < pos) {
+                result.push_back({text.substr(start, pos - start), start, pos});
             }
-            // Add punctuation as its own pre-token
-            result.push_back({std::string(1, text[i]), i});
-            current_start = i + 1;
-        } else {
-            if (current.empty()) {
-                current_start = i;
-            }
-            current += text[i];
+            result.push_back({text.substr(pos, end - pos), pos, end});
+            start = end;
         }
+        pos = end;
     }
-
-    // Flush remaining
-    if (!current.empty()) {
-        result.push_back({current, current_start});
+    if (start < text.size()) {
+        result.push_back({text.substr(start), start, text.size()});
     }
-
     return result;
 }
 

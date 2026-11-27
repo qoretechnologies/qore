@@ -44,8 +44,9 @@
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
     - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
       @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
-      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
-      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
+      refuse) decides whether the code counts as restricted for the rules that restrict what code may do, such as
+      the rules that keep sandboxed code from I/O that %Qore does not control (see @ref sandbox_manager_classes);
+      queried with
       @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
       @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
       \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
@@ -113,6 +114,25 @@
     @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
     sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
     <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+    @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
+    The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
+    tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
+    elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
+    @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
+
+    @par An Object Merged Into Another Object Gives the Members That the Merging Code May Read
+    The @ref plus_equals_operator "+= operator" with an object operand gives the target the source object's private
+    members only in the code of its class or of a class with private access to it, as the other reads of a whole object
+    do; code outside the class that relied on copying them gets the public members only
+    (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>).
+
+    @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
+    Code with sandboxed callers cannot serialize (\c SERIALIZATION-ERROR), show with \c %%y or set by
+    deserialization the non-public state of classes declared by trusted code that it has no private access to, unless
+    a class inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted hosts use
+    @ref Qore::Program::serialize() "Program::serialize()" and @ref Qore::Program::deserialize() "Program::deserialize()",
+    and a class parsed before its %Program got a sandbox counts as trusted (see @ref sandbox_serialization).
+
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -124,6 +144,12 @@
     server's objects and the credentials of the request (with the platform's authorization context), and trusted code
     when its handler opts in; an unfiltered stream request of such code is refused (see
     @ref httpserverutil_request_credentials and @ref rest_request_credentials).
+
+    @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
+    A stream request is served only in the dispatch of an @ref HttpServer::HttpServer "HttpServer" or of a host with
+    @ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()", and the code that serves it
+    for restricted code gets a placeholder in place of the socket of an HTTP/1.x connection (see
+    @ref httpserverutil_request_credentials).
 
     @par A Weak Assignment That Would Reference a Converted Copy Is an Error
     A @ref weak_assignment_operator "weak assignment (:=)" of a hash or a list to an lvalue whose type converts it to a
@@ -162,12 +188,13 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
-    A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
-    while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
-    taking data is no longer cut off after a fixed number of retries.  The rate applies to each stream, so a listener
-    that serves clients with many concurrent streams on a slow connection may need a lower value.  Set the
-    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option to \c 0 to
-    disable the check (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
+    A streamed HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, also
+    one that the I/O thread sends, so that a very slow client cannot hold it; see
+    @par HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
+    An HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, streamed or
+    buffered, until the client has taken it, so that a very slow client cannot hold it; see
+    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate", which \c 0 disables
+    (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
 
     @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
     Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
@@ -280,6 +307,13 @@
     same exceptions with full paths (see @ref no-external-info "%no-external-info";
     <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
+    @par Code Restricted From External Information Gets Dir and realpath() Paths Relative to the Current Directory
+    @ref Qore::Dir "Dir" paths, the names of files opened with it, its errors and @ref Qore::realpath() "realpath()"
+    give code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" a path that derives from the
+    process's current directory relative to it (ex: \c "./sub"), as it may not read that directory (see
+    @ref sandbox_fs_dir_cwd;
+    <a href="https://github.com/qoretechnologies/qore/issues/7662">issue 7662</a>).
+
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
     (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
@@ -324,10 +358,17 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
 
     @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
-    An HTTP/1.x handler declared by sandboxed code, or that asks for it, gets a socket for its own request only, and
-    aborts the connection with @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's
-    socket that other handlers get is refused to sandboxed code (see @ref httpserver_handler_socket; issues
-    <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
+    An HTTP/1.x handler declared by restricted code (code that a sandbox refusing uncontrolled APIs governs), that
+    asks for it, or that serves a listener that restricted code added gets a socket for its own request only; the
+    connection's socket is refused to restricted code (see @ref httpserver_handler_socket and
+    @ref HttpServer::http_abort_connection() "http_abort_connection()"; issues
+    <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7577">7577</a>).
+
+    @par A Trusted RestHandler Whose Sandboxed Classes Are Below Trusted Ones Calls setHandlerSocketView()
+    A trusted @ref RestHandler::RestHandler "RestHandler" that hands its HTTP/1.x requests to REST classes or stream
+    handlers of a sandboxed %Program below its trusted classes calls @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"
+    in its constructor, or such a request is refused (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7620">issue 7620</a>).
 
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
     The HTTP/1.1 WebSocket connection of such a handler is set up without the connection's socket, and another socket
@@ -348,8 +389,8 @@
     The description of the pool passed to a
     @ref Qore::SQL::DatasourcePool::setWarningCallback() "DatasourcePool warning callback" shows the driver name, host
     and port of the pool with its user name, password and database name masked as \c "****" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of the pool
-    with its password;
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of
+    the pool with its password;
     @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
     configuration (issue #6961).
 
@@ -359,9 +400,9 @@
     @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()" and
     @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()", is the masked description of
     @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the database name;
-    so it no longer identifies a connection, and the names of the database data providers, which are the
-    description, are the same for all the connections of a driver to a host and port; the key of the
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the
+    database name; so it no longer identifies a connection, and the names of the database data providers, which are
+    the description, are the same for all the connections of a driver to a host and port; the key of the
     @ref SqlUtil::TableCache "SqlUtil table cache" is given by the new
     @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" (issue #6988).
 
@@ -371,9 +412,10 @@
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
-    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
-    can override them and call an overridden method's base version; library classes give their subclasses final public
-    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    A class declared by code that its sandbox restricts cannot use the private declarations of a class declared by
+    trusted code, its private constructors included, but can override them and call an overridden method's base
+    version; library classes give their subclasses final public methods, so a subclass method with one of their
+    names and signatures must be renamed
     (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
@@ -879,6 +921,10 @@
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
     in the operation info, and \c exec() is removed: wait on the Queue that \c submit() returns instead.  See
     @ref asyncsocketio_3_0.
+
+    @par The Interpreter Prints One Line per Parse Diagnostic
+    The interpreter now prints @ref cli_parse_diagnostics "compiler-style parse diagnostics" by default.
+    Use <tt>\--diag-format=legacy</tt> or <tt>QORE_DIAG_FORMAT=legacy</tt> for the previous multi-line reports.
 
     @par The Short Command-Line Options -M and -G Have New Meanings
     \c -M is \c --modern and \c -G is \c --enable-debug; use \c --no-namespace-defs and \c --no-global-vars for the
@@ -1489,16 +1535,43 @@
     relatives; see @ref interruptible_io_sandbox_shared_objects;
     <a href="https://github.com/qoretechnologies/qore/issues/7669">issue 7669</a>).
 
+    @par Process-Wide Values Built on First Use as Trusted Code
+    @ref Qore::Thread::LazySharedValue "LazySharedValue" and @ref Qore::Thread::LazySharedMap "LazySharedMap" build
+    process-wide state once, as trusted code, for whichever caller needs it first, so that it is marked as shared and
+    takes neither the sandbox nor the restrictions of that caller (see @ref sandbox_lazy_shared_values;
+    <a href="https://github.com/qoretechnologies/qore/issues/7684">issue 7684</a>).
+
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as
     @ref Qore::SandboxManager::isRestricted() "isRestricted()" does for the calling code (see
     @ref sandbox_restricts).
+    @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()" does
+    the same for the %Program of a call reference or a closure
+    (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
+
+    @par Trusted (Governed) and Restricting Sandbox Managers
+    The rules that restrict what code may do (shared objects, injection, private access, process-wide state, trusted
+    capabilities, deferral) apply only to code that a restricting sandbox governs, also code acting for it, which cannot
+    send @ref Qore::Program::issueModuleCmd() "module commands" to another Program; trusting sandboxes keep interrupts,
+    limits and I/O policies (@ref sandbox_manager_classes; <a href="https://github.com/qoretechnologies/qore/issues/7737">issue 7737</a>).
+
+    @par Configurable Exception Report Limit
+    @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an
+    unhandled text report, including the errors from a syntax check (issue #2311).
 
     @par The Program ID of a Caller Frame
     @ref Qore::get_caller_program_id() "get_caller_program_id()" and its C++ API \c qore_get_caller_program_id() give
     the ID of the Program of a frame of the call stack without building a @ref Qore::CallStackInfo "CallStackInfo"
     hash (<a href="https://github.com/qoretechnologies/qore/issues/7581">issue 7581</a>).
+
+    @par Leading Command-Line Options
+    @ref Qore::GetOpt::parseLeading() "GetOpt::parseLeading()" lets a wrapper parse its options and leave the
+    program name and subsequent arguments together (<a href="https://github.com/qoretechnologies/qore/issues/1969">issue 1969</a>).
+
+    @par String Transliteration
+    @ref Qore::transliterate() "transliterate()" maps bytes in a string using source and target patterns supplied
+    at run time.
 
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
@@ -1702,6 +1775,12 @@
     @ref Qore::Option "Option" constants \c HAVE_BROTLI, \c HAVE_ZSTD, \c HAVE_LZ4, \c HAVE_HTTP2 and
     \c HAVE_HTTP3 are always \c True; see the \c BUILDING file for versions, package names, pinned source
     archives, mirrors and reproducible builds.
+
+    @par Faster Thread-Local Variable Access on x86_64 Linux
+    The %Qore library accesses its thread-local variables through TLS descriptors on x86_64 Linux with GCC or Clang
+    (the \c QORE_TLS_DESCRIPTORS build option, on by default; see the \c BUILDING file) instead of a call of
+    \c __tls_get_addr() for each access, and @ref Qore::get_qore_library_info() "get_qore_library_info()" reports it
+    as \c TlsDescriptors.
 
     @par Standard Descriptors at Startup
     \c qore, \c qcc and library initialization open a missing standard file descriptor on the null device before
@@ -1999,6 +2078,28 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par Sandbox Enforcement Levels
+    A sandbox isolates tenants (\c QSEL_TENANT_ISOLATION, the default) or only checks code safety
+    (\c QSEL_CODE_SAFETY), as its creator sets with @ref Qore::SandboxManager::setEnforcementLevel() (parse define
+    and C++ macro \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
+
+    @par Sandboxed Code Changes Only the Objects That Its Sandbox Created
+    At tenant isolation, sandboxed code cannot delete or write non-public members of objects its sandbox did not
+    create, setters check @ref Qore::SandboxManager::checkObjectOwnedByCaller(), and trusted code hands objects over
+    with @ref Qore::SandboxManager::transferObjectToCaller(); see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>).
+
+    @par Sandboxed Code Reads Only the Non-Public State of the Objects That Its Sandbox Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot read a non-public member of an object
+    that its sandbox did not create, whole-object reads show it the public members only, and a copy keeps the source's
+    ownership; see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/7033">issue 7033</a>).
+
+    @par Sandboxed Code Calls Only the Public Methods of the Objects That Other Code Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot call a non-public method of an object
+    that its sandbox did not create, and binary modules check owners with the new \c qore_check_caller_owns_object();
+    see @ref sandbox_object_ownership (<a href="https://github.com/qoretechnologies/qore/issues/7102">issue 7102</a>).
+
     @par Process-Wide Singletons Refuse Sandboxed Code
     Sandboxed code cannot change the process-wide default thread stack size or logger start time, and does not get
     the global loggers of the data provider modules; see
@@ -2213,6 +2314,8 @@
     - @ref dataproviderintro "DataProvider" module
       - delivery actions can publish @ref DataProvider::DataProviderMessageFormat "message formats" and validate
         a saved form against the installed action and destination variant
+      - @ref dpql_list_functions "DPQL list functions" flatten and group lists, select records by extreme keys, and compute percentiles
+      - @ref dpql_list_reducers "DPQL list reducers" compute totals, averages, and extrema over values or record fields
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
@@ -2379,6 +2482,10 @@
       - the \c http_fields_at_top_level option gives the fields of a request only under \c "headers" (see
         @ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "http_fields_at_top_level";
         <a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
+      - a listener with the new @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "own_handlers_only"
+        option serves only its own handlers, never those of the server, and the stop of a listener refuses new
+        connections before it waits for the requests in progress
+        (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
@@ -2439,6 +2546,8 @@
       - the \c transcribe-audio action and the Conversations API, replacing the deprecated Assistants API
       - the \c multipart/form-data boundary of a file upload is random
         (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
+      - the conversation context store of a provider is changed only by its owner, under tenant isolation
+        (<a href="https://github.com/qoretechnologies/qore/issues/7035">issue 7035</a>)
       - see @ref openaidataprovider_v1_7 for all changes
 
     - @ref openairestclientintro "OpenAiRestClient" module
@@ -2521,6 +2630,8 @@
         asynchronous client of a connection that awaits authorization is created without logging in (see
         @ref restclientv2_7 for every change in behavior;
         <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
+      - the public \c getLogger() of the clients returns the logger only to the owner of the client, under tenant
+        isolation (<a href="https://github.com/qoretechnologies/qore/issues/7034">issue 7034</a>)
       - OAuth2 client credentials that trusted code supplies can be sealed into a client: they are used for its token
         requests but never given out (see @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials";
         <a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
@@ -2585,6 +2696,10 @@
         default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
+      - @ref SqlUtil::AbstractTable::getSetLoggingSql() "table logging controls" support Oracle redo logging and
+        PostgreSQL logged and unlogged tables (issue #2975)
+      - @ref sqlutil_identity_columns "identity columns" round-trip through schema descriptions and use the target
+        database's native auto-increment mechanism
       - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports sequence ownership and native type
         where the database provides them (<a href="https://github.com/qoretechnologies/qore/issues/7587">issue 7587</a>)
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
@@ -2684,7 +2799,7 @@
     - @ref protobufintro "protobuf": dynamic <a href="https://protobuf.dev/">Protocol Buffers</a> schemas and
       encoding
     - @ref tokenizerintro "tokenizer": <a href="https://huggingface.co/">HuggingFace</a>-compatible text
-      tokenization
+      tokenization with Unicode normalization, UTF-8 byte offsets and decoder sequences
     - @ref yamlintro "yaml": YAML parsing and serialization, formerly an external module, with its companion
       modules; the standard modules require it
 
@@ -2754,7 +2869,8 @@
     - @ref customeriodataproviderintro "CustomerIoDataProvider": data provider for Customer.io marketing automation
     - @ref customeriorestclientintro "CustomerIoRestClient": REST client for the Customer.io App and Track APIs
     - @ref dataproviderdataframeintro "DataProviderDataFrame": data provider integration for the dataframe module
-    - @ref dataprovidermlintro "DataProviderML": data pipeline processors for the ml module
+    - @ref dataprovidermlintro "DataProviderML": data pipeline processors for the ml module, including
+      structured extraction with preset or custom schemas
     - @ref datastreamclientintro "DataStreamClient": synchronous HTTP data stream clients (from module-yaml)
     - @ref datastreamclientiointro "DataStreamClientIo": asynchronous HTTP data stream clients
     - @ref datastreamrequesthandlerintro "DataStreamRequestHandler": server-side HTTP data streams (from module-yaml)
@@ -2788,7 +2904,8 @@
     - @ref freshsalesrestclientintro "FreshsalesRestClient": REST client for the Freshsales API
     - @ref gcpauthintro "GcpAuth": GCP bearer access tokens through Application Default Credentials
     - @ref geminibodyshapeintro "GeminiBodyShape": the Gemini \c generateContent wire format shared by the Gemini
-      and Vertex AI clients
+      and Vertex AI clients, including the model-specific
+      @ref GeminiBodyShape::highestThinkingLevel() "highest thinking level"
     - @ref geminidataproviderintro "GeminiDataProvider": data provider for Google Gemini
     - @ref geminirestclientintro "GeminiRestClient": REST client for the Google Gemini API
     - @ref generatordataproviderintro "GeneratorDataProvider": configurable test record streams
@@ -2882,6 +2999,7 @@
     - @ref onerecordclientintro "OneRecordClient": IATA ONE Record client for air cargo data sharing
     - @ref onerecordserverhandlerintro "OneRecordServerHandler": IATA ONE Record server handler
     - @ref openapi3intro "OpenApi3": OpenAPI 3.x schemas for REST APIs
+      - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" builds schema objects faster while validating them eagerly
     - @ref openapi3dataproviderintro "OpenApi3DataProvider": data provider API for OpenAPI 3.0 / 3.1 schemas
     - @ref opensearchdataproviderintro "OpenSearchDataProvider": data provider and vector store for OpenSearch
     - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender": logger appender for OpenSearch
@@ -2995,14 +3113,63 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a class injected with @ref Qore::Program::importClass() "Program::importClass()" keeps the class that it is
+      injected in place of, with the declarations that that class names, for as long as the injected class exists:
+      the type checks of the injected class's objects (\c instanceof, typed assignments and casts, for example) read
+      freed memory once the @ref Qore::Program "Program" that declared the replaced class was deleted, when that was
+      not the Program that the injected class came from; a compiled program or module in which a class is injected in
+      place of itself, or of a class that leads back to it through the classes that it is injected in place of or
+      inherits, including classes of the other objects linked into the same program, is no longer loaded
+      (<a href="https://github.com/qoretechnologies/qore/issues/7664">issue 7664</a>)
     - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
       two threads store into targets referring to each other, or hangs when the reference refers to the target's own
       object or variable: the references are bound with no lock held (issue #7391)
     - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
       (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
+    - the @ref plus_equals_operator "+= operator" merges only the members of an object that the merging code may read
+      into another object, where it gave code outside the class the source object's private members
+      (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>)
+    - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
+      destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
+      (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
+    - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
+      extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)
+    - a builtin class that a module creates as a subclass of a class whose base classes are still being added (such
+      as a class created from Java by the \c jni module) gets the ancestors that the parent class gets afterwards,
+      so that its objects are instances of them and keep their private data
+      (<a href="https://github.com/qoretechnologies/qore/issues/7614">issue 7614</a>)
+    - @ref Qore::Serializable "Serializable" did not apply the member access of the classes declared by trusted code to
+      sandboxed code, which could read and set their non-public state through serialization (see
+      @ref sandbox_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7146">issue 7146</a>)
+    - a builtin function variant that a binary module adds at run time to a function of a Program's namespace that the
+      Program shares with the static system namespace or a module's namespace is the Program's only; it was added to
+      every Program (<a href="https://github.com/qoretechnologies/qore/issues/7588">issue 7588</a>)
+    - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
+      setups of restricted code get the request without its credentials and without the objects of the server, such
+      as its logger (@ref httpserverutil_request_credentials;
+      <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
+    - the @ref push "push" and @ref unshift "unshift" operators whose operand is the lvalue's own list (\c push l, l)
+      add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
+      assertion of a debug build (<a href="https://github.com/qoretechnologies/qore/issues/7622">issue 7622</a>)
+    - fixed a memory-safety issue with the builtin declarations that a binary module adds to a Program at run time,
+      which are now freed with their Program only once nothing, also in another Program, uses them (issues
+      <a href="https://github.com/qoretechnologies/qore/issues/7540">7540</a>, <a href="https://github.com/qoretechnologies/qore/issues/7649">7649</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7680">7680</a>)
+    - on Windows, @ref Qore::Dir::mkdir() "Dir::mkdir()", @ref Qore::Dir::rmdir() "Dir::rmdir()",
+      @ref Qore::Dir::openFile() "Dir::openFile()", @ref Qore::Dir::openDir() "Dir::openDir()" and
+      @ref Qore::Dir::removeFile() "Dir::removeFile()" refuse a name with either directory separator (slash or backslash), and the
+      @ref sandbox_filesystem "sandbox file-system policy" checks the path that is created or removed; a name starting
+      with a slash was checked as an absolute path but used in the directory of the object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7662">issue 7662</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
+    - fixed a memory-safety issue with a child @ref Qore::Program "Program" that outlives its parent: the parent's
+      classes, hashdecls and enums that the child did not inherit but that its inherited functions, constants,
+      typedefs or global variables name are now kept with the child
+      (<a href="https://github.com/qoretechnologies/qore/issues/7607">issue 7607</a>)
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
       \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
       call stack; they returned @ref nothing for any offset other than \c 0
@@ -4853,6 +5020,10 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - @ref Qore::delete_thread_data() "delete_thread_data()" and the C++ API's \c QoreHashNode::deleteKey() and
+      \c QoreObject::deleteMemberValue() raise \c SYSTEM-OBJECT-ERROR for a system constant object such as
+      @ref Qore::stdout "stdout", as the @ref delete "delete operator" does, where they deleted it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
     - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
       %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
       @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from
@@ -4862,6 +5033,11 @@
       derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
       @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
       @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - sandboxed code cannot copy a @ref sandbox_shared_objects "shared object" unless a class of the copy declares a
+      \c copy() method, which resets what the class guards for a shared object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7667">issue 7667</a>)
+    - sandboxed code cannot serialize a @ref sandbox_shared_objects "shared object"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7673">issue 7673</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement
@@ -4928,6 +5104,19 @@
       raises \c OBJECT-ALREADY-DELETED when another call takes the object over or deletes it before or at the same
       time, instead of using or releasing the Program again
       (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
+    - the key of an @ref Qore::AsyncIoController "AsyncIoController" operation is unique in the controller, not only
+      on one I/O thread: @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
+      @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()" with \c replace_existing, and the checks of a
+      submission that is refused or replaces another application's operation, now see an operation with the key on the
+      I/O thread of another socket, which left two operations with one key
+      (<a href="https://github.com/qoretechnologies/qore/issues/7624">issue 7624</a>)
+    - the process-wide standard I/O objects @ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and
+      @ref Qore::stderr "stderr" cannot be changed by code that a sandbox governs, also when the sandbox allows terminal
+      I/O: the methods of @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile" that reopen, close or redirect
+      them or change their encoding, position, locks, terminal attributes, owner or event queue raise
+      \c SHARED-OBJECT-ERROR for it, as for an object marked with
+      @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
+      affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

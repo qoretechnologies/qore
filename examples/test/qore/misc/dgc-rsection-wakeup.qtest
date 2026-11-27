@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - wakeups of threads waiting on a condition variable for the r-section of an object's lock
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcRSectionWakeupTest
+
+#! Tests that every thread waiting for an r-section is woken when it becomes free (qore#7717)
+/** A thread that takes the r-section of an object exclusively waits while recursive-reference scans hold it in shared
+    mode.  The last scan to leave woke only one waiter; when another thread took the object's write lock before that
+    waiter checked the r-section again, the waiter rolled back and returned, and the other waiters slept on although
+    the r-section was free, keeping every later scan of the object out as well.
+
+    The C++ unit test (ut_rsection_waiters_woken_on_release() in lib/ql_debug.cpp) makes this interleaving happen with
+    a debug-only hook that holds the woken waiter between its wakeup and its check until the write lock is taken; it
+    needs a debug build of the library.
+*/
+class DgcRSectionWakeupTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DgcRSectionWakeupTest", "1.0", \ARGV) {
+        addTestCase("every r-section waiter is woken when it becomes free", \testCppUnitTests());
+        set_return_value(main());
+    }
+
+    testCppUnitTests() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_run_rsection_tests() is only registered in a library-debug build");
+        }
+        hash<auto> res = call_function("dbg_run_rsection_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("C++ unit tests: %d/%d passed, %d failed", res.pass_count,
+            res.test_count, res.fail_count));
+    }
+}

@@ -98,6 +98,10 @@ http.waitStop();
     @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
 
     @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - the log message callback of a restricted %Program gets the request without its credentials, with the keys that
+      the handler adds for the dispatch of a call (@ref YamlRpcHandler::YamlRpcHandler::YamlRpcHandlerContextKeys
+      "YamlRpcHandlerContextKeys") and those that a subclass names with
+      @ref YamlRpcHandler::YamlRpcHandler::getRpcContextKeys() "getRpcContextKeys()" (issues #7303, #7724)
     - the introspection methods \c help, \c system.listMethods and \c system.describe return the registered
       methods' help, names and service description (issue #7149)
     - the error of a method call and the response for a request body that cannot be parsed give the location of the
@@ -136,6 +140,15 @@ public namespace YamlRpcHandler {
     public class YamlRpcHandler inherits public AbstractHttpRequestHandler {
         #! implementation of the handler
         const Version = "1.0";
+
+        #! The keys of the request context that the handler adds for the dispatch of a call, which the code of a
+        #! restricted %Program gets also when the request is filtered for it (qore#7724)
+        /** The method (\c method), the request ID (\c yamlid), and the context marker (\c cmark) and function
+            (\c function) of the method; see getRpcContextKeys() for keys that a subclass adds
+
+            @since YamlRpcHandler 1.5
+        */
+        public const YamlRpcHandlerContextKeys = ("cmark", "function", "method", "yamlid");
 
         #! internal methods of the handler (introspection)
         const InternalMethods = (
@@ -279,6 +292,27 @@ public namespace YamlRpcHandler {
                 h.error = sprintf("%s: %s: %y", ex.err, ex.desc, h);
                 return make_yaml({"error": h}, flags);
             }
+        }
+
+        #! Returns the names of more keys of the request context that the code of a restricted %Program gets when the
+        #! request is filtered for it (qore#7724)
+        /** A log message callback whose code is of a restricted %Program gets the request without its credentials:
+            the keys of the request that the filter gives, the keys of @ref YamlRpcHandlerContextKeys, and the keys
+            that this method returns.  A subclass that adds keys to the request context for its callbacks (in
+            preprocessRequest()) returns their names here.  The keys must hold plain data and no credentials: the code
+            of a restricted %Program gets them.  A name of a key of the request that the filter gives
+            (@ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys") is not copied
+            from the raw request context, and the server's objects
+            (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "AbstractStreamRequest::ServerContextKeys") and
+            values that are objects or hold one at any depth are not given in any case.
+
+            The default implementation returns no names.
+
+            @return the names of more keys of the request context that the code of a restricted %Program gets
+
+            @since YamlRpcHandler 1.5
+        */
+        private *list<string> getRpcContextKeys() {
         }
 
         #! @cond nodoc
@@ -430,6 +464,39 @@ public namespace YamlRpcHandler {
         }
 
         # don't reimplement this method; fix/enhance it in the module
+
+        #! Returns the request context for the log message callback: without the credentials of the request for code
+        #! of a restricted %Program (qore#7303)
+        /** See @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()";
+            fails closed
+        */
+        private hash<auto> getContextForCode(code c, hash<auto> cx) {
+            bool restricted;
+            try {
+                restricted = SandboxManager::isCodeFromRestrictedProgram(c);
+            } catch (hash<ExceptionInfo> ex) {
+                restricted = True;
+            }
+            if (!restricted) {
+                return cx;
+            }
+            hash<auto> rcx = filterRequestForHandler(cx, cx.hdr ?? {}).cx;
+            # the handler's own keys for the dispatch of the call
+            foreach string key in (YamlRpcHandlerContextKeys) {
+                if (cx.hasKey(key)) {
+                    rcx{key} = cx{key};
+                }
+            }
+            # the keys that a subclass adds: plain data only, never the request keys or the server's objects
+            foreach string key in (getRpcContextKeys()) {
+                if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ContextKeys)
+                        && !inlist(key, AbstractStreamRequest::ServerContextKeys)
+                        && !AbstractStreamRequest::holdsObject(cx{key})) {
+                    rcx{key} = cx{key};
+                }
+            }
+            return rcx;
+        }
         final private hash<auto> callMethod(hash cx, auto params) {
             @assert(cx.method);
             string method = cx.method;
@@ -449,7 +516,8 @@ public namespace YamlRpcHandler {
                 cx.cmark = found.cmark;
                 cx.function = found.function;
 
-                *string msg = getLogMessage ? getLogMessage(cx, found - "name_re", \params) : NOTHING;
+                *string msg = getLogMessage
+                    ? getLogMessage(getContextForCode(getLogMessage, cx), found - "name_re", \params) : NOTHING;
                 if (msg)
                     log(cx, msg);
 

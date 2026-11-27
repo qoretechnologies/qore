@@ -332,3 +332,27 @@ foreach string name in (p.callFunction("probe_check_names")) {
     printf("its own code opens a C++ scope in a Qore update scope: %s\n", p.callFunction("nested_in_qore_scope", o,
         t));
 }
+
+# the code of a trusted (governed) sandbox, one that allows uncontrolled APIs, is sandboxed but not restricted: it
+# creates, shares and changes shared objects as trusted code does, while its sandbox's policies still apply (qore#7737)
+printf("--- a tenant of a trusted (governed) sandbox\n");
+Program g(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+{
+    SandboxManager gsm();
+    gsm.setUncontrolledApiPolicy(True);
+    g.setSandboxManager(gsm);
+}
+g.parse(TenantCode, "governed tenant");
+foreach string name in ("creates shared objects", "can share objects", "a probe that it creates is shared",
+        "it marks a probe that it creates") {
+    printf("%s: %s\n", name, g.callFunction("run_check", name));
+}
+foreach string name in ("set the value", "mark it", "its own code in the scope", "run its own code locked") {
+    CppApiTest::SharedObjectProbe shared(1);
+    printf("%s: shared: %s\n", name, g.callFunction("run_probe_check", name, shared));
+}
+{
+    CppApiTest::SharedObjectProbe t(1);
+    printf("a file that the update opens for it: %s\n", g.callFunction("update_open", t, get_script_path()));
+    printf("the update checks a callback of it: %s\n", g.callFunction("update_check_own", t));
+}

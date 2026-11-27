@@ -121,7 +121,20 @@ public:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys && orig == this;
+        return sys && orig == this && !program_local.load(std::memory_order_acquire);
+    }
+
+    //! Marks an original builtin enum as owned by the Program to whose namespace it is added; returns true if it was
+    //! marked now and adds its types to \a marked_types (qore#7540)
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
+        if (!sys || orig != this || program_local.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        marked_types.push_back(getTypeInfo(false));
+        marked_types.push_back(getTypeInfo(true));
+        marked_owners.push_back(&type_owner);
+        program_local.store(true, std::memory_order_release);
+        return true;
     }
 
     //! An original builtin enum that is not one of the static system namespace (Qore::) or a tombstone: a binary
@@ -150,7 +163,12 @@ public:
     DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
-    //! The original of a copy of a binary module's enum (see orig_ref)
+    //! The namespace of the declaration (QoreTypeOwner::getTypeOwnerNamespace(), qore#7680)
+    DLLLOCAL const qore_ns_private* getTypeOwnerNamespace() const {
+        return ns;
+    }
+
+    //! The original of a copy of a binary module's enum or of one added to a Program at run time (see orig_ref)
     DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
         if (orig_ref) {
             refs.push_back(&const_cast<qore_enum_decl_private*>(orig)->type_owner);
@@ -411,15 +429,24 @@ protected:
         whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
     */
     bool not_module_decl = false;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
     //! copied into this Program by importing a module; never exported again
     bool mod_imported = false;
 
     bool parse_init_done = false;
-    //! true if a copy holds a reference to its original, a binary module's enum (qore#7533)
+    //! true if a copy holds a reference to its original, a binary module's enum (qore#7533) or one that a binary module
+    //! added to a Program at run time (program_local, qore#7680)
     /** The module's namespace can be freed before the copy (at the end of the process, the modules are deleted before
-        a Program that holds itself is cleared), while the module's C++ code, which code of the copy's Program can
-        call then, makes values from the original's members (QoreValue::makeEnum()); the reference is released last
-        in the destructor
+        a Program that holds itself is cleared), and the Program of an original added at run time before the copy in
+        another Program, while the module's C++ code, which code of the copy's Program can call then, makes values from
+        the original's members (QoreValue::makeEnum()); the reference is released last in the destructor
     */
     bool orig_ref = false;
 

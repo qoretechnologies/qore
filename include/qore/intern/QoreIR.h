@@ -1180,8 +1180,28 @@ enum class QoreIROpcode : uint16_t {
         qore_rt_read_reference_local().
     */
     ReadReferenceThrough = 446,
+    /** Releases what the run of a handler compiled as a function of its own has handed over to the function that it
+        runs for (QoreIROpcode::HandlerReturn) when a debugger's break or continue request abandons the return of the
+        block that it leaves, in the debug IR of AOT code (qore#7625)
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (447, 448, ...)
+        No result.  Emitted only on the paths of a debugger's requests (QoreIRBasicBlock::debug_flow) in the body of a
+        handler (QoreIRFunction::handler_body) of a function with them (QoreIRFunction::hasDebugFlowPaths()), where the
+        block that the request leaves decides it, when its handlers have run, as the AST interpreter's block releases
+        the return at once (StatementBlock::requestTakenInFunction()): the end of the request of the last handler
+        lowered inline at the exit of the block in the cleanups of a return statement, and the path of a ScopeExit
+        past the inline cap in those cleanups.  With no operands, the function takes the request (a loop or a switch
+        statement of the body): the return is abandoned.  With one operand, the request (RC_BREAK or RC_CONTINUE, an
+        integer constant), it leaves the function: the run of the handler decides (QoreHandlerRunContext::takes_request),
+        and the instruction gives the request to the frame that runs the handler (qore_ir_set_handler_flow()), as the
+        path, which ends the handler with the scope's return path, is not the path of a return request.
+        If the run has handed values over and the request abandons them, the run releases what they left in the
+        function that takes them and rolls its count back (qore_handler_abandon_return()).  The release can raise an
+        exception (a destructor), which the IR interpreter takes to the instruction's exception target.  Native code
+        has no paths: the instruction does not occur there.
+    */
+    HandlerAbandonReturn = 447,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (448, 449, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1190,8 +1210,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReadReferenceThrough);
-static_assert(QORE_IR_MAX_OPCODE == 446, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::HandlerAbandonReturn);
+static_assert(QORE_IR_MAX_OPCODE == 447, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1732,6 +1752,11 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool auto_local_string_append = false;  // Transient: paired auto-local load or generic +=, guarded by runtime type
+    // Transient: the StoreLocal of the result of a generic += of an "auto" local back to the local, paired with its load
+    // and operation (qore_ir_mark_auto_string_appends()); it stores nothing after an operation made through a
+    // reference that the local holds, and it gives a container that the operation changed in place back to the local
+    // without a share copy (qore#7421)
+    bool paired_auto_add_store = false;
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
     // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
@@ -1885,12 +1910,22 @@ struct QoreIRDebugFlowTargets {
             return false;
         }
         return target == return_target || qore_ir_debug_flow_entry_path(target) == qore_ir_debug_flow_entry_path(
-            return_target);
+            return_target) || qore_ir_debug_flow_same_branch(target, return_target)
+            || qore_ir_debug_flow_path_leaves(qore_ir_debug_flow_entry_path(target));
     }
 
 private:
     //! returns the block that the entry block of a request branches to
     DLLLOCAL static const QoreIRBasicBlock* qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry);
+    //! returns true if the code of a request, from \a path, leaves the function although it is not the path of a
+    //! return request: the path of a break or a continue that leaves a handler compiled as a function of its own,
+    //! whose code releases what the handler run handed over if the run takes the request (QoreIROpcode::
+    //! HandlerAbandonReturn with the request as its operand, qore#7625)
+    DLLLOCAL static bool qore_ir_debug_flow_path_leaves(const QoreIRBasicBlock* path);
+    //! returns true if the entry blocks \a a and \a b are each one conditional branch on the same value to the same
+    //! blocks: the entries of a ScopeExit past the inline cap whose handlers can hand a value over, for requests that
+    //! go on alike (QoreIRLowering::setReplacingScopeExitFlowTargets(), qore#7625)
+    DLLLOCAL static bool qore_ir_debug_flow_same_branch(const QoreIRBasicBlock* a, const QoreIRBasicBlock* b);
 };
 
 //! Records a debugger's request \a rc at a step event of a handler that ends the handler (RC_RETURN, RC_BREAK or

@@ -54,6 +54,12 @@ class QoreReferenceBindPairList;
 
 #define OS_OK            0
 #define OS_DELETED      -1
+//! the status of an object that the thread with TID 0 destroys
+/** q_gettid() is 0 in the signal handler thread (get_signal_thread_entry()) and in code that runs once its thread's
+    data is destroyed, which is OS_OK: such a deletion marks the object with this value instead, so that it is seen
+    being destroyed (qore_object_private::getDestroyingStatus())
+*/
+#define OS_DESTROYING_TID0 -2
 
 // object access constants
 #define QOA_OK           0
@@ -233,6 +239,34 @@ DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Returns 0 if the current code may delete the object, otherwise raises an exception and returns -1 (qore#6842)
+/** A system constant object is never deleted, by any code: refused with \c SYSTEM-OBJECT-ERROR, as with the delete
+    operator.  Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) at the
+    enforcement level of tenant isolation may delete only an object that its sandbox owns; refused with
+    \c SANDBOX-OBJECT-ACCESS-ERROR.  A refused deletion leaves the object as it is.  Used by the builtin functions and
+    methods that delete an object or take it over for the calling code (also by the TAKE_HARD_QORE_VALUE_OBJ_DATA()
+    macro), which make no check of their own: the class context of the code that called the builtin code counts as
+    well as the current one (runtime_get_caller_class()).  Also declared in QoreHashNodeIntern.h
+
+    @param obj the object to delete
+    @param action the action for the error message, such as \c "delete"
+    @param xsink for the exception if the deletion is refused
+*/
+DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
+
+//! Deletes an object for the delete operator: refused for sandboxed code if its sandbox does not own it (qore#6842)
+/** Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) can delete only an
+    object that its sandbox owns (qore_sandbox_current_code_created()); otherwise raises
+    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is.  The caller has checked for a system object
+*/
+DLLLOCAL void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink);
+
+//! Returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842)
+/** @param owner_provenance set to the provenance of the object in whose method trusted class code creates the object
+    (which the new object takes), if that object decides; not changed for sandboxed code
+*/
+DLLLOCAL bool qore_creator_is_sandbox_owner(const QoreSandboxContext*& owner_provenance);
+
 //! Returns true if the calling code may mark objects as shared by every Program of the process
 /** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it
     (see SandboxManager::updateSharedObject()) as long as it does not run for sandboxed code that the scope's code
@@ -242,9 +276,24 @@ DLLLOCAL bool qore_caller_may_share_objects();
 
 class qore_object_private : public RObject {
 public:
+    //! How a write of a non-public member is checked against the sandboxed write rule (qore#6842)
+    enum SandboxWrite : unsigned char {
+        //! the rule is checked for the write (see checkSandboxedMemberWrite())
+        SW_CHECK,
+        //! a write of a member of self (the object of the method or closure whose code writes it), which is always of
+        //! the class of the writing code or of a subclass of it and which the rule allows: not checked, so that the
+        //! write costs nothing more than before the rule existed
+        SW_SELF,
+        //! the writer was checked already (with sandboxedWriterDenied(), before the object lock was taken), and the
+        //! rule allows the write
+        SW_ALLOWED,
+        //! the writer was checked already, and the rule refuses the write
+        SW_DENIED,
+    };
+
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    //! OS_OK, the status of the thread running the destructor (getDestroyingStatus()), or OS_DELETED
     /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
         the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
         whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
@@ -257,6 +306,14 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! The sandbox context that owns the object, or nullptr if no sandbox owns it (qore#6842)
+    /** Set if sandboxed code created the object, or trusted class code directly in a method of an object that the
+        sandbox that its caller is governed by owns (the object then also takes that object's provenance): then it
+        is \c sandbox_provenance (not referenced again); or if trusted code transferred the object to the sandboxed
+        code that it served (qore_transfer_object_to_caller()): then it is the caller's context (referenced), which
+        is set once and never changed
+    */
+    std::atomic<QoreSandboxContext*> sandbox_owner{nullptr};
     //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
     //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
     //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
@@ -351,7 +408,15 @@ public:
 
     //! Returns true if the calling thread is running the destructor of the object
     DLLLOCAL bool inDestructorOfThisThread() const {
-        return status.load(std::memory_order_acquire) == q_gettid();
+        return status.load(std::memory_order_acquire) == getDestroyingStatus();
+    }
+
+    //! Returns the status with which the calling thread marks an object that it destroys: its TID, or
+    //! OS_DESTROYING_TID0 for TID 0 (the signal handler thread), which would be OS_OK
+    DLLLOCAL static int getDestroyingStatus() {
+        int tid = q_gettid();
+        assert(tid >= 0);
+        return tid ? tid : OS_DESTROYING_TID0;
     }
 
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
@@ -412,6 +477,32 @@ public:
         @param xsink for the exception
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
+    //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)
+    /** Called only for an object marked as shared, before the copy is made.  It decides as checkSharedMethodChange()
+        does (code that is sandboxed or acts for sandboxed code; fails closed), with no update-scope exemption: such
+        code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
+        (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
+        of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
+        copy method is where a class resets them.  Such code is also refused a copy with the copy method of another
+        class than the object's (Reflection's CopyMethod of a base class), which would not run the copy methods of
+        the object's subclasses.  The copy is never marked as shared here.
+
+        @param copy_cls the class whose copy runs
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
+    //! (qore#7673)
+    /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
+
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
 
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
@@ -486,7 +577,9 @@ public:
             LexicalSemanticPolicy policy);
 
     //! merges \a h and \a new_internal_data with the object's lock held
-    /** @param bound the reference elements of the values of \a h bound before the lock was taken
+    /** @param sandbox_write how the writes of non-public members are checked against the sandboxed write rule
+        (qore#6842): the result of sandboxedWriterDenied() that the caller decided before it took the lock
+        @param bound the reference elements of the values of \a h bound before the lock was taken
         (mergeBindReferences()), or nullptr: a value of a member whose type can bind a reference is checked with a
         probe, and a reference element that is not in \a bound fails the merge closed with REFERENCE-BIND-ERROR, as it
         is not bound under the lock (qore#7391)
@@ -494,7 +587,7 @@ public:
     template <bool Lexical>
     DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-            LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound = nullptr);
+            LexicalSemanticPolicy policy, SandboxWrite sandbox_write, const QoreReferenceBindPairList* bound = nullptr);
 
     //! binds the reference elements of the values of \a h that the members merged into the object bind (qore#7391)
     /** Called before the object's lock is taken: each value of a member whose type can bind a reference is checked
@@ -581,6 +674,18 @@ public:
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,
             ExceptionSink* xsink);
 
+    //! As getLValue(), for a member of self: the object of the method or closure whose code writes it
+    /** \a class_ctx is the class of that code; the sandboxed write rule allows the write (see
+        checkMemberAccessGetTypeInfo()), so it is not looked at (qore#6842)
+    */
+    DLLLOCAL int getSelfLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+            bool for_remove, ExceptionSink* xsink);
+
+    //! the implementation of getLValue() and getSelfLValue()
+    template <bool SelfWrite>
+    DLLLOCAL int getLValueImpl(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+            bool for_remove, ExceptionSink* xsink);
+
     //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the member write is refused (qore#6749)
     /** see checkProcessConstantWrite() and checkForeignBuiltinMemberWrite(); called only where a member is created
         (the miss path of a member write) and for merges, so that a write to a member that exists, such as a declared
@@ -629,8 +734,9 @@ public:
             const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
+        // get the current class context; the public members only if the sandboxed read rule refuses the code the
+        // non-public members of the object (qore#7033)
+        const qore_class_private* class_ctx = getWholeObjectReadContext(runtime_get_class());
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
             class_ctx = nullptr;
 
@@ -664,8 +770,9 @@ public:
     }
 
     DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
+        // get the current class context; the public members only if the sandboxed read rule refuses the code the
+        // non-public members of the object (qore#7033)
+        const qore_class_private* class_ctx = getWholeObjectReadContext(runtime_get_class());
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
             class_ctx = nullptr;
 
@@ -792,20 +899,24 @@ public:
         return -1;
     }
 
-    /** @param declared if not null, set to true if the member is declared by the class, false if not (a member that
+    //! Checks the access of a write to a member and returns its type
+    /** Used only for writes: a write of a non-public member by the code of a class that sandboxed code declared is
+        checked against the sandboxed write rule as well (qore#6842), as \a SW gives; a template that is not inlined (as
+        the function was before the rule), so that the write of a member of self (SW_SELF) has the code that it had
+        before the rule
+
+        @tparam SW how the write is checked against the sandboxed write rule; a caller that holds the object's lock
+        passes the result of sandboxedWriterDenied() (SW_ALLOWED or SW_DENIED), which it decided before it took the
+        lock, as the rule looks up the sandboxes of the thread
+
+        @param len the length of the member name \a mem in bytes (qore#7194)
+        @param declared if not null, set to true if the member is declared by the class, false if not (a member that
         can be added to and removed from the object)
     */
-    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+    template <SandboxWrite SW>
+    DLLLOCAL QORE_INTERN_NOINLINE int checkMemberAccessGetTypeInfoT(ExceptionSink* xsink, const char* mem, size_t len,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
-            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
-        return checkMemberAccessGetTypeInfo(xsink, mem, strlen(mem), class_ctx, member_class_ctx, typeInfo,
-            declared);
-    }
-
-    //! as above for the member name \a mem of \a len bytes (qore#7194)
-    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem, size_t len,
-            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
-            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
+            const QoreTypeInfo*& typeInfo, bool* declared) const {
         assert(!member_class_ctx);
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, len, class_ctx);
@@ -816,6 +927,19 @@ public:
             if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
                 return -1;
+            }
+            // the access check above refuses a non-public member without a class context
+            if (mi->access > Public && class_ctx) {
+                if constexpr (SW == SW_CHECK) {
+                    // a load and a branch while no code in the process is sandboxed
+                    if (qore_sandboxed_code_active()
+                            && checkSandboxedMemberWrite(mem, class_ctx, xsink)) {
+                        return -1;
+                    }
+                } else if constexpr (SW == SW_DENIED) {
+                    raiseSandboxedMemberWriteError(mem, class_ctx, xsink);
+                    return -1;
+                }
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
@@ -833,8 +957,185 @@ public:
         return 0;
     }
 
+    //! Checks the access of a write to a member and returns its type, with the sandboxed write rule (SW_CHECK)
+    /** @param declared if not null, set to true if the member is declared by the class, false if not (a member that
+        can be added to and removed from the object)
+    */
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
+        return checkMemberAccessGetTypeInfoT<SW_CHECK>(xsink, mem, strlen(mem), class_ctx, member_class_ctx, typeInfo,
+            declared);
+    }
+
+    //! as above for the member name \a mem of \a len bytes (qore#7194)
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem, size_t len,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
+        return checkMemberAccessGetTypeInfoT<SW_CHECK>(xsink, mem, len, class_ctx, member_class_ctx, typeInfo,
+            declared);
+    }
+
+    //! Checks the access of a write to a member and returns its type, as \a sandbox_write gives
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, SandboxWrite sandbox_write, bool* declared = nullptr) const {
+        size_t len = strlen(mem);
+        switch (sandbox_write) {
+            case SW_SELF:
+                return checkMemberAccessGetTypeInfoT<SW_SELF>(xsink, mem, len, class_ctx, member_class_ctx, typeInfo,
+                    declared);
+            case SW_ALLOWED:
+                return checkMemberAccessGetTypeInfoT<SW_ALLOWED>(xsink, mem, len, class_ctx, member_class_ctx,
+                    typeInfo, declared);
+            case SW_DENIED:
+                return checkMemberAccessGetTypeInfoT<SW_DENIED>(xsink, mem, len, class_ctx, member_class_ctx,
+                    typeInfo, declared);
+            default:
+                return checkMemberAccessGetTypeInfoT<SW_CHECK>(xsink, mem, len, class_ctx, member_class_ctx, typeInfo,
+                    declared);
+        }
+    }
+
+    //! Checks a write of a non-public member by the code of class \a class_ctx, which has access to it (qore#6842)
+    /** Raises \c SANDBOX-OBJECT-ACCESS-ERROR if sandboxedWriterDenied() refuses the writer; must be called without
+        the object's lock
+
+        @return 0 if the write is allowed, -1 if an exception was raised
+    */
+    DLLLOCAL int checkSandboxedMemberWrite(const char* mem, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
+    //! Returns true if the code of class \a class_ctx may not write the non-public members of the object (qore#6842)
+    /** The code of a class that sandboxed code declared (qore_class_private::isSandboxedCode()) may write a non-public
+        member of an object that is not of that class or of a subclass of it only if its sandbox created the object
+        (qore_sandbox_current_code_created()).  Looks up the sandboxes of the thread: must be called without the
+        object's lock
+
+        @param class_ctx the class of the writing code, or nullptr (no access to non-public members)
+    */
+    DLLLOCAL bool sandboxedWriterDenied(const qore_class_private* class_ctx) const {
+        return class_ctx && qore_sandboxed_code_active()
+            && sandboxedWriterDeniedIntern(*class_ctx);
+    }
+
+    //! see sandboxedWriterDenied()
+    DLLLOCAL bool sandboxedWriterDeniedIntern(const qore_class_private& class_ctx) const;
+
+    //! Raises \c SANDBOX-OBJECT-ACCESS-ERROR for a write of a non-public member that the sandboxed write rule refuses
+    DLLLOCAL void raiseSandboxedMemberWriteError(const char* mem, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
+    //! Returns true if the code of class \a class_ctx may not read the non-public members of the object (qore#7033)
+    /** The rule of writes (sandboxedWriterDenied()) applies to reads as well: the code of a class that sandboxed code
+        declared reads a non-public member of an object that is not of that class or of a subclass of it only if its
+        sandbox created the object.  Looks up the sandboxes of the thread: must be called without the object's lock
+
+        @param class_ctx the class of the reading code, or nullptr (no access to non-public members)
+    */
+    DLLLOCAL bool sandboxedReaderDenied(const qore_class_private* class_ctx) const {
+        return sandboxedWriterDenied(class_ctx);
+    }
+
+    //! Checks a read of a member by the code of class \a reader_ctx, which has access to it (qore#7033)
+    /** Raises \c SANDBOX-OBJECT-ACCESS-ERROR if the member is not public and sandboxedReaderDenied() refuses the
+        reader; a load and a branch while no code in the process is sandboxed.  Must be called without the object's
+        lock
+
+        @param mem the member
+        @param lookup_ctx the class context that the access to the member is looked up with
+        @param reader_ctx the class of the reading code
+
+        @return 0 if the read is allowed, -1 if an exception was raised
+    */
+    DLLLOCAL int checkSandboxedMemberRead(const char* mem, const qore_class_private* lookup_ctx,
+            const qore_class_private* reader_ctx, ExceptionSink* xsink) const {
+        if (!reader_ctx || !qore_sandboxed_code_active()) {
+            return 0;
+        }
+        return checkSandboxedMemberReadIntern(mem, lookup_ctx, *reader_ctx, xsink);
+    }
+
+    //! see checkSandboxedMemberRead()
+    DLLLOCAL int checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
+            const qore_class_private& reader_ctx, ExceptionSink* xsink) const;
+
+    //! Checks a call of a method with the given access on the object by the code of the current class context
+    //! (qore#7102)
+    /** The code of a class that sandboxed code declared cannot call a non-public method of an object that its sandbox
+        did not create, with the exemptions of the sandboxed write and read rules (sandboxedWriterDenied()): calling a
+        method of an object is a read or a change of its state that the method's class does not offer to every caller.
+        A call of a public method, and one while no code in the process is sandboxed, costs a compare and a load and
+        a branch; must be called before the call switches to the method's class context
+
+        @param obj the object of the call
+        @param access the access of the method variant called
+        @param mname the name of the method, for the exception
+
+        @return 0 if the call is allowed, -1 if \c SANDBOX-OBJECT-ACCESS-ERROR was raised
+    */
+    DLLLOCAL static int checkSandboxedMethodCall(const QoreObject* obj, ClassAccess access, const char* mname,
+            ExceptionSink* xsink) {
+        if (!qore_sandboxed_code_active() || access <= Public || !obj) {
+            return 0;
+        }
+        return checkSandboxedMethodCallIntern(*obj, mname, xsink);
+    }
+
+    //! see checkSandboxedMethodCall()
+    DLLLOCAL static int checkSandboxedMethodCallIntern(const QoreObject& obj, const char* mname,
+            ExceptionSink* xsink);
+
+    //! Returns the class context with which code of class \a class_ctx reads the members of the object as a whole
+    /** \a class_ctx, or nullptr (the public members only) if the sandboxed read rule refuses the code the
+        non-public members of the object (qore#7033); must be called without the object's lock
+    */
+    DLLLOCAL const qore_class_private* getWholeObjectReadContext(const qore_class_private* class_ctx) const {
+        return sandboxedReaderDenied(class_ctx) ? nullptr : class_ctx;
+    }
+
+    //! As getWholeObjectReadContext(), for a thread that holds the object's lock for writing already (qore#7033)
+    /** The sandboxes of the thread are not looked up with the object's lock held, so whether the sandbox of the reading
+        code created the object is not decided: it fails closed, and the code of a class that sandboxed code declared
+        reads the public members only of an object that is not of its class or of a subclass of it
+    */
+    DLLLOCAL const qore_class_private* getWholeObjectReadContextHeld(const qore_class_private* class_ctx) const {
+        return class_ctx && qore_sandboxed_code_active() && heldReaderDeniedIntern(*class_ctx) ? nullptr : class_ctx;
+    }
+
+    //! see getWholeObjectReadContextHeld()
+    DLLLOCAL bool heldReaderDeniedIntern(const qore_class_private& class_ctx) const;
+
+    //! Returns true if the calling code may read the non-public members of the object as a whole (qore#7033)
+    /** For the reads of the whole object that do not depend on a class context (formatting with \c %%y,
+        serialization): trusted code, and sandboxed code whose sandbox created the object; a load and a branch while
+        no code in the process is sandboxed.  Must be called without the object's lock
+    */
+    DLLLOCAL bool callerReadsNonPublicMembers() const {
+        return !qore_sandboxed_code_active() || callerReadsNonPublicMembersIntern();
+    }
+
+    //! see callerReadsNonPublicMembers()
+    DLLLOCAL bool callerReadsNonPublicMembersIntern() const;
+
+    //! Returns true if a sandbox governed the creation of the object (its provenance names a sandbox manager)
+    DLLLOCAL bool hasSandboxProvenance() const;
+
+    //! Returns a copy of the members of the object that the calling code may read as a whole (qore#7033)
+    /** As copyData(), but with the public members only if callerReadsNonPublicMembers() is false
+    */
+    DLLLOCAL QoreHashNode* copyDataForCaller(ExceptionSink* xsink, bool throw_exception = true) const;
+
+    //! Removes a member and returns its value
+    /** @param check_access false for a member of self (the object of the method or closure whose code removes it),
+        which the sandboxed write rule allows (see checkMemberAccessGetTypeInfo())
+    */
+    //! Takes a member out of the object
+    /** @param keep_system_object if true, a member that holds a system constant object is left as it is, and
+        \c SYSTEM-OBJECT-ERROR is raised (QoreObject::deleteMemberValue(); qore#6842)
+    */
     DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
-        bool for_delete = false, bool* exists = nullptr);
+        bool for_delete = false, bool* exists = nullptr, bool keep_system_object = false);
 
     //! Takes the value of a member out of the object's member hash \a odata, which must be locked for writing
     /** A declared member keeps its slot, with no value; the key of a member that the class does not declare is removed,
@@ -852,6 +1153,26 @@ public:
 
     // Self member access can use external storage for undeclared members of proxy classes.
     DLLLOCAL QoreValue getReferencedMemberForSelf(const char* mem, ExceptionSink* xsink) const;
+
+    //! Gives a copy of \a source, which no other code has yet, the creation provenance of \a source (qore#7033)
+    DLLLOCAL void setCopyProvenance(const qore_object_private& source);
+
+    //! Returns the sandbox context that owns the object, or nullptr if no sandbox owns it (qore#6842)
+    DLLLOCAL QoreSandboxContext* getSandboxOwner() const {
+        return sandbox_owner.load(std::memory_order_acquire);
+    }
+
+    //! Marks a new object owned by a sandbox if the code that creates it makes it owned (qore#6842)
+    /** See qore_creator_is_sandbox_owner(): an object that trusted class code creates in a method of an object that
+        the sandbox owns also takes that object's provenance; called by the constructor while sandboxed code exists
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void setCreatorOwnership();
+
+    //! the implementation of getReferencedMemberNoMethod() and getReferencedMemberForSelf()
+    /** @tparam CheckRead true to check the sandboxed read rule (qore#7033), false for a member of self
+    */
+    template <bool CheckRead>
+    DLLLOCAL QoreValue getReferencedMemberNoMethodIntern(const char* mem, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
@@ -1344,6 +1665,12 @@ public:
     DLLLOCAL static int getLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
             const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
         return obj.priv->getLValue(key, lvh, class_ctx, for_remove, xsink);
+    }
+
+    //! see getSelfLValue()
+    DLLLOCAL static int getSelfLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
+            const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
+        return obj.priv->getSelfLValue(key, lvh, class_ctx, for_remove, xsink);
     }
 
     //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target

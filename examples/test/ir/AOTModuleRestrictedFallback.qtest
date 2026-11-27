@@ -412,14 +412,19 @@ try {
         TmpFile err("qore-aot-module-restricted-fallback-", ".err");
         int rc;
         compileModule();
-        string out = backquote(sprintf("%s %s -b --enable-debug -pno-thread-control %s 2>%s", env(module_path),
-            qore_bin, script, err.path), \rc);
-        string err_text = ReadOnlyFile::readTextFile(err.path) ?? "";
-        assertEq(0, rc, out + err_text);
-        assertEq("run: 42\n", out);
-        assertRegex("warning encountered at .*\nBINARY-MODULE-SOURCE-FALLBACK: binary module '.*RestrictedBg\\.qmod' "
-            "for feature 'RestrictedBg' failed to load; loading source module '.*RestrictedBg\\.qm' instead: ",
-            err_text);
-        assertNRegex("(^|\n)warning: ", err_text);
+        # the default one-line format of parse diagnostics, and the legacy format
+        foreach string fmt in (("", " --diag-format=legacy")) {
+            string out = backquote(sprintf("%s %s -b --enable-debug -pno-thread-control%s %s 2>%s", env(module_path),
+                qore_bin, fmt, script, err.path), \rc);
+            string err_text = ReadOnlyFile::readTextFile(err.path) ?? "";
+            assertEq(0, rc, out + err_text);
+            assertEq("run: 42\n", out);
+            string fallback = "BINARY-MODULE-SOURCE-FALLBACK: binary module '.*RestrictedBg\\.qmod' for feature "
+                "'RestrictedBg' failed to load; loading source module '.*RestrictedBg\\.qm' instead: ";
+            # a parse warning of the script at the line of its %requires directive
+            assertRegex(fmt ? "warning encountered at .*\n" + fallback : "(^|\n)[^\n]*nested\\.q:2(:[0-9]+)?: warning: "
+                + fallback, err_text, "format: " + (fmt ?: "default"));
+            assertNRegex("(^|\n)warning: ", err_text, "format: " + (fmt ?: "default"));
+        }
     }
 }

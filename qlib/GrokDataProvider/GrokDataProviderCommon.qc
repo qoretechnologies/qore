@@ -167,7 +167,14 @@ public class GrokDataProviderCommon inherits DataProvider::AbstractDataProvider 
     }
 
     #! Sets the conversation context store
+    /**
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change
+        the conversation context store of an object that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+    */
     setConversationContextStore(*GrokConversationContextStore store) {
+        # the state can be shared with other owners (issue 7035)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the conversation context store of");
         conversation_context_store = store;
     }
 

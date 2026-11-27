@@ -38,6 +38,7 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/QoreSandboxManager.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -797,9 +798,10 @@ QoreReflectionCaller::QoreReflectionCaller() : pgm(::getProgram()), po(runtime_g
     // module Programs carry the in-module domain, which restricts nothing that the caller asks for here
     QoreParseOptions restricting = po & (qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE));
     if (!restricting) {
-        // also through a policy barrier: it masks the sandbox's filesystem and network policy, not the sandbox
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        member_access = static_cast<bool>(governing);
+        // restricted code (rule B of qore#7635): also through a policy barrier, which masks the sandbox's filesystem
+        // and network policy, not the sandbox; code that a trusted (governed) sandbox governs may use every member, as
+        // other trusted code may (qore#7737); fails closed
+        member_access = qore_caller_is_restricted();
     } else {
         member_access = true;
     }
@@ -896,9 +898,28 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
         // A user module Program has no manager of its own: sandbox resolution walks out of it to the code that
         // calls it, so code that runs there for this caller is governed by the caller's manager, as it is when the
         // caller calls the module directly.  Any other Program must have the governing manager as its own.
-        privileged = target_sm ? target_sm == sm : tpo.hasAny(QoreParseOptions(PO_IN_MODULE));
         if (target_sm) {
+            privileged = target_sm == sm;
             target_sm->deref(nullptr);
+        } else if (tpo.hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            // a module Program that keeps the sandbox of the code that loaded it instead of a manager of its own (a
+            // module loaded into a Program that trusted code created in a system-policy capability, qore#6311) gives
+            // privileges only to code governed by that same sandbox: another tenant's code is refused, as by a
+            // module Program whose own manager is the loading code's
+            QoreSandboxManager* creator;
+            QoreSandboxManager* creator_policy;
+            qore_program_private::get(*const_cast<QoreProgram*>(target))->getCreatorSandboxRefs(creator,
+                creator_policy);
+            // compared by its members: a composite is a new object at each resolution of the same sandboxes
+            privileged = !creator || QoreSandboxComposition::same(creator, sm);
+            if (creator) {
+                creator->deref(nullptr);
+            }
+            if (creator_policy) {
+                creator_policy->deref(nullptr);
+            }
+        } else {
+            privileged = false;
         }
     }
     if (privileged) {

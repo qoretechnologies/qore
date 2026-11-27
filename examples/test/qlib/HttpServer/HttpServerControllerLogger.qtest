@@ -75,7 +75,8 @@ class CountedServer inherits HttpServer {
 }
 
 #! Tests that the process-wide async I/O controller does not keep a server's logger after the server stops
-/** Every server sets its logger on the global async I/O controller.  No test case creates another server after
+/** Every server created with a logger sets it on the global async I/O controller; a server created without one leaves
+    the controller's logger alone (qore#7698).  No test case creates another server after
     releasing the one it checks: a server's logger must be released without another server replacing it on the
     controller.
 */
@@ -90,6 +91,11 @@ class HttpServerControllerLoggerTest inherits QUnit::Test {
         addTestCase("the application's controller logger is restored", \applicationLogger());
         addTestCase("a logger the application set later is kept", \applicationLoggerSetLater());
         addTestCase("a server restores the controller's logger once", \stopTwice());
+        addTestCase("a server without a logger leaves the application's logger alone", \noLoggerServer());
+        addTestCase("servers with and without a logger, stopped in the order they were created",
+            \loggerAndNoLoggerServersStoppedInOrder());
+        addTestCase("servers with and without a logger, stopped in reverse order",
+            \loggerAndNoLoggerServersStoppedInReverse());
         set_return_value(main());
     }
 
@@ -241,6 +247,65 @@ class HttpServerControllerLoggerTest inherits QUnit::Test {
         on_exit AsyncIoController::setLogger();
         # a second stop() does not restore the logger again
         server.stop();
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    #! a server without a logger does not replace the application's logger, which would discard its messages (qore#7698)
+    noLoggerServer() {
+        Logger app("app", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        {
+            HttpServer server();
+            on_exit server.stop();
+            assertTrue(AsyncIoController::getLogger() == app);
+            server.stop();
+            assertTrue(AsyncIoController::getLogger() == app);
+        }
+        {
+            HttpServer server(<HttpServerOptionInfo>{"name": "no-logger"});
+            on_exit server.stop();
+            assertTrue(AsyncIoController::getLogger() == app);
+            server.stop();
+            assertTrue(AsyncIoController::getLogger() == app);
+        }
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    #! a server with a logger, then one without, stopped in the order they were created
+    loggerAndNoLoggerServersStoppedInOrder() {
+        Logger app("app", LoggerLevel::getLevelInfo());
+        Logger a("a", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        HttpServer sa(<HttpServerOptionInfo>{"logger": a});
+        on_exit sa.stop();
+        assertTrue(AsyncIoController::getLogger() == a);
+        HttpServer sb();
+        on_exit sb.stop();
+        # the server without a logger does not replace the running server's logger
+        assertTrue(AsyncIoController::getLogger() == a);
+        sa.stop();
+        assertTrue(AsyncIoController::getLogger() == app);
+        sb.stop();
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    #! a server with a logger, then one without, stopped in reverse order
+    loggerAndNoLoggerServersStoppedInReverse() {
+        Logger app("app", LoggerLevel::getLevelInfo());
+        Logger a("a", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        HttpServer sa(<HttpServerOptionInfo>{"logger": a});
+        on_exit sa.stop();
+        HttpServer sb();
+        on_exit sb.stop();
+        assertTrue(AsyncIoController::getLogger() == a);
+        # stopping the server without a logger restores nothing
+        sb.stop();
+        assertTrue(AsyncIoController::getLogger() == a);
+        sa.stop();
         assertTrue(AsyncIoController::getLogger() == app);
     }
 }

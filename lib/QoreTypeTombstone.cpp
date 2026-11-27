@@ -178,7 +178,7 @@ public:
         if (failed) {
             return;
         }
-        if (p->sys) {
+        if (p->type_owner.isTypeOwnerSystem()) {
             fp += 'S';
             fp_ptr(fp, p);
             return;
@@ -221,6 +221,7 @@ public:
         }
         fp += "|b";
         if (p->scl) {
+            BCSMList::View sv = p->scl->sml.view();
             for (BCNode* n : *p->scl) {
                 // a parent class is kept alive by the list of the class's ancestors (BCSMList::append() references
                 // it), not by the edge: a class whose hierarchy was not initialized (such as one that is circular or
@@ -231,7 +232,7 @@ public:
                 // and an entry can be another QoreClass of the class (one imported into the Program, as the AOT
                 // loader adds it with qore_class_private::addBaseClass())
                 if (failed || !n->sclass
-                    || std::none_of(p->scl->sml.begin(), p->scl->sml.end(),
+                    || std::none_of(sv.begin(), sv.end(),
                         [n](const class_virt_pair_t& i) {
                             return qore_class_private::get(*i.first)->cls == n->sclass;
                         })) {
@@ -256,7 +257,7 @@ public:
         if (failed) {
             return;
         }
-        if (p->isTypeOwnerSystem()) {
+        if (p->type_owner.isTypeOwnerSystem()) {
             fp += 'S';
             fp_ptr(fp, p);
             return;
@@ -317,7 +318,7 @@ public:
     }
 
     DLLLOCAL void fpEnumRef(std::string& fp, const qore_enum_decl_private* p) {
-        if (p->isTypeOwnerSystem()) {
+        if (p->type_owner.isTypeOwnerSystem()) {
             fp += 'S';
             fp_ptr(fp, p);
             return;
@@ -466,7 +467,7 @@ static bool qore_type_names_user_decl(const QoreTypeInfo* ti, int depth) {
     for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
         const QoreTypeSpec& spec = as.spec;
         if (const QoreClass* qc = spec.getClass()) {
-            if (!qore_class_private::get(*qc)->sys) {
+            if (!qore_class_private::get(*qc)->type_owner.isTypeOwnerSystem()) {
                 return true;
             }
         } else if (const TypedHashDecl* hd = spec.getHashDecl()) {
@@ -498,7 +499,7 @@ void QoreTombstoneBuilder::fpTypeIntern(std::string& fp, const QoreTypeInfo* ti,
     if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
         const QoreClass* qc = ti->getAcceptSpecs()[0].spec.getClass();
         const qore_class_private* p = qc ? qore_class_private::get(*qc) : nullptr;
-        if (!p || p->sys) {
+        if (!p || p->type_owner.isTypeOwnerSystem()) {
             return;
         }
         user = true;
@@ -509,7 +510,7 @@ void QoreTombstoneBuilder::fpTypeIntern(std::string& fp, const QoreTypeInfo* ti,
     if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
         const TypedHashDecl* hd = ti->getAcceptSpecs()[0].spec.getHashDecl();
         const typed_hash_decl_private* p = hd ? typed_hash_decl_private::get(*hd) : nullptr;
-        if (!p || p->isTypeOwnerSystem()) {
+        if (!p || p->type_owner.isTypeOwnerSystem()) {
             return;
         }
         user = true;
@@ -520,7 +521,7 @@ void QoreTombstoneBuilder::fpTypeIntern(std::string& fp, const QoreTypeInfo* ti,
     if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
         const QoreEnumDecl* ed = ti->getAcceptSpecs()[0].spec.getEnum();
         const qore_enum_decl_private* p = ed ? qore_enum_decl_private::get(*ed) : nullptr;
-        if (!p || p->isTypeOwnerSystem()) {
+        if (!p || p->type_owner.isTypeOwnerSystem()) {
             return;
         }
         user = true;
@@ -532,7 +533,7 @@ void QoreTombstoneBuilder::fpTypeIntern(std::string& fp, const QoreTypeInfo* ti,
     if (const QoreParameterizedClassTypeInfo* pti = dynamic_cast<const QoreParameterizedClassTypeInfo*>(ti)) {
         const qore_class_private* p = qore_class_private::get(*pti->getBaseClass());
         fp += pti->isOrNothing() ? "P*" : "P";
-        if (!p->sys) {
+        if (!p->type_owner.isTypeOwnerSystem()) {
             user = true;
         }
         fpClassRef(fp, p, depth);
@@ -671,7 +672,7 @@ const QoreTypeInfo* QoreTombstoneBuilder::tombType(const QoreTypeInfo* ti, int d
     };
     if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
         const QoreClass* qc = ti->getAcceptSpecs()[0].spec.getClass();
-        if (!qc || qore_class_private::get(*qc)->sys) {
+        if (!qc || qore_class_private::get(*qc)->type_owner.isTypeOwnerSystem()) {
             return ti;
         }
         QoreClass* t = tombClass(qc, depth);
@@ -704,7 +705,8 @@ const QoreTypeInfo* QoreTombstoneBuilder::tombType(const QoreTypeInfo* ti, int d
     }
     if (const QoreParameterizedClassTypeInfo* pti = dynamic_cast<const QoreParameterizedClassTypeInfo*>(ti)) {
         const QoreClass* base = pti->getBaseClass();
-        const QoreClass* tbase = qore_class_private::get(*base)->sys ? base : tombClass(base, depth);
+        const QoreClass* tbase = qore_class_private::get(*base)->type_owner.isTypeOwnerSystem()
+            ? base : tombClass(base, depth);
         if (!tbase) {
             return fail();
         }
@@ -823,7 +825,7 @@ const QoreTypeInfo* QoreTombstoneBuilder::tombType(const QoreTypeInfo* ti, int d
 
 QoreClass* QoreTombstoneBuilder::tombClass(const QoreClass* qc, int depth) {
     qore_class_private* p = qore_class_private::get(*const_cast<QoreClass*>(qc));
-    if (p->sys) {
+    if (p->type_owner.isTypeOwnerSystem()) {
         return const_cast<QoreClass*>(qc);
     }
     if (p->type_owner.type_owner_tombstone) {
@@ -912,7 +914,7 @@ QoreClass* QoreTombstoneBuilder::tombClass(const QoreClass* qc, int depth) {
 
 TypedHashDecl* QoreTombstoneBuilder::tombHashDecl(const TypedHashDecl* hd, int depth) {
     typed_hash_decl_private* p = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
-    if (p->isTypeOwnerSystem()) {
+    if (p->type_owner.isTypeOwnerSystem()) {
         return const_cast<TypedHashDecl*>(hd);
     }
     if (p->type_owner.type_owner_tombstone) {
@@ -1000,7 +1002,7 @@ TypedHashDecl* QoreTombstoneBuilder::tombHashDecl(const TypedHashDecl* hd, int d
 
 QoreEnumDecl* QoreTombstoneBuilder::tombEnum(const QoreEnumDecl* ed) {
     qore_enum_decl_private* p = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
-    if (p->isTypeOwnerSystem()) {
+    if (p->type_owner.isTypeOwnerSystem()) {
         return const_cast<QoreEnumDecl*>(ed);
     }
     if (p->type_owner.type_owner_tombstone) {
