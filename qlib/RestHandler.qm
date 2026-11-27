@@ -262,7 +262,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     the keys that the REST handler adds (@ref RestHandler::RestHandlerContextKeys "RestHandlerContextKeys"), and the
     keys that trusted code names with @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"
     (never the server's objects: @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys" and
-    values that are objects); the \c hdr key has no
+    values that are or hold objects or code); the \c hdr key has no
     \c Proxy-Authorization field and no cookies, and no \c Authorization field unless the handler authenticates its
     own endpoint and opts in to receive it
     (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()").
@@ -467,6 +467,9 @@ Content-Length: 16
       declares is kept, and trusted code that adds keys to the request context for the REST classes names them with
       @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (see @ref rest_request_credentials;
       issue #6843)
+    - the REST classes of restricted code get no value of the request context that is or holds an object or code,
+      also of the keys of @ref RestHandler::RestHandlerContextKeys "RestHandlerContextKeys" and of
+      @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (issue #7303)
     - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
       Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
       class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
@@ -708,7 +711,7 @@ public namespace RestHandler {
             server's objects, see @ref rest_request_credentials) also gives the keys that the filter kept: the
             platform's authorization context and the keys of
             @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()", without the
-            values that hold an object
+            values that are or hold an object or code
 
             @return a copy of the call context with the keys in the lists that it has
 
@@ -727,8 +730,10 @@ public namespace RestHandler {
                     return rv;
                 }
             }
+            # a call context filtered for a REST class of restricted code: plain data only, never an object or code
+            # (qore#7303)
             foreach string key in (keys cx) {
-                if (!rv.hasKey(key) && !HttpServer::AbstractStreamRequest::holdsObject(cx{key})) {
+                if (!rv.hasKey(key) && !HttpServer::AbstractHttpRequestHandler::holdsObjectOrCode(cx{key})) {
                     rv{key} = cx{key};
                 }
             }
@@ -2169,15 +2174,16 @@ public namespace RestHandler {
         final hash<auto> getRestClassContext(hash<auto> cx) {
             hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, cx.hdr ?? {});
             hash<auto> rcx = filtered.cx;
+            # the handler's keys and the keys that the handler names: plain data only, never the server's objects or a
+            # value that is or holds an object or code (qore#7303)
             foreach string key in (RestHandlerContextKeys + ("arg_path",)) {
-                if (cx.hasKey(key)) {
+                if (cx.hasKey(key) && !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key})) {
                     rcx{key} = cx{key};
                 }
             }
-            # the keys that the handler names: data only, never the server's objects
             foreach string key in (rest_context_keys) {
                 if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ServerContextKeys)
-                        && !AbstractStreamRequest::holdsObject(cx{key})) {
+                        && !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key})) {
                     rcx{key} = cx{key};
                 }
             }
@@ -2192,9 +2198,9 @@ public namespace RestHandler {
             @ref RestHandlerContextKeys; trusted code that adds keys to the request context for the REST classes
             before they are dispatched names them here; the server's objects
             (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys") and values that are
-            objects or hold one at any depth are not given in any case.  The keys must hold plain data and no
-            credentials: the REST classes of restricted code get them.  Only trusted code can set them: restricted
-            callers are refused.
+            objects or code (closures and call references), or hold one at any depth, are not given in any case.  The
+            keys must hold plain data and no credentials: the REST classes of restricted code get them.  Only trusted
+            code can set them: restricted callers are refused.
 
             @param names the names of more keys of the request context that the REST classes get
 
