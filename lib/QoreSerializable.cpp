@@ -261,8 +261,10 @@ bool qore_serialization_calling_code_trusted() {
 }
 
 bool qore_serializable_receiver_function(const QoreFunction* func) {
-    // by the class and the name: the class of a Program is a copy of the class with its own method functions, as are
-    // the classes that a Program imports, and the builtin class Serializable of each Program is one
+    // by the class ID and the name, not by the identity of the function: nothing guarantees that the copies of a class
+    // in other Programs (the classes that a Program declares or imports) share the builtin method functions of the
+    // root namespace's class; a sandbox cannot declare a class with the ID of Serializable or add a method to it, so
+    // the match cannot be spoofed, and a call that does not match keeps its frame, which counts (fails closed)
     const QoreClass* cls = func ? func->getClass() : nullptr;
     if (!cls || cls->getID() != CID_SERIALIZABLE || static_cast<const MethodFunctionBase*>(func)->isStatic()) {
         return false;

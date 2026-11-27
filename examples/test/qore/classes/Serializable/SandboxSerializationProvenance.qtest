@@ -203,6 +203,7 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         addTestCase("sandbox subclass", \sandboxSubclassTest());
         addTestCase("shared object", \sharedObjectTest());
         addTestCase("nested serialization of the same object", \nestedTest());
+        addTestCase("a class of another trusted Program", \otherProgramClassTest());
         addTestCase("calls that sandboxed code sets up", \sandboxSetupTest());
         set_return_value(main());
     }
@@ -353,5 +354,48 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         Queue q();
         p.callFunction("sb_background", o, q);
         assertEq("SERIALIZATION-ERROR", q.get(30s));
+    }
+
+    #! an object of a class of another trusted Program, whose Serializable class is that Program's copy with its own
+    #! method functions: the method form serializes it for the trusted code that calls it, as the static form does
+    otherProgramClassTest() {
+        Program h(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        h.parse("class HtData inherits Serializable {\n"
+            "    private { string secret = \"HT-STATE\"; }\n"
+            "}\n"
+            "object sub make() { return new HtData(); }\n"
+            "string sub ser_method(object o) {\n"
+            "    try {\n"
+            "        return sprintf(\"%N\", o.serializeToData()) =~ /HT-STATE/ ? \"STATE\" : \"NO-STATE\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n"
+            "string sub ser_static(object o) {\n"
+            "    try {\n"
+            "        return sprintf(\"%N\", Serializable::serializeToData(o)) =~ /HT-STATE/ ? \"STATE\" : \"NO-STATE\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n", "trusted");
+        # the trusted Program's code creates the object while sandboxed code calls it: the object has the sandbox's
+        # provenance
+        object o = createUnderSandbox(object sub () { return h.callFunction("make"); });
+        assertEq("STATE", h.callFunction("ser_static", o));
+        assertEq("STATE", h.callFunction("ser_method", o));
+
+        # a trusted Program with its copy of a class that it imports: the class copy has method functions of its own
+        Program g(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        g.importClass("SspTrusted");
+        g.parse("object sub make() { return new SspTrusted(); }\n"
+            "string sub ser_method(object o) {\n"
+            "    try {\n"
+            "        return sprintf(\"%N\", o.serializeToData()) =~ /PRIV-STATE/ ? \"STATE\" : \"NO-STATE\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n", "importing");
+        object c = createUnderSandbox(object sub () { return g.callFunction("make"); });
+        assertEq("STATE", g.callFunction("ser_method", c));
     }
 }
