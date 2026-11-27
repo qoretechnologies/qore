@@ -114,7 +114,7 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 18, "PENDING_AOT3": 14, "PENDING": 31}
+SIZES = {"ALLOWED": 18, "PENDING_AOT3": 14, "PENDING": 16}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -140,21 +140,6 @@ PENDING_AOT3 = {
 PENDING = {
     # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
     # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTStringCasePipeline.qtest": 1,
-    "examples/test/ir/AOTStringOrdering.qtest": 2,
-    "examples/test/ir/AOTStringSummaryCfg.qtest": 1,
-    "examples/test/ir/AOTStringTransformCfg.qtest": 1,
-    "examples/test/ir/AOTStringTransformConsumer.qtest": 3,
-    "examples/test/ir/AOTStringTransformSwitch.qtest": 2,
-    "examples/test/ir/AOTSummaryExceptionElision.qtest": 2,
-    "examples/test/ir/AOTWideIntExpressionSummary.qtest": 2,
-    "examples/test/ir/IRContextElision.qtest": 1,
-    "examples/test/ir/IRNativeLocalSSA.qtest": 1,
-    "examples/test/ir/IRTypedForeach.qtest": 1,
-    "examples/test/ir/JITReloadChainFlush.qc": 1,
-    "examples/test/ir/LoopInvariantHashProjection.qtest": 1,
-    "examples/test/ir/LoopInvariantReadOnlyQuery.qtest": 1,
-    "examples/test/ir/aot-closure-toplevel-local-update/aot-closure-toplevel-local-update.qtest": 1,
     "examples/test/ir/aot-ir-value-ids/AotIrValueIds.qc": 2,
     # its two runs have the same text: an image with a patched format version, which the runtime refuses (exit
     # status and matches of the error, which may stay), and compileAndRun()'s, which compares the output of a
