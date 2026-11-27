@@ -166,6 +166,22 @@ class SspStreamProbe inherits OutputStream {
     }
 }
 
+#! a class declared by trusted code that opts in to the serialization of its non-public state for sandboxed code, so
+#! that only the owner rule of tenant isolation (qore#7033) decides on its objects
+class SspOpen inherits SandboxSerializable {
+    public {
+        auto nested;
+    }
+
+    private {
+        string secret;
+    }
+
+    constructor(string secret) {
+        self.secret = secret;
+    }
+}
+
 public class SandboxSerializationProvenanceTest inherits QUnit::Test {
     private {
         SandboxManager manager();
@@ -206,6 +222,7 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         addTestCase("a class of another trusted Program", \otherProgramClassTest());
         addTestCase("a sandbox that trusts its code", \trustedPolicyTest());
         addTestCase("calls that sandboxed code sets up", \sandboxSetupTest());
+        addTestCase("the owner rule with the method form", \ownerRuleMethodTest());
         set_return_value(main());
     }
 
@@ -436,5 +453,76 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
                 : {"method": "SERIALIZATION-ERROR", "static": "SERIALIZATION-ERROR", "format": "NO-STATE"};
             assertEq(expected, g.callFunction("ser", new SspTrusted()), trusting ? "trusting" : "restricting");
         }
+    }
+
+    #! the owner rule of tenant isolation (qore#7033) on the method form: a tenant does not get the non-public state of
+    #! another tenant's objects, also when its sandbox trusts its code; it gets that of its own objects; the host gets all
+    #! state; the method of a tenant's class that serializes its own object is that tenant's code
+    ownerRuleMethodTest() {
+        Program a = newOwnerTenant(False);
+        Program b = newOwnerTenant(False);
+        Program bt = newOwnerTenant(True);
+
+        object oa = a.callFunction("make", "A-STATE");
+        foreach Program t in ((b, bt)) {
+            string label = t == b ? "restricting" : "trusting";
+            # (a) another tenant's object: directly, and nested in the tenant's own object
+            assertEq("SERIALIZATION-ERROR", t.callFunction("ser", oa), label + " direct");
+            object own = t.callFunction("make", "B-STATE");
+            own.nested = oa;
+            assertEq("SERIALIZATION-ERROR", t.callFunction("ser", own), label + " nested");
+            # (b) its own object
+            assertEq("B-STATE", t.callFunction("ser", t.callFunction("make", "B-STATE")), label + " own");
+        }
+        # (c) the host: an object of its own class that its code created while tenant A called it (the method call
+        # applies tenant A's provenance), with tenant B's object nested in it: the frame of the call is left out
+        # (an object of a tenant's class, or of its copy of an imported class, is serialized by the host with the static
+        # form: the method call enters the tenant's Program, which fails closed)
+        object ob = b.callFunction("make", "B-STATE");
+        object outer = a.callFunction("call", object sub () { return new SspOpen("A-STATE"); });
+        outer.nested = ob;
+        string all = sprintf("%N", outer.serializeToData());
+        assertRegex("A-STATE", all);
+        assertRegex("B-STATE", all);
+        # (d) a method of the tenant's class that serializes its own object is the tenant's code: the other tenant's
+        # nested object is withheld
+        object ta = a.callFunction("make_class", "TA-STATE");
+        ta.nested = ob;
+        string r;
+        try {
+            r = sprintf("%N", ta.m());
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        assertEq("SERIALIZATION-ERROR", r);
+    }
+
+    #! returns a tenant at tenant isolation; \a trusting: its sandbox trusts its code
+    private Program newOwnerTenant(bool trusting) {
+        SandboxManager sm();
+        if (trusting) {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        Program t(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        t.setSandboxManager(sm);
+        t.importClass("SspOpen");
+        t.parse("class TClass inherits SandboxSerializable {\n"
+            "    public { auto nested; }\n"
+            "    private { string secret; }\n"
+            "    constructor(string secret) { self.secret = secret; }\n"
+            "    hash<SerializationInfo> m() { return self.serializeToData(); }\n"
+            "}\n"
+            "object sub make(string secret) { return new SspOpen(secret); }\n"
+            "auto sub call(code c) { return c(); }\n"
+            "object sub make_class(string secret) { return new TClass(secret); }\n"
+            "string sub ser(object o) {\n"
+            "    try {\n"
+            "        string str = sprintf(\"%N\", o.serializeToData());\n"
+            "        return (str =~ x/([A-Z]+-STATE)/)[0] ?? \"NO-STATE\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n", "tenant");
+        return t;
     }
 }
