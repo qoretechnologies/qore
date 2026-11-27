@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qore processes in the default execution mode and in qcc executables
 
 # Tests for automatic AOT function-body outlining
 # (see design/aot-function-outlining.md).
@@ -16,6 +17,7 @@
 %requires QUnit
 %requires ../TestInterpreter.qm
 %requires Util
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTFunctionOutliningTest
 
@@ -79,15 +81,21 @@ class AOTFunctionOutliningTest inherits QUnit::Test {
             libqore_dir, env, qore_bin, paths.out, paths.src);
         string compile_out = backquote(compile_cmd);
 
+        # reference: interpreted execution of the identical source, in the default execution mode (its environment
+        # only traces native compilation, which is not output of the program)
+        hash<ExecModeHarness::ModeRunResult> interp = ExecModeHarness::run_command(
+            sprintf("LD_LIBRARY_PATH=%s %s -b %s", libqore_dir, qore_bin, paths.src), NOTHING, "QORE_JIT_TIMING=1");
+        string interp_out = interp.out;
+
         string run_out = "COMPILE_FAILED";
         if (is_file(paths.out)) {
-            run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1",
+            # the output of the executable on stdout and stderr, apart from the module loader's warnings and the
+            # native compilation trace
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b",
                 libqore_dir, paths.out));
+            assertEq(interp.rc, res.rc, sprintf("exit status (output: %y)", res.out));
+            run_out = res.out;
         }
-
-        # reference: interpreted execution of the identical source
-        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1",
-            libqore_dir, qore_bin, paths.src));
 
         return {
             "compile_out": compile_out,
