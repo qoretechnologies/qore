@@ -15,7 +15,8 @@
 %exec-class ModuleHashDepsTest
 
 #! Tests the \c reexported-modules and \c required-modules keys of get_module_hash() (issue #7796)
-/** A module that requires one module with reexport, one without, and that tries one that does not exist is loaded
+/** A module that requires one module with reexport, one without, that tries one that does not exist, and that tries
+    to reexport one that exists and one that does not is loaded
     from its source and from the qmods that qcc compiled from the same sources, in child processes in each execution
     mode; both report the same direct requirements and reexports: the modules that its own directives loaded, not
     the modules that those require, nor the %try-module request that failed.
@@ -71,12 +72,33 @@ public string sub re_name() {
 }
 }
 ",
+            "HashDepsTryRe": "%modern
+module HashDepsTryRe {
+    version = \"1.0\";
+    desc = \"module hash dependency test: a requirement of a successful %try-reexport-module request\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HashDepsTryRe {
+public string sub tryre_name() {
+    return \"tryre\";
+}
+}
+",
             "HashDepsMain": "%modern
 %requires qore >= 2.0
 %requires(reexport) HashDepsRe
 %requires HashDepsPlain
 %try-module HashDepsMissing
 %define NoHashDepsMissing
+%endtry
+%try-reexport-module (tryre_ex) HashDepsTryRe
+%define NoHashDepsTryRe
+%endtry
+%try-reexport-module HashDepsTryMissing
+%define NoHashDepsTryMissing
 %endtry
 
 module HashDepsMain {
@@ -102,7 +124,8 @@ public string sub main_name() {
 hash<string, hash<auto>> mh = get_module_hash();
 printf(\"%s\\n\", main_name());
 printf(\"%s\\n\", re_name());
-foreach string m in (\"HashDepsMain\", \"HashDepsRe\", \"HashDepsPlain\", \"HashDepsLeaf\") {
+printf(\"%s\\n\", tryre_name());
+foreach string m in (\"HashDepsMain\", \"HashDepsRe\", \"HashDepsPlain\", \"HashDepsLeaf\", \"HashDepsTryRe\") {
     printf(\"%s %s reexported: %y required: %y\\n\", m, (basename(mh{m}.filename) =~ x/\\.(qmod|qm)$/)[0],
         mh{m}.\"reexported-modules\", mh{m}.\"required-modules\");
 }
@@ -159,15 +182,19 @@ foreach string m in (\"HashDepsMain\", \"HashDepsRe\", \"HashDepsPlain\", \"Hash
 
     #! runs the child in each execution mode with the modules in the given directory and checks its output
     /** the direct requirements are in the order of the directives; the requirement of "qore" is not a module and the
-        failed %try-module request is not a requirement; HashDepsLeaf is required by HashDepsRe only
+        failed %try-module and %try-reexport-module requests are neither requirements nor reexports, while the
+        successful %try-reexport-module request is both; HashDepsLeaf is required by HashDepsRe only
     */
     private checkModes(string ext, string mod_dir) {
         string expected = sprintf("main:re:leaf:plain\n"
             "re:leaf\n"
-            "HashDepsMain %s reexported: [\"HashDepsRe\"] required: [\"HashDepsRe\", \"HashDepsPlain\"]\n"
+            "tryre\n"
+            "HashDepsMain %s reexported: [\"HashDepsRe\", \"HashDepsTryRe\"] required: [\"HashDepsRe\", "
+                "\"HashDepsPlain\", \"HashDepsTryRe\"]\n"
             "HashDepsRe %s reexported: null required: [\"HashDepsLeaf\"]\n"
             "HashDepsPlain %s reexported: null required: null\n"
-            "HashDepsLeaf %s reexported: null required: null\n", ext, ext, ext, ext);
+            "HashDepsLeaf %s reexported: null required: null\n"
+            "HashDepsTryRe %s reexported: null required: null\n", ext, ext, ext, ext, ext);
         foreach string mode in (ExecModes) {
             string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b "
                 "--exec-mode=%s %s 2>&1", libqore_dir, mod_dir, qore_bin, mode, child));
