@@ -1246,6 +1246,11 @@ class QoreDataProviderI18nCmd {
         cause.  So a retained failure, or an owner module with catalogs (or named by the caller) that contributes no
         catalog, ends the run here with the original error, before any catalog is compared or written.
 
+        A module can also keep the error only for its discovery inventory provider, as TypeScriptActionInterface does
+        when its action script cannot be read: it registers no app, and its inventory provider raises the error.  The
+        failures of the inventory providers (DataProviderActionCatalog::getDiscoveryInventoryFailures(), with the
+        module that registered the provider) are therefore checked as the initialization failures are.
+
         @param owner_catalogs the catalogs that each owner module contributes, by owner module; an owner whose
         catalogs could not be extracted is not in it (its error is reported with its domains)
         @param required_owners the owner modules that must contribute: those with catalogs in the tree, or, when
@@ -1257,14 +1262,40 @@ class QoreDataProviderI18nCmd {
     */
     private checkProviderRegistrations(*hash<string, hash<string, hash<auto>>> owner_catalogs,
             *hash<string, bool> required_owners, *list<string> apps) {
-        list<hash<DataProviderInitializationFailureInfo>> failures =
-            DataProviderActionCatalog::getInitializationFailures(apps);
+        # each failure: what failed, the module that registered it, if known, and the original error
+        list<hash<auto>> failures = map (
+            "what": $1.app + ($1.action ? "/" + $1.action : ""),
+            "module_context": $1.module_context,
+            "error": $1.error,
+            "description": $1.description,
+        ), DataProviderActionCatalog::getInitializationFailures(apps);
+        # an inventory provider can stand for any app, also one of the selected apps
+        foreach hash<DataProviderDiscoveryFailureInfo> failure in (
+                DataProviderActionCatalog::getDiscoveryInventoryFailures()) {
+            string desc = failure.description;
+            # a producer can give the failures of its sources in the argument (ex: TypeScriptActionInterface)
+            if (failure.argument.typeCode() == NT_HASH && failure.argument.failures.typeCode() == NT_LIST) {
+                foreach auto source_failure in (failure.argument.failures) {
+                    if (source_failure.typeCode() == NT_HASH) {
+                        desc += sprintf("; %s: %s: %s", source_failure.source ?? source_failure.identity
+                            ?? "unknown source", source_failure.error ?? "unknown error",
+                            source_failure.description ?? "");
+                    }
+                }
+            }
+            failures += {
+                "what": "discovery inventory source " + failure.identity,
+                "module_context": failure.module_context,
+                "error": failure.error,
+                "description": desc,
+            };
+        }
         foreach hash<auto> i in (owner_catalogs.pairIterator()) {
             if (!i.value && required_owners{i.key}) {
                 # the failures of the module first
-                list<hash<DataProviderInitializationFailureInfo>> own = select failures,
+                list<hash<auto>> own = select failures,
                     $1.module_context.val() && $1.module_context.find(i.key) >= 0;
-                list<hash<DataProviderInitializationFailureInfo>> other = select failures,
+                list<hash<auto>> other = select failures,
                     !$1.module_context.val() || $1.module_context.find(i.key) < 0;
                 throw "DATA-PROVIDER-I18N-ERROR", sprintf("module %y registered no providers: %s", i.key,
                     failures
@@ -1278,10 +1309,11 @@ class QoreDataProviderI18nCmd {
         }
     }
 
-    #! Returns the text of initialization failures: each with its app, action, module and original error
-    private static string formatFailures(list<hash<DataProviderInitializationFailureInfo>> failures) {
-        return (map sprintf("%s%s (%s): %s: %s", $1.app, $1.action ? "/" + $1.action : "",
-            $1.module_context ?? "unknown module", $1.error, $1.description), failures).join("; ");
+    #! Returns the text of registration failures: each with what failed (an app, an action or an inventory source),
+    #! its module and its original error
+    private static string formatFailures(list<hash<auto>> failures) {
+        return (map sprintf("%s (%s): %s: %s", $1.what, $1.module_context ?? "unknown module", $1.error,
+            $1.description), failures).join("; ");
     }
 
     private hash<string, hash<auto>> moduleCatalogs(string owner) {

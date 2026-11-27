@@ -26,7 +26,8 @@ One file is written for each catalog domain as
 \fB\-\-check\fR is used.
 .PP
 A registration of a provider module that fails while the module is loaded (for
-example the initialization of an app whose action script cannot be opened),
+example the initialization of an app whose action script cannot be opened, also
+when the module keeps the error only for its discovery inventory provider),
 and an owner module that has catalogs (or, when catalogs are extracted, that
 \fB\-\-owner\fR names) but registers nothing, end the run with an error that names the module and gives
 the original error, and the exit status is 1, before any catalog is compared or
