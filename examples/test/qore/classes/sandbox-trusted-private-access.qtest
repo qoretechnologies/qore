@@ -123,24 +123,46 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         }
     }
 
-    testCompiled() {
+    #! returns the qcc of the test
+    private string qccBin() {
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    #! compiles a program with qcc; skips the test case if it cannot
+    private compile(string src, string exe, string opt) {
+        int rc;
+        string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", qccBin(), opt, exe, src), \rc);
+        if (rc || !is_file(exe)) {
+            testSkip("qcc is not available or cannot compile " + src + ": " + out);
         }
+    }
+
+    #! runs an executable that qcc compiled from a program and checks its output
+    /** @param quiet_loader_warnings if @ref True, the module loader's warnings are only returned (see
+        ExecModeHarness::run_command())
+
+        @return the result of the run, with the module loader's warnings, which are not output of the program
+    */
+    private hash<ExecModeHarness::ModeRunResult> runCompiled(string name, string exe, string label,
+            *bool quiet_loader_warnings) {
+        # -b must be the first argument of a compiled program
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b", exe),
+            quiet_loader_warnings);
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected(name), r.stdout, label);
+        # the program writes nothing else to stderr (the native compilation trace is not output either)
+        assertEq("", r.stderr, label + ": stderr");
+        return r;
+    }
+
+    testCompiled() {
         TmpDir tmp("qore-sandbox-trusted-private-access-");
         foreach string name in (programs()) {
             foreach string opt in (("0", "3")) {
                 string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
-                int rc;
-                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
-                if (rc || !is_file(exe)) {
-                    testSkip("qcc is not available or cannot compile " + name + ": " + out);
-                }
-                # -b must be the first argument of a compiled program
-                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
-                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
-                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+                compile(sprintf("%s/%s.q", dir, name), exe, opt);
+                runCompiled(name, exe, sprintf("%s -O%s", name, opt));
             }
         }
         skipIfLeftOut();
