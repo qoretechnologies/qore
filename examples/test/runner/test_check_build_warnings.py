@@ -107,7 +107,8 @@ class ParseTest(unittest.TestCase):
         clean = self.source / "clean.log"
         clean.write_text("[100%] Built target qore\n")
         report = self.source / "report.txt"
-        args = ["--log-source-dir", SRC, "--source-dir", str(self.source), "--report", str(report)]
+        args = ["--log-source-dir", SRC, "--source-dir", str(self.source), "--report", str(report),
+                "--memory-report", str(self.source / "compile-memory.txt")]
         with mock.patch("sys.stdout"):
             self.assertEqual(cbw.WARNINGS_FOUND, cbw.main(args + ["--log", f"ubuntu-amd64={with_warnings}",
                                                                   "--log", f"alpine-amd64={clean}"]))
@@ -185,7 +186,8 @@ class FetchTest(unittest.TestCase):
         env.update(env_extra or {})
         report = self.dir / "report.txt"
         with mock.patch.dict(os.environ, env, clear=False), mock.patch("sys.stdout"), mock.patch("sys.stderr"):
-            return cbw.main(["--fetch", "--download-dir", str(self.dir / "logs"), "--report", str(report)]), report
+            return cbw.main(["--fetch", "--download-dir", str(self.dir / "logs"), "--report", str(report),
+                             "--memory-report", str(self.dir / "compile-memory.txt")]), report
 
     def test_fetch_reports_each_platform(self):
         jobs = [
