@@ -414,6 +414,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/vars/hash-copy.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/qore/vars/hash-member-order.qtest",
+                                 "examples/test/qore/vars/timezone-spelling-casefold.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",
