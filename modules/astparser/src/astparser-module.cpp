@@ -26,6 +26,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "AstHighlighter.h"
 #include "QC_AstParser.h"
@@ -67,6 +68,11 @@ const TypedHashDecl* hashdeclAstHighlight;
 const TypedHashDecl* hashdeclAstErrorRange;
 
 static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    // the hash tables of the module that are keyed by data use the keyed hash of the process; its key is created
+    // here, where a failure is reported, so that constructing such a table later cannot fail (qore#7750)
+    if (qore_intern_hash_process_key_check(&xsink)) {
+        return;
+    }
     // hashdecls are initialized first, as the methods of the classes use them
     hashdeclAstExpressionLink = init_hashdecl_AstExpressionLink(AstParserNS);
     hashdeclAstHighlight = init_hashdecl_AstHighlight(AstParserNS);

@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "qore/intern/qore_keyed_hash.h"
+
 QoreTextFeatures::QoreTextFeatures(const std::string& mode, int max_features, int min_df,
     const std::string& tokenizer_mode, void* tokenizer_handle)
     : mode(mode), tokenizer_mode(tokenizer_mode), tokenizer_handle(tokenizer_handle),
@@ -74,7 +76,8 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
     int64_t num_docs = documents->size();
 
     // Count document frequency for each term
-    std::unordered_map<std::string, int> df_counts;
+    qore_keyed_string_map<int> df_counts;
+    QORE_KEYED_HASH_SITE("ml-1", df_counts);
 
     for (int64_t i = 0; i < num_docs; ++i) {
         QoreValue v = documents->retrieveEntry(i);
@@ -93,11 +96,12 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count unique terms in this document
-        std::unordered_map<std::string, bool> seen;
+        qore_keyed_string_set seen;
+        QORE_KEYED_HASH_SITE("ml-2", seen);
         for (const auto& tok : tokens) {
-            if (!seen[tok]) {
+            // one search for a term that was seen and for a new one
+            if (seen.insert(tok).second) {
                 df_counts[tok]++;
-                seen[tok] = true;
             }
         }
     }
@@ -190,7 +194,8 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count term frequencies
-        std::unordered_map<std::string, int> tf_counts;
+        qore_keyed_string_map<int> tf_counts;
+        QORE_KEYED_HASH_SITE("ml-3", tf_counts);
         for (const auto& tok : tokens) {
             tf_counts[tok]++;
         }
