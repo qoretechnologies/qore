@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-metadata-compression-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -22,7 +33,7 @@ string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
     ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-string source_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + ".qr";
+string source_path = tmp.path + "/metadata-compression.qr";
 {
     File source();
     source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -30,14 +41,14 @@ string source_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + 
 }
 
 foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
-    string exe_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + "-" + mode;
+    string exe_path = tmp.path + "/metadata-compression-" + mode;
     string compile_out = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s --aot-metadata-compression=%s -O3 -o %s %s 2>&1",
         libqore_dir, qcc_bin, mode, exe_path, source_path));
     if (!is_file(exe_path)) {
         printf("%s metadata compilation failed:\n%s", mode, compile_out);
         unlink(source_path);
-        exit(2);
+        test_exit(2);
     }
 
     string execution_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -46,7 +57,7 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
         printf("%s metadata execution mismatch:\n%s", mode, execution_out);
         unlink(source_path);
         unlink(exe_path);
-        exit(2);
+        test_exit(2);
     }
 
     string dump_out = backquote(sprintf(
@@ -63,7 +74,7 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
         printf("%s metadata dump mismatch:\n%s", mode, dump_out);
         unlink(source_path);
         unlink(exe_path);
-        exit(2);
+        test_exit(2);
     }
     *list<string> debug_section =
         dump_out =~ x/DEBUG_IR\s+type=28\s+offset=\d+\s+size=(\d+)/;
@@ -74,7 +85,7 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
         printf("%s split debug IR metadata mismatch:\n%s", mode, dump_out);
         unlink(source_path);
         unlink(exe_path);
-        exit(2);
+        test_exit(2);
     }
     unlink(exe_path);
 }
@@ -82,14 +93,14 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
 # Auto mode must prefer lazy section compression when debug IR is substantial,
 # even when the linker-only symbol index is below its independent threshold.
 string debug_source_path = realpath(get_script_dir() + "/../../../qlib/Util.qm");
-string debug_qmod_path = "/tmp/qore-aot-metadata-debug-compression-" + string(getpid()) + ".qmod";
+string debug_qmod_path = tmp.path + "/metadata-debug-compression.qmod";
 string debug_compile_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --aot-metadata-compression=auto -O3 -m %s -o %s 2>&1",
     libqore_dir, qcc_bin, debug_source_path, debug_qmod_path));
 if (!is_file(debug_qmod_path)) {
     printf("debug-heavy auto metadata compilation failed:\n%s", debug_compile_out);
     unlink(source_path);
-    exit(2);
+    test_exit(2);
 }
 string debug_dump_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-info --dump-sections %s 2>&1",
@@ -105,7 +116,7 @@ if (!(debug_dump_out =~ /bytes compressed \(sectioned-zstd\)/)
         debug_compile_out, debug_dump_out);
     unlink(source_path);
     unlink(debug_qmod_path);
-    exit(2);
+    test_exit(2);
 }
 unlink(debug_qmod_path);
 

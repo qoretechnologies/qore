@@ -6,7 +6,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-object-member-compound-get-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -16,7 +27,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-object-member-compound-get-" + string(getpid());
+string root = tmp.path + "/object-member-compound-get";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -227,7 +238,7 @@ string enabled_compile = backquote(sprintf(
     env, qcc_bin, enabled_exe, source_path));
 if (!is_file(enabled_exe)) {
     printf("enabled compile failed:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string disabled_exe = root + "/disabled";
@@ -237,7 +248,7 @@ string disabled_compile = backquote(sprintf(
     env, qcc_bin, disabled_exe, source_path));
 if (!is_file(disabled_exe)) {
     printf("disabled compile failed:\n%s", disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
@@ -246,7 +257,7 @@ if (!enabled_symbols.regex("qore_rt_object_member_compound_get_aot")
         || disabled_symbols.regex("qore_rt_object_member_compound_get_aot")) {
     printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s",
         enabled_symbols, disabled_symbols);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
@@ -254,5 +265,5 @@ string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
 if (ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

@@ -5,7 +5,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-overload-self-recursion-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -13,7 +24,7 @@ string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
     "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
 trim timeout_cmd;
 
-string root = "/tmp/qore-aot-overload-self-recursion-" + string(getpid());
+string root = tmp.path + "/overload-self-recursion";
 mkdir(root);
 on_exit {
     foreach string name in (("direct.qr", "global-method.qr", "direct-aot", "global-method-aot")) {

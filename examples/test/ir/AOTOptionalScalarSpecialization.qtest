@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-optional-scalar-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -74,7 +84,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-optional-scalar-" + string(getpid());
+string root = tmp.path + "/optional-scalar";
 mkdir(root);
 string source_path = root + "/test.qr";
 File source_file();
@@ -92,7 +102,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -102,7 +112,7 @@ string sub compile(string output, string env) {
         env, libqore_dir, qcc_bin, output, source_path));
     if (!is_file(output)) {
         printf("compile failed:\n%s", compile_output);
-        exit(2);
+        test_exit(2);
     }
     return compile_output;
 }
@@ -120,7 +130,7 @@ if (enabled_compile
             =~ /IR-OPT-AOT-EFFECTS: (intOps|floatOps|mix)[^:]*:.*native-specializations=[1-9]/) {
     printf("unexpected optional scalar specialization stats:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string path in ((enabled_exe, disabled_exe)) {
@@ -129,6 +139,6 @@ foreach string path in ((enabled_exe, disabled_exe)) {
     if (actual != expected) {
         printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
