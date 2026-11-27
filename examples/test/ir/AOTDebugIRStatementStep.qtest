@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 # Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
 
 # Regression test: a debugger attached to an AOT program gets the step event of every statement of an AOT
@@ -17,6 +18,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTDebugIRStatementStepTest
 
@@ -118,10 +120,20 @@ foreach string e in (r.seen) {
             string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
                 libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
             assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
-            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+            string aot_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
             assertEq(ast_out, aot_out, sprintf("AOT step events of probe() match the AST interpreter "
                 "(strip-source: %y)", strip));
             unlink(exe);
         }
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }
