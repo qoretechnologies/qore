@@ -14457,9 +14457,10 @@ static QORE_INTERN_ALWAYS_INLINE void qore_rt_check_function_return_value(const 
     if (*xsink || val.isNothing()) {
         return;
     }
-    if (const QoreTypeInfo* rt = qore_rt_fast_call_return_type(sig, method, receiver_type_info)) {
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-    }
+    // as before qore#7762: a return type without a type (any, auto) is accepted (and stripped) too
+    QoreTypeInfo::acceptAssignment(method
+        ? qore_rt_get_effective_return_type(sig, receiver_type_info)
+        : qore_rt_get_effective_return_type(sig), "<return statement>", val, xsink);
 }
 
 //! checks a body of a function that a fast call ran and that returned no value against its declared return type (a
@@ -15318,14 +15319,18 @@ extern "C" DLLEXPORT void qore_rt_leave_native_method_v1(void* storage) {
 }
 #endif
 
+// a signature without type parameters (its cached answer: one load) has a return type that no substitution changes
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info) {
     const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-    return receiver_type_info ? qore_substitute_type_params_if_needed(rt, receiver_type_info) : rt;
+    return receiver_type_info && sig->needsTypeParameterSubstitution()
+        ? qore_substitute_type_params_if_needed(rt, receiver_type_info)
+        : rt;
 }
 
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig) {
-    return qore_substitute_type_params_if_needed(sig->getReturnTypeInfo());
+    const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+    return sig->needsTypeParameterSubstitution() ? qore_substitute_type_params_if_needed(rt) : rt;
 }
 
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
@@ -15750,10 +15755,6 @@ extern "C" DLLEXPORT void qore_rt_unbind_fast_entry_ref_params_aot(QoreAOTContex
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
-// The low bit requests the cached environment override check of prelinked AOT calls; each Program with a debugger
-// attached adds two (see qore_aot_debug_program_change())
-extern DLLLOCAL std::atomic<unsigned> qore_aot_direct_call_mode;
-
 #ifdef DEBUG
 //! the number of calls through references to user functions made without the generic call path (qore#5578), for
 //! the tests (dbg_function_reference_fast_calls()); defined in the single compilation unit
@@ -15786,8 +15787,8 @@ extern DLLLOCAL std::atomic<int64_t> qore_dbg_function_reference_fast_calls;
       read the variant's signature, are all made before any Program is entered, without a reference to it, and a miss
       leaves no trace (entering a Program runs its thread entry handlers and charges a sandbox's budgets): a function
       of another Program, which can be deleted, takes the generic call path;
-    - the callee's Program is not being deleted and no debugger is attached to it: the global count of the Programs
-      with a debugger (qore_aot_direct_call_mode) first.
+    - the callee's Program is not being deleted, the variant does not run in another Program
+      (UserVariantBase::fastCallBlocked()), and no debugger is attached to the Program (qore_rt_debugger_attached()).
 
     The refusals of a call made by the expression of the background operator (qore#7087) are those of the generic
     call path: of a reference created by code that may not control threads (checkBackgroundCreator()), and of the code
@@ -15866,11 +15867,10 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
             : exec_pgm->getProgramId() != uvb->pgm_id) {
         return false;
     }
-    // a debugger: the global count of the Programs with a debugger attached (one load), then the callee's Program
-    // (fastCallBlocked(): its Program is being deleted, or it runs in another Program, as the other fast paths test it;
-    // qore#5822, qore#7202)
-    if (uvb->fastCallBlocked()
-            || ((qore_aot_direct_call_mode.load(std::memory_order_acquire) & ~1u) && qore_rt_debugger_attached(uvb))) {
+    // a debugger attached to the callee's Program, which is allocated (the caller's, or a module's); fastCallBlocked():
+    // its Program is being deleted, or it runs in another Program, as the other fast paths test it (qore#5822,
+    // qore#7202)
+    if (uvb->fastCallBlocked() || qore_rt_debugger_attached(uvb)) {
         return false;
     }
     const LocalFunctionCallReferenceNode::FastCallInfo* info = state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE
