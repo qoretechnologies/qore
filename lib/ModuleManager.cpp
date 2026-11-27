@@ -2083,6 +2083,10 @@ int QoreModuleDefContext::addChild(const QoreProgramLocation* loc, const char* s
 }
 
 int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, QoreValue val) {
+    // the keys of a duplicate module declaration are not the module's; the duplicate is already a parse error
+    if (ignore_keys) {
+        return -1;
+    }
     int err = 0;
     // special handling for "init" and "del"
     if (!strcmp(key, "init")) {
@@ -2404,9 +2408,23 @@ void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi)
     trySetUserModule(mi->getName());
 }
 
-void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
-    assert(vmap.find("name") == vmap.end());
+void QoreUserModuleDefContextHelper::setNameInit(const QoreProgramLocation* loc, const char* name) {
+    assert(loc);
+    // the scanner declares the module each time that it reads a module declaration in the parse of the module,
+    // including its other files (those of a separated module, included files); a module is declared once (qore#7794)
+    strmap_t::const_iterator i = vmap.find("name");
+    if (i != vmap.end()) {
+        assert(name_loc);
+        parse_error(*loc, "duplicate module declaration '%s': module '%s' was already declared at %s:%d", name,
+            i->second.c_str(), name_loc->getFile() ? name_loc->getFile() : "<unknown>", name_loc->start_line);
+        // the keys parsed from now on are in this or another duplicate declaration, as the module was declared
+        // already: they are ignored, so that a duplicate cannot add a closure or lift the module's restrictions with
+        // its domains; this is not reset when a declaration closes, as the parser can read the next token first
+        ignore_keys = true;
+        return;
+    }
     vmap["name"] = name;
+    name_loc = loc;
 
     assert(!header_frame.isLinked());
 

@@ -28850,7 +28850,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
-    // the "module Name" declaration, and calling it twice triggers an assertion.
+    // the "module Name" declaration, and a second call is a duplicate module declaration (qore#7794).
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);

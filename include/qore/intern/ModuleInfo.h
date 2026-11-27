@@ -1960,7 +1960,12 @@ public:
         return mod_name;
     }
 
-    DLLLOCAL void setNameInit(const char* name);
+    //! Declares the name of the module at \a loc, the location of the module declaration, and opens its header
+    /** A module is declared once: a second declaration in the parse of the module (in the same file, another file of
+        a separated module or an included file) raises a parse error at its own location (qore#7794); the module
+        keeps the name of the first declaration, and the header is not opened again.
+    */
+    DLLLOCAL void setNameInit(const QoreProgramLocation* loc, const char* name);
 
     //! applies the declared domains to the module's Program and lifts them from the header's own restrictions
     DLLLOCAL virtual int64 applyDomains(int64 dom) override;
@@ -1980,6 +1985,8 @@ protected:
     QoreParseOptions header_po;
     //! the scoped options of the header's code, which end with the header (see close())
     ParseOptionsOverlayFrame header_frame{ParseOptionsOverlayFrame::MODULE_HEADER};
+    //! the location of the module declaration once the module is declared (see setNameInit())
+    const QoreProgramLocation* name_loc = nullptr;
 
     ExceptionSink& xsink;
     bool dup;

@@ -1618,6 +1618,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>del</b> = </tt><i>@ref closure "deletion closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}</tt>
 
+    A module is declared once: a second module declaration anywhere in the module's code (in the same file, in another
+    file of a @ref separated_modules "separated module" or in a file included with
+    @ref include "%include") raises a \c PARSE-EXCEPTION at the second declaration that gives the location of the
+    first one; the keys of the second declaration are ignored, and the module is neither loaded nor compiled.
+
     Module properties are as follows:
     - \c version: (required) must be assigned to a string giving the version of the module
     - \c desc: (required) must be assigned to a string giving a text description of the module

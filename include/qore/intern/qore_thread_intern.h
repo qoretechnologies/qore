@@ -278,6 +278,11 @@ public:
     DLLLOCAL AbstractQoreNode* takeDel();
 
 protected:
+    //! true while the keys of a module declaration that was rejected as a duplicate are parsed: they are ignored
+    /** see QoreUserModuleDefContextHelper::setNameInit() (qore#7794)
+    */
+    bool ignore_keys = false;
+
     DLLLOCAL int initClosure(const QoreProgramLocation* loc, QoreValue& c, const char* n);
 };
 
@@ -3543,7 +3548,9 @@ DLLLOCAL void set_module_context(QoreModuleContext* qmc);
 DLLLOCAL QoreModuleContext* get_module_context();
 DLLLOCAL QoreModuleDefContext* set_module_def_context(QoreModuleDefContext* qmd);
 DLLLOCAL QoreModuleDefContext* get_module_def_context();
-DLLLOCAL void parse_set_module_def_context_name(const char* name);
+//! declares the name of the module being defined at \a loc, the location of its declaration (see
+//! QoreUserModuleDefContextHelper::setNameInit())
+DLLLOCAL void parse_set_module_def_context_name(const QoreProgramLocation* loc, const char* name);
 DLLLOCAL const char* set_module_context_name(const char* n);
 DLLLOCAL const char* get_module_context_name();
 DLLLOCAL const char* set_module_context_path(const char* p);

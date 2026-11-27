@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# a module whose included file declares the module again (qore#7794)
+
+module DupDeclInc {
+    version = "1.0";
+    desc = "duplicate module declaration test module";
+    author = "Qore Technologies, s.r.o.";
+}
+
+%modern
+
+%include DupDeclInc.ql
+
+public namespace DupDeclInc {
+public int sub get() {
+    return 1;
+}
+}

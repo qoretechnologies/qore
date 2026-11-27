@@ -12750,7 +12750,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
-    // the "module Name" declaration, and calling it twice triggers an assertion.
+    // the "module Name" declaration, and a second call is a duplicate module declaration (qore#7794).
     // the module is a binary module: the user modules that its code loads are not recorded as its dependencies, only
     // the binary modules, which are released if the initialization fails (#5953)
     QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink, QMRL_BINARY);
