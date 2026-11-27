@@ -1,0 +1,46 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# I18nFailingEagerOwner.qm - provider fixture whose eager registration fails and is reported
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires DataProvider
+
+#! A provider fixture whose eager registration fails and is reported, so that the module registers nothing
+/** As a provider integration that initializes eagerly does, the module reports the failure of its app's
+    registration to the data provider catalog instead of raising it, so its load succeeds and it contributes no
+    presentation.  Used by I18nFailClosed.qtest (qore#7788).
+*/
+module I18nFailingEagerOwner {
+    version = "1.0";
+    desc = "provider fixture whose eager registration fails and is reported";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        try {
+            throw "FILE-OPEN2-ERROR", "cannot open 'index.js': the action script of the fixture does not exist";
+        } catch (hash<ExceptionInfo> ex) {
+            DataProviderActionCatalog::reportInitializationFailure("app", "QoreTestI18nFailingEager", NOTHING, ex,
+                "I18nFailingEagerOwner");
+        }
+    };
+}

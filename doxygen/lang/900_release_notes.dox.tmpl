@@ -301,6 +301,12 @@
     same exceptions with full paths (see @ref no-external-info "%no-external-info";
     <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
+    @par Code Restricted From External Information Gets No Process Arguments or Environment
+    \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are empty in a %Program restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", also when it inherits the restriction or gets it later, and
+    code with this restriction reads them empty from other %Programs (see @ref sandbox_program_process_information;
+    <a href="https://github.com/qoretechnologies/qore/issues/7693">issue 7693</a>).
+
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
     (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
@@ -2294,6 +2300,12 @@
         @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "getActionProcessing()" and
         @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()"
         (<a href="https://github.com/qoretechnologies/qore/issues/7568">issue 7568</a>)
+      - a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in a global variable no longer keeps the
+        program from ending, and an error of its thread callback is raised instead of deadlocking it
+        (<a href="https://github.com/qoretechnologies/qore/issues/7771">issue 7771</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
+      - a synchronous @ref DataProvider::DataProviderPipeline "DataProviderPipeline" processes the records of an
+        iterator instead of hanging (<a href="https://github.com/qoretechnologies/qore/issues/7793">issue 7793</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module

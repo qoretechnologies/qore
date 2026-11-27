@@ -8555,27 +8555,28 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         its result takes a reference to the server to the controller, which releases it in the callback that runs the
         request, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
 
-        @param info connection and request information
+        @param sock the socket of the connection
+        @param cx the connection context
+        @param hdr the request header
+        @param header_info the header information of the request
 
         @return result info for the controller to act on, or @ref nothing if the request's handler does not answer it
         inline
 
         @since HttpServer 1.7
     */
-    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
-            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(Socket sock, hash<auto> cx, hash<auto> hdr,
+            hash<auto> header_info) {
         *hash<HttpServerAsyncIo::HttpRequestResultInfo> rv;
-        {
-            *HttpServer server_hold = serv;
-            *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(info.hdr);
-            if (handler && (handler.handlerCodeIsRestricted()
-                    ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
-                        handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
-                    : handler.canHandleInline(info.cx, info.hdr))) {
-                rv = processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
-            }
-            remove server_hold;
+        *HttpServer server_hold = serv;
+        *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(hdr);
+        if (handler && (handler.handlerCodeIsRestricted()
+                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(cx, hdr).cx,
+                    handler.withholdCredentialsForDispatch(cx, hdr).hdr)
+                : handler.canHandleInline(cx, hdr))) {
+            rv = processInlineRequest(sock, cx, hdr, handler, header_info);
         }
+        remove server_hold;
         # the request released the last reference to the server (the program released it while the request ran, and
         # the request has no response to give that would hold the server): its stop closed the connections (qore#6508)
         if (!serv) {
@@ -14813,7 +14814,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         if (!inlineHeadValid(info.hdr, info.header_info)) {
             return NOTHING;
         }
-        return cast<HttpListener>(info.listener).tryInlineRequest(info);
+        return cast<HttpListener>(info.listener).tryInlineRequest(info.sock, info.cx, info.hdr, info.header_info);
     }
 
     #! Called when an HTTP request is ready (header fully parsed)
