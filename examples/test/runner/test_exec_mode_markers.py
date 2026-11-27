@@ -209,8 +209,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
         # - hash-member-order (#7272): its probe runs in child processes that set their own --exec-mode and in a qcc
         #   executable
-        # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
-        #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
         #   in qcc executables
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
@@ -235,10 +233,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
         #   executables and with a module compiled by qcc
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
-        # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
-        #   and in qcc executables
-        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
@@ -250,12 +244,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   in a child process with --exec-mode=ast
         # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
         #   executables
-        # - closure-default-self-ref (#6417, #5949): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
-        # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
-        #   and in qcc executables
-        # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
-        #   qcc executables
         # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
@@ -301,8 +289,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
         #   qcc executables
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
-        # - expression-declarations-modes (#6524): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
         # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
         # - AOTModuleDependencyRestrictions (#6406) and AOTModuleHeaderRequests (#6386): their checks run in child
         #   processes that set their own --exec-mode and in qcc executables
@@ -397,20 +383,15 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",
-                                 "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
                                  "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
-                                 "examples/test/qore/classes/explicit-type-param-method-call.qtest",
-                                 "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
                                  "examples/test/qore/security/stdio-sandbox-change.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
-                                 "examples/test/qore/classes/deleted-object-generic-variant.qtest",
-                                 "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
@@ -419,7 +400,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
-                                 "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
                                  "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
@@ -433,7 +413,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
                                  "examples/test/qore/misc/test-interpreter-options/test-interpreter-options.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
-                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
