@@ -9626,8 +9626,11 @@ llvm::AllocaInst* QoreIRToLLVM::emitCallRefSiteSkip(llvm::Value* ref_boxed, llvm
     llvm::AllocaInst* not_funcref = ab.CreateAlloca(i64_type, nullptr, "callref_not_funcref");
     ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), not_funcref);
     llvm::BasicBlock* try_bb = llvm::BasicBlock::Create(ctx, "callref_try", llvm_func);
-    builder->CreateCondBr(builder->CreateICmpEQ(ref_boxed, builder->CreateLoad(i64_type, not_funcref,
-        "callref_not_funcref_value")), generic_bb, try_bb);
+    // a volatile load and store: the slot stays in memory, so that a loop does not keep its value in a register
+    // across the generic call, which costs a closure's call the spill and reload of it (one load instead)
+    llvm::LoadInst* kept = builder->CreateLoad(i64_type, not_funcref, "callref_not_funcref_value");
+    kept->setVolatile(true);
+    builder->CreateCondBr(builder->CreateICmpEQ(ref_boxed, kept), generic_bb, try_bb);
     builder->SetInsertPoint(try_bb);
     return not_funcref;
 }
@@ -9638,7 +9641,7 @@ llvm::BasicBlock* QoreIRToLLVM::emitCallRefSiteNote(llvm::AllocaInst* not_funcre
     llvm::IRBuilder<>::InsertPointGuard guard(*builder);
     llvm::BasicBlock* note_bb = llvm::BasicBlock::Create(ctx, "callref_note_not_funcref", llvm_func);
     builder->SetInsertPoint(note_bb);
-    builder->CreateStore(ref_boxed, not_funcref);
+    builder->CreateStore(ref_boxed, not_funcref)->setVolatile(true);
     builder->CreateBr(generic_bb);
     return note_bb;
 }
