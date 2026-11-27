@@ -70,6 +70,8 @@ public class FileListDataProvider inherits FileDataProviderBase {
         @throw LIST-ERROR if the path cannot be read
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the paths are the caller's input (qore#7806)
+        checkCallerFileAccess();
         if (root.val() && lock) {
             checkPath(\req.path);
         }

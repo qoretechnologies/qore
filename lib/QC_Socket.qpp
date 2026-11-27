@@ -2638,7 +2638,7 @@ Socket::destructor() {
     sandboxed code, such as the accept of a listener that trusted code added on behalf of a tenant.
 
     @return @ref True if the socket is marked, @ref False if the code that calls this method is the code of a
-    sandboxed %Program and the socket is not marked
+    restricted %Program (see @ref sandbox_manager_classes) and the socket is not marked
 
     @throw SOCKET-SERVER-OWNED-ERROR the object is the alias of a server's connection socket, or another object with
     the same connection is already marked
@@ -2654,7 +2654,9 @@ bool Socket::setServerOwned() [guard=none] {
     // call runs for: a server's code marks the connections of a listener that was added for sandboxed code, whose
     // accepts run for that code; a mark by sandboxed code would refuse its socket to the trusted code that it gives
     // it to when that runs for sandboxed code
-    if (qore_calling_code_is_sandboxed()) {
+    // only restricted code is refused: the code of a Program that a trusted (governed) sandbox governs is trusted
+    // (qore#7737)
+    if (qore_calling_code_is_restricted()) {
         return false;
     }
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
@@ -2701,7 +2703,7 @@ bool Socket::isServerOwned() [guard=none; flags=CONSTANT] {
 Socket Socket::getServerAlias() [guard=none] {
     // decided at each call by the code that calls, like setServerOwned(): the server's code gets the alias also when
     // it runs for sandboxed code
-    if (qore_calling_code_is_sandboxed()) {
+    if (qore_calling_code_is_restricted()) {
         xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "sandboxed code cannot get the alias of the connection "
             "socket of a server");
         return QoreValue();
@@ -2754,7 +2756,7 @@ bool Socket::isServerAlias() [guard=none; flags=CONSTANT] {
     @since %Qore 3.0
 */
 *Socket Socket::getServerSocket() [guard=none] {
-    if (qore_calling_code_is_sandboxed()) {
+    if (qore_calling_code_is_restricted()) {
         xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "sandboxed code cannot get the connection socket of a "
             "server from its alias");
         return QoreValue();

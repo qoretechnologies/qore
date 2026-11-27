@@ -748,6 +748,8 @@ public class UnstructuredPartitionFileDataProvider inherits UnstructuredDataProv
 
     #! Partitions the document and returns its element list
     /** @throw PARTITION-FILE-ERROR neither or both of \c file_data and \c file_path were given
+        @throw PERMISSION-DENIED \c file_path was given by code restricted from the file system (see
+        @ref Util::check_caller_file_access() "check_caller_file_access()")
 
         @throw REST-RESPONSE-ERROR the server rejected the request
     */
@@ -755,6 +757,10 @@ public class UnstructuredPartitionFileDataProvider inherits UnstructuredDataProv
         if (exists req.file_data && req.file_path.val()) {
             throw "PARTITION-FILE-ERROR", "'file_data' and 'file_path' are mutually exclusive; "
                 "give exactly one of them";
+        }
+        if (req.file_path.val()) {
+            # the path is the caller's input: refused before it is read or anything is sent (qore#7806)
+            check_caller_file_access("the 'file_path' field of the partition-file request");
         }
 
         data body;

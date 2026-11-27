@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - file-system policy of a sandbox and the file-system restrictions of the code that creates objects
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires NdjsonDataProvider
+%requires YamlDocumentDataProvider
+%requires CsvUtil
+%requires FixedLengthUtil
+%requires EdifactUtil
+%requires Hl7v2Util
+%requires FilePoller
+%requires FtpPoller
+%requires QoreModelRegistry
+%requires QoreTokenizerUtils
+%requires ml
+
+%exec-class PathOptionsRestrictedCreatorsTest
+
+#! Tests that the objects that read or write a local path given when they are created refuse a creator restricted
+#! from the file system (qore#7806)
+/** Code restricted from the file system by a parse option (PO_NO_FILESYSTEM) that creates the object (a data provider
+    with a path option, a poller, a model registry, an embedding model) is refused with PERMISSION-DENIED before the
+    path is used; a creator that a sandbox governs is refused by the sandbox's file-system policy
+    (FILESYSTEM-ACCESS-DENIED); the path that the host gave an object that it lends to restricted code is the host's,
+    and the object uses it for that code; an unrestricted creator uses the path.
+*/
+class PathOptionsRestrictedCreatorsTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        const Source = "%modern
+%requires DataProvider
+%requires NdjsonDataProvider
+%requires YamlDocumentDataProvider
+%requires CsvUtil
+%requires FixedLengthUtil
+%requires EdifactUtil
+%requires Hl7v2Util
+%requires FilePoller
+%requires FtpPoller
+%requires QoreModelRegistry
+%requires QoreTokenizerUtils
+# concrete pollers
+class TestFilePoller inherits FilePoller {
+    constructor(string path, string mask) : FilePoller(path, mask) {}
+    singleFileEvent(hash<FilePollerFileEventInfo> event) {}
+}
+class TestFtpPoller inherits FtpPoller {
+    constructor(FtpClient ftp, hash<auto> opts) : FtpPoller(ftp, opts) {}
+    singleFileEvent(hash<FtpPollerFileEventInfo> event) {}
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> event) {}
+}
+# creates the object with the given arguments and uses it
+string sub create(string cls, *softlist<auto> args, string op) {
+    try {
+        object o = create_object_args(cls, args);
+        return use(o, op);
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+# uses an object that the host created
+string sub lent(object o, string op) {
+    try {
+        return use(o, op);
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+string sub use(object o, string op) {
+    switch (op) {
+        case \"register\": o.registerPackage(\"/etc\", {\"name\": \"m\"}); break;
+        case \"search\": o.searchRecords(); break;
+        case \"create\": o.createRecord({\"tag\": \"PID\", \"fields\": (\"a\",)}); break;
+    }
+    return \"ok\";
+}
+# the error, also of a record operation, which the data provider wraps
+string sub err(hash<ExceptionInfo> ex) {
+    if (ex.err =~ /^(CREATE|SEARCH)-RECORD-ERROR$/) {
+        *string e = (ex.desc =~ x/^([A-Z0-9-]+):/)[0];
+        if (e) {
+            return e;
+        }
+    }
+    return sprintf(\"%s\", ex.err);
+}
+";
+    }
+
+    private {
+        #! the directory of the test
+        TmpDir tmp("qore-7806-opts-");
+        #! a file that every reader can read: one JSON line, which is also a YAML document
+        string input;
+    }
+
+    constructor() : QUnit::Test("PathOptionsRestrictedCreators", "1.0", \ARGV) {
+        input = tmp.path + "/input.txt";
+        File f();
+        f.open2(input, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("{\"a\": 1}\n");
+
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("path options, " + m, sub () { testOptions(m); });
+        }
+        set_return_value(main());
+    }
+
+    private testOptions(string mode) {
+        string out = tmp.path + "/out";
+        # name: class, constructor arguments, the use, and whether the host's object reads its path when it is used
+        # (and not only when it is created)
+        hash<string, list<auto>> uses = {
+            "ndjson read": ("NdjsonDataProvider::NdjsonReadDataProvider", ({"path": input},), "search", True),
+            "yaml document read": ("YamlDocumentDataProvider::YamlDocumentReadDataProvider", ({"path": input},),
+                "search", True),
+            "csv read": ("CsvUtil::CsvReadDataProvider", (input,), "none", False),
+            "csv write": ("CsvUtil::CsvWriteDataProvider", (out,), "none", False),
+            "fixed-length read": ("FixedLengthUtil::FixedLengthReadDataProvider",
+                (input, {"r": {"a": {"length": 1, "type": "string"}}}), "none", False),
+            "fixed-length write": ("FixedLengthUtil::FixedLengthWriteDataProvider",
+                (out, {"r": {"a": {"length": 1, "type": "string"}}}), "none", False),
+            "edifact read": ("EdifactUtil::EdifactReadDataProvider", (input,), "none", False),
+            "edifact write": ("EdifactUtil::EdifactWriteDataProvider", (out,), "none", False),
+            "edifact schema": ("EdifactUtil::EdifactSchemaDataProvider", ({"release": "D96A", "dir": tmp.path},),
+                "none", False),
+            "hl7v2 read": ("Hl7v2Util::Hl7v2ReadDataProvider", ({"path": input},), "none", False),
+            "hl7v2 write": ("Hl7v2Util::Hl7v2WriteDataProvider", ({"path": out},), "create", True),
+            "file poller": ("TestFilePoller", (tmp.path, "*"), "none", False),
+            "ftp poller": ("TestFtpPoller", (new FtpClient("ftp://127.0.0.1:1"), {"local_dir": tmp.path}),
+                "none", False),
+            "model registry": ("QoreModelRegistry::ModelRegistry", ({"path": tmp.path + "/registry"},), "none",
+                False),
+            "embedding model": ("QoreTokenizerUtils::EmbeddingModel", (<EmbeddingConfig>{"mode": "onnx",
+                "model_path": input, "tokenizer_config": {"version": "1.0"}},), "none", False),
+            "model registry backend": ("QoreModelRegistry::FilesystemBackend", (tmp.path + "/registry2",), "none",
+                False),
+            "model registry with a backend": ("QoreModelRegistry::ModelRegistry",
+                ({"backend": new FilesystemBackend(tmp.path + "/registry3")},), "register", False),
+            "embedding model profile": ("QoreTokenizerUtils::EmbeddingModel", (<EmbeddingConfig>{"mode": "onnx",
+                "model_data": binary("x"), "tokenizer_config": {"version": "1.0"},
+                "session_config": <ML::OnnxSessionConfig>{"enable_profiling": True, "profile_file_prefix": out}},),
+                "none", False),
+        };
+        # the uses whose objects the sandbox refuses only when they use the path (a poller when it polls, a
+        # registry when it registers, ONNX Runtime when it writes a profile)
+        hash<string, bool> sandbox_later = {
+            "file poller": True,
+            "model registry with a backend": True,
+            "embedding model profile": True,
+        };
+
+        foreach hash<auto> i in (uses.pairIterator()) {
+            string desc = i.key + " " + mode;
+            string cls = i.value[0];
+            list<auto> args = i.value[1];
+            string op = i.value[2];
+            assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("create", cls, args, op),
+                "nofs " + desc);
+            assertFalse(is_file(out), "nofs, nothing written " + desc);
+            string sbx = getProgram("sandbox", mode).callFunction("create", cls, args, op);
+            if (!sandbox_later{i.key}) {
+                assertEq("FILESYSTEM-ACCESS-DENIED", sbx, "sandbox " + desc);
+            }
+            assertFalse(is_file(out), "sandbox, nothing written " + desc);
+
+            # the host's object uses the host's path for code restricted from the file system that it is lent to
+            if (i.value[3]) {
+                object o = create_object_args(cls, args);
+                assertEq("ok", getProgram("nofs", mode).callFunction("lent", o, op), "lent " + desc);
+                if (is_file(out)) {
+                    unlink(out);
+                }
+            }
+
+            # an unrestricted creator is not refused for the path
+            string rv = getProgram("unrestricted", mode).callFunction("create", cls, args, op);
+            assertNeq("PERMISSION-DENIED", rv, "unrestricted " + desc);
+            assertNeq("FILESYSTEM-ACCESS-DENIED", rv, "unrestricted " + desc);
+            if (is_file(out)) {
+                unlink(out);
+            }
+        }
+
+        # the package path that restricted code gives a registry that the host lent it is that code's input
+        ModelRegistry reg({"path": tmp.path + "/registry4"});
+        assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("lent", reg, "register"),
+            "lent registry, package path " + mode);
+    }
+
+    #! returns a Program of the given kind
+    private Program getProgram(string kind, string mode) {
+        Program p;
+        switch (kind) {
+            case "nofs":
+                p = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+                break;
+            case "sandbox": {
+                SandboxManager sm();
+                sm.setFilesystemDefaultPolicy(False);
+                p = new Program(PO_NEW_STYLE);
+                p.setSandboxManager(sm);
+                break;
+            }
+            default:
+                p = new Program(PO_NEW_STYLE);
+                break;
+        }
+        p.setExecMode(Modes{mode});
+        p.parse(Source, kind);
+        return p;
+    }
+}

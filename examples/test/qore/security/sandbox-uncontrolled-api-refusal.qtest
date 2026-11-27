@@ -212,8 +212,8 @@ class Probe {
     allowedTest() {
         Program p = getProgram(True);
         foreach string call in (Calls) {
-            # a capability of the sandboxed code is refused by createSystemPolicyCall() itself
-            assertEq(call == "own_capability" ? "SANDBOX-CAPABILITY-ERROR" : "ok", p.callFunction(call), call);
+            # a capability of the code of a trusted (governed) sandbox is created as for trusted code (qore#7737)
+            assertEq("ok", p.callFunction(call), call);
         }
     }
 
@@ -279,12 +279,12 @@ class Probe {
             "created under a trusting sandbox, run under the refusing one");
         assertEq(Refused, deny2.callFunction("through", auto sub () { return deny_probe.capability(); }),
             "created under a refusing sandbox, run under another refusing one");
-        assertEq("SANDBOX-CAPABILITY-ERROR",
-            allow.callFunction("through", auto sub () { return allow_probe.capability(); }),
+        # trusting sandboxes govern trusted code, which creates the capability (qore#7737)
+        assertEq("ok", allow.callFunction("through", auto sub () { return allow_probe.capability(); }),
             "created under a trusting sandbox, run under another trusting one");
         # with no sandbox on the call stack, the provenance alone decides
         assertEq(Refused, deny_probe.capability(), "the provenance of the refusing sandbox");
-        assertEq("SANDBOX-CAPABILITY-ERROR", allow_probe.capability(), "the provenance of a trusting sandbox");
+        assertEq("ok", allow_probe.capability(), "the provenance of a trusting sandbox");
     }
 
     onBehalfTest() {

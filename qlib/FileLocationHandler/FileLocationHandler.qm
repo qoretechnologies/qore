@@ -244,9 +244,11 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "getCallerDomains()"): the handler that
     the connection gives the location to does not refuse the domains that it uses with the options of the connection.
     The options that the caller adds in braces are checked against the caller: a caller restricted from the file
-    system cannot add \c ssl_cert_path to a connection's \c https location, for example.  The URL that an
-    application's file API returns for a read (the second mechanism above) is read with the caller's own
-    restrictions, as it can name any location, \c file locations included.
+    system cannot add \c ssl_cert_path to a connection's \c https location, for example, also when the connection
+    gives a certificate file of its own, which the caller's option would replace, and a caller restricted from the
+    network cannot add a \c proxy.  The URL that an application's file API returns for a read (the second mechanism
+    above) is read with the restrictions of the code that calls the handler (not with those of the code that a lent
+    object was lent to, as the URL is the application's), as it can name any location, \c file locations included.
 */
 /** @page filelocationhandler_nonblocking Non-Blocking Reads
 
@@ -390,13 +392,20 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
 
     @section filelocationhandler_v3_0 FileLocationHandler v3.0
+    - added @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "FileLocationHandler::checkCallerLocation()",
+      which library code that uses a location that its caller gives calls first; it also refuses the code that a lent
+      object was lent to, which the read and write methods do not refuse, and
+      @ref FileLocationHandler::FileLocationHandler::getLocationCallerDomains() "FileLocationHandler::getLocationCallerDomains()"
+      (issue #7806)
     - a caller restricted from the functional domain of a location's scheme cannot read or write the location:
       \c file locations (and locations without a scheme) are in the \c FILESYSTEM domain, and \c http, \c https,
       \c ftp, \c ftps, \c sftp, \c rest and \c rests locations in the \c NETWORK domain, unless the handler is bound
       to a client; \c data locations, \c conn locations (whose connection's policy decides) and the schemes that host
       code registers apply their own policy; options that name local files (\c ssl_cert_path, \c ssl_key_path,
-      \c ssh2_private_key, \c ssh2_public_key) are in the \c FILESYSTEM domain, and a handler that restricted code
-      bound to a client keeps the \c NETWORK domain; see
+      \c ssh2_private_key, \c ssh2_public_key), also when a caller adds them to a \c conn location, are in the
+      \c FILESYSTEM domain, a \c proxy that a caller adds to a \c conn location in the \c NETWORK domain, the
+      \c swagger option of \c rest locations in the domains of its location, and a handler that restricted code bound
+      to a client keeps the \c NETWORK domain; see
       @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "AbstractFileLocationHandler::getCallerDomains()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
     - text reads (\c getTextFileFromLocation() and \c getStreamReaderFromLocation()) check the text in its encoding

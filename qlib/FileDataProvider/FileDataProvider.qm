@@ -254,6 +254,11 @@ module FileDataProvider {
     @section filedataprovider_relnotes Release Notes
 
     @subsection filedataprovider_v2_2 FileDataProvider v2.2
+    - the actions refuse code restricted from the file system (\c PERMISSION-DENIED), also when the provider was lent
+      to it, unless code that may use the file system confined the provider to a \c root directory with \c lock
+      (the data provider of a file connection, for example); see
+      @ref Util::check_caller_file_access() "check_caller_file_access()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - the get request checks text in its encoding and takes the \c encoding_errors field: \c "raise" (the default)
       raises \c INVALID-ENCODING, \c "latin1" returns text that is not valid as \c ISO-8859-1, \c "keep" returns it
       without a check (see @ref encoding_errors)

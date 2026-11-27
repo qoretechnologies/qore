@@ -41,6 +41,11 @@ sub main() {
     Queue q();
     Program p(PO_MODERN);
     SandboxManager sm();
+    # a trusted (governed) manager: the tenant's exceptions are reported as the host's (qore#7737)
+    if (mode =~ /^trusted-/) {
+        sm.setUncontrolledApiPolicy(True);
+        mode = mode.substr(8);
+    }
     # the module that the sandboxed code loads by path, and the one that it requires, are read with the policy of
     # the sandbox, which must allow them (qore#7518)
     sm.addFilesystemAllowedPath(get_script_dir() + "/ReportLoadFail.qm", QSEC_READ);
