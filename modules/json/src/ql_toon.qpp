@@ -694,7 +694,9 @@ static ToonArrayForm toon_array_form(ToonEncCtx& c, const QoreListNode* l, std::
                 }
                 ConstHashIterator hi(he);
                 while (hi.next()) {
-                    if (fset.find(hi.getKey()) == fset.end()) {
+                    // a search by std::string, as with std::hash: libstdc++ searches a set of up to 20 elements by
+                    // comparing its keys, without hashing them, only for a key of the key type
+                    if (fset.find(std::string(hi.getKey())) == fset.end()) {
                         ok = false;
                         break;
                     }
