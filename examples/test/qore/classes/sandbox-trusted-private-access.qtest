@@ -39,6 +39,14 @@
     public methods that library classes offer their sandboxed subclasses in place of their private members are in
     public-hooks.q.  The output of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
 
+    The refusals are the same when a module is loaded from its source in place of its AOT module, as the module
+    loader does when the AOT module is out of date (\c BINARY-MODULE-SOURCE-FALLBACK): library-hooks.q runs with a
+    copy of the build's AOT module of RestHandler (StaleModule) first in its module path, once current and once out
+    of date (qore#7785).  The qcc executables run through ExecModeHarness::run_command(), as the other runs do, with
+    its trace environment (ExecModeHarness::TraceEnv: \c QORE_JIT_SYNC_COMPILE=1 and the IR and JIT thresholds of
+    1), which sets the module loader's warnings aside as environment noise, not output of the programs (see
+    ExecModeHarness::ModeRunResult::loader_warnings; qore#7785).
+
     The programs are in \c sandbox-trusted-private-access/.
 */
 class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
@@ -52,6 +60,13 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
 
         #! the programs that need the sqlite3 driver, which they leave out when it cannot be loaded
         const Sqlite3Programs = ("library-hooks",);
+
+        #! the module that the stale-module case loads from a directory of its own, and the program that uses it
+        const StaleModule = "RestHandler";
+        const StaleProgram = "library-hooks";
+
+        #! the line of StaleProgram that gives its module path, which the stale-module case replaces
+        const ModulePathLine = "%prepend-module-path \"${SCRIPT_DIR}/../../../../../qlib\"\n";
 
         #! the reason why the programs that need the sqlite3 driver are left out, if they are
         *string sqlite3_missing;
@@ -68,6 +83,8 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("a module loaded from its source in place of its out-of-date AOT module refuses the same accesses",
+            \testStaleModule());
         set_return_value(main());
     }
 
@@ -115,26 +132,134 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         skipIfLeftOut();
     }
 
-    testCompiled() {
+    #! returns the qcc of the test
+    private string qccBin() {
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    #! compiles a program with qcc; skips the test case if it cannot
+    private compile(string src, string exe, string opt) {
+        int rc;
+        string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", qccBin(), opt, exe, src), \rc);
+        if (rc || !is_file(exe)) {
+            testSkip("qcc is not available or cannot compile " + src + ": " + out);
         }
+    }
+
+    #! runs an executable that qcc compiled from a program and checks its output
+    /** @param quiet_loader_warnings if @ref True, the module loader's warnings are only returned (see
+        ExecModeHarness::run_command())
+
+        @return the result of the run, with the module loader's warnings, which are not output of the program
+    */
+    private hash<ExecModeHarness::ModeRunResult> runCompiled(string name, string exe, string label,
+            *bool quiet_loader_warnings) {
+        # -b must be the first argument of a compiled program
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b", exe),
+            quiet_loader_warnings);
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected(name), r.stdout, label);
+        # the program writes nothing else to stderr (the native compilation trace is not output either)
+        assertEq("", r.stderr, label + ": stderr");
+        return r;
+    }
+
+    testCompiled() {
         TmpDir tmp("qore-sandbox-trusted-private-access-");
         foreach string name in (programs()) {
             foreach string opt in (("0", "3")) {
                 string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
-                int rc;
-                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
-                if (rc || !is_file(exe)) {
-                    testSkip("qcc is not available or cannot compile " + name + ": " + out);
-                }
-                # -b must be the first argument of a compiled program
-                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
-                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
-                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+                compile(sprintf("%s/%s.q", dir, name), exe, opt);
+                runCompiled(name, exe, sprintf("%s -O%s", name, opt));
             }
         }
         skipIfLeftOut();
+    }
+
+    #! writes a file
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+
+    #! checks the module loader's warnings for StaleModule: one that its AOT module is out of date if \a stale, or none
+    private checkLoaderWarnings(hash<ExecModeHarness::ModeRunResult> r, string qmod, bool stale, string label) {
+        string text = sprintf("AOT module '%s' for feature '%s' is out of date", qmod, StaleModule);
+        list<string> w = select r.loader_warnings, $1.find(text) != -1;
+        assertEq(stale ? 1 : 0, w.size(), sprintf("%s: loader warnings: %y", label, r.loader_warnings));
+    }
+
+    testStaleModule() {
+        if (sqlite3_missing) {
+            testSkip(sqlite3_missing);
+        }
+        # the AOT module of the build of the interpreter
+        string build_qmod = dirname(qore_bin) + "/qlib-qmod/" + StaleModule + ".qmod";
+        if (!is_file(build_qmod)) {
+            testSkip(sprintf("the build of %y has no AOT module %y", qore_bin, build_qmod));
+        }
+        string qlib = realpath(get_script_dir() + "/../../../../qlib");
+        string src_orig = qlib + "/" + StaleModule + ".qm";
+        string prog = ReadOnlyFile::readTextFile(dir + "/" + StaleProgram + ".q");
+        int pos = prog.find(ModulePathLine);
+        assertNeq(-1, pos, "the module path line of " + StaleProgram);
+        assertEq(-1, prog.find(ModulePathLine, pos + 1), "one module path line in " + StaleProgram);
+
+        TmpDir tmp("qore-sandbox-trusted-private-access-stale-");
+        # False: a current AOT module, which is loaded; True: an out-of-date one, whose source is loaded in its place
+        foreach bool stale in ((False, True)) {
+            string kind = stale ? "source" : "qmod";
+            string mdir = tmp.path + "/" + kind;
+            assertEq(0, mkdir(mdir), "mkdir " + mdir);
+            mdir = realpath(mdir);
+            string qmod = mdir + "/" + StaleModule + ".qmod";
+            copy_file(build_qmod, qmod);
+            # a copy of a module without a depfile is not checked: it is loaded
+            string loaded = qmod;
+            if (stale) {
+                # a source that differs from the one the AOT module was compiled from, and the module's depfile with
+                # the fingerprint of the source that it was compiled from, of another size: the loader finds the
+                # module out of date without hashing the source or comparing modification times
+                string src = mdir + "/" + StaleModule + ".qm";
+                writeFile(src, ReadOnlyFile::readTextFile(src_orig) + "# a change after the AOT module was compiled\n");
+                writeFile(qmod + ".d", sprintf("%s: %s\n", qmod, src));
+                writeFile(qmod + ".d.fingerprints", sprintf("# qore AOT module source fingerprints 1\n%d 0 "
+                    "0000000000000000 %s\n", hstat(src_orig).size, src));
+                loaded = src;
+            }
+            # the module directory is searched first, then the source qlib directory
+            string path = sprintf("%%prepend-module-path \"%s\"\n%%prepend-module-path \"%s\"\n", qlib, mdir);
+
+            # the module that is loaded
+            string probe = mdir + "/probe.q";
+            writeFile(probe, sprintf("%%modern\n%s%%requires %s\nprintf(\"%%s\\n\", get_module_hash().%s.filename);\n",
+                path, StaleModule, StaleModule));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s",
+                qore_bin, probe), True);
+            assertEq(0, r.rc, sprintf("%s probe: exit status (output: %y)", kind, r.out));
+            assertEq(loaded + "\n", r.stdout, kind + " probe: the module loaded");
+            assertEq("", r.stderr, kind + " probe: stderr");
+            checkLoaderWarnings(r, qmod, stale, kind + " probe");
+
+            string src = mdir + "/" + StaleProgram + ".q";
+            writeFile(src, prog.substr(0, pos) + path + prog.substr(pos + ModulePathLine.size()));
+            foreach string mode in (("ast", "ir")) {
+                string label = sprintf("%s %s %s", StaleProgram, kind, mode);
+                r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug --exec-mode=%s %s", qore_bin, mode,
+                    src), True);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(expected(StaleProgram), r.stdout, label);
+                assertEq("", r.stderr, label + ": stderr");
+                checkLoaderWarnings(r, qmod, stale, label);
+            }
+            foreach string opt in (("0", "3")) {
+                string label = sprintf("%s %s -O%s", StaleProgram, kind, opt);
+                string exe = sprintf("%s/%s-O%s", mdir, StaleProgram, opt);
+                compile(src, exe, opt);
+                checkLoaderWarnings(runCompiled(StaleProgram, exe, label, True), qmod, stale, label);
+            }
+        }
     }
 }
