@@ -69,8 +69,15 @@ run_case("another Program", string sub () {
 });
 
 # the sandbox: a Program with a sandbox manager that loads the module, references handed between it and the script,
-# and a reference that the module's code makes for a governed call; the module's own references in the sandboxed
-# Program are made and called in the same context, the others take the generic call path
+# and a reference that the module's code makes for a governed call; the references that the module's code makes for
+# the sandboxed Program record the sandbox's provenance, so they take the generic call path, as do the references
+# made by the code of another Program and the reference made for a governed call; only a reference made without
+# provenance, in the context of its call, uses its entry (its body, context-independent, calls no builtin, so it
+# observes no restriction that the generic call path would apply).  A caller's PO_NO_FILESYSTEM does not reach module
+# code (a module keeps its own filesystem and network options, and the sandbox governs that access at run time), so
+# the module code runs with its own options under both callers, the reference's creator context is the current one,
+# and the call uses the entry; a caller's PO_NO_THREAD_CONTROL is applied to the module's code, whose effective parse
+# options then differ from its creator's, so that call takes the generic call path
 SandboxManager manager();
 Program sandboxed(PO_NEW_STYLE);
 sandboxed.setSandboxManager(manager);
@@ -90,4 +97,19 @@ run_case("sandboxed Program's module reference called by the script", string sub
 run_case("module reference made for a governed call", string sub () {
     code<int(int)> f = SandboxManager::callGoverned(\mod_ref(), sandboxed);
     return sprintf("%d", mod_apply(f, N, 7));
+});
+Program restricted(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+restricted.setSandboxManager(manager);
+restricted.loadModule("CallRefNativeEntryModule");
+restricted.parse("int sub r_apply(code<int(int)> f, int n) { return mod_apply(f, n, 7); }", "restricted");
+run_case("script's module reference called in a Program with parse restrictions", string sub () {
+    return sprintf("%d", restricted.callFunction("r_apply", mod_ref(), N));
+});
+Program restricted_threads(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+restricted_threads.setSandboxManager(manager);
+restricted_threads.loadModule("CallRefNativeEntryModule");
+restricted_threads.parse("int sub t_apply(code<int(int)> f, int n) { return mod_apply(f, n, 7); }",
+    "restricted_threads");
+run_case("script's module reference called in a Program without thread control", string sub () {
+    return sprintf("%d", restricted_threads.callFunction("t_apply", mod_ref(), N));
 });

@@ -9,3 +9,5 @@ sandboxed Program's module calls: 13160200
 script's module reference called in the sandboxed Program: 6997564
 sandboxed Program's module reference called by the script: 6997564
 module reference made for a governed call: 6997564
+script's module reference called in a Program with parse restrictions: 6997564
+script's module reference called in a Program without thread control: 6997564

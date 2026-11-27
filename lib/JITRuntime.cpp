@@ -15162,7 +15162,8 @@ static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t 
 //! qore_rt_call_ref_boxed_impl())
 static QORE_INTERN_ALWAYS_INLINE bool qore_rt_call_ref_candidate(uint64_t ref_bits) {
     QoreValue ref_val = fromBits(ref_bits);
-    return ref_val.isPlainPointer() && ref_val.get<const AbstractQoreNode>()->getType() == NT_FUNCREF;
+    const AbstractQoreNode* node = ref_val.isPlainPointer() ? ref_val.get<const AbstractQoreNode>() : nullptr;
+    return node && node->getType() == NT_FUNCREF;
 }
 
 namespace {
@@ -15297,8 +15298,8 @@ static QORE_INTERN_NOINLINE int qore_rt_call_ref_value_impl(uint64_t ref_bits, t
 
 //! qore_rt_call_ref_value_impl() for a function reference only; any other value takes the generic call path at once
 template <BatchCalleeParamKind... A>
-static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_value_t(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a,
-        uint64_t* result, ExceptionSink* xsink) {
+static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_value_t(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, uint64_t* result, ExceptionSink* xsink) {
     return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_value_impl<A...>(ref_bits, a..., result, xsink) : 0;
 }
 

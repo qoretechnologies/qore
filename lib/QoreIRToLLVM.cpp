@@ -9743,7 +9743,8 @@ bool QoreIRToLLVM::emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst
     const int nargs = static_cast<int>(inst->operands.size()) - 1;
     // code whose exceptions are checked later (an init function) can run the call with an exception pending, which
     // the conversion here would take for the call's own
-    if (nargs > 1 || deferred_exception_checking || !next || next->opcode != QoreIROpcode::StoreLocal || next->operands.empty()
+    if (nargs > 1 || deferred_exception_checking || !next || next->opcode != QoreIROpcode::StoreLocal
+            || next->operands.empty()
             || next->operands[0].id != inst->result.id || !inst->result.isValid() || disabled_env.get()) {
         return true;
     }

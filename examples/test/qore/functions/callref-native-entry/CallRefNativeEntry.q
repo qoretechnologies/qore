@@ -380,6 +380,8 @@ run_case("native exception in a loop", string sub () {
     return sprintf("%d", caught);
 });
 run_case("native exceptions in a try block", string sub () { return sprintf("%d", catch_div(\divide(), N)); });
+# a recursive body is not context-independent, so it has no entry: the stack check in an entry's prologue is that of
+# the native fast entries of direct calls
 run_case("recursion in the callee", string sub () {
     string deep;
     try {
@@ -578,8 +580,9 @@ run_case("concurrent first use", string sub () {
     }
     return seen.keys().join("|") + sprintf(" x%d", seen.firstValue());
 });
-# a reference that sandboxed code made to a function of the program, called by the program's code: the creator's
-# context applies, so the generic call path makes the call
+# a reference that sandboxed code made to a function of the program, called by the program's code: the reference's
+# Program is the sandboxed Program, not the caller's, so the generic call path makes the call (the provenance and
+# creator-context checks are covered by CallRefNativeEntryHost.q)
 run_case("sandboxed reference called by the program", string sub () {
     SandboxManager manager();
     Program sandboxed(PO_NEW_STYLE);

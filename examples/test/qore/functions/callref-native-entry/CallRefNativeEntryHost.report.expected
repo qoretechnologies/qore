@@ -9,3 +9,5 @@ sandboxed Program's module calls: generic
 script's module reference called in the sandboxed Program: native
 sandboxed Program's module reference called by the script: generic
 module reference made for a governed call: generic
+script's module reference called in a Program with parse restrictions: native
+script's module reference called in a Program without thread control: generic
