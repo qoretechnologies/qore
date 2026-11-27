@@ -456,9 +456,13 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     to it gets the events of the functions that it runs in the IR interpreter,
     but can miss the entry and exit of calls that native code makes directly,
     and the functions and top-level code without debug IR run their native
-    code, with no statement events.  When a debugger attaches while code compiled without
-    \c -g is loaded, or such code is loaded while a debugger is attached, %Qore
-    prints a warning once to standard error:
+    code, with no statement events.  When a debugger attaches to a Program that
+    has AOT code compiled without \c -g, or such code is registered into a Program
+    that a debugger is attached to, %Qore prints a warning once for the Program to
+    standard error.  Only the code of the debugged Program counts: the code of a
+    module runs in the module's own Program, of which a debugger attached to a
+    Program that uses the module gets no events, so the modules that a debugger
+    such as \c qdbg loads itself give no warning:
     @verbatim
 warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded (<label>): calls in it may give no entry/exit events, and some of its functions cannot be stepped
     @endverbatim

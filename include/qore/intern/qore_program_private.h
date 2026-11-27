@@ -67,13 +67,16 @@ class QoreSandboxManager;
 // Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
 DLLLOCAL void qore_aot_debug_program_change(bool attached);
 
-//! Records that AOT code compiled without debugging (qcc -g; QORE_AOT_FLAG_DEBUGGING) is loaded (qore#7676)
-/** A debugger that is attached then, or that attaches later, gets a warning once in the process: calls in that code
-    may give no entry and exit events, and some of its functions run their native code under a debugger.
+//! Records that AOT code compiled without debugging (qcc -g; QORE_AOT_FLAG_DEBUGGING) is registered into the Program
+/** A debugger that is attached to the Program then, or that attaches to it later, gets a warning once for the Program:
+    calls in that code may give no entry and exit events, and some of its functions run their native code under a
+    debugger (qore#7676).  Only the code of the Program a debugger is attached to counts: the code of a module runs in
+    the module's own Program, of which a debugger attached to a Program that uses the module gets no events.
 
+    @param pgm the Program the code is registered into
     @param label the label of the binary, named in the warning
 */
-DLLLOCAL void qore_aot_note_code_without_debugging(const char* label);
+DLLLOCAL void qore_aot_note_code_without_debugging(QoreProgram* pgm, const char* label);
 
 #include <algorithm>
 #include <atomic>
@@ -7433,6 +7436,42 @@ public:
         qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
+    //! records that AOT code compiled without debugging is registered into the Program (qore#7676)
+    /** see qore_aot_note_code_without_debugging()
+    */
+    DLLLOCAL void noteAotCodeWithoutDebugging(const char* label) {
+        if (!aot_without_debugging.load(std::memory_order_acquire)) {
+            {
+                std::lock_guard<std::mutex> l(aot_without_debugging_lock);
+                if (aot_without_debugging_label.empty()) {
+                    aot_without_debugging_label = label && *label ? label : "<unknown>";
+                }
+            }
+            // sequentially consistent with the attach (attachDebug()): one of the two sees the other
+            aot_without_debugging.store(true, std::memory_order_seq_cst);
+        }
+        if (dpgm.load(std::memory_order_seq_cst)) {
+            warnAotCodeWithoutDebugging();
+        }
+    }
+
+    //! warns once on stderr that a debugger is attached to the Program while it has AOT code compiled without
+    //! debugging (qore#7676)
+    DLLLOCAL void warnAotCodeWithoutDebugging() {
+        if (!aot_without_debugging.load(std::memory_order_seq_cst)
+                || aot_without_debugging_warned.exchange(true, std::memory_order_acq_rel)) {
+            return;
+        }
+        std::string label;
+        {
+            std::lock_guard<std::mutex> l(aot_without_debugging_lock);
+            label = aot_without_debugging_label;
+        }
+        fprintf(stderr, "warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded "
+            "(%s): calls in it may give no entry/exit events, and some of its functions cannot be stepped\n",
+            label.c_str());
+    }
+
     //! attaches the debug program
     /** @param n_dpgm the debug program
         @param record records the Program in the debug program; called with the stripe lock of the debug program
@@ -7456,8 +7495,11 @@ public:
             if (!dpgm.load(std::memory_order_relaxed)) {
                 qore_aot_debug_program_change(true);
             }
-            dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
+            // sequentially consistent with noteAotCodeWithoutDebugging(): one of the two sees the other
+            dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_seq_cst);
         }
+        // the warning for AOT code of the Program compiled without debugging (qore#7676)
+        warnAotCodeWithoutDebugging();
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473); after the store, and
         // under tlock, but not under the stripe lock, as it takes the lock of the inline sites
         qore_ir_suspend_inline_states(&dpgm);
@@ -8045,6 +8087,14 @@ private:
     // can read it concurrently with attachDebug()/detachDebug() (which write under tlock)
     // without a data race; relaxed ordering compiles to a plain aligned load/store.
     std::atomic<qore_debug_program_private*> dpgm{nullptr};
+    //! set once AOT code compiled without debugging is registered into the Program (noteAotCodeWithoutDebugging())
+    std::atomic<bool> aot_without_debugging{false};
+    //! set once the warning for that code has been given (warnAotCodeWithoutDebugging())
+    std::atomic<bool> aot_without_debugging_warned{false};
+    //! the label of the first binary compiled without debugging registered into the Program
+    std::string aot_without_debugging_label;
+    //! protects aot_without_debugging_label
+    std::mutex aot_without_debugging_lock;
     QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
     QoreBreakpointList_t breakpointList;
 

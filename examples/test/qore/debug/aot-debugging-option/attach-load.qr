@@ -2,7 +2,8 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 # attaches a debugger to its Program before or after it loads DbgOptMod (ARGV[0]: attach-first or load-first),
-# attaches it again, and calls the module: aot-debugging-option.qtest checks the warning of qore#7676 on stderr
+# attaches it again, and calls the module: aot-debugging-option.qtest checks that the code of the module, which runs
+# in the module's own Program, gives no warning of qore#7676
 %modern
 %allow-debugger
 
