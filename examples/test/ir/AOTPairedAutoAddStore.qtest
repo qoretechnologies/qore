@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - the LLVM lowering of compiled code, whose terminator queries differ with LLVM 23 (macOS CI)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+%exec-class AOTPairedAutoAddStoreTest
+
+#! a += of an untyped local, which the store paired with it gives back to the local, compiles and runs with qcc
+/** The lowering of the store paired with a += of an untyped local (QoreIRToLLVM::lowerPairedAutoAddStore(),
+    qore#7421) tested the block that it was building for a terminator with getTerminator(), which LLVM 23 no longer
+    makes return nullptr for a block without one: with LLVM 23.1.6 (the macOS CI) the DataProvider qmod failed to
+    compile, "missing terminator in LLVM block reference_slot_done" for DataProvider::dp_reduce_values(), whose shape
+    the first function below has.  The script runs in every execution mode and compiled at -O0 and -O3, and must give
+    the AST interpreter's results; examples/test/runner/test_llvm_terminator_queries.py checks the code for any LLVM.
+*/
+class AOTPairedAutoAddStoreTest inherits QUnit::Test {
+    public {
+        const Script = "%modern
+number sub promote(auto v) {
+    return v.toNumber();
+}
+# the shape of DataProvider::dp_reduce_values(): an untyped local accumulates the results of calls
+auto sub reduce(list<auto> values, bool as_float) {
+    auto total = as_float ? 0.0 : 0n;
+    foreach auto value in (values) {
+        total += promote(value);
+    }
+    if (as_float) {
+        total /= values.size();
+    }
+    return total;
+}
+# an untyped local that holds a reference: each += changes the referenced lvalue (qore#7421)
+sub addThrough(reference r, list<int> values) {
+    auto local = \\r;
+    foreach int v in (values) {
+        local += v;
+    }
+}
+# a += whose store raises: the referenced lvalue's type refuses the value
+string sub addRefused(reference<list<int>> r) {
+    auto local = \\r;
+    try {
+        local += \"x\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"no exception\";
+}
+printf(\"%y %y\\n\", reduce((1, 2, 3), False), reduce((1, 2, 4), True));
+int x = 1;
+addThrough(\\x, (1, 2, 3));
+printf(\"%d\\n\", x);
+list<int> y = (1,);
+printf(\"%s %y\\n\", addRefused(\\y), y);
+";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AOTPairedAutoAddStore", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("paired auto add store", \pairedStoreTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    pairedStoreTest() {
+        TmpDir tmp("qore-aot-paired-auto-add-store-");
+        string src = tmp.path + DirSep + "paired-store.qr";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --exec-mode=ast " + quote(src),
+            ExecModeHarness::NativeCheck::None);
+        assertRegex("^6 2\\.33", ast, "the AST interpreter's sums");
+        assertRegex("(?m)^7$", ast, "the AST interpreter's += through the reference");
+        assertRegex("(?m)^RUNTIME-TYPE-ERROR \\[1\\]$", ast, "the AST interpreter refuses the value");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --exec-mode=" + mode + " " + quote(src),
+                ExecModeHarness::NativeCheck::None), mode);
+        }
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "paired-store" + opt;
+            int rc;
+            string out = backquote(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(src)
+                + " 2>&1", \rc);
+            assertEq(0, rc, opt + ": qcc compiles the script: " + out);
+            assertEq(-1, out.find("missing terminator"), opt + ": every block has its terminator");
+            assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt);
+        }
+    }
+}

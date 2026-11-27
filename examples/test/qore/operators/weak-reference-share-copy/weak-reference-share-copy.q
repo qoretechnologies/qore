@@ -378,6 +378,70 @@ sub untyped_plus_equals() {
     printf("hash += existing key: %y, %y, %y\n", wh, ah, hr);
 }
 
+# += with an untyped parameter
+sub add_to(auto p, auto v) {
+    p += v;
+}
+
+our auto plus_equals_global;
+
+# A += through a reference that an untyped parameter or local holds changes the referenced container in place, which
+# a weak reference to it still designates (#7421)
+sub reference_plus_equals() {
+    auto l = (1, 2);
+    auto wl;
+    wl := l;
+    add_to(\l, 3);
+    printf("param ref list: %y, %y\n", l, wl);
+
+    hash<auto> h = {"a": 1};
+    auto wh;
+    wh := h;
+    add_to(\h, {"b": 2});
+    printf("param ref hash: %y, %y\n", h, wh);
+
+    auto z = (1, 2);
+    auto wz;
+    wz := z;
+    auto r = \z;
+    r += 3;
+    printf("local ref list: %y, %y\n", z, wz);
+
+    plus_equals_global = (1, 2);
+    auto wg;
+    wg := plus_equals_global;
+    add_to(\plus_equals_global, 3);
+    printf("param ref global: %y, %y\n", plus_equals_global, wg);
+
+    O o();
+    o.m = (1, 2);
+    auto wm;
+    wm := o.m;
+    add_to(\o.m, 3);
+    printf("param ref member: %y, %y\n", o.m, wm);
+}
+
+# An assignment of a weakly designated container that the variable holds already, with another holder, is a share
+# point (qore#7342): only the store of the result of a += that changed it in place gives it back (#7421)
+sub self_assignment() {
+    auto a = (1, 2);
+    auto w;
+    w := a;
+    auto b = a;
+    a = b;
+    printf("self assignment: %y, %y\n", a, w);
+    a += 3;
+    printf("self assignment +=: %y, %y\n", a, w);
+
+    auto c = (1, 2);
+    auto wc;
+    wc := c;
+    c = c ?? ();
+    printf("self assignment of the sole holder: %y, %y\n", c, wc);
+    c += 3;
+    printf("self assignment of the sole holder +=: %y, %y\n", c, wc);
+}
+
 #! runs a case by its name: each case is called by name, so that JIT and tiered execution run it as native code
 #! (a call through a call reference runs on the IR tier, and is compiled only when it returns)
 sub run_case(string name) {
@@ -394,6 +458,8 @@ sub run_case(string name) {
         case "member_path": member_path(); break;
         case "moves": moves(); break;
         case "untyped_plus_equals": untyped_plus_equals(); break;
+        case "reference_plus_equals": reference_plus_equals(); break;
+        case "self_assignment": self_assignment(); break;
         case "copy_on_write": copy_on_write(); break;
         case "share_points_of_moves": share_points_of_moves(); break;
         case "list_growth": list_growth(); break;
@@ -416,6 +482,8 @@ const CaseNames = (
     "share_points_of_moves",
     "list_growth",
     "untyped_plus_equals",
+    "reference_plus_equals",
+    "self_assignment",
 );
 
 # a case named on the command line runs alone

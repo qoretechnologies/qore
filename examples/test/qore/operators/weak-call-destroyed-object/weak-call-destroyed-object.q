@@ -177,6 +177,12 @@ sub call_while_destroyed(string name, string hook, string kind) {
     hash<auto> h;
     list<auto!> l = (NOTHING,);
     WeakHolder o();
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         T t();
         w := t;
@@ -184,12 +190,15 @@ sub call_while_destroyed(string name, string hook, string kind) {
         h.w := t;
         l[0] := t;
         o.w := t;
-        call_function(hook, "T", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove t;
-        }();
+        handoff.push(t);
+        remove t;
     }
+    call_function(hook, "T", held, release);
+    background sub () {
+        on_exit done.dec();
+        T t = handoff.get();
+        remove t;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("%s: the destroying thread was not held\n", label);
         release.dec();
@@ -285,6 +294,12 @@ sub collected_cycle(int released = 0) {
     Counter done(1);
     C w;
     C wb;
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         C a();
         C b();
@@ -294,12 +309,15 @@ sub collected_cycle(int released = 0) {
         w := a;
         wb := b;
         remove b;
-        call_function("dbg_hold_deref_collect", "C", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove a;
-        }();
+        handoff.push(a);
+        remove a;
     }
+    call_function("dbg_hold_deref_collect", "C", held, release);
+    background sub () {
+        on_exit done.dec();
+        C a = handoff.get();
+        remove a;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("%s: the collecting thread was not held\n", label);
         release.dec();
@@ -346,6 +364,12 @@ sub broken_cycle() {
     Counter release(1);
     Counter done(1);
     C w;
+    # the other thread releases the last reference: this thread hands its reference over in a Queue and releases its
+    # own before it arms the hold, so that no release of this thread makes the decision that the hold catches: with
+    # the variable used by the background expression instead, this thread's frame could still hold a reference to the
+    # object (a temporary that the interpreter releases later) when the other thread released its own, and the hold
+    # then caught this thread, which alone could let it go on (qore#7509)
+    Queue handoff();
     {
         C a();
         C b();
@@ -355,12 +379,15 @@ sub broken_cycle() {
         w := a;
         gwb := b;
         remove b;
-        call_function("dbg_hold_deref_collect", "C", held, release);
-        background sub () {
-            on_exit done.dec();
-            remove a;
-        }();
+        handoff.push(a);
+        remove a;
     }
+    call_function("dbg_hold_deref_collect", "C", held, release);
+    background sub () {
+        on_exit done.dec();
+        C a = handoff.get();
+        remove a;
+    }();
     if (held.waitForZero(HoldTimeout)) {
         printf("broken cycle: the collecting thread was not held\n");
         release.dec();
@@ -414,6 +441,9 @@ sub superseded_cycle() {
         remove a;
         # the cycle is made while the call holds a real reference to the object: its scan is deferred
         gd.link(bl[0]);
+        # released here, before the holds are armed, and not when the frame ends, which can be later in native code:
+        # a release of this thread must not be the dereference that the holds catch
+        remove bl;
     }
     Counter decide_held(1);
     Counter decide_release(1);

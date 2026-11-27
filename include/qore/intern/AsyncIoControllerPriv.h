@@ -3782,7 +3782,8 @@ private:
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     /** @return false if there is no logger to take the message (neither the controller's own logger nor a global
-        one); a logger that is not enabled for the level counts as taking it
+        one), or if none of them can take it, because its Program is being torn down (qore#7698); a logger that is not
+        enabled for the level counts as taking it
     */
     DLLLOCAL bool log(int level, const char* fmt, ...) const;
 
@@ -3796,7 +3797,8 @@ private:
 
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
-    /** @return false if the controller has no logger; the message is then not logged
+    /** @return false if the controller has no logger, or if its logger cannot take the message, because its Program
+        is being torn down (qore#7698); the message is then not logged
     */
     DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr) const;
 

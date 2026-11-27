@@ -104,6 +104,7 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         addTestCase("group-by - named output columns", \groupByNamedOutputColumns());
         addTestCase("group-by - avg with no numeric values", \groupByAvgNoValues());
         addTestCase("group-by - bulk hash-of-lists shape", \groupByBulkHashOfLists());
+        addTestCase("group-by - a block gives the records its rows give", \groupByBlockEqualsRows());
 
         # Integration tests
         addTestCase("integration - pipeline with analytics", \integrationPipeline());
@@ -790,6 +791,39 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         assertEq(25.0, by_city.NYC.total);
         assertEq(2, by_city.LA.orders);
         assertEq(25.0, by_city.LA.total);
+    }
+
+    #! A block of rows gives the records the rows give one at a time (qorus#1208)
+    /** The block path grouped a row without a value of a group-by field under no value, and took a missing value
+        as the first or last value, where a row submitted on its own is dropped and its missing value is ignored;
+        a Qog reading records from a bulk source and its design PoC, which submits rows, gave different totals.
+    */
+    groupByBlockEqualsRows() {
+        list<hash<auto>> rows = (
+            {"invoice": "I1", "sku": NOTHING, "amount": 10},
+            {"invoice": NOTHING, "sku": "E", "amount": 100},
+            {"invoice": "I1", "sku": "B", "amount": 2},
+            {"invoice": "I2", "sku": "C", "amount": NOTHING},
+            {"invoice": "I1", "sku": NOTHING, "amount": 3},
+        );
+        string aggregates = "n=count(),total=sum(amount),first_sku=first(sku),last_sku=last(sku)";
+        list<auto> by_rows = ();
+        QoreGroupByProcessor row_proc({"group_by": "invoice", "aggregates": aggregates});
+        map row_proc.submit(sub (auto r) { push by_rows, r; }, $1), rows;
+        row_proc.flush(sub (auto r) { push by_rows, r; });
+        assertEq((
+            {"invoice": "I1", "n": 3, "total": 15.0, "first_sku": "B", "last_sku": "B"},
+            {"invoice": "I2", "n": 1, "total": 0.0, "first_sku": "C", "last_sku": "C"},
+        ), by_rows);
+
+        QoreGroupByProcessor block_proc({"group_by": "invoice", "aggregates": aggregates});
+        block_proc.processRecordsShape(AbstractDataProcessor::recordsToHashList(rows), DataProviderShape::HashOfLists);
+        assertEq(by_rows, block_proc.flushRecords(), "the block's records are the rows' records");
+
+        # a block without the group-by column groups no row, as rows without the field
+        QoreGroupByProcessor none_proc({"group_by": "region", "aggregates": aggregates});
+        none_proc.processRecordsShape(AbstractDataProcessor::recordsToHashList(rows), DataProviderShape::HashOfLists);
+        assertNothing(none_proc.flushRecords());
     }
 
     # --- Integration Tests ---

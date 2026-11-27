@@ -250,6 +250,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
     lib/QC_Counter.qpp
+    lib/QC_LazySharedValue.qpp
+    lib/QC_LazySharedMap.qpp
     lib/QC_Channel.qpp
     lib/QC_ChannelIterator.qpp
     lib/QC_Future.qpp
@@ -353,6 +355,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_StdoutOutputStream.qpp
     lib/QC_StderrOutputStream.qpp
     lib/QC_Serializable.qpp
+    lib/QC_SandboxSerializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
     lib/QC_SendRateMonitor.qpp
@@ -1903,6 +1906,7 @@ set(LIBQORE_CPP_SRC
     lib/SystemEnvironment.cpp
     lib/QoreForkHandlers.cpp
     lib/QoreCounter.cpp
+    lib/QoreLazyShared.cpp
     lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
@@ -2269,6 +2273,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreForkHandlers.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLazyShared.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
@@ -2459,6 +2464,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Channel.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedValue.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedMap.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FutureImpl.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
@@ -2505,6 +2512,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_StdoutOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StderrOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxSerializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"

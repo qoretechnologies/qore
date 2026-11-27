@@ -163,7 +163,12 @@ public:
     DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
-    //! The original of a copy of a binary module's enum (see orig_ref)
+    //! The namespace of the declaration (QoreTypeOwner::getTypeOwnerNamespace(), qore#7680)
+    DLLLOCAL const qore_ns_private* getTypeOwnerNamespace() const {
+        return ns;
+    }
+
+    //! The original of a copy of a binary module's enum or of one added to a Program at run time (see orig_ref)
     DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
         if (orig_ref) {
             refs.push_back(&const_cast<qore_enum_decl_private*>(orig)->type_owner);
@@ -436,11 +441,12 @@ protected:
     bool mod_imported = false;
 
     bool parse_init_done = false;
-    //! true if a copy holds a reference to its original, a binary module's enum (qore#7533)
+    //! true if a copy holds a reference to its original, a binary module's enum (qore#7533) or one that a binary module
+    //! added to a Program at run time (program_local, qore#7680)
     /** The module's namespace can be freed before the copy (at the end of the process, the modules are deleted before
-        a Program that holds itself is cleared), while the module's C++ code, which code of the copy's Program can
-        call then, makes values from the original's members (QoreValue::makeEnum()); the reference is released last
-        in the destructor
+        a Program that holds itself is cleared), and the Program of an original added at run time before the copy in
+        another Program, while the module's C++ code, which code of the copy's Program can call then, makes values from
+        the original's members (QoreValue::makeEnum()); the reference is released last in the destructor
     */
     bool orig_ref = false;
 

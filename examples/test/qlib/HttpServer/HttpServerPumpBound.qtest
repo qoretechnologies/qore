@@ -260,8 +260,12 @@ class HttpServerPumpBoundTest inherits QUnit::Test {
             cpu_used));
         # the data that the socket took, then the reset
         hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
-        assertEq(True, exists r.reset_code, sprintf("the body was reset while the client did not read (%d bytes "
-            "taken, ended: %y)", r.data_bytes, r.ended));
+        # the body is ended by the bound while the data that the client does not take fills the connection's send
+        # buffer, which the server collects no frames into until it is written: the stream's RST_STREAM is never
+        # written, and the connection is ended after the next window (qoretechnologies/qore#7653)
+        assertTrue(r.closed, sprintf("the connection was ended while the client did not read (%d bytes taken, "
+            "ended: %y)", r.data_bytes, r.ended));
+        assertEq(NOTHING, r.reset_code, "no RST_STREAM was written");
         assertFalse(r.ended, "the body did not end normally");
     }
 

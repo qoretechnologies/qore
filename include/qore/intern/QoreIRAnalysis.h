@@ -460,8 +460,10 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
-    receiver or an operand that the statement holds, or 0 if it is released on its own (an operand of any other
-    instruction, or a value used more than once);
+    receiver or an operand that the statement holds (including the source of a CopyCallArg, the original of a call's
+    value that an argument took a copy of, qore#7426), or 0 if it is released on its own (an operand of any other
+    instruction, or a value used more than once); the release of a temporary (ReleaseOwnedTemp,
+    ReleaseCallArgSource) is not a use;
     an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
     the incoming value, which an engine can keep in the incoming value's own slot.
 

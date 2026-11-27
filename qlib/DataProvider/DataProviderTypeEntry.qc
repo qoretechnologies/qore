@@ -136,6 +136,17 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         }
     }
 
+    #! Freezes a type that code no sandbox governs places in the process-wide cache (qore#7728)
+    /** Every caller of the cache gets the type: freezing marks it, and the types and fields that it holds, as shared
+        objects (see AbstractDataProviderType::freeze()), so that sandboxed code that gets it from the cache cannot
+        change or delete it; the code that registered it still can
+    */
+    private:internal freezeShared(AbstractDataProviderType type) {
+        if (shared && SandboxManager::createsSharedObjects()) {
+            type.freeze();
+        }
+    }
+
     #! Returns a new child entry, marked shared if this entry is
     private:internal DataProviderTypeEntry newChild(string child) {
         DataProviderTypeEntry rv(path, child);
@@ -283,6 +294,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
             return False;
         }
 
+        freezeShared(type);
         self.type = type;
         self.locked = locked;
         epheremal_type_id = neg ? -seq.next() : seq.next();
@@ -306,6 +318,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
             throw "TYPE-LOCK-ERROR", sprintf("type entry %y cannot be replaced, because it is locked", path);
         }
         *AbstractDataProviderType rv = self.type;
+        freezeShared(type);
         self.type = type;
         if (!rv || type != rv) {
             epheremal_type_id = id ?? (neg ? -seq.next() : seq.next());

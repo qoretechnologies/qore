@@ -4960,14 +4960,45 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
-    // the loading Program's own manager, not the sandbox that it keeps of the code that created it (see
-    // qore_program_private::creator_sandbox_manager), which governs the module's callers through the walk of their
-    // call stack; a module that sandboxed code, or code acting for it, loads gets the sandbox of that code below (all
-    // purposes, as before: also in a Program that trusted code created in a system-policy capability)
-    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getOwnSandboxManagerRef();
+    qore_program_private* parent = qore_program_private::get(*parent_pgm);
+    // the loading Program's own manager
+    QoreSandboxManager* sm = parent->getOwnSandboxManagerRef();
     // loaded by library code for code that is not trusted: governed by the sandbox of that code
     if (!sm) {
         sm = qore_module_init_lift_manager_ref();
+    }
+    // a Program with no manager of its own that keeps the sandbox of a sandboxed caller without its policy (one that
+    // trusted code created in a system-policy capability or under a policy barrier for that caller) gives the module
+    // that same sandbox: the module is governed as the Program's code is, with the caller's limits and its other
+    // restrictions, but no policy that the Program does not have (qore#6311); any other Program gives the module a
+    // manager of its own below, as before (the reflection privileges of a module Program depend on it)
+    if (!sm) {
+        QoreSandboxManager* creator;
+        QoreSandboxManager* creator_policy;
+        parent->getCreatorSandboxRefs(creator, creator_policy);
+        ReferenceHolder<QoreSandboxManager> creator_holder(creator, nullptr);
+        ReferenceHolder<QoreSandboxManager> creator_policy_holder(creator_policy, nullptr);
+        if (creator && !creator_policy) {
+            // the sandbox of the code that loads the module, resolved as for a Program that it creates (its policy
+            // outside a grant): a sandboxed caller that loads a module of its choice into such a Program outside the
+            // capability (one that leaked to it) does not get a module without its policy; the module Program's
+            // constructor adds it too for a caller that it sees, which a load barrier can hide
+            QoreSandboxManager* all = nullptr;
+            QoreSandboxManager* policy = nullptr;
+            if (qore_caller_is_sandboxed()) {
+                qore_caller_sandbox_refs(all, policy);
+            }
+            ReferenceHolder<QoreSandboxManager> all_holder(all, nullptr);
+            ReferenceHolder<QoreSandboxManager> policy_holder(policy, nullptr);
+            // marked before the managers are added: a failed addition leaves a sandboxed module, never a trusted one
+            qore_program_mark_sandboxed(module_pgm);
+            qore_program_private* mp = qore_program_private::get(module_pgm);
+            mp->addCreatorSandbox(creator, nullptr);
+            if (all || policy) {
+                mp->addCreatorSandbox(all, policy);
+            }
+            return;
+        }
     }
     // a module that sandboxed code chose, loaded into a Program that has no manager (Program::loadModule() on a
     // Program that it was handed, or trusted code that it called), has the sandbox of that code, as when it loads the

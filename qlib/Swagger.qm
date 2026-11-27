@@ -1256,6 +1256,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         }
     }
 
+    #! Copies the document without its type caches, which a copy builds for itself
+    /** The type cache and the response copies of its types are what the document guards when it is shared (see
+        getType() and getResponseDataType()); code that is sandboxed or acts for sandboxed code can copy a shared
+        document because this class declares a copy method (qore#7667)
+
+        @since Swagger 2.6
+    */
+    copy() {
+        remove typemap;
+        response_types = {};
+    }
+
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
     private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         return definitions{rstr};
@@ -4700,6 +4712,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 "types that it has already built do not need it)", name);
         }
         return swagger.getType(path, typestr, format, arrayItems, required);
+    }
+
+    #! Copies the schema object
+    /** What the schema object guards when it is shared (the caches of its types, see getDataType()) is kept by its
+        base class, whose copy method resets it for a copy of a shared object that is not shared itself
+        (\c AbstractRestSchemaObject::copy()); code that is sandboxed or acts for sandboxed code can copy a shared
+        schema object because this class declares a copy method (qore#7667)
+
+        @param old the object copied
+
+        @since Swagger 2.6
+    */
+    copy(SchemaObject old) {
+        # no own guarded state: the caches that getDataType() guards are the base class's
     }
 
     #! Creates the type of an object, which records its read-only properties if it has any; see SwaggerHashDataType

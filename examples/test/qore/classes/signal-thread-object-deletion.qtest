@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - signal handler thread, object destruction in another thread and AOT code generation and linking
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SignalThreadObjectDeletionTest
+
+#! Tests objects deleted explicitly by a signal handler
+/** The signal handler thread has TID 0, which was the status of an object that is not being destroyed: an object that a
+    signal handler deleted was not marked as being destroyed, so a second deletion while its destructor ran (by the
+    destructor itself, or by another thread) ran the destructor again (qore#7509).  The child script
+    (signal-thread-object-deletion/signal-thread-object-deletion.q) deletes objects in a signal handler and in a
+    background thread, which must give the same output, in every execution mode and compiled with AOT at optimization
+    levels 0 and 3.  The children run with signal handling; the test is skipped without it.
+*/
+class SignalThreadObjectDeletionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-signal-thread-object-deletion-");
+    }
+
+    constructor() : QUnit::Test("SignalThreadObjectDeletion", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/signal-thread-object-deletion/signal-thread-object-deletion.q";
+
+        addTestCase("objects deleted by a signal handler, in every mode", \testModes());
+        addTestCase("objects deleted by a signal handler, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    #! returns the output of the child script
+    private string expected() {
+        string rv;
+        foreach string ctx in ("thread", "signal") {
+            rv += sprintf("%s: self delete: destructor run 1: DOUBLE-DELETE-EXCEPTION\n", ctx);
+            rv += sprintf("%s: other thread delete: DOUBLE-DELETE-EXCEPTION; destructor runs: 1\n", ctx);
+        }
+        return rv;
+    }
+
+    private skipWithoutSignals() {
+        if (!Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is not available");
+        }
+    }
+
+    testModes() {
+        skipWithoutSignals();
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        skipWithoutSignals();
+        string exp = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/signal-thread-object-deletion-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

@@ -113,13 +113,9 @@ public class FireworksSchema {
             "api_version": "1.0.0",
         };
     }
-    private {
-        static hash<string, OpenApi3::OpenApi3Schema> schemas = {};
-        static hash<string, RestSchemaActionSet> sets = {};
-    }
-
     private:internal {
-        static Mutex mutex();
+        #! the action sets, built once for every caller as trusted code (qore#7684)
+        static LazySharedValue sets(\FireworksSchema::buildActionSets());
     }
 
     #! Returns every action set in dependency order
@@ -127,27 +123,29 @@ public class FireworksSchema {
         @throw REST-SCHEMA-ACTION-ERROR a schema or manifest is invalid
     */
     static list<RestSchemaActionSet> getActionSets() {
-        AutoLock al(mutex);
-        if (!sets) {
-            hash<string, RestSchemaActionSet> pending;
-            pending.Control = new RestSchemaActionSet(getSchemaIntern("control"),
-                FireworksManifest::ControlManifest, FireworksManifest::ReferenceData,
-                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
-            pending.Upload = new RestSchemaActionSet(getSchemaIntern("upload"),
-                FireworksManifest::UploadManifest, NOTHING, pending.Control,
-                NOTHING, RestSchemaActionSet::LazyResponseTypes);
-            pending.Text = new RestSchemaActionSet(getSchemaIntern("text"),
-                FireworksManifest::TextManifest, NOTHING, pending.Control,
-                NOTHING, RestSchemaActionSet::LazyResponseTypes);
-            pending.Responses = new RestSchemaActionSet(getSchemaIntern("responses"),
-                FireworksManifest::ResponsesManifest, FireworksManifest::ResponseReferenceData, pending.Control,
-                NOTHING, RestSchemaActionSet::LazyResponseTypes);
-            pending.Messages = new RestSchemaActionSet(getSchemaIntern("messages"),
-                FireworksManifest::MessagesManifest, NOTHING, pending.Control,
-                NOTHING, RestSchemaActionSet::LazyResponseTypes);
-            sets = pending;
-        }
-        return (sets.Control, sets.Upload, sets.Text, sets.Responses, sets.Messages);
+        hash<string, RestSchemaActionSet> built = sets.get();
+        return (built.Control, built.Upload, built.Text, built.Responses, built.Messages);
+    }
+
+    #! Builds every action set; only a complete set of them is published
+    private:internal static hash<string, RestSchemaActionSet> buildActionSets() {
+        hash<string, RestSchemaActionSet> pending;
+        pending.Control = new RestSchemaActionSet(FireworksSchema::loadSchema("control"),
+            FireworksManifest::ControlManifest, FireworksManifest::ReferenceData,
+            NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
+        pending.Upload = new RestSchemaActionSet(FireworksSchema::loadSchema("upload"),
+            FireworksManifest::UploadManifest, NOTHING, pending.Control,
+            NOTHING, RestSchemaActionSet::LazyResponseTypes);
+        pending.Text = new RestSchemaActionSet(FireworksSchema::loadSchema("text"),
+            FireworksManifest::TextManifest, NOTHING, pending.Control,
+            NOTHING, RestSchemaActionSet::LazyResponseTypes);
+        pending.Responses = new RestSchemaActionSet(FireworksSchema::loadSchema("responses"),
+            FireworksManifest::ResponsesManifest, FireworksManifest::ResponseReferenceData, pending.Control,
+            NOTHING, RestSchemaActionSet::LazyResponseTypes);
+        pending.Messages = new RestSchemaActionSet(FireworksSchema::loadSchema("messages"),
+            FireworksManifest::MessagesManifest, NOTHING, pending.Control,
+            NOTHING, RestSchemaActionSet::LazyResponseTypes);
+        return pending;
     }
 
     #! Returns the action set owning an action
@@ -164,12 +162,8 @@ public class FireworksSchema {
         throw "FIREWORKS-ACTION-ERROR", sprintf("unknown Fireworks action %y", action);
     }
 
-    private static OpenApi3::OpenApi3Schema getSchemaIntern(string name) {
-        if (!schemas{name}) {
-            schemas{name} = OpenApi3::OpenApi3Loader::fromFile(Priv::FireworksModuleDir
-                + "/fireworks-" + name + "-openapi.yaml");
-        }
-        return schemas{name};
+    private:internal static OpenApi3::OpenApi3Schema loadSchema(string name) {
+        return OpenApi3::OpenApi3Loader::fromFile(Priv::FireworksModuleDir + "/fireworks-" + name + "-openapi.yaml");
     }
 }
 }

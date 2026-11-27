@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires reflection
+
+%exec-class CapabilityHelperModuleSandboxTest
+
+#! A module loaded into a Program governs its code as the Program's code is governed (qore#6311)
+/** Trusted code that a system-policy capability (SandboxManager::createSystemPolicyCall()) runs for a sandboxed caller
+    can create a Program, which keeps the caller's sandbox for everything but its file system and network policy, as
+    the capability's own code does; a user module that the trusted code loaded into it was given the caller's whole
+    sandbox, policy included, so its code was refused what the Program's own code may do.  The module now gets the
+    Program's sandbox: no policy that the Program does not have, and the caller's limits.  Outside a capability, and for
+    a module that another sandboxed caller loads into a Program, the policy of the sandboxed code still applies.
+*/
+class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
+    private {
+        #! the module's source; each case loads a copy of its own, as a module that sandboxed code loads by path is
+        #! bound to that code's sandbox in the process
+        string mod_src = ReadOnlyFile::readTextFile(get_script_dir() + "/capability-helper-module-sandbox/CapReadMod.qm");
+        TmpDir tmp("capmodsb");
+        string outside;
+        string allowed;
+        #! the directory of the copies of the modules, which the tenants' sandboxes may read: sandboxed code reads the
+        #! source of a module that it loads by path as its policy allows (qore#7518)
+        string mods;
+
+
+        #! the tenant's code: calls a capability, or creates a helper Program itself and loads the module into it
+        const TenantCode = "%new-style\n%strict-args\n%require-types\n"
+            "auto sub run(code c) { return c(); }\n"
+            "hash<auto> sub own_helper(string mod, string code, string p) {\n"
+            "    Program h();\n"
+            "    h.loadModule(mod);\n"
+            "    h.parse(code, \"tenant-helper\");\n"
+            "    return {\"own\": h.callFunction(\"own_read\", p), \"module\": h.callFunction(\"mod_read\", p)};\n"
+            "}\n"
+            "Program sub make(string code) { Program h(); h.parse(code, \"a-helper\"); return h; }\n"
+            "auto sub read_var(object v) { try { return v.getValue(); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "auto sub call_fn(object f) { try { return f.call(); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "auto sub call_with(code c, auto v) { try { return c(v); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "hash<auto> sub child_refl(string mod, string name) {\n"
+            "    Program h();\n"
+            "    h.loadModule(mod);\n"
+            "    h.parse(sprintf(\"%%modern\\nauto sub v() { return call_function(\\\"%s::var\\\"); }\\n\"\n"
+            "        \"auto sub f() { return call_function(\\\"%s::fn\\\"); }\", name, name), \"child-refl\");\n"
+            "    return {\"var\": h.callFunction(\"v\"), \"fn\": h.callFunction(\"f\")};\n"
+            "}\n"
+            "auto sub write_var(object v, auto x) { try { v.setValue(x); return \"written\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "hash<auto> sub load_into(Program h, string mod, string p) {\n"
+            "    h.loadModule(mod);\n"
+            "    return {\"module\": h.callFunction(\"mod_read\", p)};\n"
+            "}\n";
+    }
+
+    constructor() : QUnit::Test("CapabilityHelperModuleSandboxTest", "1.0", \ARGV) {
+        outside = tmp.path + "/outside.txt";
+        allowed = tmp.path + "/allowed";
+        mkdir(allowed);
+        mods = tmp.path + "/mods";
+        mkdir(mods);
+        File f();
+        f.open2(outside, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("secret");
+        f.close();
+
+        addTestCase("a module in a capability's helper Program has no policy that the Program does not have",
+            \capabilityTest());
+        addTestCase("the module keeps the caller's limits", \limitsTest());
+        addTestCase("outside a capability, the module has the caller's policy", \noCapabilityTest());
+        addTestCase("a module that another sandboxed caller loads has that caller's policy", \otherTenantTest());
+        addTestCase("a module that sandboxed code loads into a trusted Program has its policy", \trustedProgramTest());
+        addTestCase("the module's classes are restricted as the caller's sandbox decides", \restrictedTest());
+        addTestCase("the module, used again outside the capability, has the caller's policy", \reuseTest());
+        addTestCase("the module's classes cannot use a trusted class's private declarations", \privateAccessTest());
+        addTestCase("a module loaded into a helper Program that leaked to the caller has its policy", \leakedHelperTest());
+        addTestCase("another tenant has no reflection privileges in the module", \reflectionTest());
+        set_return_value(main());
+    }
+
+    #! writes a copy of the module named \a name and returns its path
+    private string module(string name) {
+        string path = sprintf("%s/%s.qm", mods, name);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(replace(mod_src, "CapReadMod", name));
+        f.close();
+        return path;
+    }
+
+    #! writes a copy of a module template of the test named \a name and returns its path
+    private string templateModule(string template, string name) {
+        string path = sprintf("%s/%s.qm", mods, name);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(replace(ReadOnlyFile::readTextFile(sprintf("%s/capability-helper-module-sandbox/%s.qm.in",
+            get_script_dir(), template)), "%%NAME%%", name));
+        f.close();
+        return path;
+    }
+
+    #! the code that the helper Programs run: its own read, and the module's read and thread start
+    static string helperCode(string name) {
+        return sprintf("%%modern\n"
+            "string sub own_read(string p) { try { return trim(ReadOnlyFile::readTextFile(p)); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "string sub mod_read(string p) { return call_function(\"%s::read\", p); }\n"
+            "string sub mod_threads() { return call_function(\"%s::threads\"); }\n"
+            "object sub mod_object() { return call_function(\"%s::make\"); }\n", name, name, name);
+    }
+
+    #! a sandbox that allows reading only \c allowed, and the modules of the test (\c mods) to load them
+    private SandboxManager denyOutside() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        sm.addFilesystemAllowedPath(mods, QSEC_READ);
+        return sm;
+    }
+
+    private Program tenant(SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.parse(TenantCode, "tenant");
+        return p;
+    }
+
+    #! a capability whose trusted code creates a helper Program, loads the module into it and calls \a func
+    private code capability(string name, string func, *list<auto> args) {
+        string m = module(name);
+        string hc = helperCode(name);
+        return SandboxManager::createSystemPolicyCall(auto sub () {
+            Program h();
+            h.loadModule(m);
+            h.parse(hc, "helper");
+            if (func == "restricted") {
+                return SandboxManager::isFromRestrictedProgram(h.callFunction("mod_object"));
+            }
+            if (func == "reads") {
+                return {"own": h.callFunction("own_read", args[0]), "module": h.callFunction("mod_read", args[0])};
+            }
+            return h.callFunction(func);
+        });
+    }
+
+    capabilityTest() {
+        Program p = tenant(denyOutside());
+        hash<auto> r = p.callFunction("run", capability("CapMod1", "reads", (outside,)));
+        assertEq("secret", r.own, "the helper Program's own code");
+        assertEq("secret", r.module, "the module's code");
+    }
+
+    limitsTest() {
+        SandboxManager sm = denyOutside();
+        sm.setMaxThreads(1);
+        Program p = tenant(sm);
+        assertEq("THREAD-CREATION-FAILURE", p.callFunction("run", capability("CapMod2", "mod_threads")));
+    }
+
+    noCapabilityTest() {
+        Program p = tenant(denyOutside());
+        hash<auto> r = p.callFunction("own_helper", module("CapMod3"), helperCode("CapMod3"), outside);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.own, "the tenant's helper Program's own code");
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.module, "the module's code");
+    }
+
+    otherTenantTest() {
+        # tenant A may read the file and creates a Program; tenant B, which may not, loads the module into it (the
+        # file system policy of a sandbox denies by default: tenant A's allows reading, so that only tenant B's policy
+        # can deny the module's read; the source of the module is read under the policy in force for the load, which
+        # tenant A's Program takes part in, qore#7518)
+        SandboxManager a_sm();
+        a_sm.setFilesystemDefaultPolicy(True);
+        Program a = tenant(a_sm);
+        Program h = a.callFunction("make", helperCode("CapMod4"));
+        Program b = tenant(denyOutside());
+        hash<auto> r = b.callFunction("load_into", h, module("CapMod4"), outside);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.module);
+    }
+
+    #! the Program of a module's class is restricted when the caller's sandbox refuses uncontrolled APIs (the default)
+    #! and trusted when it allows them, as before: the policy half that the Program does not have changes neither
+    restrictedTest() {
+        Program p = tenant(denyOutside());
+        assertTrue(p.callFunction("run", capability("CapMod6", "restricted")), "a sandbox that refuses uncontrolled APIs");
+        SandboxManager permissive = denyOutside();
+        permissive.setUncontrolledApiPolicy(True);
+        p = tenant(permissive);
+        assertFalse(p.callFunction("run", capability("CapMod7", "restricted")), "a sandbox that allows uncontrolled APIs");
+    }
+
+    #! a module that a capability loaded first and the caller loads again outside it: its code is governed by the
+    #! caller's policy through the caller's calls
+    reuseTest() {
+        Program p = tenant(denyOutside());
+        hash<auto> r = p.callFunction("run", capability("CapMod8", "reads", (outside,)));
+        assertEq("secret", r.module, "in the capability");
+        r = p.callFunction("own_helper", module("CapMod8"), helperCode("CapMod8"), outside);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.module, "outside the capability");
+    }
+
+    #! a module that a capability loads for a sandboxed caller whose sandbox refuses uncontrolled APIs declares
+    #! classes of sandboxed code: they cannot use the private declarations of a class declared by trusted code
+    #! (qore#6843), as before; the trusted base class is loaded by the test itself
+    privateAccessTest() {
+        load_module(realpath(get_script_dir() + "/capability-helper-module-sandbox/CapTrustedBase.qm"));
+        string path = sprintf("%s/CapSubMod1.qm", mods);
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(replace(ReadOnlyFile::readTextFile(get_script_dir()
+                + "/capability-helper-module-sandbox/CapSubMod.qm.in"), "%%NAME%%", "CapSubMod1"));
+        }
+        code c = SandboxManager::createSystemPolicyCall(string sub () {
+            Program h();
+            try {
+                h.loadModule(path);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err + ": " + ex.desc;
+            }
+            return "loaded";
+        });
+        string r = tenant(denyOutside()).callFunction("run", c);
+        assertRegex("PARSE-EXCEPTION: illegal access to private member 'secret'.*a class declared by sandboxed code "
+            "cannot use the private declarations of a class declared by trusted code", r);
+    }
+
+    #! a helper Program that a capability created and gave to the caller: a module that the caller loads into it
+    #! outside the capability has the caller's policy, also when trusted code calls it with no caller on the stack
+    leakedHelperTest() {
+        string hc = helperCode("CapMod9");
+        code leak = SandboxManager::createSystemPolicyCall(Program sub () {
+            Program h();
+            h.parse(hc, "leaked-helper");
+            return h;
+        });
+        Program p = tenant(denyOutside());
+        Program h = p.callFunction("run", leak);
+        hash<auto> r = p.callFunction("load_into", h, module("CapMod9"), outside);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.module, "called by the caller");
+        assertEq("FILESYSTEM-ACCESS-DENIED", h.callFunction("mod_read", outside), "called by trusted code");
+        assertEq("secret", h.callFunction("own_read", outside), "the helper Program's own code");
+    }
+
+    #! the reflection object of a global variable of a module that a capability loaded for tenant A: tenant A may
+    #! use it, tenant B, governed by another sandbox, may not
+    reflectionTest() {
+        string path = templateModule("CapReflMod", "CapRefl1");
+        code get_refl = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            Program h();
+            h.loadModule(path);
+            h.parse("%modern\nauto sub v() { return call_function(\"CapRefl1::var\"); }\n"
+                "auto sub f() { return call_function(\"CapRefl1::fn\"); }", "refl-helper");
+            return {"var": h.callFunction("v"), "fn": h.callFunction("f")};
+        });
+        Program a = tenant(denyOutside());
+        Program b = tenant(denyOutside());
+        hash<auto> r = a.callFunction("run", get_refl);
+        checkReflection(a, b, r, "capability helper");
+
+        # a module that tenant A loads into a Program of its own outside any capability keeps a manager of its own,
+        # as before: tenant B is refused as well
+        hash<auto> c = a.callFunction("child_refl", templateModule("CapReflMod", "CapRefl2"), "CapRefl2");
+        checkReflection(a, b, c, "tenant's own Program");
+    }
+
+    #! tenant A may use the reflection objects of its module, tenant B may not, also through trusted code
+    private checkReflection(Program a, Program b, hash<auto> r, string label) {
+        code host_read = auto sub (object v) { return v.getValue(); };
+        assertEq("module-data", a.callFunction("read_var", r.var), label + ": tenant A reads");
+        assertEq("module-data", a.callFunction("call_fn", r.fn), label + ": tenant A calls");
+        assertEq("REFLECTION-ACCESS-ERROR", b.callFunction("read_var", r.var), label + ": tenant B reads");
+        assertEq("REFLECTION-ACCESS-ERROR", b.callFunction("write_var", r.var, "changed"), label + ": tenant B writes");
+        assertEq("REFLECTION-ACCESS-ERROR", b.callFunction("call_fn", r.fn), label + ": tenant B calls");
+        assertEq("REFLECTION-ACCESS-ERROR", b.callFunction("call_with", host_read, r.var),
+            label + ": tenant B reads through trusted code");
+        assertEq("module-data", a.callFunction("read_var", r.var), label + ": tenant A reads after tenant B's write");
+    }
+
+    trustedProgramTest() {
+        # a Program of the host with no manager handed to sandboxed code (qore#5659)
+        Program h();
+        h.parse(helperCode("CapMod5"), "host-helper");
+        Program b = tenant(denyOutside());
+        hash<auto> r = b.callFunction("load_into", h, module("CapMod5"), outside);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.module);
+    }
+}
