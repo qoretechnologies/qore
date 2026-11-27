@@ -1,0 +1,38 @@
+program typed SNA: m(SNA::Foo)
+program typed SNB: m(SNB::Foo)
+program untyped SNA: m(SNA::Foo)
+program untyped SNB: m(SNB::Foo)
+program call ref SNA: m(SNA::Foo)
+program call ref SNB: m(SNB::Foo)
+program call_object_method SNA: m(SNA::Foo)
+program call_object_method SNB: m(SNB::Foo)
+SNM typed SNA: m(SNA::Foo)
+SNM typed SNB: m(SNB::Foo)
+SNM untyped SNA: m(SNA::Foo)
+SNM untyped SNB: m(SNB::Foo)
+SNM call ref SNA: m(SNA::Foo)
+SNM call ref SNB: m(SNB::Foo)
+SNM call_object_method SNA: m(SNA::Foo)
+SNM call_object_method SNB: m(SNB::Foo)
+param SNA <- SNB: RUNTIME-OVERLOAD-ERROR
+param SNB <- SNA: RUNTIME-OVERLOAD-ERROR
+param SNA <- SNA: take_a(Foo)
+assign SNA <- SNB: RUNTIME-TYPE-ERROR
+assign *SNB <- SNA: RUNTIME-TYPE-ERROR
+list<SNA> <- SNB: RUNTIME-TYPE-ERROR
+cast SNA <- SNB: RUNTIME-CAST-ERROR
+instanceof: False True
+abstract: ABSTRACT-CLASS-ERROR
+abstract union: ABSTRACT-CLASS-ERROR
+union typed SNB: m(union<SNB::Foo, string>)
+union untyped SNB: m(union<SNB::Foo, string>)
+union untyped SNA: m(union<SNA::Foo, int>)
+program same declaration: take(XA::Foo)
+program other namespace: RUNTIME-OVERLOAD-ERROR
+program nested namespace: RUNTIME-OVERLOAD-ERROR
+program scoped declaration: take(XA::Foo)
+program scoped declaration back: take(XA::Foo)
+program scoped other namespace: RUNTIME-OVERLOAD-ERROR
+program overloads SNA: m(SNA::Foo)
+program overloads SNB: m(SNB::Foo)
+parse type error: PARSE-TYPE-ERROR

@@ -105,8 +105,6 @@ sub values() {
 
 our float gf;
 our softint gsi;
-our hash gh;
-thread_local hash tlh;
 
 #! the value of a weak assignment is the value assigned, converted to the variable's type
 sub conversions() {
@@ -127,20 +125,8 @@ sub conversions() {
     printf("global float %y %s softint %y %s\n", v3, v3.type(), v4, v4.type());
     list<auto> l = ((f := 7), (cf := 8), (gf := 9));
     printf("list %y\n", l);
-    # a container whose type the variable's type strips: the weak reference designates the container assigned, which
-    # is the value of the assignment, and which the variable reads while it exists (qore#7085, qore#7237)
-    hash<string, int> th = {"a": 1};
-    hash ph;
-    auto v5 = (ph := th);
-    printf("plain strip: %y %s ph=%y\n", v5, v5.fullType(), ph);
-    hash ch;
-    code c2 = auto sub () { return ch; };
-    auto v6 = (ch := th);
-    printf("closure strip: %y %s ch=%y\n", v6, v6.fullType(), c2());
-    remove v5;
-    remove v6;
-    printf("strip released: ph=%y ch=%y\n", ph, c2());
-    printf("global strip: %y thread_local strip: %y\n", (gh := th), (tlh := th));
+    # a weak assignment of a container that the variable's type converts to a copy of its own is an error
+    # (qore#7572, weak-store-conversion-error.qtest)
 }
 
 #! a class whose destructor raises an exception: releasing the previous value of a variable fails
@@ -216,7 +202,6 @@ class M {
     public {
         *object m;
         float f;
-        hash h;
     }
 
     #! assigns members of self
@@ -231,8 +216,6 @@ class M {
         printf("self member receiver: %s\n", (m := new C()).n());
         auto vf = (f := 1);
         printf("self member float: %y %s\n", vf, vf.type());
-        hash<string, int> th = {"a": 1};
-        printf("self member strip: %y\n", (h := th));
     }
 }
 
@@ -278,9 +261,6 @@ sub paths() {
     remove c6;
     remove om;
     printf("opaque member value: %s\n", desc(v7));
-    M om2();
-    hash<string, int> oth = {"a": 1};
-    printf("opaque member strip: %y\n", (om2.h @= oth));
 
     list<auto!> l = (NOTHING,);
     before = destroyed;
@@ -291,6 +271,8 @@ sub paths() {
     printf("list element value: %s\n", desc(v3));
     remove v3;
 
+    # the list that the softlist type makes of the value is a temporary of the statement; v4 takes a copy of its own
+    # (qore#7342)
     softlist<auto> sl;
     auto v4 = (sl := 1);
     printf("softlist value: %y %s sl=%y\n", v4, v4.fullType(), sl);
@@ -327,3 +309,41 @@ paths();
 store_errors();
 temporaries();
 printf("done destroyed=%d\n", destroyed);
+
+# a list or hash literal is a value of its own, as any expression that is not a variable or a path: the weak reference
+# designates a copy of it, a temporary of the statement, the same in every execution mode and in AOT code, also for a
+# literal that a deferred initializer folds (qore#7290, qore#7318)
+sub containerLiterals(int x) {
+    softlist<auto> typed;
+    auto l;
+    auto h;
+    typed := (1, 2);
+    l := (1, 2);
+    h := {"nested": (3, 4)};
+    printf("weak literals: %y %y %y\n", typed, l, h.nested);
+
+    l := (1, x);
+    h := {"x": x};
+    printf("weak computed containers: %d %d\n", l.size(), h.size());
+}
+containerLiterals(9);
+
+auto sub deferredLiteral() {
+    auto weak;
+    weak := {"nested": (1, 2)};
+    return weak;
+}
+const Built = deferredLiteral();
+printf("deferred literal: %y %y\n", Built.nested, deferredLiteral().nested);
+
+# a declaration that assigns a literal weakly: the copy that the weak reference designates is a temporary of the
+# declaration's statement, released when it ends, in a local of top-level code, a function local and a typed local, as
+# a store into an existing local (qore#7630, qore#7318)
+auto top_literal := {"k": 5};
+printf("weak declaration: top level: %y\n", top_literal);
+sub declarationLiterals() {
+    auto local := {"k": 6};
+    hash<auto> typed := {"k": 7};
+    printf("weak declaration: local: %y typed local: %y\n", local, typed);
+}
+declarationLiterals();

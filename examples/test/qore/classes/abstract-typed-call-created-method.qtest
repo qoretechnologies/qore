@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls bound late, module loading
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractTypedCallCreatedMethodTest
+
+#! a call bound when parsing calls the method that resolving the abstract methods creates in the class, as the call
+#! made at run time does (qore#7411)
+/** <tt>class G6 inherits C5, G3 {}</tt>, where \c C5's \c m(int) implements the abstract \c m(int) of \c G0 that
+    \c G6 inherits through \c G3, which implements \c G0's \c m(bool): resolving the abstract methods gives \c G6 a
+    method \c m of its own with the variants of both parent classes.  They are resolved once all the code of the parse
+    is initialized, so that a call bound before (a typed call, a call in the code of the class, a call of the method
+    named with its class, a call reference) was bound to \c C5's method and raised a PARSE-TYPE-ERROR or a
+    RUNTIME-OVERLOAD-ERROR for \c m(True), which the untyped call made at run time calls \c G3::m(bool) for.  Such a
+    call is now bound once the abstract methods are resolved: also from a class parsed before, member initializers,
+    default arguments, subclasses, with private and private:internal inheritance of the implementing class, with the
+    parent classes in the other order, with named arguments, and through call references.
+
+    The output of every execution mode, of qcc executables (-O0, -O3) and of the program whose parent classes are
+    loaded from the module's source and from a qcc -m .qmod must be the same: probe.expected; program-api.q checks
+    the calls in a parse that is rolled back, in parsePending() parses and in a Program.  The programs, the
+    classes that they share (users.ql) and the module are in \c abstract-typed-call-created-method/.
+*/
+class AbstractTypedCallCreatedMethodTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-typed-call-created-method";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractTypedCallCreatedMethodTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the parent classes in a module and in a qcc -m .qmod", \testModule());
+        addTestCase("binds in a parse rolled back, in pending parses and in a Program", \testProgramApi());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode, string script = Name, *string module_dir) {
+        return sprintf("%s%s -b --enable-debug --exec-mode=%s %s/%s.q", module_dir ? "QORE_MODULE_DIR="
+            + module_dir + " " : "", qore_bin, mode, dir, script);
+    }
+
+    private string run(string mode, string script = Name, *string module_dir) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode, script, module_dir));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testProgramApi() {
+        string exp = ReadOnlyFile::readTextFile(dir + "/program-api.expected");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, run(mode, "program-api"), "program-api: " + mode);
+        }
+    }
+
+    testModule() {
+        # the module's source
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", dir), "source module: " + mode);
+        }
+
+        # the module compiled by qcc -m
+        TmpDir tmp("qore-abstract-typed-call-created-method-qmod-");
+        string mod = "AbstractTypedCallA";
+        int rc;
+        string out = backquote(sprintf("%s -m -o %s/%s.qmod %s/%s.qm 2>&1", qccBin(), tmp.path, mod, dir, mod), \rc);
+        if (rc || !is_file(tmp.path + "/" + mod + ".qmod")) {
+            testSkip("qcc is not available or cannot compile the module " + mod + ": " + out);
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", tmp.path), "qmod: " + mode);
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-abstract-typed-call-created-method-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

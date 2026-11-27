@@ -135,7 +135,8 @@ public hashdecl UrlDownloadOptions {
     *string proxy;
 
     #! @ref True "True" to use a proxy from the environment (\c http_proxy, \c https_proxy, \c no_proxy) if
-    #! \c proxy is not set
+    #! \c proxy is not set; not for code restricted from external information, which gives its proxy in \c proxy
+    #! (see @ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()")
     bool env_proxy = True;
 
     #! the HTTP version: \c "1.1", \c "2", or \c "3"; negotiated if not set

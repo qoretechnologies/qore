@@ -390,16 +390,6 @@ static qore_type_result_e match_QTS_COMPLEXREF(const QoreTypeSpec& self, QoreTyp
 }
 
 // Handler for QTS_PARAMCLASS: invariant parameterized class type matching
-static const QoreTypeInfo* get_raw_auto_parameterized_source_type(const QoreClass* source_class,
-        const QoreClass* target_base) {
-    const qore_class_private* source = qore_class_private::get(*source_class);
-    if (source_class == target_base && source->hasTypeParams() && source->rawConstructionDefaultsToAuto()) {
-        type_vec_t args(source_class->getTypeParameterCount(), autoTypeInfo);
-        return source_class->getTypeInfo(args);
-    }
-    return source->getConcreteParameterizedBaseTypeInfo(target_base);
-}
-
 static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     const QoreParameterizedClassTypeInfo* self_pti = self.getParameterizedClassTypeInfo();
     assert(self_pti);
@@ -426,8 +416,9 @@ static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTyp
                 ctx.max_result = rv;
                 return rv;
             }
-            if (const QoreTypeInfo* mapped_type = get_raw_auto_parameterized_source_type(ctx.t.getClass(),
-                    self_pti->getBaseClass())) {
+            if (const QoreTypeInfo* mapped_type = qore_class_private::get(*ctx.t.getClass())
+                    ->getConcreteParameterizedBaseTypeInfo(self_pti->getBaseClass(), /*allow_raw_self=*/true,
+                            /*match_class_type=*/true)) {
                 bool type_may_not_match = false;
                 bool type_may_need_filter = false;
                 qore_type_result_e mapped_rv = qore_parameterized_class_accepts(self_pti, mapped_type,

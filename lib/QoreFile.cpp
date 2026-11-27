@@ -37,6 +37,7 @@
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/ModuleInfo.h"
 
 #include <cerrno>
 #include <chrono>
@@ -889,8 +890,10 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
     struct stat sbuf;
     std::string canon;
     if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, name, canon)) {
+        // the messages name the file in the form for the code that they are built for (see canonicalize() in
+        // QoreSandboxManager.cpp, qore#7507)
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file opened cannot be "
-            "identified by a path, so the security policy cannot be applied to it", name);
+            "identified by a path, so the security policy cannot be applied to it", qore_msg_path(name).c_str());
         return -1;
     }
     // the name was checked before it was opened
@@ -905,7 +908,7 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
         QoreString code(err_str ? err_str.c_str() : "FILESYSTEM-ACCESS-DENIED");
         xsink2.clear();
         xsink->raiseException(code.c_str(), "Access to '%s' denied: the file opened is not permitted by the security "
-            "policy", name);
+            "policy", qore_msg_path(name).c_str());
         return -1;
     }
     return 0;
@@ -1065,7 +1068,7 @@ int qore_qf_private::openPinned(QoreSandboxManager& sm, const char* fn, int ofla
         // the file became a link after it was checked
         if (xsink) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
-                "checked", fn);
+                "checked", qore_msg_path(fn).c_str());
         } else {
             errno = EACCES;
         }
@@ -1134,6 +1137,84 @@ int qore_qf_private::openFd(const char* fn, int flags, int mode, ExceptionSink* 
         return -1;
     }
     return nfd;
+}
+
+bool q_source_read_policy_applies() {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    // only a load of library code reads as library code: the files of a library module loaded into a container are
+    // read by their loaders as library code, and any other source read during the load with the policy
+    return smh && !qore_module_load_is_trusted();
+}
+
+FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink) {
+    // the name is checked first: nothing about a file that the policy denies is told
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(fn, QSEC_READ, xsink)) {
+            return nullptr;
+        }
+    }
+#ifdef _Q_WINDOWS
+    int fd = q_open_policy_checked(fn, O_RDONLY, 0, xsink);
+    if (fd < 0) {
+        return nullptr;
+    }
+    FILE* fp = _fdopen(fd, "r");
+    if (!fp) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+    }
+    return fp;
+#else
+    // O_NONBLOCK: a FIFO with the name of a source does not block the parse
+    int fd = q_open_policy_checked(fn, O_RDONLY | O_NONBLOCK, 0, xsink);
+    if (fd < 0) {
+        return nullptr;
+    }
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+        return nullptr;
+    }
+    if (!S_ISREG(sbuf.st_mode)) {
+        ::close(fd);
+        errno = S_ISDIR(sbuf.st_mode) ? EISDIR : EINVAL;
+        return nullptr;
+    }
+    int fl = fcntl(fd, F_GETFL);
+    if (fl >= 0) {
+        fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+    }
+    FILE* fp = fdopen(fd, "r");
+    if (!fp) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+    }
+    return fp;
+#endif
+}
+
+int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink) {
+    FILE* fp = q_open_policy_checked_source(fn, xsink);
+    if (!fp) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(fclose, fp);
+    out.clear();
+    char buf[16384];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, fp)) > 0) {
+        out.append(buf, n);
+    }
+    if (ferror(fp)) {
+        errno = EIO;
+        return -1;
+    }
+    return 0;
 }
 
 void q_dbg_fs_swap_point(const char* name) {

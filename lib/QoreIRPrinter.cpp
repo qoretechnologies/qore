@@ -447,6 +447,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HandlerReturn: return "handler.return";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleasePlainLocalRead: return "release.plain.local.read";
+        case QoreIROpcode::ReadReferenceThrough: return "read.reference.through";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::PushTempMarkPair: return "push.temp.mark.pair";
@@ -479,6 +480,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MakeHashConstKeys: return "make.hash.const.keys";
         case QoreIROpcode::ToString: return "to.string";
         case QoreIROpcode::Sprintf: return "sprintf";
+        case QoreIROpcode::CopyCallArg: return "copy.call.arg";
+        case QoreIROpcode::ReleaseCallArgSource: return "release.call.arg.source";
         case QoreIROpcode::RefSelf: return "ref.self";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::DebugStatement: return "debug.statement";

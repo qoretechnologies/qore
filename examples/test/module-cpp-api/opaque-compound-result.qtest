@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# the "cppapiuser" test module is built into the build tree and never installed, so QORE_MODULE_DIR must include the
+# build tree (run_tests.sh does this)
+
+%modern
+%allow-opaque-references
+
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class OpaqueCompoundResultTest
+
+class Target {
+    public {
+        auto any;
+        auto other;
+    }
+}
+
+#! The value of += and -= on a container element that holds an opaque reference to an object is the target as a read
+#! of the element gives it: an opaque reference where a read keeps it (the compound operations of the IR, JIT and AOT
+#! lvalue paths, which can be made again after references have been bound: qore#7391)
+class OpaqueCompoundResultTest inherits QUnit::Test {
+    public {
+        Target holder();
+        static hash<auto> static_hash = {};
+    }
+
+    constructor() : Test("OpaqueCompoundResult", "1.0") {
+        addTestCase("local hash member", \localHashMember());
+        addTestCase("static hash member", \staticHashMember());
+        addTestCase("list element", \listElement());
+        addTestCase("object member", \objectMember());
+        addTestCase("container operand", \containerOperand());
+        set_return_value(main());
+    }
+
+    localHashMember() {
+        hash<auto> h = {};
+        h.x @= new Target();
+        Target t = h.x;
+        bool expected = CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x += {"any": 1}), "+=");
+        assertEq(1, t.any);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x -= "any"), "-=");
+        assertEq(NOTHING, t.any);
+        t.any = t.other = 2;
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x -= ("any", "other")), "-= list");
+        assertEq(NOTHING, t.other);
+        # the opaque reference is still in the element
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x));
+        assertTrue(h.x === t);
+    }
+
+    staticHashMember() {
+        static_hash.x @= new Target();
+        Target t = static_hash.x;
+        bool expected = CppApiTest::MemberAccessorProbe::isOpaqueValue(static_hash.x);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(static_hash.x += {"any": 1}), "+=");
+        assertEq(1, t.any);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(static_hash.x -= "any"), "-=");
+        assertEq(NOTHING, t.any);
+        remove static_hash.x;
+    }
+
+    listElement() {
+        list<auto!> l = (NOTHING,);
+        l[0] @= new Target();
+        Target t = l[0];
+        bool expected = CppApiTest::MemberAccessorProbe::isOpaqueValue(l[0]);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(l[0] += {"any": 1}), "+=");
+        assertEq(1, t.any);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(l[0] -= "any"), "-=");
+        assertEq(NOTHING, t.any);
+    }
+
+    objectMember() {
+        holder.any @= new Target();
+        Target t = holder.any;
+        bool expected = CppApiTest::MemberAccessorProbe::isOpaqueValue(holder.any);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(holder.any += {"any": 1}), "+=");
+        assertEq(1, t.any);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(holder.any -= "any"), "-=");
+        assertEq(NOTHING, t.any);
+        remove holder.any;
+    }
+
+    #! container values merged into the object
+    containerOperand() {
+        hash<auto> h = {};
+        h.x @= new Target();
+        Target t = h.x;
+        bool expected = CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x);
+        assertEq(expected, CppApiTest::MemberAccessorProbe::isOpaqueValue(h.x += {"any": (1, 2), "other": {"a": (3,)}}),
+            "+= containers");
+        assertEq((1, 2), t.any);
+        assertEq({"a": (3,)}, t.other);
+    }
+}
