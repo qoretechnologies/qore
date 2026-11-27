@@ -1312,18 +1312,7 @@ AbstractDataProviderType output_type = action.output_type;
     (setSchemeLookupCallback(), setGenericApiCallActionBuilder()), and the listeners, which belong to trusted code,
     never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
     thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
-<<<<<<< HEAD
-    registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
-    way; getLazyValue() gives a value only to the code of the %Program that registered it (the module's code, also
-    when it serves a caller of the module), not to the code of a caller, of another module or of a tenant, also when
-    the module's code calls that code back.  The check identifies the code that makes the call of getLazyValue(): a
-    call that the module's code makes for a caller, with a callable and arguments that the caller gives it (a call
-    reference to getLazyValue() itself, for example), is the module's call, so a module does not call a callable of a
-    caller with the caller's arguments if they can include the ID of one of its values (issue #7601).  Every such
-    decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
-=======
     Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
->>>>>>> cecc7a1663
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
     loading the module by path): then every deferred registration runs when it is registered.
@@ -1333,7 +1322,12 @@ AbstractDataProviderType output_type = action.output_type;
     own code, with its provenance, for a module that sandboxed code loaded by its path, whose value is private.  Such
     a value is the exception to the rule above: the builder that a module loaded under a sandbox registered runs
     later, on the thread of its first reader, which can be another tenant or trusted code, and the other readers wait
-    for it.
+    for it.  getLazyValue() gives a value only to the code of the %Program that registered it (the module's code, also
+    when it serves a caller of the module), not to the code of a caller, of another module or of a tenant, also when
+    the module's code calls that code back.  The check identifies the code that makes the call of getLazyValue(): a
+    call that the module's code makes for a caller, with a callable and arguments that the caller gives it (a call
+    reference to getLazyValue() itself, for example), is the module's call, so a module does not call a callable of a
+    caller with the caller's arguments if they can include the ID of one of its values (issue #7601).
 
     The deferred initialization of an application, pending or lazy, runs on one thread at a time: a thread that
     uses the application while another thread initializes it waits until the initialization has ended.  A thread
@@ -1679,19 +1673,17 @@ public class DataProviderActionCatalog {
         */
         static *code lazy_worker_start = DataProviderActionCatalog::initLazyWorker();
 
-<<<<<<< HEAD
-        #! Lazy values: ID -> \c builder, \c value, \c built and \c owner; see buildLazyValue()
-        /** See registerLazyValue(); \c owner is the ID of the Program of the code that registered the value, the only
-            code that getLazyValue() gives it to
-=======
-        #! Lazy values: ID -> the value; see registerLazyValue()
-        static hash<string, LazySharedValue> lazy_values = {};
+        #! Lazy values: ID -> \c value (the @ref Qore::Thread::LazySharedValue "LazySharedValue") and \c owner; see
+        #! registerLazyValue()
+        /** \c owner is the ID of the Program of the code that registered the value, the only code that getLazyValue()
+            gives it to (qore#6843)
+        */
+        static hash<string, hash<auto>> lazy_values = {};
 
         #! The lazy values that each thread reads and that were not built when it started to: TID -> value IDs
         /** The innermost read is last; set under @ref init_lck, and removed without a lock.  A thread reading a value
             that is not built waits for the thread building it, which is one of the other threads reading it; the
             cycle check of the waits for the initialization of apps follows these waits too (see waitReaches())
->>>>>>> cecc7a1663
         */
         static hash<string, list<string>> value_reads = {};
 
@@ -2122,26 +2114,13 @@ class MyProvider {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "a lazy value can only be registered while a module is being "
                 "loaded";
         }
-<<<<<<< HEAD
         # the value belongs to the Program of the code that registers it; fails closed if it cannot be identified
         int owner = DataProviderActionCatalog::getDirectCallerProgramId();
         if (!owner) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "the code that registers a lazy value cannot be identified";
         }
-        # a hash of any values: the value replaces the builder's entry when it is built
-        hash<auto!> v = {"owner": owner};
-        # without a catalog worker, and for a module that sandboxed code loaded by path, the value is built now, as it was when
-        # it was not lazy: no code registered under a sandbox runs later, on another thread
-        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
-            v.value = builder();
-            v.built = True;
-        } else {
-            v.builder = builder;
-        }
-=======
         # built on its first read; private for a module that sandboxed code loaded by its path (see LazySharedValue)
-        LazySharedValue v(builder);
->>>>>>> cecc7a1663
+        hash<auto> v = {"value": new LazySharedValue(builder), "owner": owner};
         int id;
         {
             AutoLock al(lazy_worker_lck);
@@ -2157,7 +2136,6 @@ class MyProvider {
         return id;
     }
 
-<<<<<<< HEAD
     #! Returns the ID of the Program of the code that called the method of this class that calls this method, or 0 if
     #! it cannot be identified
     /** The frame of the call of that method on the thread's call stack is the frame of the code that called it; its
@@ -2173,12 +2151,9 @@ class MyProvider {
         return get_caller_program_id(2) ?? 0;
     }
 
-    #! Removes a lazy value of a module whose load failed; a build running ends without storing its value
-=======
     #! Removes a lazy value of a module whose load failed
     /** A build running for a reader ends into the value removed, which no other reader reaches any more
     */
->>>>>>> cecc7a1663
     private:internal static removeLazyValue(string key) {
         AutoLock al(lazy_worker_lck);
         remove lazy_values{key};
@@ -2189,17 +2164,12 @@ class MyProvider {
 
         @return the value
 
-<<<<<<< HEAD
-        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID by the code of the %Program of the
-        calling code (only the code of the %Program that registered a value can read it), or the %Program of the
-        calling code cannot be identified
-        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader, the value is not built, and there is no
-        catalog worker, or the reader is loading a module
-=======
         @note A reader waits for a value that another thread builds, also when it is loading a module: a builder must
         not load a module that one of its readers can be loading
 
-        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID
+        @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID by the code of the %Program of the
+        calling code (only the code of the %Program that registered a value can read it), or the %Program of the
+        calling code cannot be identified
         @throw SHARED-INIT-ERROR the value is needed by its own builder, directly or through other values; this
         error repeats on every read (see @ref Qore::Thread::LazySharedValue::get() "LazySharedValue::get()" for the
         other errors of the build)
@@ -2207,7 +2177,6 @@ class MyProvider {
         of initializations of apps, or the value is needed by its own builder through the initialization of an app;
         another order of the same reads can succeed, and a lazy registration that fails with it runs again for the
         next reader
->>>>>>> cecc7a1663
 
         @note The calling code is the code that makes the call of this method: a call that the code of the registering
         module makes with a callable and arguments that another caller gives it, such as a call reference to this
@@ -2217,23 +2186,18 @@ class MyProvider {
     */
     static auto getLazyValue(int id) {
         string key = id.toString();
-<<<<<<< HEAD
-        *hash<auto> v = lazy_values{key};
+        *hash<auto> e = lazy_values{key};
         # only the code of the Program that registered the value can read it; fails closed if the calling code cannot
         # be identified, and gives the same error as for an unknown ID; the Program ID of the frame of the call of this
         # method is read here, as reading it costs much less than the call of a helper (see
         # getDirectCallerProgramId())
         # (the owner of a registered value is never 0: registerLazyValue() refuses code that it cannot identify, and
         # the ID of a frame without a Program is NOTHING, which no owner equals)
-        if (!v || v.owner != get_caller_program_id(1)) {
+        if (!e || e.owner != get_caller_program_id(1)) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d for the calling "
                 "code", id);
-=======
-        *LazySharedValue v = lazy_values{key};
-        if (!v) {
-            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d", id);
->>>>>>> cecc7a1663
         }
+        LazySharedValue v = e.value;
         if (v.isBuilt()) {
             return v.get();
         }

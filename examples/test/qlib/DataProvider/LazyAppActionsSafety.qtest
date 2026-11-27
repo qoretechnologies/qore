@@ -748,12 +748,17 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \load_module(), (path,));
         assertEq(0, loader.callFunction("get", "getRuns"));
         int id = loader.callFunction("get", "getId");
-        # only the module's code reads its value
+        # only the module's code reads its value: a reader of another Program is refused before the value is built,
+        # and the builder does not run for it
         assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \DataProviderActionCatalog::getLazyValue(), id);
+        assertEq(0, loader.callFunction("get", "getRuns"));
         assertEq("governed", loader.callFunction("get", "getValue"));
         assertEq(1, loader.callFunction("get", "getRuns"));
-        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        # built once: the second read of the module's code gets the same value
+        assertEq("governed", loader.callFunction("get", "getValue"));
         assertEq(1, loader.callFunction("get", "getRuns"));
+        # and a reader of another Program is still refused once it is built
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \DataProviderActionCatalog::getLazyValue(), id);
     }
 
     valueCycleTest() {
@@ -778,17 +783,10 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
                 result = ex.err;
             }
         });
-<<<<<<< HEAD
-        # refused instead of waiting for the worker, which could be loading the same module
-        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
-        assertEq(0, Values::runs);
-        assertEq("counted", Values::getValue(Values::counted));
-=======
         # built on the thread loading the module, as trusted code, with no wait for a worker (qore#7712)
         assertEq("counted", result);
         assertEq(1, Values::runs);
-        assertEq("counted", DataProviderActionCatalog::getLazyValue(Values::counted));
->>>>>>> cecc7a1663
+        assertEq("counted", Values::getValue(Values::counted));
         assertEq(1, Values::runs);
     }
 

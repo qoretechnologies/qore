@@ -27,6 +27,16 @@ public class WorkerCycle {
         return id;
     }
 
+    #! Returns the value: only the code of the module that registered it can read it (qore#6843)
+    static string getValue() {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
+    #! Returns a closure of the module that reads the value, for the readers of other Programs (qore#6843)
+    static code getReader() {
+        return string sub () { return DataProviderActionCatalog::getLazyValue(id); };
+    }
+
     static string build() {
         LazyAppActionsHooks::Hooks::run("LazyValueWorkerCycleModule");
         return "private";
