@@ -25,7 +25,8 @@
     which requires RcM with reexport), and checks that the qmods load in each execution mode and behave as the
     sources do.  It also checks, in a process that compiles modules in process (a debug build's
     dbg_aot_compile_module()), that a compilation that fails leaves no reservation of the name behind and that a
-    load of the name in another thread during a compilation waits for it and then loads the module.
+    load of the name in another thread during a compilation waits for it and then loads the module, and that a
+    compilation of a name that another thread is loading fails at once with LOAD-MODULE-ERROR, parsing nothing.
 */
 class QccRequireCyclesTest inherits QUnit::Test {
     public {
@@ -326,6 +327,63 @@ printf(\"no debug\\n\");
 %endif
 ";
 
+        #! the module loaded after the compilation
+        const HeldModuleSource = "%modern
+module RcHeld {
+    version = \"1.0\";
+    desc = \"require cycle test: a module loaded after a compilation of its name failed\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcHeld {
+public string sub held_name() {
+    return \"held\";
+}
+}
+";
+
+        #! the module of the same name that the other thread compiles: a parse would fail
+        const HeldBrokenModuleSource = "%modern
+module RcHeld {
+    version = \"1.0\";
+    desc = \"require cycle test: a module whose parse fails\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcHeld {
+public string sub held_name() {
+    return no_such_function();
+}
+}
+";
+
+        #! the child: another thread holds the load of RcHeld (an in-process compilation must run in the main thread,
+        #! as the compiler waits for the other threads to end), the main thread compiles it, releases the load and
+        #! loads the module
+        const HeldChildSource = "%modern
+%ifdef QoreDebug
+Counter held(1);
+bool hold_rc;
+background sub () {
+    hold_rc = dbg_module_load_hold(\"RcHeld\");
+    held.dec();
+}();
+held.waitForZero();
+printf(\"hold: %y\\n\", hold_rc);
+*string err = dbg_aot_compile_module(\"single\", ARGV[0], ARGV[1]);
+printf(\"%s\\n\", err ?? \"compiled\");
+printf(\"release: %y\\n\", dbg_module_load_release(\"RcHeld\"));
+load_module(\"RcHeld\");
+printf(\"%s\\n\", call_function(\"held_name\"));
+%else
+printf(\"no debug\\n\");
+%endif
+";
+
         #! the execution modes the children run in
         const ExecModes = ("ast", "ir", "jit", "tiered");
     }
@@ -369,6 +427,7 @@ printf(\"no debug\\n\");
         addTestCase("the load_module() cycle with source and AOT modules", \loadCycleTest());
         addTestCase("a failed compilation leaves no reservation of the module name", \failedCompileTest());
         addTestCase("a load in another thread during a compilation waits for it", \concurrentLoadTest());
+        addTestCase("a compilation of a name that another thread is loading fails", \heldLoadTest());
         set_return_value(main());
     }
 
@@ -444,6 +503,31 @@ printf(\"no debug\\n\");
         }
     }
 
+    #! while another thread holds the load of the name, the compilation fails at once with LOAD-MODULE-ERROR and
+    #! parses nothing (the module that it would parse has a parse error, which is not reported), and the load of the
+    #! name completes after the hold is released
+    heldLoadTest() {
+        string bad_dir = tmp.path + DirSep + "held-bad";
+        string mod_dir = tmp.path + DirSep + "held";
+        mkdir(bad_dir);
+        mkdir(mod_dir);
+        writeFile(bad_dir + DirSep + "RcHeld.qm", HeldBrokenModuleSource);
+        writeFile(mod_dir + DirSep + "RcHeld.qm", HeldModuleSource);
+        string child = tmp.path + DirSep + "held.q";
+        writeFile(child, HeldChildSource);
+        foreach string mode in (ExecModes) {
+            # standard error is included: a parse would report its error there
+            string out = runChild(child, mode, mod_dir, (bad_dir + DirSep + "RcHeld.qm",
+                tmp.path + DirSep + "RcHeld-" + mode + ".qmod"), True);
+            if (out == "no debug\n") {
+                testSkip("dbg_aot_compile_module() needs a debug build");
+            }
+            assertEq("hold: True\nLOAD-MODULE-ERROR: cannot compile module 'RcHeld': a module of the same name is "
+                "being loaded in another thread\nrelease: True\nheld\n", out, mode);
+            assertFalse(is_file(tmp.path + DirSep + "RcHeld-" + mode + ".qmod"), mode + ": no qmod was written");
+        }
+    }
+
     #! runs the cycle child in each execution mode with the modules in the given directory and checks its output
     /** @param ext the extension of the modules' files
         @param mod_dir the directory of the modules
@@ -473,12 +557,13 @@ printf(\"no debug\\n\");
         f.close();
     }
 
-    #! runs a child; its standard error is included, unless the child compiles in process (\a args): the
-    #! diagnostics of the compiler are then left out
-    private string runChild(string child, string mode, string mod_dir, *list<string> args) {
+    #! runs a child; its standard error is included, unless the child compiles in process (\a args) and
+    #! \a with_stderr is not set: the diagnostics of the compiler are then left out
+    private string runChild(string child, string mode, string mod_dir, *list<string> args, bool with_stderr = False) {
         string arg_str = args ? (foldl $1 + " " + $2, args) : "";
         return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --exec-mode=%s "
-            "%s %s %s", libqore_dir, mod_dir, qore_bin, mode, child, arg_str, args ? "2>/dev/null" : "2>&1"));
+            "%s %s %s", libqore_dir, mod_dir, qore_bin, mode, child, arg_str,
+            (args && !with_stderr) ? "2>/dev/null" : "2>&1"));
     }
 
     private static writeFile(string path, string data) {
