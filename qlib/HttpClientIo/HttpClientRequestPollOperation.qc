@@ -456,7 +456,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         *hash<SocketPollInfo> info = continuePoll();
         if (info) {
-            mgr.getController().submit(<SocketPollOperationInfo>{
+            mgr.submitPollOperation(<SocketPollOperationInfo>{
                 "sock": info.socket,
                 "spop": self,
                 # the operation raises its own timeout errors first; a negative value means no timeout

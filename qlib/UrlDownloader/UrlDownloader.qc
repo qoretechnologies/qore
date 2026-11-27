@@ -116,7 +116,15 @@ public class UrlDownloader {
     #! Closes all connections
     destructor() {
         foreach HttpClientConnectionManager mgr in (mgrs.iterator()) {
-            mgr.closeAll();
+            try {
+                mgr.closeAll();
+            } catch (hash<ExceptionInfo> ex) {
+                # a downloader that restricted code which does not own a connection manager deletes does not close its
+                # connections (qore#7828): the manager closes them when it is deleted
+                if (ex.err != "PERMISSION-DENIED") {
+                    rethrow;
+                }
+            }
         }
     }
 

@@ -6253,10 +6253,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             return;
         }
 
-        auto controller = rcio.getConnectionManager().getController();
         # a request's own timeout replaces the client's
         int to_ms = request_timeout_ms ?? rcio.getTimeout();
-        controller.submit(<SocketPollOperationInfo>{
+        rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
             "spop": self,
             # a request timeout of 0 means no deadline; a negative controller timeout means none
@@ -6818,8 +6817,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 return;
             }
 
-            auto controller = rcio.getConnectionManager().getController();
-            controller.submit(<SocketPollOperationInfo>{
+            rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
                 "sock": poll_info.socket,
                 "spop": self,
                 # a request timeout of 0 means no deadline; a negative controller timeout means none
