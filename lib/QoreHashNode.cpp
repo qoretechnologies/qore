@@ -224,35 +224,70 @@ int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
     return 0;
 }
 
+#ifdef DEBUG
+//! the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466), in each way to create a member
+#define QORE_DBG_HASH_MEMBER_FAILS() if (qore_dbg_hash_member_fails()) throw std::bad_alloc()
+#else
+#define QORE_DBG_HASH_MEMBER_FAILS()
+#endif
+
+// the bodies of createMemberKnownAbsent(const qore_hash_lookup_key&) and addMemberKnownAbsent(), always inlined into
+// the find-or-create functions: GCC inlines a function that is not declared inline by a size limit
+// (max-inline-insns-auto) that this body exceeds, so that the member's creation was a call of its own in each of them
+// (qore#7763)
+QORE_HASH_ALWAYS_INLINE HashMember* qore_hash_private::addMemberKnownAbsentInline(HashMember* m) {
+    assert(m->val.isNothing());
+    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+#ifdef DEBUG
+    // a member stores the unseeded hash of its key (qore#7557), also when it is created with a hash computed before
+    // the run (JIT and AOT keys); only the test function dbg_hash_insert_with_hash_of() stores another
+    assert(m->hash == qore_hash_member_map::hashOf(m->key.data(), m->key.size())
+        || qore_dbg_hash_foreign_member_hash());
+#endif
+    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
+    std::unique_ptr<HashMember> holder(m);
+    hm.insert(m);
+    holder.release();
+    member_list.push_back(m);
+    sbAdd(m);
+    return m;
+}
+
+QORE_HASH_ALWAYS_INLINE HashMember* qore_hash_private::createMemberKnownAbsentInline(
+        const qore_hash_lookup_key& key) {
+    QORE_DBG_HASH_MEMBER_FAILS();
+    return addMemberKnownAbsentInline(new HashMember(key));
+}
+
 HashMember* qore_hash_private::findCreateMember(const char* key) {
     qore_hash_lookup_key k(key);
-    HashMember* om = findMember(k);
-    return om ? om : createMemberKnownAbsent(k);
+    HashMember* om = findMemberForCreate(k);
+    return om ? om : createMemberKnownAbsentInline(k);
 }
 
 HashMember* qore_hash_private::findCreateMember(const char* key, bool& created) {
     qore_hash_lookup_key k(key);
-    HashMember* om = findMember(k);
+    HashMember* om = findMemberForCreate(k);
     if (om) {
         created = false;
         return om;
     }
 
     created = true;
-    return createMemberKnownAbsent(k);
+    return createMemberKnownAbsentInline(k);
 }
 
 HashMember* qore_hash_private::findCreateMemberFor(const char* key, QoreValue value, ExceptionSink* xsink,
         bool& created) {
     qore_hash_lookup_key k(key);
-    HashMember* om = findMember(k);
+    HashMember* om = findMemberForCreate(k);
     if (om) {
         created = false;
         return om;
     }
     created = true;
     try {
-        return createMemberKnownAbsent(k);
+        return createMemberKnownAbsentInline(k);
     } catch (...) {
         discardUnstoredValue(value, xsink);
         throw;
@@ -270,16 +305,9 @@ HashMember* qore_hash_private::createMemberKnownAbsentFor(const char* key, QoreV
 
 HashMember* qore_hash_private::findCreateMemberPrehashed(const char* key, size_t hash) {
     qore_hash_lookup_key k(key, strlen(key), hash);
-    HashMember* om = findMember(k);
-    return om ? om : createMemberKnownAbsent(k);
+    HashMember* om = findMemberForCreate(k);
+    return om ? om : createMemberKnownAbsentInline(k);
 }
-
-#ifdef DEBUG
-//! the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466), in each way to create a member
-#define QORE_DBG_HASH_MEMBER_FAILS() if (qore_dbg_hash_member_fails()) throw std::bad_alloc()
-#else
-#define QORE_DBG_HASH_MEMBER_FAILS()
-#endif
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
     QORE_DBG_HASH_MEMBER_FAILS();
@@ -287,26 +315,11 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
 }
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
-    QORE_DBG_HASH_MEMBER_FAILS();
-    return addMemberKnownAbsent(new HashMember(key));
+    return createMemberKnownAbsentInline(key);
 }
 
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
-    assert(m->val.isNothing());
-    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
-#ifdef DEBUG
-    // a member stores the unseeded hash of its key (qore#7557), also when it is created with a hash computed before
-    // the run (JIT and AOT keys); only the test function dbg_hash_insert_with_hash_of() stores another
-    assert(m->hash == qore_hash_member_map::hashOf(m->key.data(), m->key.size())
-        || qore_dbg_hash_foreign_member_hash());
-#endif
-    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
-    std::unique_ptr<HashMember> holder(m);
-    hm.insert(m);
-    holder.release();
-    member_list.push_back(m);
-    sbAdd(m);
-    return m;
+    return addMemberKnownAbsentInline(m);
 }
 
 // the insert limit, which also tells a hardened map, takes the half of the old 64-bit mask, so that a hash is as large
