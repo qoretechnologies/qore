@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Buscar en índice"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Buscar datos en un índice de ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Agregar documento"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Agregar un documento / ingerir datos en ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Operaciones masivas"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Realizar operaciones masivas de indexación, creación, actualización y eliminación en documentos de ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Búsqueda Scroll"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

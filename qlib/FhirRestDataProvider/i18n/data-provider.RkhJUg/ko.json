@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
-          "source": "Get Capability Statement",
+          "source": "Get capability statement",
           "message": "Capability Statement 가져오기"
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "FHIR `metadata` 엔드포인트에서 서버 `CapabilityStatement`을(를) 읽습니다."
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Get SMART Configuration",
+          "source": "Get SMART configuration",
           "message": "SMART 구성 가져오기"
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "`.well-known/smart-configuration`에서 SMART on FHIR 디스커버리 문서를 읽습니다."
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "리소스 읽기"
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -400,7 +400,7 @@
           "message": "리소스 인스턴스의 FHIR 논리 ID"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
-          "source": "Search Resources",
+          "source": "Search resources",
           "message": "리소스 검색"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "FHIR `_revinclude` 검색 매개변수에 매핑된 편의 필드입니다. 반복되는 역포함(reverse include) 값에는 목록을 사용하세요."
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
-          "source": "Search All Resources",
+          "source": "Search all resources",
           "message": "모든 리소스 검색"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
@@ -748,7 +748,7 @@
           "message": "`next` 페이지 네비게이션 링크를 따라 가져올 Bundle 페이지의 최대 개수"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
-          "source": "Create Resource",
+          "source": "Create resource",
           "message": "리소스 생성"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
@@ -796,7 +796,7 @@
           "message": "`If-None-Exist` 헤더로 전송되는 FHIR 조건부 생성 검색 표현식"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
-          "source": "Submit Bundle",
+          "source": "Submit bundle",
           "message": "Bundle 제출"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
@@ -820,7 +820,7 @@
           "message": "`type`이 `transaction` 또는 `batch`(으)로 설정된 FHIR `Bundle` 리소스입니다. 원자적 트랜잭션 쓰기 또는 배치 실행을 위해 Bundle이 FHIR 서비스 베이스로 POST됩니다.\n\n**예시**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Update Resource",
+          "source": "Update resource",
           "message": "리소스 업데이트"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
@@ -880,7 +880,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Conditional Update Resource",
+          "source": "Conditional update resource",
           "message": "조건부 업데이트 리소스"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
@@ -928,7 +928,7 @@
           "message": "JSON 호환 해시 형태의 FHIR 리소스 본문입니다. 해시에는 `resource_type`과(와) 일치하는 `resourceType`이(가) 포함되어야 합니다."
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
-          "source": "Patch Resource",
+          "source": "Patch resource",
           "message": "리소스 패치"
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
-          "source": "Delete Resource",
+          "source": "Delete resource",
           "message": "리소스 삭제"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
-          "source": "Validate Resource",
+          "source": "Validate resource",
           "message": "리소스 검증"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "인스턴스 수준 검증을 위한 선택적 FHIR 논리 ID"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
-          "source": "Validate Code",
+          "source": "Validate code",
           "message": "코드 검증"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "쿼리 파라미터로 제공되는 FHIR `$validate-code` 작업 파라미터입니다. 키는 서버에서 허용하는 작업 파라미터 이름입니다.\n\n**예시**: `{\"code\": \"abc\"}`"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
-          "source": "Lookup Code",
+          "source": "Lookup code",
           "message": "코드 조회"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "쿼리 파라미터 형태의 FHIR `$lookup` 작업 파라미터입니다. 키는 서버에서 허용하는 작업 파라미터 이름입니다.\n\n**예시**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
-          "source": "Translate Code",
+          "source": "Translate code",
           "message": "코드 변환"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "FHIR `_revinclude` 검색 매개변수에 매핑된 편의 필드입니다. 반복되는 역포함(reverse include) 값에는 목록을 사용하세요."
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
+          "source": "Search all Bundle",
           "message": "모든 Bundle 검색"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
+          "source": "Conditional update Bundle",
           "message": "Conditional Update Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "FHIR `_revinclude` 검색 매개변수에 매핑된 편의 필드입니다. 반복되는 역포함(reverse include) 값에는 목록을 사용하세요."
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
+          "source": "Search all Observation",
           "message": "모든 Observation 검색"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
+          "source": "Conditional update Observation",
           "message": "Conditional Update Observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
@@ -5436,7 +5436,7 @@
           "message": "FHIR `_revinclude` 검색 매개변수에 매핑된 편의 필드입니다. 반복되는 역포함(reverse include) 값에는 목록을 사용하세요."
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
+          "source": "Search all Patient",
           "message": "모든 Patient 검색"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
@@ -6344,7 +6344,7 @@
           "message": "낙관적 동시성을 위해 `If-Match` 헤더로 전송되는 ETag 값"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
+          "source": "Conditional update Patient",
           "message": "Conditional Update Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {

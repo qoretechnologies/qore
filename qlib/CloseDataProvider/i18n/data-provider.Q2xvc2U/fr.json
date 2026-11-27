@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "Créer un lead"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Le code postal ou le code postal"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update a Lead",
+          "source": "Update a lead",
           "message": "Mettre à jour un prospect"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "La nouvelle URL de site web associée au lead"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "Supprimer un lead"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Le lead à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Lister les leads"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "Obtenir un lead"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -804,7 +804,7 @@
           "message": "L'ID du lead"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Créer un contact"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -956,7 +956,7 @@
           "message": "La valeur de l'URL"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Mettre à jour un contact"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Le type de numéro de téléphone (par exemple `mobile`, `office`, `home`, `fax`)"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Supprimer un contact"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Le contact à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Lister les contacts"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Obtenir un contact"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "L'ID du contact"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Créer une opportunité"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "La date de perte au format AAAA-MM-JJ"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Mettre à jour une opportunité"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "La nouvelle note textuelle pour l'opportunité"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Supprimer une opportunité"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "L'opportunité à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Lister les opportunités"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Obtenir une opportunité"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "L'ID de l'opportunité"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Créer une tâche"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "L'ID de l'utilisateur à qui attribuer cette tâche"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Mettre à jour une tâche"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "La nouvelle description textuelle ou le corps de la tâche"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Supprimer une tâche"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "La tâche à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Lister les tâches"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Obtenir une tâche"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "L'ID de la tâche"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
-          "source": "Create a Call",
+          "source": "Create a call",
           "message": "Créer un appel"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Une note au format HTML pour cet appel"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
-          "source": "Update a Call",
+          "source": "Update a call",
           "message": "Mettre à jour un appel"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "La nouvelle disposition ou issue de l'appel"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
-          "source": "Delete a Call",
+          "source": "Delete a call",
           "message": "Supprimer un appel"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "L'appel à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
-          "source": "List Calls",
+          "source": "List calls",
           "message": "Lister les appels"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
-          "source": "Get a Call",
+          "source": "Get a call",
           "message": "Obtenir un appel"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "L'ID de l'appel"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
-          "source": "Create an Email",
+          "source": "Create an email",
           "message": "Créer un e-mail"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "E-mail sortant"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete an Email",
+          "source": "Delete an email",
           "message": "Supprimer un e-mail"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "L'e-mail à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Lister les e-mails"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
@@ -2340,7 +2340,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get an Email",
+          "source": "Get an email",
           "message": "Obtenir un e-mail"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "L'ID de l'e-mail"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Créer une note"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2428,7 +2428,7 @@
           "message": "Définir sur `True` pour épingler cette note en haut"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Mettre à jour une note"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Le nouveau contenu HTML de la note"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Supprimer une note"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "La note à supprimer"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Lister les notes"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get a Note",
+          "source": "Get a note",
           "message": "Obtenir une note"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "L'ID de la note"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
-          "source": "List Meetings",
+          "source": "List meetings",
           "message": "Lister les réunions"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
-          "source": "Get a Meeting",
+          "source": "Get a meeting",
           "message": "Obtenir une réunion"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "L'ID du SMS"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
-          "source": "Lead Created",
+          "source": "Lead created",
           "message": "Lead créé"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
-          "source": "Lead Updated",
+          "source": "Lead updated",
           "message": "Lead mis à jour"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
-          "source": "Lead Deleted",
+          "source": "Lead deleted",
           "message": "Lead supprimé"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Contact créé"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Contact mis à jour"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
-          "source": "Contact Deleted",
+          "source": "Contact deleted",
           "message": "Contact supprimé"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
-          "source": "Opportunity Created",
+          "source": "Opportunity created",
           "message": "Opportunité créée"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
-          "source": "Opportunity Updated",
+          "source": "Opportunity updated",
           "message": "Opportunité mise à jour"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
-          "source": "Opportunity Deleted",
+          "source": "Opportunity deleted",
           "message": "Opportunité supprimée"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {

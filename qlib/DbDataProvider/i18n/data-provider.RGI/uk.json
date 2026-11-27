@@ -16,7 +16,7 @@
           "message": "Операції з БД у підключених джерелах даних."
         },
         "app.RGI.action.c2VsZWN0LXNxbA.display_name": {
-          "source": "Execute an SQL Select Statement",
+          "source": "Execute an SQL select statement",
           "message": "Виконати SQL-інструкцію Select"
         },
         "app.RGI.action.c2VsZWN0LXNxbA.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Виконати SQL-інструкцію select"
         },
         "app.RGI.action.ZXhlYy1zcWw.display_name": {
-          "source": "Execute an SQL Statement",
+          "source": "Execute an SQL statement",
           "message": "Виконати SQL-інструкцію"
         },
         "app.RGI.action.ZXhlYy1zcWw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Виконати SQL-інструкцію"
         },
         "app.RGI.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Створити запис"
         },
         "app.RGI.action.Y3JlYXRl.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Знайти один запис"
         },
         "app.RGI.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "Знайти відповідні записи"
         },
         "app.RGI.action.ZmluZA.short_desc": {
@@ -112,7 +112,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.RGI.action.dXBkYXRl.short_desc": {
@@ -136,7 +136,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "Оновити або додати записи"
         },
         "app.RGI.action.dXBzZXJ0.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.RGI.action.ZGVsZXRl.short_desc": {
@@ -184,7 +184,7 @@
           "message": "Назва таблиці"
         },
         "app.RGI.action.ZmluZC12aWV3.display_name": {
-          "source": "Find Matching View Records",
+          "source": "Find matching view records",
           "message": "Знайти відповідні записи подання"
         },
         "app.RGI.action.ZmluZC12aWV3.short_desc": {
@@ -208,7 +208,7 @@
           "message": "Назва подання"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
-          "source": "Find Single View Record",
+          "source": "Find single view record",
           "message": "Знайти один запис подання"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "Назва подання"
         },
         "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
-          "source": "Find Matching Materialized View Records",
+          "source": "Find matching materialized view records",
           "message": "Знайти відповідні записи матеріалізованого подання"
         },
         "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
@@ -256,7 +256,7 @@
           "message": "Назва матеріалізованого подання"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
-          "source": "Find Single Materialized View Record",
+          "source": "Find single materialized view record",
           "message": "Знайти один запис матеріалізованого подання"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
@@ -280,7 +280,7 @@
           "message": "Назва матеріалізованого подання"
         },
         "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
-          "source": "Refresh Materialized View",
+          "source": "Refresh materialized view",
           "message": "Оновити матеріалізоване подання"
         },
         "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {

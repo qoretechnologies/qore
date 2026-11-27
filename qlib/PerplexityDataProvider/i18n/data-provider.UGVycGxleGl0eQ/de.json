@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Multi-Chat"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Ein ISO 639-1-Sprachcode, der die bevorzugte Sprache für die Antwort angibt"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Einfacher Chat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Ein ISO 639-1-Sprachcode, der die bevorzugte Sprache für die Antwort angibt"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
+          "source": "Stream chat",
           "message": "Chat streamen"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Ein ISO 639-1-Sprachcode, der die bevorzugte Sprache für die Antwort angibt"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Websuche"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

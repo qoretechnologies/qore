@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Data Provider Labels Are in Sentence Case
+    @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" renders a display name
+    in sentence case in English and without a locale (ex: \c "max_tokens_per_request" -> \c "Max tokens per request"),
+    and the data provider modules' action names follow; code that compares a display name with a literal in title
+    case must change (<a href="https://github.com/qoretechnologies/qore/issues/6784">issue 6784</a>).
+
     @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
     The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
     tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
@@ -2369,6 +2375,10 @@
         option serves only its own handlers, never those of the server, and the stop of a listener refuses new
         connections before it waits for the requests in progress
         (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
+      - the stop of a listener lets its requests and responses in progress complete (at most the \c drain_timeout
+        option), then closes its connections that are left before it returns (see
+        @ref HttpServer::HttpServer::stopListenerID() "stopListenerID()";
+        <a href="https://github.com/qoretechnologies/qore/issues/7692">issue 7692</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
@@ -2992,10 +3002,26 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
+      thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
+      running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
+      through links to directories), such as those in data, no longer add a time zone each without bound
+      (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
+    - @ref Qore::split() "split()", @ref <string>::split() and @ref <binary>::split() with an empty separator return
+      the whole subject when it contains a NUL character instead of never ending
+      (<a href="https://github.com/qoretechnologies/qore/issues/7710">issue 7710</a>)
+    - keys chosen to share the internal hash value of hash keys can no longer make the key lookups of a hash slow: a
+      hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
+      @ref hash_key_hardening;
+      <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
+    - an operand of an operator keeps the value of the variable that it read when a later operand changes the
+      variable in place, as in <tt>a == (a += x)</tt>, in the AST interpreter as in the other execution modes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7722">issue 7722</a>)
     - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
       extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)
@@ -3054,6 +3080,10 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
     - a method called through a weak reference while another thread releases the last strong reference to its object
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
+      (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
+    - a method that another thread calls on an object whose destructor runs after its last strong reference was
+      released is refused with \c OBJECT-ALREADY-DELETED instead of running while the object's members are deleted
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
     - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
@@ -4927,6 +4957,10 @@
       \c SHARED-OBJECT-ERROR for it, as for an object marked with
       @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
       affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
+    - fixed a memory leak when a deleted object, held by a strong or a
+      @ref weak_assignment_operator "weak reference", is converted to \c softlist or \c softlist<T>; the converted
+      value is unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/7759">issue 7759</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

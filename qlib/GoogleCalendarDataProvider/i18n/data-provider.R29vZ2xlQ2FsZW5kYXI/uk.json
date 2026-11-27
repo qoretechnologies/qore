@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
+          "source": "Add event from text",
           "message": "Додати подію з тексту"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Сповіщення не надсилаються. Для завдань міграції календаря розгляньте можливість використання методу `Events.import`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Створити подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Календар, до якого слід додати подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
+          "source": "Update event",
           "message": "Оновити подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Календар, до якого слід додати подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
+          "source": "Delete event",
           "message": "Видалити подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Календар, до якого слід додати подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Перелічити події"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Якщо `True`, видалені події (зі `status`, що дорівнює `cancelled`) включаються до результату. Скасовані екземпляри повторюваних подій (але не базова повторювана подія) все одно включаються, якщо `showDeleted` і `singleEvents` обидва мають значення `False`; якщо обидва мають значення `True`, повертаються лише окремі екземпляри видалених подій. Типове значення — `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Отримати подію"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Ідентифікатор події, яку потрібно отримати; ідентифікатори подій повертаються в полі `id` подій, які повертає дія `list-events`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
+          "source": "List calendars",
           "message": "Перелічити календарі"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {

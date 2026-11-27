@@ -16,7 +16,7 @@
           "message": "Lire et écrire des fichiers JSON standard (pas NDJSON/JSON Lines). Prend en charge les fichiers JSON contenant un tableau d'objets (itérés sous forme d'enregistrements individuels) ou un seul objet (renvoyé sous forme d'un seul enregistrement). Fournit une sortie imprimée de manière lisible (pretty-print) configurable pour l'écriture."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "Lire un fichier JSON"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "Conserver le texte dans l'encodage d'entrée tel qu'il a été lu, sans vérification"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "Lire des données JSON en ligne"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "Encodage US-ASCII"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "Écrire un fichier JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Écrire une sortie JSON compacte sans espaces supplémentaires"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "Écrire des données JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

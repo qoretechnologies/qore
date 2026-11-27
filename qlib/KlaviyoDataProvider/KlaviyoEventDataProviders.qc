@@ -337,7 +337,7 @@ public class KlaviyoNewProfileDataProvider inherits KlaviyoWatchDataProviderBase
         const EventName = "new_profile";
 
         #! The event display name
-        const DisplayName = "New Profile";
+        const DisplayName = "New profile";
 
         #! The event short description
         const ShortDesc = "Triggers when a new profile is created";
@@ -406,7 +406,7 @@ public class KlaviyoNewEventDataProvider inherits KlaviyoWatchDataProviderBase {
         const EventName = "new_event";
 
         #! The event display name
-        const DisplayName = "New Event";
+        const DisplayName = "New event";
 
         #! The event short description
         const ShortDesc = "Triggers when a new event occurs";
@@ -568,7 +568,7 @@ public class KlaviyoNewListProfileDataProvider inherits KlaviyoGroupMembershipDa
         const EventName = "new_list_profile";
 
         #! The event display name
-        const DisplayName = "Profile Added to List";
+        const DisplayName = "Profile added to list";
 
         #! The event short description
         const ShortDesc = "Triggers when a profile is added to a list";
@@ -653,7 +653,7 @@ public class KlaviyoNewSegmentProfileDataProvider inherits KlaviyoGroupMembershi
         const EventName = "new_segment_profile";
 
         #! The event display name
-        const DisplayName = "Profile Added to Segment";
+        const DisplayName = "Profile added to segment";
 
         #! The event short description
         const ShortDesc = "Triggers when a profile is added to a segment";

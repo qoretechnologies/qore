@@ -16,7 +16,7 @@
           "message": "Legge e scrive i dati dei file a lunghezza fissa"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "Leggi dati a lunghezza fissa"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "La regione del fuso orario da utilizzare per l'analisi delle date (es.: `Europe/Prague`); vedere [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) per i valori validi"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "Scrivi dati a lunghezza fissa"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

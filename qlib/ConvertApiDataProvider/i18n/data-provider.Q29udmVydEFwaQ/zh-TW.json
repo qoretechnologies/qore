@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "轉換檔案"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "轉換逾時秒數，範圍為 `10` 到 `1200`；若未設定，則套用轉換器的預設值，例如 Office 文件為 `900`，網頁為 `120`。"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "取得轉換器資訊"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "轉換器的其他參數，以 ConvertAPI 參數名稱對應值的雜湊表示。\n\n每個轉換器的參數列在 [ConvertAPI 文件](https://docs.convertapi.com)中，也可由 `get-converter-info` 動作傳回。\n\n- 純量值會原樣傳送\n- 檔案雜湊（`name` 和 `content`）會作為檔案傳送\n- 檔案雜湊的清單會作為檔案清單傳送\n\n**範例**：`{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "將 PDF 轉換為影像"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "轉換器的其他參數，以 ConvertAPI 參數名稱對應值的雜湊表示。\n\n每個轉換器的參數列在 [ConvertAPI 文件](https://docs.convertapi.com)中，也可由 `get-converter-info` 動作傳回。\n\n- 純量值會原樣傳送\n- 檔案雜湊（`name` 和 `content`）會作為檔案傳送\n- 檔案雜湊的清單會作為檔案清單傳送\n\n**範例**：`{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "合併 PDF 檔案"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

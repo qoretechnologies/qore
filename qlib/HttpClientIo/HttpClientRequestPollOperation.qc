@@ -819,14 +819,26 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
             return;
         }
         try {
-            stream.getConnection().cancelRequest(sid);
+            HttpClientConnection stream_conn = HttpClientIoSocketAccess::connectionOf(stream);
+            stream_conn.cancelRequest(sid);
         } catch (hash<ExceptionInfo> ex) {
             # the connection is already closed
         }
     }
 
+    #! Marks the request's stream as ended, unless the stream is handed over to the caller (qore#7570)
+    /** The pool may give the connection to other requests from now on, so code that a sandbox restricts and that does
+        not own the connection manager acts on it no more (see @ref HttpClientConnectionView)
+    */
+    private endStream() {
+        if (stream && !opts.keep_stream) {
+            HttpClientIoSocketAccess::markStreamEnded(stream);
+        }
+    }
+
     #! Makes the output available
     private complete(auto output) {
+        endStream();
         self.output = output;
         done = True;
         state = ST_COMPLETE;
@@ -838,6 +850,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
 
     #! Rejects the Future of an operation started with @ref startAsync()
     private rejectIntern(hash<ExceptionInfo> ex) {
+        endStream();
         if (promise && !promise_done) {
             promise_done = True;
             promise.setError(ex.err, ex.desc, ex.arg);
@@ -856,7 +869,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
             "headers_raw": response.headers_raw,
             "content_type": ct.typeCode() == NT_LIST ? ct[0] : ct,
             "stream_id": stream.getStreamId() ?? 0,
-            "protocol": response.protocol ?? stream.getConnection().getProtocol(),
+            "protocol": response.protocol ?? (HttpClientIoSocketAccess::connectionOf(stream)).getProtocol(),
             "effective_url": rf.getRequestUrl(),
         });
         list<hash<HttpRedirectInfo>> redirects = rf.getRedirects();

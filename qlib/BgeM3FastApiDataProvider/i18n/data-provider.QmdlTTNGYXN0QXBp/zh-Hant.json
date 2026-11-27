@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "建立嵌入"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Sidecar 每個內部編碼器批次處理的最大文字數量。未設定時，將使用 sidecar 自己的預設值 (`256`)。較低的值會降低記憶體壓力，但會犧牲輸送量。"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
+          "source": "Get health",
           "message": "取得健康狀態"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
@@ -412,7 +412,7 @@
           "message": "傳回 sidecar 的存活狀態（通常為 `\"ok\"`）與主機記憶體壓力資料。上游路由器可使用 `pressure` 欄位來驅動本機與雲端路由之間的退避升級。"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
+          "source": "Get metrics",
           "message": "取得指標"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {

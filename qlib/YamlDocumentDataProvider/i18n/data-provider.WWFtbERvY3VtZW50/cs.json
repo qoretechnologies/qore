@@ -8,7 +8,7 @@
           "message": "Přečtěte data dokumentu YAML z konkrétního umístění souboru.\n\nSoubor YAML může obsahovat jeden nebo více dokumentů oddělených oddělovači `---`. Každý dokument je iterován jako samostatný záznam.\n\n**Klíčové volby**\n- `path`: umístění souboru pro čtení (povinné)\n- `encoding`: kódování znaků (výchozí: `UTF-8`)\n- `skip_empty_documents`: přeskočit prázdné dokumenty (výchozí: `True`)\n- `max_documents`: maximální počet dokumentů k přečtení (`0` = bez omezení)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "Přečíst soubor s dokumentem YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "Přečtěte vložená data YAML zadaná přímo jako řetězec.\n\nData YAML mohou obsahovat jeden nebo více dokumentů oddělených oddělovači `---`. Každý dokument je iterován jako samostatný záznam.\n\n**Klíčové volby**\n- `data`: řetězec YAML k analýze (povinné)\n- `encoding`: kódování znaků (výchozí: `UTF-8`)\n- `skip_empty_documents`: přeskočit prázdné dokumenty (výchozí: `True`)\n- `max_documents`: maximální počet dokumentů k přečtení (`0` = bez omezení)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "Přečíst vložená data YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "Zapište záznamy dokumentů YAML jako vícedokumentový stream do konkrétního umístění souboru.\n\nZáznamy se shromažďují a zapisují s oddělovači dokumentů `---` po dokončení akce.\n\n**Klíčové volby**\n- `path`: umístění výstupního souboru (povinné)\n- `flow_style`: použít kompaktní řádkový výstup YAML (výchozí: `False`)\n- `encoding`: kódování znaků (výchozí: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "Zapsat soubor s dokumentem YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "Vygeneruje ze záznamů vícedokumentový proud YAML a vrátí jej jako data, například pro přiložení k e-mailu nebo nahrání jinou akcí.\n\nKaždý záznam se stane jedním dokumentem YAML, odděleným značkami `---`; akce vrací vygenerovaná data v `data` a počet dokumentů v `record_count`.\n\n**Klíčové volby**\n- `flow_style`: použít kompaktní řádkový výstup YAML (výchozí: `False`)\n- `encoding`: kódování znaků (výchozí: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "Zapsat vložená data YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

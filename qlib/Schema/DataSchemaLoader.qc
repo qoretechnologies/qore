@@ -818,7 +818,17 @@ if (info.normalized) {
         @since Schema 1.9
     */
     public const ColumnShorthandKeys = ("type", "size", "scale", "notnull", "default_value", "populate", "comment",
-        "driver");
+        "driver", "identity", "identity_start", "identity_increment", "identity_generation");
+
+    #! The identity options of a column: a portable identity column (@ref sqlutil_identity_columns)
+    /** @since Schema 1.9 (issue #7747)
+    */
+    public const ColumnIdentityKeys = ("identity", "identity_start", "identity_increment", "identity_generation");
+
+    #! The identity generation policies a column may give with \c identity_generation
+    /** @since Schema 1.9 (issue #7747)
+    */
+    public const ColumnIdentityGenerations = ("by default", "always", "by default on null");
 
     #! The keys of a reference data section
     /** @since Schema 1.9
@@ -1202,6 +1212,9 @@ if (info.normalized) {
             result.comment = col_def.comment;
         }
 
+        # issue #7747: a portable identity column, created with each database's own mechanism
+        DataSchemaLoader::normalizeColumnIdentity(table_name, col_name, col_def, \result, path, issues);
+
         # Merge user-provided driver overrides on top of the base type's driver block.
         # This lets a schema combine `type:` with driver-specific tweaks, or define a
         # column entirely through driver overrides with no shorthand type at all.
@@ -1235,6 +1248,74 @@ if (info.normalized) {
         }
 
         return result;
+    }
+
+    #! Carries a shorthand column's identity options to its normalized form, refusing the invalid ones
+    /** The options are SqlUtil's (@ref sqlutil_identity_columns): \c identity makes an integral column generate its
+        own values; \c identity_start, \c identity_increment and \c identity_generation require it.  Each problem is
+        reported at the path of its key:
+        - \c IDENTITY-TYPE: \c identity on a column whose type is not integral (\c int, or \c number without a scale)
+        - \c IDENTITY-DEFAULT: \c identity with a \c default_value; an identity column supplies its own
+        - \c IDENTITY-OPTION: an identity option without \c identity, an option value of the wrong type, a zero
+          increment, or a generation policy that is not one of
+          @ref Schema::DataSchemaLoader::ColumnIdentityGenerations "ColumnIdentityGenerations"
+
+        Whether a database can represent the settings (ex: MySQL and SQLite support only the default start and
+        increment) is checked by SqlUtil when the column is created on it.
+    */
+    private static normalizeColumnIdentity(string table_name, string col_name, hash<auto> col_def,
+            reference<hash<auto!>> result, string path, DataSchemaIssueCollector issues) {
+        string desc = sprintf("table %y column %y", table_name, col_name);
+        auto identity = col_def.identity;
+        if (exists identity && identity.typeCode() != NT_BOOLEAN) {
+            issues.error("DATA-SCHEMA-ERROR", "IDENTITY-OPTION", path + ".identity", sprintf("%s: \"identity\" must "
+                "be a boolean, got %y", desc, identity));
+            return;
+        }
+        if (!identity) {
+            foreach string key in (ColumnIdentityKeys[1..]) {
+                if (exists col_def{key}) {
+                    issues.error("DATA-SCHEMA-ERROR", "IDENTITY-OPTION", path + "." + key, sprintf("%s: %y "
+                        "requires \"identity\": true", desc, key));
+                }
+            }
+            return;
+        }
+        # integral: int, or number without a scale
+        if (!inlist(result.qore_type, (Type::Int, SqlUtil::NUMERIC)) || col_def.scale) {
+            issues.error("DATA-SCHEMA-ERROR", "IDENTITY-TYPE", path + ".identity", sprintf("%s: an identity column "
+                "must be integral (\"int\", or \"number\" without a scale), not %y", desc,
+                col_def.scale ? sprintf("%s with scale %d", col_def.type, col_def.scale) : col_def.type));
+            return;
+        }
+        if (exists col_def.default_value && col_def.default_value !== NULL) {
+            issues.error("DATA-SCHEMA-ERROR", "IDENTITY-DEFAULT", path + ".default_value", sprintf("%s: an identity "
+                "column supplies its own values and cannot have a default_value", desc));
+            return;
+        }
+        foreach string key in (("identity_start", "identity_increment")) {
+            if (exists col_def{key} && col_def{key}.typeCode() != NT_INT) {
+                issues.error("DATA-SCHEMA-ERROR", "IDENTITY-OPTION", path + "." + key, sprintf("%s: %y must be an "
+                    "integer, got %y", desc, key, col_def{key}));
+                return;
+            }
+        }
+        if (exists col_def.identity_increment && !col_def.identity_increment) {
+            issues.error("DATA-SCHEMA-ERROR", "IDENTITY-OPTION", path + ".identity_increment", sprintf("%s: "
+                "\"identity_increment\" cannot be 0", desc));
+            return;
+        }
+        if (exists col_def.identity_generation && !inlist(col_def.identity_generation, ColumnIdentityGenerations)) {
+            issues.error("DATA-SCHEMA-ERROR", "IDENTITY-OPTION", path + ".identity_generation", sprintf("%s: "
+                "\"identity_generation\" must be one of %y, got %y", desc, ColumnIdentityGenerations,
+                col_def.identity_generation));
+            return;
+        }
+        foreach string key in (ColumnIdentityKeys) {
+            if (exists col_def{key}) {
+                result{key} = col_def{key};
+            }
+        }
     }
 
     #! Reports the warnings of a column written with the \c type shorthand

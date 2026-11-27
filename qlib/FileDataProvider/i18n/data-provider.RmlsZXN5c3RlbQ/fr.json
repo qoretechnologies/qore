@@ -16,7 +16,7 @@
           "message": "Accès au système de fichiers du serveur"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Copier un fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Les fichiers cibles existants doivent-ils être écrasés ?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
+          "source": "Follow symlinks",
           "message": "Suivre les liens symboliques"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Les liens symboliques doivent-ils être suivis ?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
+          "source": "Create file",
           "message": "Créer un fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Le mode pour le nouveau fichier (par défaut `0664`)"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Supprimer le fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
@@ -148,7 +148,7 @@
           "message": "Le chemin du fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Obtenir le fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
@@ -196,7 +196,7 @@
           "message": "L'encodage de chaîne à utiliser si `text` = `True` (par défaut : `UTF-8`)"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Erreurs d'encodage"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -208,7 +208,7 @@
           "message": "Ce que donne un texte qui n'est pas valide dans son encodage de caractères si `text` = `True` : `raise` (la valeur par défaut) lève une erreur `INVALID-ENCODING`, `latin1` renvoie le texte en `ISO-8859-1`, et `keep` le renvoie dans l'encodage sans vérification"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
+          "source": "Max len",
           "message": "Longueur max"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
@@ -220,7 +220,7 @@
           "message": "La longueur maximale des données renvoyées en octets"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Lister les fichiers"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
@@ -244,7 +244,7 @@
           "message": "Le chemin du fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
+          "source": "Create directory",
           "message": "Créer un répertoire"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
@@ -280,7 +280,7 @@
           "message": "Le mode pour le nouveau fichier (par défaut `0775`)"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Déplacer le fichier"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
@@ -328,7 +328,7 @@
           "message": "Les fichiers cibles existants doivent-ils être écrasés ?"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
+          "source": "Get info",
           "message": "Obtenir des informations"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {

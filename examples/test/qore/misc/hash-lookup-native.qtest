@@ -23,6 +23,6 @@ class HashLookupNativeTest inherits QUnit::Test {
         int rc;
         string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 316167 hash lookup checks\n", output);
+        assertEq("PASS: 316297 hash lookup checks\n", output);
     }
 }

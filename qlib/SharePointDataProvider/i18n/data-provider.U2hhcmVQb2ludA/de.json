@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
+          "source": "List sites",
           "message": "Sites auflisten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Ein Begriff, nach dem in Websitetiteln und -URLs gesucht werden soll. Wenn dieser weggelassen wird, werden die Root-Website des Mandanten und ihre Unterwebsites zurückgegeben"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
+          "source": "Get site",
           "message": "Site abrufen"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Die zu adressierende SharePoint-Website. Verwenden Sie die Aktion `list-sites`, um die verfügbaren Websites zu ermitteln; die Stammwebsite des Mandanten wird immer angeboten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
+          "source": "List document libraries",
           "message": "Dokumentbibliotheken auflisten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Die zu adressierende SharePoint-Website. Verwenden Sie die Aktion `list-sites`, um die verfügbaren Websites zu ermitteln; die Stammwebsite des Mandanten wird immer angeboten"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
+          "source": "Get document library info",
           "message": "Dokumentbibliotheks-Info abrufen"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Die zu adressierende Dokumentbibliothek. Verwenden Sie die Aktion `list-drives`, um die Bibliotheken auf einer Website aufzulisten"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "Dokumente suchen"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Sortierreihenfolge für Ergebnisse (z. B. `name asc`, `size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
+          "source": "Get document",
           "message": "Dokument abrufen"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Der Pfad des Elements relativ zum Stammverzeichnis des Laufwerks (z. B. `/Documents/file.txt`). Geben Sie entweder `id` oder `path` an"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Ordner erstellen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -700,7 +700,7 @@
           "message": "Die Anfrage mit einem Fehler fehlschlagen lassen"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
+          "source": "Upload document",
           "message": "Dokument hochladen"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Die ID des übergeordneten Ordners. Wenn weggelassen, wird die Datei in das Stammverzeichnis des Laufwerks hochgeladen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Upload-Sitzung erstellen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Die Anfrage mit einem Fehler fehlschlagen lassen"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
+          "source": "Download document",
           "message": "Dokument herunterladen"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "Die eindeutige Kennung der herunterzuladenden Datei"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
+          "source": "Delete document",
           "message": "Dokument löschen"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Elements"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
+          "source": "Update document",
           "message": "Dokument aktualisieren"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Die ID des Zielordners, in den das Element verschoben werden soll. Legen Sie dies fest, um ein Element in einen anderen Ordner zu verschieben"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
+          "source": "Copy document",
           "message": "Dokument kopieren"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Die Anfrage mit einem Fehler fehlschlagen lassen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Freigabelink erstellen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Datum und Uhrzeit, zu denen der Freigabelink abläuft"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "Listen auflisten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Listen einschließen, deren Vorlage `documentLibrary` ist"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Liste abrufen"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Die zu adressierende Liste. Verwenden Sie die Aktion `list-lists`, um die Listen auf einer Website aufzulisten"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "Liste erstellen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Die Spalten, mit denen die Liste erstellt werden soll, als Liste von Microsoft Graph-[columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition)-Objekten, zum Beispiel `{\"name\": \"Amount\", \"number\": {}}`. Wenn weggelassen, wird die Liste nur mit der Standardspalte `Title` erstellt"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Liste löschen"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Die zu adressierende Liste. Verwenden Sie die Aktion `list-lists`, um die Listen auf einer Website aufzulisten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
+          "source": "List columns",
           "message": "Spalten auflisten"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Nur die Spalten zurückgeben, die beschrieben werden können; SharePoint verwaltet viele schreibgeschützte Spalten, die bei einem Erstellungs- oder Aktualisierungsaufruf abgelehnt würden"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
+          "source": "Search list items",
           "message": "Listenelemente durchsuchen"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Nach insgesamt so vielen Elementen über alle Seiten hinweg anhalten"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
+          "source": "Get list item",
           "message": "Listenelement abrufen"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Das zu adressierende Listenelement"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
+          "source": "Create list item",
           "message": "Listenelement erstellen"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Die für die Spalten des Elements festzulegenden Werte, indiziert nach internem Spaltennamen. Sobald eine Website und eine Liste ausgewählt wurden, werden die einzelnen Spalten mit ihren eigenen Typen angeboten; die Aktion `columns` listet sie auf"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
+          "source": "Update list item",
           "message": "Listenelement aktualisieren"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Die für die Spalten des Elements festzulegenden Werte, indiziert nach internem Spaltennamen. Sobald eine Website und eine Liste ausgewählt wurden, werden die einzelnen Spalten mit ihren eigenen Typen angeboten; die Aktion `columns` listet sie auf"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
+          "source": "Delete list item",
           "message": "Listenelement löschen"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Das zu adressierende Listenelement"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Wird ausgelöst, wenn ein Dokument zu einer Dokumentbibliothek hinzugefügt wird. Verwendet Delta-Abfragen, die genau dort fortgesetzt werden, wo sie aufgehört haben, anstatt die Bibliothek erneut zu lesen"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument geändert"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Wird ausgelöst, wenn ein Dokument, das sich bereits in einer Bibliothek befindet, geändert wird. Verwendet Delta-Abfragen, die genau dort fortgesetzt werden, wo sie aufgehört haben, anstatt die Bibliothek erneut zu lesen"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Ordner hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Wird ausgelöst, wenn ein Ordner zu einer Dokumentbibliothek hinzugefügt wird"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Listenelement hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

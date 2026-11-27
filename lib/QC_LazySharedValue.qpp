@@ -54,7 +54,9 @@
     end their wait (the build continues), and they can give a timeout.  If the builder raises an exception, nothing is
     published, the exception is raised to the caller that ran it, and the next caller builds the value again; the
     time budget of a caller's call counts the build that it runs.  A builder that needs its own value raises
-    \c SHARED-INIT-ERROR, and so does a wait that would close a cycle of waits of builders.
+    \c SHARED-INIT-ERROR, which every call that builds the value raises again, and a wait that would close a cycle of
+    waits of builders on other threads raises \c SHARED-INIT-CYCLE, which only the order of the threads causes: the
+    thread that closes the cycle gets it, and another order of the same calls can succeed.
 
     The mode of the object is fixed when it is created.  An object that code which may create a trusted build of the
     builder creates (code that is not sandboxed and does not act for sandboxed code, with a builder of trusted code,
@@ -70,6 +72,9 @@
     both modes.
 
     @note
+    - the builder runs only when get() is first called, never when the object is created: an exception that it raises
+      is raised to the caller of get() that ran it (for a value that a module creates when it is loaded, at its first
+      use, not when the module is loaded)
     - an object that library code creates later than its initialization, for whichever caller needs it first, is
       private if that caller is sandboxed or acts for sandboxed code, and then builds its value as that caller's code
       would; code that must have a process-shared object creates it during module initialization or trusted startup
@@ -144,8 +149,9 @@ LazySharedValue::copy() {
 
     @return the value
 
-    @throw SHARED-INIT-ERROR the value is needed by its own builder, the wait would close a cycle of waits of builders,
-    or the builder returned an object or callable value that sandboxed or restricted code created
+    @throw SHARED-INIT-ERROR the value is needed by its own builder, or the builder returned an object or callable
+    value that sandboxed or restricted code created
+    @throw SHARED-INIT-CYCLE the wait for another thread's build would close a cycle of waits of builders
     @throw SHARED-INIT-TIMEOUT the timeout ran out while another thread built the value
 
     @note see the class description for the lock order of the wait

@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pooled HTTP/1.1 and HTTP/2 client connections over TCP and TLS, closed and cancelled by other code
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpClientIoLentConnectionScopeTest
+
+#! A sandboxed borrower of a connection manager that other code shares acts on a pooled connection only for its own
+#! request (qore#7570)
+/** The borrower keeps the connection of its request after the request has ended.  The pool gives that connection to
+    the host's later requests, so the borrower's public calls on it (closing it, changing its pool state, cancelling a
+    stream of it) must not reach them: a borrower that does not own the manager acts on a connection only while its
+    own request is active on it.  The host's request is held by the server while the borrower acts, so the test fails
+    without any timing: the host's request must complete with its response, on the connection that it reused.
+*/
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! the code of the borrower
+const BorrowerCode = "%modern
+%requires HttpClientIo
+our HttpClientConnectionView conn;
+our HttpClientStreamHandle kept;
+our bool during;
+#! makes a request with the manager and keeps the view of its connection; returns the status code
+int sub request(HttpClientConnectionManager mgr, string url, string path) {
+    HttpClientStreamHandle sh = mgr.acquireStream(url);
+    kept = sh;
+    conn = sh.getConnectionView();
+    hash<auto> r = sh.submitAsync(\"GET\", path);
+    # the view works while the borrower's request is active
+    during = conn.isActive() && conn.isReady() && conn.getProtocol() != \"\";
+    int status = r.future.get(20s).status_code;
+    return status;
+}
+#! leases a connection of the lent manager, or releases the kept one; returns what happened
+string sub lease(HttpClientConnectionManager mgr, string url, string what) {
+    try {
+        if (what == \"release\") {
+            mgr.releaseConnection(kept.getConnection());
+        } else {
+            mgr.leaseConnection(url);
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! True if the view worked during the borrower's request
+bool sub viewDuringRequest() {
+    return during;
+}
+#! the ID of the kept connection
+int sub connId() {
+    return conn.getConnectionId();
+}
+#! acts on the kept connection after the borrower's request ended; returns what happened
+string sub act(string what) {
+    try {
+        switch (what) {
+            case \"close\": conn.close(); break;
+            case \"cancel\": conn.cancelRequest(1); break;
+            case \"cancel3\": conn.cancelRequest(3); break;
+            case \"direct\": kept.getConnection().close(); break;
+            default: throw \"UNKNOWN\", what;
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! answers each request with 200; a request for /hold waits until the test releases it
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue held();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.url.path == "hold") {
+            held.push(True);
+            release.get(HangGuard);
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok " + cx.url.path};
+    }
+}
+
+class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("lent manager: the borrower acts on a connection for its own request only", "1.0",
+            \ARGV) {
+        addTestCase("HTTP/1.1: closing or changing the pool state of the kept connection", \h1Test());
+        addTestCase("HTTP/2: closing, cancelling and changing the pool state of the kept connection", \h2Test());
+        addTestCase("the code that owns the manager acts on its connections", \ownerTest());
+        set_return_value(main());
+    }
+
+    #! returns a server, its handler and its URL
+    private hash<auto> startServer(bool tls) {
+        HoldHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("hold", handler);
+        int port = tls
+            ? server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "http_version": "2.0",
+            }).port
+            : server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "handler": handler,
+            "port": port,
+            "url": sprintf("%s://127.0.0.1:%d", tls ? "https" : "http", port),
+        };
+    }
+
+    #! a manager that the host creates and lends
+    private HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "max_request_retries": 0,
+            "request_timeout": HangGuard,
+        });
+    }
+
+    #! a sandboxed borrower that may reach the server
+    private Program getBorrower(int port) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        sm.addNetworkAllowedPort(port);
+        p.setSandboxManager(sm);
+        p.parse(BorrowerCode, "borrower");
+        return p;
+    }
+
+    #! a request of the host; returns the status code, the ID of its connection and the body
+    private list<auto> hostRequest(HttpClientConnectionManager mgr, string url, string path) {
+        HttpClientStreamHandle sh = mgr.acquireStream(url);
+        hash<auto> r = sh.submitAsync("GET", path);
+        hash<auto> resp = r.future.get(HangGuard);
+        return (resp.status_code, sh.getConnection().getConnectionId(), resp.body);
+    }
+
+    #! the host's request /hold is held by the server while the borrower acts on its kept connection
+    /** @return the result of the host's request: (status, connection ID, body), or the error
+    */
+    private auto actWhileHostRequestHeld(hash<auto> srv, HttpClientConnectionManager mgr, Program p, string what,
+            reference<string> result) {
+        Queue done();
+        background sub () {
+            try {
+                done.push(hostRequest(mgr, srv.url, "/hold"));
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        }();
+        # the server has the host's request, or the request ended without reaching it
+        if (!srv.handler.held.get(HangGuard)) {
+            fail(sprintf("the host's request did not reach the server: %y", done.get(0)));
+        }
+        on_exit srv.handler.release.push(True);
+        result = p.callFunction("act", what);
+        srv.handler.release.push(True);
+        return done.get(HangGuard);
+    }
+
+    private scopeTest(bool tls, string protocol, softlist<string> actions) {
+        foreach string what in (actions) {
+            hash<auto> srv = startServer(tls);
+            on_exit srv.server.stop();
+            HttpClientConnectionManager mgr = getManager(protocol);
+            on_exit mgr.closeAll();
+            Program p = getBorrower(srv.port);
+
+            assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+            assertTrue(p.callFunction("viewDuringRequest"), protocol + ": the view works during the request");
+            assertEq("PERMISSION-DENIED", p.callFunction("lease", mgr, srv.url, "lease"),
+                protocol + ": the borrower leases no connection");
+            assertEq("PERMISSION-DENIED", p.callFunction("lease", mgr, srv.url, "release"),
+                protocol + ": the borrower releases no connection");
+            int borrowed = p.callFunction("connId");
+            # the host's request reuses the connection
+            string result;
+            auto r = actWhileHostRequestHeld(srv, mgr, p, what, \result);
+            assertTrue(r.typeCode() == NT_LIST,
+                sprintf("%s %s: the host's request completes (%y)", protocol, what, r));
+            if (r.typeCode() == NT_LIST) {
+                assertEq(200, r[0], sprintf("%s %s: the host's request", protocol, what));
+                assertEq("ok hold", r[2], sprintf("%s %s: the host's response", protocol, what));
+                assertEq(borrowed, r[1], sprintf("%s %s: the host's request used the kept connection", protocol, what));
+            }
+            assertEq("PERMISSION-DENIED", result, sprintf("%s %s: the borrower's call is refused", protocol, what));
+            # the pool still hands the connection out
+            list<auto> after = hostRequest(mgr, srv.url, "/after");
+            assertEq(200, after[0], sprintf("%s %s: the host's request after the borrower's call", protocol, what));
+        }
+    }
+
+    h1Test() {
+        scopeTest(False, "h1", ("close", "direct"));
+    }
+
+    h2Test() {
+        scopeTest(True, "h2", ("close", "cancel", "cancel3", "direct"));
+    }
+
+    ownerTest() {
+        foreach hash<auto> c in ({"tls": False, "protocol": "h1"}, {"tls": True, "protocol": "h2"}) {
+            hash<auto> srv = startServer(c.tls);
+            on_exit srv.server.stop();
+            # the code that owns the manager is not restricted
+            HttpClientConnectionManager mgr = getManager(c.protocol);
+            on_exit mgr.closeAll();
+            HttpClientStreamHandle sh = mgr.acquireStream(srv.url);
+            hash<auto> r = sh.submitAsync("GET", "/ok");
+            assertEq(200, r.future.get(HangGuard).status_code, c.protocol + ": the host's request");
+            # the view of the code that owns the manager is never ended
+            HttpClientConnectionView view = sh.getConnectionView();
+            assertTrue(view.isActive(), c.protocol + ": the owner's view is active after its request");
+            assertTrue(view.isReady(), c.protocol + ": the owner's view works after its request");
+            # the owner leases and releases a connection
+            HttpClientConnection leased = mgr.leaseConnection(srv.url);
+            mgr.releaseConnection(leased);
+            HttpClientConnection conn = sh.getConnection();
+            conn.close();
+            assertEq(200, hostRequest(mgr, srv.url, "/again")[0], c.protocol + ": the owner closed its connection");
+        }
+    }
+}

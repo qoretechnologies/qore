@@ -16,8 +16,8 @@
           "message": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
-          "message": "Read YAML Document File"
+          "source": "Read YAML document file",
+          "message": "Read YAML document file"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.short_desc": {
           "source": "Read YAML document data from a specific file location",
@@ -112,8 +112,8 @@
           "message": "Latin-1 encoding"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
-          "message": "Read YAML Inline Data"
+          "source": "Read YAML inline data",
+          "message": "Read YAML inline data"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.short_desc": {
           "source": "Read YAML inline data",
@@ -208,8 +208,8 @@
           "message": "Latin-1 encoding"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
-          "message": "Write YAML Document File"
+          "source": "Write YAML document file",
+          "message": "Write YAML document file"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.short_desc": {
           "source": "Write YAML document data to a specific file location",
@@ -316,8 +316,8 @@
           "message": "Block style: indented format (default)"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
-          "message": "Write YAML Inline Data"
+          "source": "Write YAML inline data",
+          "message": "Write YAML inline data"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
           "source": "Generate YAML document data from records",

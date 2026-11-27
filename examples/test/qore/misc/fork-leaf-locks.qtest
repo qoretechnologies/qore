@@ -33,6 +33,10 @@ class ForkLeafLocksTest inherits QUnit::Test {
         addTestCase("fork() while another thread holds the lock of the thread finish debug hold",
             \testThreadFinishHold());
         addTestCase("fork() while another thread holds the class data locks", \testClassDataLocks());
+        addTestCase("fork() while another thread holds the lock of the secret key of the keyed hashes",
+            \testHashProcessKey());
+        addTestCase("fork() while another thread holds the lock of the debug registry of keyed hash sites",
+            \testKeyedHashSites());
         addTestCase("a child constructs an object with the copied handle of a class whose data lock another thread "
             "held at fork()", \testClassCopyConstruction());
         set_return_value(main());
@@ -49,6 +53,16 @@ class ForkLeafLocksTest inherits QUnit::Test {
     testExitHooks() {
         # the lock is held while a system thread is reserved; a child that inherited it held would hang at its end
         forkWhileHeld("exit_hooks");
+    }
+
+    testHashProcessKey() {
+        # the lock is held while the secret key of the keyed hashes is created (qore#7750)
+        forkWhileHeld("hash_process_key");
+    }
+
+    testKeyedHashSites() {
+        # the lock is held while a container with a keyed hash records its site (debug builds, qore#7750)
+        forkWhileHeld("dbg_keyed_hash_sites");
     }
 
     testThreadStartHold() {

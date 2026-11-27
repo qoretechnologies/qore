@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "建立記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Salesforce 資料表的名稱 (亦稱為 \"sobject\")，例如：`Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "尋找單筆記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Salesforce 資料表的名稱 (亦稱為 \"sobject\")，例如：`Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "尋找相符記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Salesforce 資料表的名稱 (亦稱為 \"sobject\")，例如：`Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "更新記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Salesforce 資料表的名稱 (亦稱為 \"sobject\")，例如：`Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "更新或插入記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Salesforce 資料表的名稱 (亦稱為 \"sobject\")，例如：`Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "刪除記錄"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {

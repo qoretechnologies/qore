@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JsonSchemaLargeObject.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A hash with many members is converted for JSON schema validation in time proportional to n log n: the members are
+# collected and the object is built in one step, not inserted one by one into the object's sorted members, which took
+# time quadratic in their number (qoretechnologies/qore#7754)
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+
+%exec-class JsonSchemaLargeObjectTest
+
+class JsonSchemaLargeObjectTest inherits QUnit::Test {
+    public {
+        #! the members of the small object of the growth check
+        const Small = 12500;
+        #! the members of the large object of the growth check: 8 times as many
+        const Large = Small * 8;
+    }
+
+    constructor() : QUnit::Test("JsonSchemaLargeObject", "1.0", \ARGV) {
+        addTestCase("a large object is converted whole", \testLargeObject());
+        addTestCase("a large schema object is converted whole", \testLargeSchema());
+        addTestCase("the validation of a large object grows as n log n", \testGrowth());
+        set_return_value(main());
+    }
+
+    #! returns a hash of @p n members whose keys are in descending order, the worst order for inserting them one by
+    #! one into sorted members; the value of each member is its index
+    static hash<auto> makeHash(int n, string prefix = "k") {
+        hash<auto> h;
+        for (int i = n; i > 0; --i) {
+            h{sprintf("%s%09d", prefix, i)} = i;
+        }
+        return h;
+    }
+
+    testLargeObject() {
+        hash<auto> data = makeHash(Large);
+        JsonSchema v({
+            "type": "object",
+            "additionalProperties": {"type": "integer", "minimum": 1},
+            "minProperties": Large,
+            "maxProperties": Large,
+            "required": ("k000000001", sprintf("k%09d", Large)),
+        });
+        assertTrue(v.validate(data), "every member is converted");
+
+        # the member that sorts first and the one that sorts last are converted with their values
+        hash<auto> bad = data + {"k000000001": "x"};
+        assertFalse(v.validate(bad), "the value of the first member in sorted order is checked");
+        bad = data + {sprintf("k%09d", Large): -1};
+        assertFalse(v.validate(bad), "the value of the last member in sorted order is checked");
+
+        # one member more or less is seen
+        assertFalse(v.validate(data + {"z": 1}), "one member more");
+        hash<auto> fewer = data - "k000000002";
+        assertFalse(v.validate(fewer), "one member less");
+    }
+
+    testLargeSchema() {
+        # a schema whose properties have many members, each with its own constraint
+        hash<auto> props;
+        for (int i = Large; i > 0; --i) {
+            props{sprintf("p%09d", i)} = {"type": "integer", "const": i};
+        }
+        JsonSchema v({
+            "type": "object",
+            "properties": props,
+            "additionalProperties": False,
+        });
+        hash<auto> data = makeHash(Large, "p");
+        assertTrue(v.validate(data), "each property's constraint applies to its member");
+        data."p000000001" = 2;
+        assertFalse(v.validate(data), "the constraint of the first property in sorted order is checked");
+        data."p000000001" = 1;
+        data{sprintf("p%09d", Large)} = 1;
+        assertFalse(v.validate(data), "the constraint of the last property in sorted order is checked");
+    }
+
+    #! the time of the validation of 8 times as many members, which is the conversion of the data and a linear pass
+    #! over it, grows by far less than 64 times, which a quadratic conversion takes (n log n: about 9 times); the best
+    #! of several runs is taken to keep the load of the host out of the check
+    testGrowth() {
+        JsonSchema v({"type": "object", "additionalProperties": {"type": "integer"}});
+        hash<auto> small = makeHash(Small);
+        hash<auto> large = makeHash(Large);
+        int small_us = bestTime(v, small, 5);
+        int large_us = bestTime(v, large, 3);
+        # a small time is no less than 1 us, so that the ratio is defined
+        float ratio = large_us.toFloat() / (small_us ?: 1);
+        assertLt(32.0, ratio, sprintf("8 times as many members took %.1f times as long (%d us, %d us)", ratio,
+            small_us, large_us));
+    }
+
+    #! returns the least time of @p runs validations of @p data, in microseconds
+    private int bestTime(JsonSchema v, hash<auto> data, int runs) {
+        *int best;
+        for (int i = 0; i < runs; ++i) {
+            date start = now_us();
+            assertTrue(v.validate(data));
+            int us = get_duration_microseconds(now_us() - start);
+            if (!exists best || us < best) {
+                best = us;
+            }
+        }
+        return best;
+    }
+}

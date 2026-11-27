@@ -80,7 +80,7 @@ module UnstructuredDataProvider {
             "app": UnstructuredDataProvider::AppName,
             "path": "/partition-file",
             "action": "partition-file",
-            "display_name": "Partition Document",
+            "display_name": "Partition document",
             "short_desc": "Partition a document file into a typed element tree",
             "desc": "Submits a document to [Unstructured.io](https://unstructured.io) and "
                 "returns it as a list of typed elements — `Title`, `NarrativeText`, "
@@ -117,7 +117,7 @@ module UnstructuredDataProvider {
             "app": UnstructuredDataProvider::AppName,
             "path": "/partition-text",
             "action": "partition-text",
-            "display_name": "Partition Text",
+            "display_name": "Partition text",
             "short_desc": "Partition raw text into a typed element tree",
             "desc": "Submits text to [Unstructured.io](https://unstructured.io) and returns it "
                 "as a list of typed elements — `Title`, `NarrativeText`, `ListItem`, `Table` "
@@ -163,7 +163,7 @@ module UnstructuredDataProvider {
                 "path": "/" + UnstructuredPlatformDataProvider::ProviderName + "/"
                     + UnstructuredConnectorFieldsDataProvider::ProviderName,
                 "action": "get-connector-fields",
-                "display_name": "Get Connector Configuration Fields",
+                "display_name": "Get connector configuration fields",
                 "short_desc": "List the settings a connector type needs",
                 "desc": "Lists the configuration fields a given connector type accepts, so that a "
                     "connector can be created without guessing at its `config` hash.\n\n"
@@ -191,7 +191,7 @@ module UnstructuredDataProvider {
                     + UnstructuredPlatformDataProvider::EventsChildName + "/"
                     + UnstructuredJobWatchDataProvider::ProviderName,
                 "action": "job-finished",
-                "display_name": "Job Finished",
+                "display_name": "Job finished",
                 "short_desc": "Fires when a workflow run reaches a terminal status",
                 "desc": "Fires once for each workflow run that finishes, whether it succeeded, failed, "
                     "was stopped or was rejected.\n\n"

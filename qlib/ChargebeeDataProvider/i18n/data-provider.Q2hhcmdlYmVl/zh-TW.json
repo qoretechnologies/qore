@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
-          "source": "Find Customers",
+          "source": "Find customers",
           "message": "尋找顧客"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
@@ -404,7 +404,7 @@
           "message": "依姓氏篩選客戶"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -424,7 +424,7 @@
           "message": "客戶 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "建立客戶"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -460,7 +460,7 @@
           "message": "客戶姓氏"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "客戶名字"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "刪除客戶"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -516,7 +516,7 @@
           "message": "要刪除的客戶"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "Find Subscriptions",
+          "source": "Find subscriptions",
           "message": "尋找訂閱"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "依所屬客戶篩選訂閱"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "取得訂閱"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
@@ -600,7 +600,7 @@
           "message": "訂閱 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Subscription",
+          "source": "Create subscription",
           "message": "建立訂閱"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -620,7 +620,7 @@
           "message": "訂閱的客戶"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Update Subscription",
+          "source": "Update subscription",
           "message": "更新訂閱"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -640,7 +640,7 @@
           "message": "要更新的訂閱"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Delete Subscription",
+          "source": "Delete subscription",
           "message": "刪除訂閱"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -660,7 +660,7 @@
           "message": "要刪除的訂閱"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
-          "source": "Find Invoices",
+          "source": "Find invoices",
           "message": "尋找發票"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
@@ -708,7 +708,7 @@
           "message": "等待中"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "取得發票"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -728,7 +728,7 @@
           "message": "發票 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "建立發票"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "發票的客戶"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "更新發票"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "要更新的發票"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "刪除發票"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -788,7 +788,7 @@
           "message": "要刪除的發票"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
-          "source": "Collect Invoice Payment",
+          "source": "Collect invoice payment",
           "message": "收取發票款項"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "以分為單位的付款金額"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
-          "source": "Record Invoice Payment",
+          "source": "Record invoice payment",
           "message": "記錄發票付款"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "以分為單位的付款金額"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
-          "source": "Refund Invoice",
+          "source": "Refund invoice",
           "message": "發票退款"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
@@ -872,7 +872,7 @@
           "message": "退款金額 (以分為單位)"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
-          "source": "Get Invoice Link",
+          "source": "Get invoice link",
           "message": "取得發票連結"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
@@ -892,7 +892,7 @@
           "message": "要取得 PDF 連結的發票"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
-          "source": "Find Coupons",
+          "source": "Find coupons",
           "message": "尋找優惠券"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
@@ -960,7 +960,7 @@
           "message": "優惠數量"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "取得優惠券"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "優惠券 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "建立優惠券"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "有限期限"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "更新優惠券"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "優惠券顯示名稱"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "刪除優惠券"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "要刪除的優惠券"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
-          "source": "Find Promotional Credits",
+          "source": "Find promotional credits",
           "message": "尋找促銷額度"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "設定"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Get Promotional Credit",
+          "source": "Get promotional credit",
           "message": "取得促銷額度"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "促銷額度 ID"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Add Promotional Credit",
+          "source": "Add promotional credit",
           "message": "新增推廣額度"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "額度的貨幣"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Deduct Promotional Credit",
+          "source": "Deduct promotional credit",
           "message": "扣除促銷額度"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "額度的貨幣"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Set Promotional Credit",
+          "source": "Set promotional credit",
           "message": "設定促銷點數"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "額度的貨幣"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "取得交易"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "要擷取的交易"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "已建立客戶"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "當 Chargebee 中建立新客戶時觸發。提供客戶事件詳細資訊。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
-          "source": "Any Event (Instant)",
+          "source": "Any event (instant)",
           "message": "任何事件 (即時)"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "在 Chargebee 發生任何事件時觸發。提供所有事件類型的完整事件詳細資訊。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
-          "source": "Invoice Generated",
+          "source": "Invoice generated",
           "message": "已產生發票"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "當 Chargebee 中產生新發票時觸發。提供發票事件詳細資訊。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "訂閱已建立"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {

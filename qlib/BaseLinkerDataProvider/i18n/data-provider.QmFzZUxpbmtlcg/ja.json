@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "注文の一覧取得"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "`getOrders`経由でBaseLinkerの注文ストリームを返します。`id_from`/`date_from`によるカーソルページネーションをサポートし、ステータス、メールアドレス、ソースチャネルによるフィルタリングが可能です。ページサイズはBaseLinkerにより1回の呼び出しあたり100件の注文に固定されています。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "注文を取得"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
@@ -372,7 +372,7 @@
           "message": "BaseLinker 注文識別子"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
-          "source": "Add Order",
+          "source": "Add order",
           "message": "注文を追加"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
@@ -928,7 +928,7 @@
           "message": "1ユニットあたりの重量（キログラム）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
-          "source": "Set Order Fields",
+          "source": "Set order fields",
           "message": "注文フィールドの設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "星5つ"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Set Order Status",
+          "source": "Set order status",
           "message": "注文ステータスを設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "新しい注文ステータス識別子。`list-order-statuses` を参照してください。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
-          "source": "Set Order Payment",
+          "source": "Set order payment",
           "message": "注文支払いの設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "決済ゲートウェイによって割り当てられた識別子"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "注文の削除"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "削除する BaseLinker 注文 ID の配列（1回の呼び出しにつき最大1000件）。"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Add Order Product",
+          "source": "Add order product",
           "message": "注文商品を追加"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "マーケットプレイスのオークションまたは出品ID（eBay、Allegro、Amazonなど）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
-          "source": "Set Order Product Fields",
+          "source": "Set order product fields",
           "message": "注文製品フィールドの設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "マーケットプレイスのオークションまたは出品ID（eBay、Allegro、Amazonなど）。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Delete Order Product",
+          "source": "Delete order product",
           "message": "注文商品の削除"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "削除する明細行識別子"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
-          "source": "List Order Returns",
+          "source": "List order returns",
           "message": "返品注文の一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "`getOrderReturns` を介して BaseLinker 返品注文のストリームを返します。`id_from` によるカーソルページネーション、およびステータスと確認日による絞り込みをサポートします。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
-          "source": "Get Order Return",
+          "source": "Get order return",
           "message": "返品注文の取得"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "BaseLinker 返品注文識別子"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
-          "source": "Add Order Return",
+          "source": "Add order return",
           "message": "注文返品の追加"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "1ユニットあたりの重量（キログラム）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
-          "source": "Set Order Return Fields",
+          "source": "Set order return fields",
           "message": "注文返品フィールドの設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "BaseLinkerで設定されたカスタム注文返品追加フィールドの `{\"<extra_field_id>\": <value>}` のマップ。テキストフィールドは文字列を受け入れ、ファイルフィールドはBase64エンコードされたファイルが2 MB以下である必要がある `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` ハッシュを受け入れます。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
-          "source": "Set Order Return Status",
+          "source": "Set order return status",
           "message": "注文返品ステータスを設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "対象の返品ステータス識別子。値は BaseLinker の `getOrderReturnStatusList` エンドポイントから取得され、`order_return_statuses` 参照データを介して表示されます。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
-          "source": "Set Order Return Refund",
+          "source": "Set order return refund",
           "message": "注文返品返金の設定"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "返金プロバイダーによって割り当てられた識別子"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
-          "source": "List Inventories",
+          "source": "List inventories",
           "message": "在庫の一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "`getInventories` を介してすべての BaseLinker 在庫（カタログ）を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
-          "source": "List Inventory Products",
+          "source": "List inventory products",
           "message": "在庫商品の一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "`getInventoryProductsList` を介して BaseLinker 在庫内の商品を一覧表示します。ページ番号によるページネーション、およびカテゴリー、EAN、SKU、名前、価格帯、在庫範囲による絞り込みをサポートします。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Get Inventory Product",
+          "source": "Get inventory product",
           "message": "在庫商品の取得"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "BaseLinker 在庫商品識別子"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Add / Update Inventory Product",
+          "source": "Add / update inventory product",
           "message": "インベントリ商品の追加/更新"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "各キーがこのバンドルに含まれる商品の識別子であり、値が個数である `{\"<product_id>\": <quantity>}` のマップ。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Delete Inventory Product",
+          "source": "Delete inventory product",
           "message": "在庫商品の削除"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "削除する商品"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
-          "source": "List Inventory Stock",
+          "source": "List inventory stock",
           "message": "商品在庫レベルの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "`getInventoryProductsStock` を介して BaseLinker の在庫商品在庫レベルを一覧表示します。各行には、倉庫 → 数量の `product_id` キー付きハッシュが含まれます。"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
-          "source": "Update Inventory Stock",
+          "source": "Update inventory stock",
           "message": "在庫数を更新"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "`{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}` 形式のネストされたマップ。バリエーションのない商品の場合は、商品IDを内部キーのプレフィックスとして使用します（例: `0|bl_123`）。1回の呼び出しにつき最大1000商品まで。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
-          "source": "List Inventory Prices",
+          "source": "List inventory prices",
           "message": "在庫商品価格の一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "`getInventoryProductsPrices` を介して BaseLinker の在庫商品価格を一覧表示します。各行には、価格グループ → 価格の `product_id` キー付きハッシュが含まれます。"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
-          "source": "Update Inventory Prices",
+          "source": "Update inventory prices",
           "message": "在庫価格を更新"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "`{\"<product_id>\": {\"<price_group_id>\": <price>}}` 形式のネストされたマップ。1回の呼び出しにつき最大1000商品まで。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
-          "source": "List Inventory Manufacturers",
+          "source": "List inventory manufacturers",
           "message": "在庫メーカーの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "`getInventoryManufacturers` を介して BaseLinker の在庫メーカーを一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
-          "source": "List Inventory Categories",
+          "source": "List inventory categories",
           "message": "在庫カテゴリーの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
@@ -3124,7 +3124,7 @@
           "message": "`getInventoryCategories` を介して BaseLinker の在庫カテゴリーを一覧表示します。`inventory_id` が指定されている場合、結果はそのカタログに対象が絞り込まれます。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
-          "source": "List Order Packages",
+          "source": "List order packages",
           "message": "注文荷物の一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
@@ -3136,7 +3136,7 @@
           "message": "`getOrderPackages` を介して BaseLinker 注文に関連付けられた配送業者パッケージ（出荷）を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
-          "source": "Add Courier Package",
+          "source": "Add courier package",
           "message": "配送業者パッケージを追加"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "小包の幅"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
-          "source": "Get Courier Label",
+          "source": "Get courier label",
           "message": "クーリエラベルの取得"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "配送業者から割り当てられた追跡/パッケージ番号。これまたは `package_id` のいずれかを指定してください。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
-          "source": "Delete Courier Package",
+          "source": "Delete courier package",
           "message": "クーリエパッケージの削除"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "`True` の場合、配送業者がキャンセルを拒否しても BaseLinker からパッケージを削除します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "配送業者を一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "`getCouriersList` を介してこの BaseLinker アカウントに設定されている配送業者を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
-          "source": "List Courier Services",
+          "source": "List courier services",
           "message": "配送業者サービスの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "`getCourierServices` を介して指定された配送業者の利用可能なサービス（製品/階層オプション）を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Courier Accounts",
+          "source": "List courier accounts",
           "message": "配送業者アカウントの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "`getCourierAccounts` を介して指定された配送業者に設定されている配送業者アカウントの認証情報を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
-          "source": "List Courier Fields",
+          "source": "List courier fields",
           "message": "配送業者フィールドの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "`getCourierFields` を介して指定された配送業者のカスタムフィールドスキーマ（必須/オプションの入力項目）を一覧表示します。`createPackage` ペイロードをプログラムで構築する際に役立ちます。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
-          "source": "List Order Statuses",
+          "source": "List order statuses",
           "message": "注文ステータスの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
@@ -3432,7 +3432,7 @@
           "message": "`getOrderStatusList`経由でBaseLinkerに設定されている注文ステータスを一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
-          "source": "List Order Sources",
+          "source": "List order sources",
           "message": "注文ソースの一覧表示"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
@@ -3444,7 +3444,7 @@
           "message": "`getOrderSources`経由でBaseLinkerに設定されている注文ソース（マーケットプレイス/ショップ）を一覧表示します。"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "注文が作成されたとき"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "BaseLinker で新しい注文が作成されたときに発火します。（`getJournalList` `log_type` 1 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
-          "source": "Order Downloaded",
+          "source": "Order downloaded",
           "message": "注文のダウンロード"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "接続されたショップから注文がダウンロードされたときに発火します。（`getJournalList` `log_type` 2 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
-          "source": "Order Paid",
+          "source": "Order paid",
           "message": "注文の支払い完了"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "注文が支払い済みとしてマークされたときにトリガーされます。(`getJournalList` `log_type` 3 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
-          "source": "Order Removed",
+          "source": "Order removed",
           "message": "注文の削除"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
@@ -3492,7 +3492,7 @@
           "message": "注文が削除されたときにトリガーされます。(`getJournalList` `log_type` 4 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
-          "source": "Orders Merged",
+          "source": "Orders merged",
           "message": "注文の統合"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
@@ -3504,7 +3504,7 @@
           "message": "複数の注文が統合されたときにトリガーされます。(`getJournalList` `log_type` 5 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
-          "source": "Order Split",
+          "source": "Order split",
           "message": "注文の分割"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
@@ -3516,7 +3516,7 @@
           "message": "注文が分割されたときにトリガーされます。(`getJournalList` `log_type` 6 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
-          "source": "Invoice Issued",
+          "source": "Invoice issued",
           "message": "請求書発行時"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
@@ -3528,7 +3528,7 @@
           "message": "請求書が発行されたときに発火します。（`getJournalList` `log_type` 7 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
-          "source": "Receipt Issued",
+          "source": "Receipt issued",
           "message": "領収書発行時"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "領収書が発行されたときにトリガーされます。(`getJournalList` `log_type` 8 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
-          "source": "Package Created",
+          "source": "Package created",
           "message": "パッケージ作成時"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "宅配便パッケージが作成されたときにトリガーされます。(`getJournalList` `log_type` 9 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
-          "source": "Package Deleted",
+          "source": "Package deleted",
           "message": "パッケージ削除時"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "宅配便パッケージが削除されたときにトリガーされます。(`getJournalList` `log_type` 10 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Delivery Data Edited",
+          "source": "Delivery data edited",
           "message": "配送データ編集時"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "注文の配送データが編集されたときに発火します。（`getJournalList` `log_type` 11 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
-          "source": "Order Product Added",
+          "source": "Order product added",
           "message": "注文商品の追加"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "注文に商品が追加されたときにトリガーされます。(`getJournalList` `log_type` 12 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
-          "source": "Order Product Edited",
+          "source": "Order product edited",
           "message": "注文商品の編集"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "注文の商品明細が編集されたときにトリガーされます。(`getJournalList` `log_type` 13 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
-          "source": "Order Product Removed",
+          "source": "Order product removed",
           "message": "注文商品の削除"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
@@ -3612,7 +3612,7 @@
           "message": "注文から商品明細が削除されたときにトリガーされます。(`getJournalList` `log_type` 14 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
-          "source": "Blacklist Entry Added",
+          "source": "Blacklist entry added",
           "message": "ブラックリストエントリが追加されました"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "購入者がブラックリストに追加されたときにトリガーされます。（`getJournalList` `log_type` 15 からポーリング。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Order Data Edited",
+          "source": "Order data edited",
           "message": "注文データの編集"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3636,7 +3636,7 @@
           "message": "注文の一般データが編集されたときにトリガーされます。(`getJournalList` `log_type` 16 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
-          "source": "Order Copied",
+          "source": "Order copied",
           "message": "注文コピー時"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "注文がコピーされたときに発火します。（`getJournalList` `log_type` 17 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Order Status Changed",
+          "source": "Order status changed",
           "message": "注文ステータスの変更"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
@@ -3660,7 +3660,7 @@
           "message": "注文のステータスが変更されたときにトリガーされます。(`getJournalList` `log_type` 18 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
-          "source": "Invoice Deleted",
+          "source": "Invoice deleted",
           "message": "請求書削除時"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "請求書が削除されたときに発火します。（`getJournalList` `log_type` 19 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
-          "source": "Receipt Deleted",
+          "source": "Receipt deleted",
           "message": "領収書削除時"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
@@ -3684,7 +3684,7 @@
           "message": "領収書が削除されたときにトリガーされます。(`getJournalList` `log_type` 20 からポーリング)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
-          "source": "Invoice Edited",
+          "source": "Invoice edited",
           "message": "請求書編集時"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "請求書が編集されたときに発火します。（`getJournalList` `log_type` 21 からポーリング）"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
-          "source": "Package Status Changed",
+          "source": "Package status changed",
           "message": "パッケージステータス変更時"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {

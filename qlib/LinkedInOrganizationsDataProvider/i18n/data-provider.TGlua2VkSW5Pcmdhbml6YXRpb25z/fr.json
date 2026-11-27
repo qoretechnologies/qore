@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
-          "source": "Get Current Member",
+          "source": "Get current member",
           "message": "Obtenir le membre actuel"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Récupère le profil du membre dont cette connexion porte l'autorisation.\n\nUtile pour confirmer à quel compte une connexion est liée ; les organisations que ce compte administre sont celles auxquelles toutes les autres actions peuvent accéder."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Lister les organisations"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Liste les organisations administrées par le membre authentifié, avec le nom, la description, le logo, la taille, les secteurs d'activité et l'URL de la page de chacune d'elles.\n\nLe `id` d'une organisation ici correspond à ce que chaque autre action accepte, et l'URN `organizational_page` correspond à ce qu'adressent les API d'analytique et d'abonnements de LinkedIn."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "Obtenir l'organisation"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -388,7 +388,7 @@
           "message": "L'organisation dont les données sont lues. La liste propose les organisations administrées par le membre authentifié"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "Lister les publications"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
@@ -472,7 +472,7 @@
           "message": "La dernière version, qui peut être un brouillon ou une publication programmée ; une publication programmée est identifiée par son champ `scheduled_at` renseigné"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Obtenir la publication"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "La dernière version, qui peut être un brouillon ou une publication programmée ; une publication programmée est identifiée par son champ `scheduled_at` renseigné"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "Lister les commentaires"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Le `cursor` renvoyé par un appel précédent, pour récupérer la page suivante. Laissez-le non défini pour commencer au début"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
-          "source": "List Reactions",
+          "source": "List reactions",
           "message": "Lister les réactions"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Le `cursor` renvoyé par un appel précédent, pour récupérer la page suivante. Laissez-le non défini pour commencer au début"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Engagement Summary",
+          "source": "Get engagement summary",
           "message": "Obtenir le résumé de l'engagement"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Les URN du contenu à résumer : publications, activités ou commentaires. Plusieurs peuvent être fournis à la fois, ce qui est bien plus économique qu'un appel pour chacun"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
-          "source": "List Followers",
+          "source": "List followers",
           "message": "Lister les abonnés"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Le `cursor` renvoyé par un appel précédent, pour récupérer la page suivante. Laissez-le non défini pour commencer au début"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
-          "source": "List Following",
+          "source": "List following",
           "message": "Lister les abonnements"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Le `cursor` renvoyé par un appel précédent, pour récupérer la page suivante. Laissez-le non défini pour commencer au début"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Follower Statistics",
+          "source": "Get follower statistics",
           "message": "Obtenir les statistiques des abonnés"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Ventiler par relation du membre avec l'organisation, ce qui distingue les employés de tous les autres"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
-          "source": "Get Visitor Statistics",
+          "source": "Get visitor statistics",
           "message": "Obtenir les statistiques des visiteurs"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "L'onglet personnes de la page"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "Nouvelle publication"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {

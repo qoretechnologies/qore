@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "メッセージの検索"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "リスト内の特定の結果ページを取得するためのページトークン"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "メッセージの取得"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "取得するメッセージの ID"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "添付ファイルの取得"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "取得する添付ファイルのID"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "新しいメール"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "1回のポーリングサイクルで配信されるメッセージの最大数。未設定または `0` の場合は無制限を意味します。\n\n制限はバックログの**最も古い**方から適用されるため、監視カーソルは連続して進み、残りのメッセージはスキップされずに後続のサイクルで配信されます。大量のバックログが蓄積する可能性がある場合に、単一のサイクルが実行できる作業量を制限するために使用します"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "新しいメールの添付ファイル"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "1回のポーリングサイクルで配信されるメッセージの最大数。未設定または `0` の場合は無制限を意味します。\n\n制限はバックログの**最も古い**方から適用されるため、監視カーソルは連続して進み、残りのメッセージはスキップされずに後続のサイクルで配信されます。大量のバックログが蓄積する可能性がある場合に、単一のサイクルが実行できる作業量を制限するために使用します"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "メッセージをゴミ箱に移動"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "ゴミ箱に移動するメッセージのID。監視イベントはこの値を `message_id` として保持します"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "メッセージを削除"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -852,7 +852,7 @@
           "message": "完全に削除するメッセージのID。ウォッチイベントはこの値を `message_id` として渡します"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "メッセージを送信"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "`References` ヘッダーの値。返信対象の会話に含まれるメッセージの `Message-ID` 値を、古い順にスペース区切りで山かっこを含めて指定します。設定されていない場合は `in_reply_to` が使用されます。監視イベントは元のメッセージの `References` ヘッダーを保持します"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "メタデータ付きでメッセージを検索"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "一致した各メッセージについて取得するメッセージヘッダー。`format` が `metadata` でない場合は無視されます"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "メッセージをゴミ箱から復元"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "ゴミ箱から復元するメッセージの ID。監視イベントはこの値を `message_id` として保持します"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "メッセージのラベルを変更"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "メッセージから削除するラベルの ID。ラベルは名前ではなく ID（例: `INBOX`、`UNREAD`、`Label_12`）で識別されます"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "ラベルの一覧"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "アカウント内のすべてのラベルを、Gmail のシステムラベル（`INBOX`、`UNREAD`、`STARRED` など）とユーザーが作成したラベルの両方について、`modify-message-labels` および検索オプション `labelIds` が受け取る ID とともに一覧表示します"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "ラベルを作成"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "このラベルの付いたメッセージをメッセージリストに表示しません"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "下書きを作成"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "`References` ヘッダーの値。返信対象の会話に含まれるメッセージの `Message-ID` 値を、古い順にスペース区切りで山かっこを含めて指定します。設定されていない場合は `in_reply_to` が使用されます。監視イベントは元のメッセージの `References` ヘッダーを保持します"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "下書きの検索"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "リスト内の特定の結果ページを取得するためのページトークン"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "下書きの取得"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "`raw` に base64url でエンコードされた MIME データとして格納された完全なメッセージ。本文は解析されません"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "下書きを送信"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "送信する下書きの ID。`list-drafts` と `create-draft` はこの値を `id` として返します"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "下書きを削除"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

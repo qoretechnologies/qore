@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "列出帳戶"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "傳送錯誤"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "建立帳戶"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -488,7 +488,7 @@
           "message": "作用中"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "取得帳戶"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -512,7 +512,7 @@
           "message": "要擷取的唯一帳戶 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.display_name": {
-          "source": "Patch Account",
+          "source": "Patch account",
           "message": "修補帳戶"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.short_desc": {
@@ -560,7 +560,7 @@
           "message": "要為此帳戶設定的自訂追蹤網域"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "刪除帳戶"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -584,7 +584,7 @@
           "message": "要刪除的帳戶唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.display_name": {
-          "source": "Pause Account",
+          "source": "Pause account",
           "message": "暫停帳戶"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.short_desc": {
@@ -608,7 +608,7 @@
           "message": "要暫停的帳戶唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.display_name": {
-          "source": "Resume Account",
+          "source": "Resume account",
           "message": "繼續帳戶"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.short_desc": {
@@ -632,7 +632,7 @@
           "message": "要繼續的唯一帳戶 UUID"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.display_name": {
-          "source": "Mark Account Fixed",
+          "source": "Mark account fixed",
           "message": "標記帳戶已修復"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.short_desc": {
@@ -656,7 +656,7 @@
           "message": "要標記為已修復的唯一帳戶 UUID"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.display_name": {
-          "source": "Test Account Vitals",
+          "source": "Test account vitals",
           "message": "測試帳戶健康指標"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.short_desc": {
@@ -680,7 +680,7 @@
           "message": "要測試健康指標的唯一帳戶 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.display_name": {
-          "source": "Get Warmup Analytics",
+          "source": "Get warmup analytics",
           "message": "獲取預熱分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.short_desc": {
@@ -704,7 +704,7 @@
           "message": "要獲取預熱分析的電子郵件地址清單 (1-100 個項目)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.display_name": {
-          "source": "Get Custom Tracking Domain Status",
+          "source": "Get custom tracking domain status",
           "message": "取得自訂追蹤網域狀態"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.short_desc": {
@@ -728,7 +728,7 @@
           "message": "要檢查狀態的選填自訂追蹤網域"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "列出行銷活動"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -796,7 +796,7 @@
           "message": "依名稱篩選行銷活動"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "建立廣告活動"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "如果 `True`，則此變體將不會用於發送；預設情況下所有變體均啟用"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "取得行銷活動"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "要擷取的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.display_name": {
-          "source": "Patch Campaign",
+          "source": "Patch campaign",
           "message": "修補行銷活動"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "更新後每日可傳送電子郵件的數量上限"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "刪除行銷活動"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "要刪除的行銷活動唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.display_name": {
-          "source": "Update Campaign Status",
+          "source": "Update campaign status",
           "message": "更新活動狀態"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "執行中的子序列"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.display_name": {
-          "source": "Share Campaign",
+          "source": "Share campaign",
           "message": "共用行銷活動"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "要為其產生共用連結的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Analytics",
+          "source": "Get campaign analytics",
           "message": "取得行銷活動分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "要擷取分析資料的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.display_name": {
-          "source": "Get Campaign Analytics Overview",
+          "source": "Get campaign analytics overview",
           "message": "取得行銷活動分析概覽"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "要擷取分析概覽的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Daily Analytics",
+          "source": "Get campaign daily analytics",
           "message": "獲取行銷活動每日分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "用於檢索每日分析的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.display_name": {
-          "source": "Get Campaign Step Analytics",
+          "source": "Get campaign step analytics",
           "message": "獲取行銷活動步驟分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "用於檢索步驟分析的唯一行銷活動 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.display_name": {
-          "source": "List Campaign Subsequences",
+          "source": "List campaign subsequences",
           "message": "列出行銷活動子序列"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Create Campaign Subsequence",
+          "source": "Create campaign subsequence",
           "message": "建立行銷活動子序列"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "要建立的子序列名稱"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Get Campaign Subsequence",
+          "source": "Get campaign subsequence",
           "message": "獲取行銷活動子序列"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "要檢索的唯一子序列 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.display_name": {
-          "source": "Patch Campaign Subsequence",
+          "source": "Patch campaign subsequence",
           "message": "修補行銷活動子序列"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "子序列的更新名稱"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Delete Campaign Subsequence",
+          "source": "Delete campaign subsequence",
           "message": "刪除行銷活動子序列"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "要刪除的子序列唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.display_name": {
-          "source": "Pause Subsequence",
+          "source": "Pause subsequence",
           "message": "暫停子序列"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "要暫停的子序列唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Resume Subsequence",
+          "source": "Resume subsequence",
           "message": "繼續子序列"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "要繼續的唯一子序列 UUID"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Duplicate Subsequence",
+          "source": "Duplicate subsequence",
           "message": "複製子序列"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "要複製的子序列唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "列出潛在客戶"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "建立潛在客戶"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "要將該潛在客戶新增至其中的潛在客戶清單 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "取得潛在客戶"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "要檢索的潛在客戶唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.display_name": {
-          "source": "Patch Lead",
+          "source": "Patch lead",
           "message": "修補潛在客戶"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "潛在客戶的網站 URL"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "刪除潛在客戶"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "要刪除的潛在客戶唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.display_name": {
-          "source": "Merge Leads",
+          "source": "Merge leads",
           "message": "合併潛在客戶"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "要合併的第二個潛在客戶唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.display_name": {
-          "source": "Move Leads",
+          "source": "Move leads",
           "message": "移動潛在客戶"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "要將潛在客戶移至之潛在客戶清單的 UUID"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Move Lead to Subsequence",
+          "source": "Move lead to subsequence",
           "message": "將潛在客戶移至子序列"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "目標子序列的唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.display_name": {
-          "source": "Remove Lead from Subsequence",
+          "source": "Remove lead from subsequence",
           "message": "從子序列中移除潛在客戶"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "要從中移除潛在客戶的子序列唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.display_name": {
-          "source": "Update Lead Interest Status",
+          "source": "Update lead interest status",
           "message": "更新潛在客戶意向狀態"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "對象錯誤"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.display_name": {
-          "source": "Bulk Assign Leads",
+          "source": "Bulk assign leads",
           "message": "批次指派潛在客戶"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "要指派潛在客戶的使用者 UUID 清單"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.display_name": {
-          "source": "Export Leads",
+          "source": "Export leads",
           "message": "匯出潛在客戶"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "匯出格式"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.display_name": {
-          "source": "List Lead Lists",
+          "source": "List lead lists",
           "message": "列出潛在客戶名單"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.short_desc": {
@@ -2196,7 +2196,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Create Lead List",
+          "source": "Create lead list",
           "message": "建立潛在客戶清單"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2220,7 +2220,7 @@
           "message": "要建立的潛在客戶清單名稱"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.display_name": {
-          "source": "Get Lead List",
+          "source": "Get lead list",
           "message": "獲取潛在客戶清單"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.short_desc": {
@@ -2244,7 +2244,7 @@
           "message": "要獲取的潛在客戶清單唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.display_name": {
-          "source": "Patch Lead List",
+          "source": "Patch lead list",
           "message": "修補潛在客戶清單"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "潛在客戶清單的新名稱"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Delete Lead List",
+          "source": "Delete lead list",
           "message": "刪除潛在客戶清單"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "要刪除的潛在客戶清單唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.display_name": {
-          "source": "List Lead Labels",
+          "source": "List lead labels",
           "message": "列出潛在客戶標籤"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "每頁傳回的結果數量上限 (1-100)"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Create Lead Label",
+          "source": "Create lead label",
           "message": "建立潛在客戶標籤"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "標籤的描述"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.display_name": {
-          "source": "Get Lead Label",
+          "source": "Get lead label",
           "message": "獲取潛在客戶標籤"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "要獲取的標籤唯一識別碼 (UUID)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.display_name": {
-          "source": "Patch Lead Label",
+          "source": "Patch lead label",
           "message": "修補潛在客戶標籤"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "標籤的描述"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Delete Lead Label",
+          "source": "Delete lead label",
           "message": "刪除潛在客戶標籤"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "刪除標籤時將潛在客戶和電子郵件重新指派到的意向狀態"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "列出電子郵件"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "取得電子郵件"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "要檢索的唯一電子郵件 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.display_name": {
-          "source": "Patch Email",
+          "source": "Patch email",
           "message": "修補電子郵件"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "電子郵件更新後的內文內容"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "刪除電子郵件"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "要刪除的電子郵件唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.display_name": {
-          "source": "Reply to Email",
+          "source": "Reply to email",
           "message": "回覆電子郵件"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.short_desc": {
@@ -2776,7 +2776,7 @@
           "message": "用於發送回覆的電子郵件地址"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.display_name": {
-          "source": "Count Unread Emails",
+          "source": "Count unread emails",
           "message": "計算未讀電子郵件數"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "取得收件匣中未讀電子郵件的數量。"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.display_name": {
-          "source": "Mark Thread as Read",
+          "source": "Mark thread as read",
           "message": "將會話串標記為已讀"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "用於將會話串標記為已讀的唯一電子郵件 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.display_name": {
-          "source": "Get Campaign for Email",
+          "source": "Get campaign for email",
           "message": "獲取電子郵件所屬行銷活動"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "用於獲取行銷活動的唯一電子郵件 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.display_name": {
-          "source": "List Block List",
+          "source": "List block list",
           "message": "列出封鎖清單"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Create Block List Entry",
+          "source": "Create block list entry",
           "message": "建立封鎖名單項目"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "要新增至封鎖名單的電子郵件地址或網域"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Delete Block List Entry",
+          "source": "Delete block list entry",
           "message": "刪除封鎖清單項目"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "要刪除的封鎖清單項目唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.display_name": {
-          "source": "Patch Block List",
+          "source": "Patch block list",
           "message": "修補封鎖清單"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "封鎖清單項目更新後的電子郵件地址或網域"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.display_name": {
-          "source": "List Custom Tags",
+          "source": "List custom tags",
           "message": "列出自訂標籤"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Create Custom Tag",
+          "source": "Create custom tag",
           "message": "建立自訂標籤"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "標籤適用的資源類型（例如 account、campaign）"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.display_name": {
-          "source": "Get Custom Tag",
+          "source": "Get custom tag",
           "message": "取得自訂標籤"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "要擷取的唯一自訂標籤 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.display_name": {
-          "source": "Patch Custom Tag",
+          "source": "Patch custom tag",
           "message": "修補自訂標籤"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.short_desc": {
@@ -3088,7 +3088,7 @@
           "message": "自訂標籤的更新資源類型"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Delete Custom Tag",
+          "source": "Delete custom tag",
           "message": "刪除自訂標籤"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "要刪除的自訂標籤唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.display_name": {
-          "source": "Assign Custom Tag",
+          "source": "Assign custom tag",
           "message": "指派自訂標籤"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "取消指派標籤"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.display_name": {
-          "source": "List Inbox Placement Tests",
+          "source": "List inbox placement tests",
           "message": "列出收件匣送達率測試"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.short_desc": {
@@ -3204,7 +3204,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Create Inbox Placement Test",
+          "source": "Create inbox placement test",
           "message": "建立收件匣放置測試"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "來自外部"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Get Inbox Placement Test",
+          "source": "Get inbox placement test",
           "message": "獲取收件匣投放測試"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "要檢索的唯一收件匣投放測試 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.display_name": {
-          "source": "Patch Inbox Placement Test",
+          "source": "Patch inbox placement test",
           "message": "修補收件匣放置測試"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "已完成"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Delete Inbox Placement Test",
+          "source": "Delete inbox placement test",
           "message": "刪除收件匣送達率測試"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "要刪除的收件匣送達率測試唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.display_name": {
-          "source": "Get Inbox Placement Analytics",
+          "source": "Get inbox placement analytics",
           "message": "獲取收件匣投放分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "檢索顯示跨提供商送達率的收件匣投放分析數據。"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.display_name": {
-          "source": "Get IP Analytics Stats by Date",
+          "source": "Get IP analytics stats by date",
           "message": "按日期獲取 IP 分析統計資料"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "分析日期範圍篩選條件的結束日期"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.display_name": {
-          "source": "Get IP Analytics Stats by Test",
+          "source": "Get IP analytics stats by test",
           "message": "按測試獲取 IP 分析統計資料"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "用於獲取統計資料的唯一收件匣投放測試 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.display_name": {
-          "source": "Get IP Deliverability Insights",
+          "source": "Get IP deliverability insights",
           "message": "獲取 IP 送達率深入分析"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "檢索收件匣投放測試的送達率深入分析。"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.display_name": {
-          "source": "List IP Analytics",
+          "source": "List IP analytics",
           "message": "列出 IP 分析"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.display_name": {
-          "source": "Get IP Blacklist Report",
+          "source": "Get IP blacklist report",
           "message": "獲取 IP 黑名單報告"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "要檢索的唯一黑名單報告 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.display_name": {
-          "source": "List IP Blacklist Reports",
+          "source": "List IP blacklist reports",
           "message": "列出 IP 黑名單報告"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "建立電子郵件驗證"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {
@@ -3556,7 +3556,7 @@
           "message": "要驗證的電子郵件地址"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.display_name": {
-          "source": "Get Email Verification Status",
+          "source": "Get email verification status",
           "message": "獲取電子郵件驗證狀態"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.short_desc": {
@@ -3580,7 +3580,7 @@
           "message": "用於檢查狀態的唯一電子郵件驗證 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.display_name": {
-          "source": "List Background Jobs",
+          "source": "List background jobs",
           "message": "列出背景工作"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.display_name": {
-          "source": "Get Background Job",
+          "source": "Get background job",
           "message": "取得背景工作"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.short_desc": {
@@ -3628,7 +3628,7 @@
           "message": "要擷取的唯一背景工作 UUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "取得工作區"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -3640,7 +3640,7 @@
           "message": "擷取目前工作區的資訊。"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get Workspace Admin",
+          "source": "Get workspace admin",
           "message": "獲取工作區管理員"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "擷取工作區的管理資訊。"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.display_name": {
-          "source": "Patch Workspace",
+          "source": "Patch workspace",
           "message": "修補工作區"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "工作區的新名稱"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "列出工作區成員"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Create Workspace Member",
+          "source": "Create workspace member",
           "message": "建立工作區成員"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "工作區成員的姓氏"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Get Workspace Member",
+          "source": "Get workspace member",
           "message": "獲取工作區成員"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "要獲取的工作區成員唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.display_name": {
-          "source": "Patch Workspace Member",
+          "source": "Patch workspace member",
           "message": "修補工作區成員"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "工作區成員的新姓氏"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Member",
+          "source": "Delete workspace member",
           "message": "刪除工作區成員"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3868,7 +3868,7 @@
           "message": "要移除的工作區成員唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "List Workspace Group Members",
+          "source": "List workspace group members",
           "message": "列出工作區群組成員"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Create Workspace Group Member",
+          "source": "Create workspace group member",
           "message": "建立工作區群組成員"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "要指派給工作區群組中成員的角色"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Get Workspace Group Member",
+          "source": "Get workspace group member",
           "message": "獲取工作區群組成員"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "要獲取的工作區群組成員唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Group Member",
+          "source": "Delete workspace group member",
           "message": "刪除工作區群組成員"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "要移除的工作區群組成員唯一 UUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "列出稽核日誌"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -4072,7 +4072,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.display_name": {
-          "source": "Reply Received",
+          "source": "Reply received",
           "message": "已收到回覆"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "當收到活動電子郵件的回覆時觸發此事件。"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "電子郵件已退信"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "當行銷活動電子郵件退信時觸發此事件。"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Interested",
+          "source": "Lead interested",
           "message": "潛在客戶感興趣"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -4108,7 +4108,7 @@
           "message": "當潛在客戶的意向狀態變更為感興趣時觸發此事件。"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.display_name": {
-          "source": "Campaign Completed",
+          "source": "Campaign completed",
           "message": "行銷活動已完成"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.short_desc": {

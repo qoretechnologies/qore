@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
+          "source": "Scrape a web page",
           "message": "Scrapovať webovú stránku"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Ak je `True`, zmeny vykonané po scrapovaní (súbory cookie, lokálna pamäť atď.) sa uložia späť do pomenovaného profilu. Predvolené je `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
+          "source": "Batch scrape web pages",
           "message": "Hromadné scrapovanie webových stránok"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Ak je `True`, zmeny vykonané po scrapovaní (súbory cookie, lokálna pamäť atď.) sa uložia späť do pomenovaného profilu. Predvolené je `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "Zrušiť hromadné scrapovanie"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Jedinečný identifikátor úlohy hromadného scrapovania, ktorá sa má zrušiť"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
+          "source": "Get batch scrape status",
           "message": "Získať stav dávkového scrapingu"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Jedinečný identifikátor úlohy dávkového scrapingu na kontrolu"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
+          "source": "Crawl a website",
           "message": "Prechádzať webovú lokalitu"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Ak je `True`, Firecrawl po odoslaní odpovede neuchováva na svojich serveroch žiadne údaje z prechádzania. Funkcia Enterprise — pre povolenie kontaktujte podporu Firecrawl"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
+          "source": "Get crawl status",
           "message": "Získať stav crawlera"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Jedinečný identifikátor úlohy crawlera na kontrolu"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "Zrušiť prechádzanie"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Jedinečný identifikátor úlohy prechádzania, ktorá sa má zrušiť"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
+          "source": "Map a website",
           "message": "Zmapovať webovú lokalitu"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Zoznam preferovaných jazykov/lokalít v poradí priority. Predvolené sú jazyky zadaného miesta"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Vyhľadať na webe"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Anonymizované nulové uchovávanie údajov"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
+          "source": "Extract structured data",
           "message": "Extrahovať štruktúrované údaje"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Ak je `True`, Firecrawl neukláda žiadne scrapované údaje na svojich serveroch po vrátení odpovede. Podniková funkcia – kontaktujte podporu Firecrawl na povolenie"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
+          "source": "Get extraction status",
           "message": "Získať stav extrakcie"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "Jedinečný identifikátor úlohy extrakcie, ktorá sa má skontrolovať"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
+          "source": "Run AI agent",
           "message": "Spustiť agenta AI"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "Zrušiť úlohu agenta"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
@@ -3960,7 +3960,7 @@
           "message": "Jedinečný identifikátor úlohy agenta, ktorá sa má zrušiť"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
+          "source": "Get agent status",
           "message": "Získať stav agenta"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "Jedinečný identifikátor úlohy agenta na kontrolu"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "Parsovať dokument"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {

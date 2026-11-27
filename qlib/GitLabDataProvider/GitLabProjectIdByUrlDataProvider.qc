@@ -130,7 +130,7 @@ public class GitLabProjectIdByUrlDataProvider inherits DataProvider::AbstractDat
         const RequestPath = "/api/v4/projects/%s";
 
         #! The action display name
-        const DisplayName = "Get Project ID by URL";
+        const DisplayName = "Get project ID by URL";
 
         #! The action short description
         const ShortDesc = "Resolve a GitLab project URL to the project's ID and path";

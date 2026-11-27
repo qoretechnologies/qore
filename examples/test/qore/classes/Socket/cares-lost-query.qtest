@@ -64,7 +64,8 @@ class CaresLostQueryTest inherits QUnit::Test {
     }
 
     globalTearDown() {
-        if (dns) {
+        # the DNS server is started only with library debugging
+        if (Option::HAVE_LIBRARY_DEBUGGING && dns) {
             call_function("dbg_cares_set_query_options", old_options);
             call_function("dbg_cares_set_servers", old_servers);
             dns.stop();

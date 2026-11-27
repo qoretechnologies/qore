@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "コンテンツの生成"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "以前に作成された cached-content リソース（例: `projects/{project}/locations/{region}/cachedContents/{id}`）への参照。反復的なシステムプロンプトのコストを大幅に削減します"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "テキストを埋め込み"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {

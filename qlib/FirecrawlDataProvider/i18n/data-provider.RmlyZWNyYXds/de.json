@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
+          "source": "Scrape a web page",
           "message": "Webseite scrapen"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Wenn `True`, werden während des Scrapings vorgenommene Änderungen (Cookies, Lokales Speicher, usw.) in das benannte Profil zurückgeschrieben. Standardwert: `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
+          "source": "Batch scrape web pages",
           "message": "Webseiten im Batch scrapen"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Wenn `True`, werden während des Scrapings vorgenommene Änderungen (Cookies, Lokales Speicher, usw.) in das benannte Profil zurückgeschrieben. Standardwert: `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "Einen Batch-Scrape abbrechen"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Die eindeutige Kennung des abzubrechenden Batch-Scrape-Jobs"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
+          "source": "Get batch scrape status",
           "message": "Batch-Scrape-Status abrufen"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Die eindeutige Kennung des zu prüfenden Batch-Scrape-Auftrags"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
+          "source": "Crawl a website",
           "message": "Website crawlen"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Wenn `True`, speichert Firecrawl nach der Rückgabe der Antwort keine Crawl-Daten auf seinen Servern. Enterprise-Funktion – wenden Sie sich zur Aktivierung an den Firecrawl-Support"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
+          "source": "Get crawl status",
           "message": "Crawl-Status abrufen"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Die eindeutige Kennung des zu überprüfenden Crawl-Auftrags"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "Einen Crawl abbrechen"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Die eindeutige Kennung des abzubrechenden Crawl-Jobs"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
+          "source": "Map a website",
           "message": "Website erfassen (Map)"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Liste bevorzugter Sprachen/Lokalisierungen in Prioritätsreihenfolge. Standardmäßig die Sprache des angegebenen Standorts"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Das Web durchsuchen"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Anonymisierte Zero Data Retention"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
+          "source": "Extract structured data",
           "message": "Strukturierte Daten extrahieren"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Wenn `True`, behält Firecrawl keine gescrapten Daten auf seinen Servern nach der Antwort zurück. Enterprise-Funktion – wenden Sie sich an den Firecrawl-Support, um sie zu aktivieren"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
+          "source": "Get extraction status",
           "message": "Extraktionsstatus abrufen"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "Die eindeutige Kennung des zu überprüfenden Extraktionsauftrags"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
+          "source": "Run AI agent",
           "message": "KI-Agenten ausführen"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "Einen Agent-Job abbrechen"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
@@ -3960,7 +3960,7 @@
           "message": "Die eindeutige Kennung des abzubrechenden Agent-Jobs"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
+          "source": "Get agent status",
           "message": "Agent-Status abrufen"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "Die eindeutige Kennung des zu prüfenden Agent-Auftrags"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "Ein Dokument parsen"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {

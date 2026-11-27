@@ -60,6 +60,7 @@ public class CsvProfileDataProvider inherits DataProvider::AbstractDataProvider 
         @return the profile; see @ref DataProvider::TabularWorkbookProfileDataType "TabularWorkbookProfileDataType"
 
         @throw CSV-PROFILE-ERROR neither or both of \c path and \c data were given, or \c max_rows is not positive
+        @throw TABULAR-PROFILE-ERROR \c header_row is negative
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (exists req.path == exists req.data) {
@@ -72,6 +73,7 @@ public class CsvProfileDataProvider inherits DataProvider::AbstractDataProvider 
             <TabularProfileOptions>{
                 "sample_rows": req.sample_rows ?? 5,
                 "redact": req.redact ?? True,
+                "header_row": req.header_row,
             });
     }
 

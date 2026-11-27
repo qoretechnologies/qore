@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
+          "source": "List sites",
           "message": "Vypsat weby"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Výraz pro vyhledávání v názvech a adresách URL webů. Pokud je vynechán, vrátí se kořenový web tenanta a jeho dílčí weby"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
+          "source": "Get site",
           "message": "Získat web"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "SharePoint web, na který se má odkazovat. K vyhledání dostupných webů použijte akci `list-sites`; kořenový web tenanta je nabízen vždy"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
+          "source": "List document libraries",
           "message": "Zobrazit knihovny dokumentů"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "SharePoint web, na který se má odkazovat. K vyhledání dostupných webů použijte akci `list-sites`; kořenový web tenanta je nabízen vždy"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
+          "source": "Get document library info",
           "message": "Získat informace o knihovně dokumentů"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Knihovna dokumentů, na kterou se má odkazovat. K výpisu knihoven na webu použijte akci `list-drives`"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "Vyhledat dokumenty"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Pořadí řazení výsledků (např. `name asc`, `size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
+          "source": "Get document",
           "message": "Získat dokument"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Cesta k položce relativní vůči kořenu disku (např. `/Documents/file.txt`). Zadejte buď `id`, nebo `path`"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Vytvořit složku"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -700,7 +700,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
+          "source": "Upload document",
           "message": "Nahrát dokument"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -880,7 +880,7 @@
           "message": "ID nadřazené složky. Pokud je vynecháno, soubor se nahraje do kořenového adresáře disku"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Vytvořit relaci nahrávání"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
+          "source": "Download document",
           "message": "Stáhnout dokument"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "Jedinečný identifikátor souboru ke stažení"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
+          "source": "Delete document",
           "message": "Smazat dokument"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Jedinečný identifikátor položky ke smazání"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
+          "source": "Update document",
           "message": "Aktualizovat dokument"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "ID cílové složky, do které se má položka přesunout. Nastavte pro přesun položky do jiné složky"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
+          "source": "Copy document",
           "message": "Kopírovat dokument"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Vytvořit odkaz pro sdílení"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Datum a čas vypršení platnosti odkazu pro sdílení"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "Vypsat seznamy"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Zahrnout seznamy, jejichž šablona je `documentLibrary`"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Získat seznam"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Seznam, na který se má odkazovat. K výpisu seznamů na webu použijte akci `list-lists`"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "Vytvořit seznam"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Sloupce, se kterými se má seznam vytvořit, jako seznam objektů Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition), například `{\"name\": \"Amount\", \"number\": {}}`. Pokud je parametr vynechán, seznam se vytvoří pouze s výchozím sloupcem `Title`"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Smazat seznam"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Seznam, na který se má odkazovat. K výpisu seznamů na webu použijte akci `list-lists`"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
+          "source": "List columns",
           "message": "Zobrazit sloupce"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Vrátit pouze sloupce, do kterých lze zapisovat; SharePoint udržuje mnoho sloupců pouze pro čtení, které by volání pro vytvoření nebo aktualizaci odmítlo"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
+          "source": "Search list items",
           "message": "Vyhledat položky seznamu"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Zastavit po tomto celkovém počtu položek na všech stránkách"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
+          "source": "Get list item",
           "message": "Získat položku seznamu"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Položka seznamu, se kterou se má pracovat"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
+          "source": "Create list item",
           "message": "Vytvořit položku seznamu"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Hodnoty pro nastavení sloupců položky, indexované interním názvem sloupce. Po výběru webu a seznamu jsou jednotlivé sloupce nabízeny s vlastními typy; akce `columns` je vypíše"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
+          "source": "Update list item",
           "message": "Aktualizovat položku seznamu"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Hodnoty pro nastavení sloupců položky, indexované interním názvem sloupce. Po výběru webu a seznamu jsou jednotlivé sloupce nabízeny s vlastními typy; akce `columns` je vypíše"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
+          "source": "Delete list item",
           "message": "Smazat položku seznamu"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Položka seznamu, se kterou se má pracovat"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument přidán"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Spustí se při přidání dokumentu do knihovny dokumentů. Používá rozdílové (delta) dotazy, které pokračují přesně tam, kde skončily, místo opětovného čtení celé knihovny"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument změněn"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Spustí se při změně dokumentu, který již je v knihovně. Používá rozdílové (delta) dotazy, které pokračují přesně tam, kde skončily, místo opětovného čtení celé knihovny"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Složka přidána"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Spustí se při přidání složky do knihovny dokumentů"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Položka seznamu přidána"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

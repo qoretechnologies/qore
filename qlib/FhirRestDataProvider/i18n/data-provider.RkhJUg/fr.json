@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
-          "source": "Get Capability Statement",
+          "source": "Get capability statement",
           "message": "Obtenir Capability Statement"
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Lire le `CapabilityStatement` du serveur à partir du point de terminaison FHIR `metadata`."
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Get SMART Configuration",
+          "source": "Get SMART configuration",
           "message": "Obtenir la configuration SMART"
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Lire le document de découverte SMART on FHIR à partir de `.well-known/smart-configuration`."
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "Lire une ressource"
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Identifiant logique FHIR de l'instance de ressource"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
-          "source": "Search Resources",
+          "source": "Search resources",
           "message": "Rechercher des ressources"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Champ de commodité mappé au paramètre de recherche FHIR `_revinclude` ; utilisez une liste pour les valeurs d'inclusion inverse répétées"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
-          "source": "Search All Resources",
+          "source": "Search all resources",
           "message": "Rechercher toutes les ressources"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Nombre maximal de pages Bundle à récupérer en suivant les liens de pagination `next`"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
-          "source": "Create Resource",
+          "source": "Create resource",
           "message": "Créer une ressource"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Expression de recherche de création conditionnelle FHIR envoyée dans l'en-tête `If-None-Exist`"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
-          "source": "Submit Bundle",
+          "source": "Submit bundle",
           "message": "Soumettre un Bundle"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Ressource FHIR `Bundle` avec `type` défini sur `transaction` ou `batch`. Le Bundle est envoyé par POST à la base du service FHIR pour des écritures de transaction atomique ou une exécution en lot.\n\n**Exemple** : `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Update Resource",
+          "source": "Update resource",
           "message": "Mettre à jour une ressource"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Conditional Update Resource",
+          "source": "Conditional update resource",
           "message": "Mise à jour conditionnelle de ressource"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Corps de ressource FHIR sous forme de hash compatible JSON. Le hash doit inclure `resourceType` correspondant à `resource_type`."
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
-          "source": "Patch Resource",
+          "source": "Patch resource",
           "message": "Patcher une ressource"
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
-          "source": "Delete Resource",
+          "source": "Delete resource",
           "message": "Supprimer la ressource"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
-          "source": "Validate Resource",
+          "source": "Validate resource",
           "message": "Valider la ressource"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Identifiant logique FHIR optionnel pour la validation au niveau de l'instance"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
-          "source": "Validate Code",
+          "source": "Validate code",
           "message": "Valider le code"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Paramètres de l'opération FHIR `$validate-code` en tant que paramètres de requête. Les clés sont les noms des paramètres d'opération acceptés par le serveur.\n\n**Exemple** : `{\"code\": \"abc\"}`"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
-          "source": "Lookup Code",
+          "source": "Lookup code",
           "message": "Rechercher un code"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Paramètres d'opération FHIR `$lookup` sous forme de paramètres de requête. Les clés sont les noms de paramètres d'opération acceptés par le serveur.\n\n**Exemple** : `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
-          "source": "Translate Code",
+          "source": "Translate code",
           "message": "Traduire un code"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "Champ de commodité mappé au paramètre de recherche FHIR `_revinclude` ; utilisez une liste pour les valeurs d'inclusion inverse répétées"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
+          "source": "Search all Bundle",
           "message": "Rechercher tous les Bundle"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
+          "source": "Conditional update Bundle",
           "message": "Mise à jour conditionnelle de Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "Champ de commodité mappé au paramètre de recherche FHIR `_revinclude` ; utilisez une liste pour les valeurs d'inclusion inverse répétées"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
+          "source": "Search all Observation",
           "message": "Rechercher toutes les Observation"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
+          "source": "Conditional update Observation",
           "message": "Mise à jour conditionnelle d'observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
@@ -5436,7 +5436,7 @@
           "message": "Champ de commodité mappé au paramètre de recherche FHIR `_revinclude` ; utilisez une liste pour les valeurs d'inclusion inverse répétées"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
+          "source": "Search all Patient",
           "message": "Rechercher tous les Patient"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
@@ -6344,7 +6344,7 @@
           "message": "Valeur ETag envoyée dans l'en-tête `If-Match` pour la gestion optimiste des accès concurrents"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
+          "source": "Conditional update Patient",
           "message": "Mise à jour conditionnelle de Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {

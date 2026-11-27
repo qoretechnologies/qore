@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Rechercher dans l'index"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Rechercher des données dans un index ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Ajouter un document"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Ajouter un document à / ingérer des données dans ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Opérations en bloc"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Effectuer des opérations en bloc d'indexation, de création, de mise à jour et de suppression sur des documents ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Recherche Scroll"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

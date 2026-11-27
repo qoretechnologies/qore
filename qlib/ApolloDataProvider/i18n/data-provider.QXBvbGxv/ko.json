@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "연락처 생성"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -432,7 +432,7 @@
           "message": "이 연락처를 소유한 사용자의 ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "연락처 업데이트"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -516,7 +516,7 @@
           "message": "연락처 현재 위치"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "연락처 검색"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -568,7 +568,7 @@
           "message": "최대 결과 수"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "연락처 가져오기"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -588,7 +588,7 @@
           "message": "연락처 ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
+          "source": "Create an account",
           "message": "계정 생성"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -644,7 +644,7 @@
           "message": "소유자 사용자 ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
+          "source": "Update an account",
           "message": "계정 업데이트"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -704,7 +704,7 @@
           "message": "소유자 사용자 ID"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "계정 검색"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
@@ -748,7 +748,7 @@
           "message": "최대 결과 수"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "계정 가져오기"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "계정 ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
+          "source": "Create a deal",
           "message": "거래 생성"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -848,7 +848,7 @@
           "message": "연결된 계정 ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
+          "source": "Update a deal",
           "message": "거래 업데이트"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "소유자 사용자 ID"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "거래 목록 조회"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "최대 결과 수"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
+          "source": "Get a deal",
           "message": "거래 가져오기"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
@@ -964,7 +964,7 @@
           "message": "거래 ID"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
-          "source": "Enrich Person",
+          "source": "Enrich person",
           "message": "인물 보강"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "개인 LinkedIn URL"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
-          "source": "Bulk Enrich People",
+          "source": "Bulk enrich people",
           "message": "인물 일괄 보강"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "`email`, `first_name`, `last_name`, `organization_name`, `domain`와(과) 같은 필드를 포함하는 인물 세부 정보 개체 목록"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Enrich Organization",
+          "source": "Enrich organization",
           "message": "조직 보강"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "보강할 조직 도메인"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
-          "source": "Bulk Enrich Organizations",
+          "source": "Bulk enrich organizations",
           "message": "조직 일괄 보강"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "보강할 조직 도메인 목록"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
-          "source": "Search People",
+          "source": "Search people",
           "message": "인물 검색"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "페이지당 결과 수(최대 100개)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
+          "source": "Search organizations",
           "message": "조직 검색"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "페이지당 결과 수(최대 100개)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "연락처 생성됨"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Apollo에서 새 연락처가 생성될 때 트리거됩니다"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "연락처 업데이트됨"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Apollo에서 연락처가 업데이트될 때 트리거됩니다"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
+          "source": "Account created",
           "message": "계정 생성됨"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Apollo에서 새 계정이 생성될 때 트리거됨"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
+          "source": "Deal created",
           "message": "거래 생성됨"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {

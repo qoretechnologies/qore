@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "コンタクトを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "特別な機会の名前（例：`Birthday`、`Anniversary`）"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "連絡先を更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "特別な機会の名前（例：`Birthday`、`Anniversary`）"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "連絡先を削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "削除する連絡先の一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "連絡先一覧"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "連絡先の取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "連絡先ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
+          "source": "Create organisation",
           "message": "組織を作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "特別な機会の名前（例：`Birthday`、`Anniversary`）"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
+          "source": "Update organisation",
           "message": "組織を更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "特別な機会の名前（例：`Birthday`、`Anniversary`）"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
+          "source": "Delete organisation",
           "message": "組織の削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "削除する組織の一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
+          "source": "List organisations",
           "message": "組織を一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
+          "source": "Get organisation",
           "message": "組織を取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "組織ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "リードを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "タグの名前"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "リードを更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "タグの名前"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "リードを削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "削除するリードの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "リードを一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -4080,7 +4080,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "リードを取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "リードID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
+          "source": "Create opportunity",
           "message": "案件を作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "オブジェクト間の関係を表す役割"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
+          "source": "Update opportunity",
           "message": "案件の更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4984,7 +4984,7 @@
           "message": "オブジェクト間の関係を表す役割"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
+          "source": "Delete opportunity",
           "message": "案件を削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -5008,7 +5008,7 @@
           "message": "削除する商談の一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "商談を一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -5112,7 +5112,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
+          "source": "Get opportunity",
           "message": "案件を取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -5132,7 +5132,7 @@
           "message": "商談ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "プロジェクトを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -5508,7 +5508,7 @@
           "message": "オブジェクト間の関係を表す役割"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "プロジェクトの更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -5896,7 +5896,7 @@
           "message": "オブジェクト間の関係を表す役割"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "プロジェクトの削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -5920,7 +5920,7 @@
           "message": "削除するプロジェクトの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "プロジェクトの一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "プロジェクトの取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "プロジェクトID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "タスクを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -6404,7 +6404,7 @@
           "message": "タスクリンクの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "タスクの更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -6776,7 +6776,7 @@
           "message": "タスクリンクの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "タスクを削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -6800,7 +6800,7 @@
           "message": "削除するタスクの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "タスクの一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
@@ -6904,7 +6904,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "タスクの取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "タスクID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "ノートを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -7052,7 +7052,7 @@
           "message": "オーナーのチームに表示"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "ノートを更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -7192,7 +7192,7 @@
           "message": "オーナーのチームに表示"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "ノートを削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -7216,7 +7216,7 @@
           "message": "削除するノートの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "ノートを一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -7320,7 +7320,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
+          "source": "Get note",
           "message": "ノートを取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
@@ -7340,7 +7340,7 @@
           "message": "メモID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
+          "source": "Create calendar event",
           "message": "カレンダーイベントを作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7460,7 +7460,7 @@
           "message": "このイベントを所有するユーザーのID"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
+          "source": "Update calendar event",
           "message": "カレンダーイベントを更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7592,7 +7592,7 @@
           "message": "このイベントを所有するユーザーのID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
+          "source": "Delete calendar event",
           "message": "カレンダーイベントの削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "削除するカレンダーイベントの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
+          "source": "List calendar events",
           "message": "カレンダーイベントの一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -7720,7 +7720,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
+          "source": "Get calendar event",
           "message": "カレンダーイベントの取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7740,7 +7740,7 @@
           "message": "イベントID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "商品を作成"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -7944,7 +7944,7 @@
           "message": "カスタムフィールドの値。フィールド設定に応じて文字列、数値、論理値、日付になる可能性があります"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "製品を更新"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -8160,7 +8160,7 @@
           "message": "カスタムフィールドの値。フィールド設定に応じて文字列、数値、論理値、日付になる可能性があります"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "製品を削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -8184,7 +8184,7 @@
           "message": "削除する製品の一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "商品一覧"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -8288,7 +8288,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "製品の取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -8308,7 +8308,7 @@
           "message": "製品ID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "メールの削除"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -8332,7 +8332,7 @@
           "message": "削除するメールの一意の識別子"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "メールを一覧表示"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -8436,7 +8436,7 @@
           "message": "`field_name`と照合する値。`field_name`とペアで指定する必要があります。リクエストはInsightlyの`/Search`エンドポイントを経由してルーティングされます。"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "メールの取得"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "メールID"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "新規連絡先"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Insightly で新しい連絡先が作成されたときにトリガーされます"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
+          "source": "New organisation",
           "message": "新規組織"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -8480,7 +8480,7 @@
           "message": "Insightly で新しい組織が作成されたときにトリガーされます"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
+          "source": "New lead",
           "message": "新しいリード"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Insightly で新しいリードが作成されたときにトリガーされます"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
+          "source": "New opportunity",
           "message": "新規案件"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
@@ -8504,7 +8504,7 @@
           "message": "Insightly で新しい商談が作成されたときにトリガーされます"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
+          "source": "New task",
           "message": "新しいタスク"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {

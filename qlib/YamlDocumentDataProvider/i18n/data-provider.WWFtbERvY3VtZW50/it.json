@@ -8,7 +8,7 @@
           "message": "Legge i dati di documenti YAML da un percorso file specifico.\n\nIl file YAML può contenere uno o più documenti separati da marcatori `---`. Ogni documento viene iterato come record separato.\n\n**Opzioni principali**\n- `path`: il percorso del file da cui leggere (obbligatorio)\n- `encoding`: codifica caratteri (predefinito: `UTF-8`)\n- `skip_empty_documents`: ignora i documenti vuoti (predefinito: `True`)\n- `max_documents`: numero massimo di documenti da leggere (`0` = illimitato)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "Leggi file documento YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "Legge i dati YAML inline forniti direttamente come stringa.\n\nI dati YAML possono contenere uno o più documenti separati da marcatori `---`. Ogni documento viene iterato come record separato.\n\n**Opzioni principali**\n- `data`: la stringa YAML da analizzare (obbligatorio)\n- `encoding`: codifica caratteri (predefinito: `UTF-8`)\n- `skip_empty_documents`: ignora i documenti vuoti (predefinito: `True`)\n- `max_documents`: numero massimo di documenti da leggere (`0` = illimitato)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "Leggi dati YAML inline"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "Scrive i record di documenti YAML come flusso multidocumento in un percorso file specifico.\n\nI record vengono accumulati e scritti con separatori di documento `---` al termine dell'azione.\n\n**Opzioni principali**\n- `path`: il percorso del file di output (obbligatorio)\n- `flow_style`: usa output YAML inline compatto (predefinito: `False`)\n- `encoding`: codifica caratteri (predefinito: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "Scrivi file documento YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "Genera dai record un flusso YAML multi-documento e lo restituisce come dati, ad esempio per allegarlo a un'e-mail o caricarlo con un'altra azione.\n\nOgni record diventa un documento YAML, separato da marcatori `---`; l'azione restituisce i dati generati in `data` e il numero di documenti in `record_count`.\n\n**Opzioni principali**\n- `flow_style`: usa output YAML inline compatto (predefinito: `False`)\n- `encoding`: codifica caratteri (predefinito: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "Scrivi dati YAML inline"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

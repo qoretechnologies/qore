@@ -16,7 +16,7 @@
           "message": "標準 JSON ファイル (NDJSON/JSON Lines 以外) の読み書きを行います。オブジェクトの配列 (個別レコードとして反復処理) または単一オブジェクト (1 つのレコードとして返却) を含む JSON ファイルをサポートします。書き込みの際に設定可能なプリティプリント出力を提供します。"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "JSON ファイルの読み取り"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "テキストを読み取ったまま、チェックせずに入力エンコーディングで保持します"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "JSON インラインデータの読み取り"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "US-ASCII エンコーディング"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "JSON ファイルの書き込み"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "余分な空白なしでコンパクトな JSON 出力を書き込みます"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "JSON データの書き込み"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

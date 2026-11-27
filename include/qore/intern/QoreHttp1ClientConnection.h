@@ -73,7 +73,7 @@ struct Http1SslConfig {
 
     @since %Qore 3.0
 */
-class Http1ClientConnection : public HttpClientConnectionBase {
+class DLLLOCAL Http1ClientConnection : public HttpClientConnectionBase {
 public:
     //! Creates a new HTTP/1.1 client connection (direct, no proxy)
     /** Creates a socket, a @ref SocketConnectPollOperation, and a

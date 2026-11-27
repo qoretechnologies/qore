@@ -43,4 +43,8 @@ cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TY
     -DQORE_EXTERNAL_MODULE_DIRS= -DSINGLE_COMPILATION_UNIT=OFF -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr}
 # the targets whose sources the option changes: libqore (linked by qore and qcc) and the binary modules with a single
 # compilation unit build (the SINGLE_COMPILATION_UNIT cases in modules/*/CMakeLists.txt)
-cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target libqore qore qcc reflection krb5 logger_bin astparser
+# the compiler output is kept in build.log for check-build-warnings, which reports it as the non-SCU build's: a build
+# of separate units shows warnings that the single compilation unit hides (see ci-build-log.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"
+qore_ci_build_logged "${BUILD_DIR}/build.log" cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target libqore qore qcc \
+    reflection krb5 logger_bin astparser

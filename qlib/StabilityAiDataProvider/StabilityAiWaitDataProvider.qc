@@ -24,9 +24,9 @@ public const StabilityAiWaitRequest = new StabilityAiWaitRequestType();
 public class StabilityAiWaitDataProvider inherits StabilityAiDataProviderCommon {
     public {
         const Jobs = {
-            "wait-for-image": ("get-image-result", "Wait for Image Job", "Wait for an asynchronous background or lighting edit."),
-            "wait-for-upscale": ("get-upscale-result", "Wait for Creative Upscale", "Wait for an existing creative upscale job."),
-            "wait-for-audio": ("get-audio-result", "Wait for Audio Job", "Wait for an existing Stable Audio 3 job."),
+            "wait-for-image": ("get-image-result", "Wait for image job", "Wait for an asynchronous background or lighting edit."),
+            "wait-for-upscale": ("get-upscale-result", "Wait for creative upscale", "Wait for an existing creative upscale job."),
+            "wait-for-audio": ("get-audio-result", "Wait for audio job", "Wait for an existing Stable Audio 3 job."),
         };
         const ProviderInfo = <DataProviderInfo>{"type": "StabilityAiWaitDataProvider", "supports_request": True};
         const RequestType = StabilityAiWaitRequest;

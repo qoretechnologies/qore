@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
+          "source": "Get drive info",
           "message": "Obtener información de la unidad"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Recupera los metadatos de OneDrive del usuario actual, incluida la cuota de almacenamiento, el tipo de unidad y la información del propietario"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "Buscar artículos"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Orden de clasificación para los resultados (p. ej., `name asc`, `size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Obtener elemento"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
@@ -448,7 +448,7 @@
           "message": "La ruta del elemento relativa a la raíz de la unidad (p. ej., `/Documents/file.txt`). Proporcione `id` o `path`"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Crear carpeta"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Cargar archivo"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "El ID de la carpeta principal. Si se omite, el archivo se carga en la raíz de la unidad"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Crear sesión de carga"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Descargar archivo"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -784,7 +784,7 @@
           "message": "El identificador único del archivo a descargar"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Eliminar elemento"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -808,7 +808,7 @@
           "message": "El identificador único del elemento que se va a eliminar"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Actualizar elemento"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -868,7 +868,7 @@
           "message": "El ID de la carpeta de destino a la que se va a mover el elemento. Establézcalo para mover un elemento a una carpeta diferente"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
+          "source": "Copy item",
           "message": "Copiar elemento"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Crear enlace para compartir"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "La fecha y hora en que caduca el enlace para compartir"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Archivo o carpeta modificados"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

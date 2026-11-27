@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Generovať obsah"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Odkaz na predtým vytvorený prostriedok cached-content (napr. `projects/{project}/locations/{region}/cachedContents/{id}`); výrazné zníženie nákladov pri opakovaných systémových výzvach"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Vytvoriť embedding textu"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {

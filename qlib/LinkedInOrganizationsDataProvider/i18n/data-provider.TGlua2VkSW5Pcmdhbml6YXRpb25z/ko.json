@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
-          "source": "Get Current Member",
+          "source": "Get current member",
           "message": "현재 회원 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "이 연결에 승인된 회원의 프로필을 조회합니다.\n\n연결이 어떤 계정에 바인딩되어 있는지 확인하는 데 유용합니다. 해당 계정이 관리하는 조직은 다른 모든 작업이 접근할 수 있는 대상입니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "조직 나열"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -364,7 +364,7 @@
           "message": "인증된 회원이 관리하는 조직 목록과 각 조직의 이름, 설명, 로고, 규모, 업종 및 페이지 URL을 나열합니다.\n\n여기서 조직의 `id`은 다른 모든 작업에서 사용하는 값이며, `organizational_page` URN은 LinkedIn의 분석 및 팔로우 API가 참조하는 대상입니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "조직 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -388,7 +388,7 @@
           "message": "데이터를 읽을 조직입니다. 목록에는 인증된 회원이 관리하는 조직이 표시됩니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "게시물 목록 조회"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
@@ -472,7 +472,7 @@
           "message": "초안 또는 예약된 게시물일 수 있는 최신 버전입니다. 예약된 게시물은 `scheduled_at` 필드가 설정되어 있는지로 식별됩니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "게시물 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "초안 또는 예약된 게시물일 수 있는 최신 버전입니다. 예약된 게시물은 `scheduled_at` 필드가 설정되어 있는지로 식별됩니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "댓글 목록 조회"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "다음 페이지를 가져오기 위해 이전 호출에서 반환된 `cursor`입니다. 처음부터 시작하려면 비워 두세요."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
-          "source": "List Reactions",
+          "source": "List reactions",
           "message": "반응 나열"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
@@ -628,7 +628,7 @@
           "message": "다음 페이지를 가져오기 위해 이전 호출에서 반환된 `cursor`입니다. 처음부터 시작하려면 비워 두세요."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Engagement Summary",
+          "source": "Get engagement summary",
           "message": "반응 요약 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "요약할 콘텐츠(게시물, 활동 또는 댓글)의 URN입니다. 여러 개를 한 번에 지정할 수 있어 각각 호출하는 것보다 훨씬 효율적입니다."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
-          "source": "List Followers",
+          "source": "List followers",
           "message": "팔로워 목록 조회"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
@@ -736,7 +736,7 @@
           "message": "다음 페이지를 가져오기 위해 이전 호출에서 반환된 `cursor`입니다. 처음부터 시작하려면 비워 두세요."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
-          "source": "List Following",
+          "source": "List following",
           "message": "팔로잉 목록 조회"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
@@ -784,7 +784,7 @@
           "message": "다음 페이지를 가져오기 위해 이전 호출에서 반환된 `cursor`입니다. 처음부터 시작하려면 비워 두세요."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Follower Statistics",
+          "source": "Get follower statistics",
           "message": "팔로워 통계 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
@@ -904,7 +904,7 @@
           "message": "직원과 기타 인원을 구분하는 조직과의 관계별 세분화"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
-          "source": "Get Visitor Statistics",
+          "source": "Get visitor statistics",
           "message": "방문자 통계 가져오기"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "페이지의 사람들 탭"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "새 게시물"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {

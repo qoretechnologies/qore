@@ -16,7 +16,7 @@
           "message": "MongoDB는 대용량 데이터 스토리지를 위한 문서 지향 NoSQL 데이터베이스입니다"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
-          "source": "Insert Document",
+          "source": "Insert document",
           "message": "문서 삽입"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
@@ -52,7 +52,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.ZmluZA.display_name": {
-          "source": "Find Documents",
+          "source": "Find documents",
           "message": "문서 찾기"
         },
         "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "문서 업데이트"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "문서 삭제"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
-          "source": "Aggregation Pipeline",
+          "source": "Aggregation pipeline",
           "message": "집계 파이프라인"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
@@ -196,7 +196,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.YnVsaw.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "대량 작업"
         },
         "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "MongoDB 컬렉션 이름"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.display_name": {
-          "source": "Find One Document",
+          "source": "Find one document",
           "message": "문서 하나 찾기"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.short_desc": {
@@ -268,7 +268,7 @@
           "message": "MongoDB 컬렉션의 이름"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.display_name": {
-          "source": "Count Documents",
+          "source": "Count documents",
           "message": "문서 수 세기"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.short_desc": {
@@ -304,7 +304,7 @@
           "message": "MongoDB 컬렉션의 이름"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "벡터 검색"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.short_desc": {
