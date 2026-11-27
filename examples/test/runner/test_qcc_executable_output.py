@@ -104,7 +104,7 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 14, "PENDING_AOT3": 14, "PENDING": 76}
+SIZES = {"ALLOWED": 14, "PENDING_AOT3": 14, "PENDING": 61}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -130,21 +130,6 @@ PENDING_AOT3 = {
 PENDING = {
     # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
     # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTDebugCatchTables.qtest": 1,
-    "examples/test/ir/AOTDebugIRFlow.qtest": 1,
-    "examples/test/ir/AOTExecutableOptions.qtest": 1,
-    "examples/test/ir/AOTExitCleanupScaling.qtest": 1,
-    "examples/test/ir/AOTExplicitObjectStringMeasure.qtest": 5,
-    "examples/test/ir/AOTFreshContainerInit.qtest": 3,
-    "examples/test/ir/AOTGenericCrossObjectFastEntry.qtest": 1,
-    "examples/test/ir/AOTGenericFunctionFastEntry.qtest": 1,
-    "examples/test/ir/AOTGenericInstanceMethodFastEntry.qtest": 1,
-    "examples/test/ir/AOTGenericReturnParam.qtest": 1,
-    "examples/test/ir/AOTGenericStaticMethodFastEntry.qtest": 1,
-    "examples/test/ir/AOTHashDeclKeyProof.qtest": 4,
-    "examples/test/ir/AOTHashdeclConstantDefaults.qtest": 1,
-    "examples/test/ir/AOTImmediateNumericFacts.qtest": 1,
-    "examples/test/ir/AOTInvokeCleanupArraySize.qtest": 2,
     "examples/test/ir/AOTLLVM23Terminator.qtest": 1,
     "examples/test/ir/AOTLateExceptionEdgeElision.qtest": 1,
     "examples/test/ir/AOTLinkDeploymentTarget.qtest": 1,
