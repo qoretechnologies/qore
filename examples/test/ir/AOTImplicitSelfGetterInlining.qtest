@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -111,8 +123,8 @@ source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source_file.write(source);
 source_file.close();
 
-string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, source_path));
+string ast = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+    libqore_dir, qore_bin, source_path), NOTHING, "QORE_JIT_TIMING=1").out;
 string compile_output = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, executable_path, source_path));
@@ -130,7 +142,7 @@ if (!(compile_output =~ /inlined implicit-self getter 'value'/)
     exit(2);
 }
 
-string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string aot = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, executable_path));
 if (ast != "first:second:first:9223372036854775807:1.25:True:True:True:True\n"
         || aot != ast) {
