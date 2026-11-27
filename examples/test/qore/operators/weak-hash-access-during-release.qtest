@@ -130,7 +130,10 @@ class WeakHashAccessDuringReleaseTest inherits QUnit::Test {
                 string label = sprintf("%s %s", access, path);
                 assertNeq(0, rc, sprintf("%s: the process ends with the assertion (output: %y)", label, out));
                 assertNeq(137, rc, sprintf("%s: the process is not killed by the timeout (output: %y)", label, out));
-                assertRegex("Assertion.*\\(!releasing\\)", out,
+                # the C libraries print the failed assertion differently: BSD/macOS "Assertion failed: (!releasing),
+                # function ...", glibc "...: Assertion `!releasing' failed.", musl "Assertion failed: !releasing
+                # (file: function: line)"; all have "Assertion" and the expression on one line
+                assertRegex("Assertion[^\\n]*!releasing", out,
                     sprintf("%s: the assertion of the release fails", label));
                 assertFalse(out =~ /no assertion/, sprintf("%s: the program does not go on", label));
             }
