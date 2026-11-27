@@ -2727,7 +2727,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # return, also when an exception is raised below; the listener no longer drains (qore#7692)
         on_exit {
             if (*Counter reserved = remove stop_reserved{l.getID()}) {
-                reserved.dec();
+                Priv::StopReservation::end(reserved);
             }
             remove draining_lids{l.getID()};
             listeners_draining = boolean(draining_lids);
@@ -3261,7 +3261,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         lm.enter();
         on_exit lm.exit();
         if (*Counter reserved = remove stop_reserved{id}) {
-            reserved.dec();
+            Priv::StopReservation::end(reserved);
         }
     }
 
@@ -8606,16 +8606,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return whether listener was stopped
     */
     static bool stopIfNoHandlers(HttpServer::HttpListener listener) {
-        listener.m.lock();
-        on_error listener.m.unlock();
-
-        if (listener.handler_ref_cnt == 0) {
-            listener.m.unlock();
-            listener.stop();
-            return True;
+        {
+            # the lock is released once, before the stop: an error that the stop raises is not hidden by a second
+            # release (LOCK-ERROR)
+            AutoLock al(listener.m);
+            if (listener.handler_ref_cnt) {
+                return False;
+            }
         }
-        listener.m.unlock();
-        return False;
+        listener.stop();
+        return True;
     }
 
     hash getListenerSocketInfo() {
@@ -9539,9 +9539,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Releases the server's reservation of the stop of this listener when the server cannot be notified (qore#7509)
     private endStopReservation() {
         if (*Counter reservation = remove stop_reservation) {
-            if (reservation.getCount()) {
-                reservation.dec();
-            }
+            Priv::StopReservation::end(reservation);
         }
     }
 
@@ -14249,6 +14247,27 @@ class ResponseAfterSendNotifier {
 } # namespace Priv
 
 namespace Priv {
+
+#! Ends the reservations of the stops of listeners (HttpServer::stop_reserved, qore#7692)
+/** A reservation is ended by the server (HttpServer::listenerStopped(), HttpServer::endListenerStopReservation()), or
+    by the listener when the server refuses its notification (HttpListener::endStopReservation(), qore#7509); both
+    can end the same reservation, which is ended once: its Counter is decremented only if it is above zero, with one
+    lock for all reservations, so that the check and the decrement are atomic
+*/
+class StopReservation {
+    private {
+        static Mutex lck = new Mutex();
+    }
+
+    #! Ends the reservation unless it has been ended
+    static end(Counter reservation) {
+        AutoLock al(lck);
+        if (reservation.getCount() > 0) {
+            reservation.dec();
+        }
+    }
+}
+
 #! Runs the event source of a Server-Sent Events stream: starts it with the stream and stops it exactly once
 /** The stream's end (the controller's close callback on HTTP/1.x, the peer-close notification on HTTP/2 and HTTP/3,
     or a close by the source itself) calls @ref end(), which runs the source's stop on a thread of the handler pool;

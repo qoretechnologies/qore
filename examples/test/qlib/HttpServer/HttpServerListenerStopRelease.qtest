@@ -68,9 +68,17 @@ class TestServer inherits HttpServer {
     }
 }
 
+#! answers each request with 200
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
 class HttpServerListenerStopReleaseTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerListenerStopRelease", "1.0") {
         addTestCase("a listener's stop in progress while the server is destroyed", \stopInProgressTest());
+        addTestCase("the error of the stop of a listener left without handlers is raised", \stopErrorTest());
         set_return_value(main());
     }
 
@@ -122,5 +130,36 @@ class HttpServerListenerStopReleaseTest inherits QUnit::Test {
         # the listener's stop goes on while the server is destroyed
         hook_go.dec();
         assertEq(0, destroyed.waitForZero(HangTimeout), "the server's destructor ended");
+    }
+
+    #! The stop of a listener that removeHandlerFromListenerID() leaves without handlers raises an error
+    /** The error is raised to the caller: the lock of the listener was released twice (HttpListener::stopIfNoHandlers()),
+        which raised LOCK-ERROR instead
+    */
+    stopErrorTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
+        }
+        # called by name: the method exists only in a debug build of the library
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            throw "TEST-ERROR", "the stop failed";
+        });
+        on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int id = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).id;
+        server.addHandlerToListenerID(id, "h", <HttpHandlerConfigInfo>{"handler": new OkHandler()});
+        # the listener has no handler left, and is stopped
+        hash<auto> err;
+        try {
+            server.removeHandlerFromListenerID(id, "h");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("TEST-ERROR", err.err, "the stop's error is raised");
+        assertEq(NOTHING, err.next ? err.next.err : NOTHING, "no other error is raised with it");
     }
 }
