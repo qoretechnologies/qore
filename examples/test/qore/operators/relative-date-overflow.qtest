@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class RelativeDateOverflowTest
 
@@ -145,11 +146,19 @@ class RelativeDateOverflowTest inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 file));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            assertEq(expected, backquote(sprintf("TZ=UTC LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
-                libqore_dir, libqore_dir, exe)), "qcc " + opt);
-            assertEq(expected, backquote(sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
-                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)),
-                "qcc " + opt + ", JIT");
+            checkExecutable(sprintf("TZ=UTC LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir,
+                exe), expected, "qcc " + opt);
+            checkExecutable(sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe), expected, "qcc " + opt + ", JIT");
         }
+    }
+
+    #! runs the qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

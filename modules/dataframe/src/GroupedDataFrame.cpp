@@ -83,6 +83,7 @@ void setGroupedDataFramePrivate(QoreObject& obj, QoreGroupedDataFrame* gdf) {
 
 QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
         const std::vector<std::string>& group_cols, ExceptionSink* xsink) {
+    QORE_KEYED_HASH_SITE("dataframe-2", source_col_index);
     group_col_names = group_cols;
 
     // Lock the source DataFrame to read its columns
@@ -108,7 +109,8 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
     }
 
     // Build groups: hash group key values → row indices
-    std::unordered_map<std::string, size_t> group_map;  // key_str → group index
+    qore_keyed_string_map<size_t> group_map;  // key_str → group index
+    QORE_KEYED_HASH_SITE("dataframe-3", group_map);
     group_map.reserve(static_cast<size_t>(std::min<int64_t>(source_n_rows, 65536)));
 
     // the key of the value of a group column: the exact value (the bits of a float, with -0.0 as 0.0 and the NaN
@@ -180,7 +182,7 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
             }
         }
 
-        auto inserted = group_map.emplace(std::move(key), groups.size());
+        auto inserted = group_map.try_emplace(std::move(key), groups.size());
         if (inserted.second) {
             // the values of a group are those of the source columns at its first row
             groups.push_back({{r}});
@@ -465,7 +467,8 @@ std::shared_ptr<ColumnData> QoreGroupedDataFrame::aggregateColumn(const ColumnDa
         cd->int_data.resize(n_groups);
         for (int64_t g = 0; g < n_groups; ++g) {
             int64_t count = 0;
-            std::unordered_set<std::string> seen;
+            qore_keyed_string_set seen;
+            QORE_KEYED_HASH_SITE("dataframe-4", seen);
             for (int64_t r : groups[g].row_indices) {
                 if (cancelled()) {
                     return nullptr;

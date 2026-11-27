@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -151,8 +163,8 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 
-string actual = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+string actual = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
 string expected = "1500000:ok:yes:z:True\n";
 if (actual != expected) {
     printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",

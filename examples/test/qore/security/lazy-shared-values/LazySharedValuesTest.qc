@@ -1,21 +1,10 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
-# test-platform: macos - threads waiting on condition variables, trusted builds and AOT-compiled calls of builtin classes
 
-%modern
-%no-child-restrictions
+# The cases of the LazySharedValuesTest-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase())
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires ../../../TestInterpreter.qm
-%requires FsUtil
-%requires ../../../ExecModeHarness.qm
-
-%exec-class LazySharedValuesTest
-
-#! Regression test for qore#7684: process-wide values built on first use are built as trusted code
+#! Cases of the regression test for qore#7684: process-wide values built on first use are built as trusted code
 /** LazySharedValues.q uses a library module that builds process-wide values with LazySharedMap and LazySharedValue,
     and with the plain lazy pattern that they replace: only trusted code creates the objects; for each state of the
     first caller that the barrier of a trusted build hides (a sandbox, a sandbox that a trusted deputy acts for, a
@@ -29,11 +18,19 @@
     build them for a sandboxed first caller as trusted code.  Their output must be the one in the .expected files in
     every execution mode, and in programs compiled with qcc -O0 and -O3 (the callers' code is parsed at run time, so
     the compiled code there is that of the trusted callers and of the test module).
+
+    The cases are in three parts, one test each, so that none takes long (LazySharedVendoredSchemas.q builds the
+    schemas of the provider modules in each run, about 9 s in a debug build, and all the cases took 120-156 s in the
+    Alpine CI jobs): LazySharedValuesTest-1.qtest runs LazySharedVendoredSchemas.q in every execution mode,
+    LazySharedValuesTest-2.qtest as programs compiled with qcc, and LazySharedValuesTest-3.qtest runs
+    LazySharedValues.q and LazySharedModuleByPath.q in every execution mode and compiled with qcc.
 */
-class LazySharedValuesTest inherits QUnit::Test {
+class LazySharedValuesTestBase inherits QUnit::Test {
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
-        list<string> fixtures = ("LazySharedValues", "LazySharedVendoredSchemas", "LazySharedModuleByPath");
+
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
     public {
@@ -41,23 +38,52 @@ class LazySharedValuesTest inherits QUnit::Test {
         const DebugHookFixtures = {"LazySharedValues": True};
     }
 
-    constructor() : QUnit::Test("lazy shared values", "1.0", \ARGV) {
-        foreach string fixture in (fixtures) {
-            string name = fixture;
+    constructor(string name, int part) : QUnit::Test("lazy shared values", "1.0", \ARGV) {
+        self.part = part;
+
+        # the fixture that loads the vendored schema providers takes most of the time (about 9 s per run in a
+        # debug build), so its execution modes and its qcc programs are parts of their own
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addPartCase(1, "LazySharedVendoredSchemas: execution mode " + mode,
+                modeCase("LazySharedVendoredSchemas", mode));
+        }
+        addPartCase(2, "LazySharedVendoredSchemas: qcc -O0", qccCase("LazySharedVendoredSchemas", 0));
+        addPartCase(2, "LazySharedVendoredSchemas: qcc -O3", qccCase("LazySharedVendoredSchemas", 3));
+
+        foreach string fixture in (("LazySharedValues", "LazySharedModuleByPath")) {
             foreach string mode in (ExecModeHarness::ExecModes) {
-                string execution_mode = mode;
-                addTestCase(name + ": execution mode " + mode, sub () {
-                    skipWithoutDebugHooks(name);
-                    # the library modules' code chooses its own execution, so the native compilation is not checked
-                    assertEq(expected(name), ExecModeHarness::run_stdout(command(name, execution_mode),
-                        ExecModeHarness::NativeCheck::None));
-                });
+                addPartCase(3, fixture + ": execution mode " + mode, modeCase(fixture, mode));
             }
-            addTestCase(name + ": qcc -O0", sub () { skipWithoutDebugHooks(name); checkQcc(name, 0); });
-            addTestCase(name + ": qcc -O3", sub () { skipWithoutDebugHooks(name); checkQcc(name, 3); });
+            addPartCase(3, fixture + ": qcc -O0", qccCase(fixture, 0));
+            addPartCase(3, fixture + ": qcc -O3", qccCase(fixture, 3));
         }
 
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! returns the case that runs the fixture in an execution mode and compares its output
+    private code modeCase(string name, string execution_mode) {
+        return sub () {
+            skipWithoutDebugHooks(name);
+            # the library modules' code chooses its own execution, so the native compilation is not checked
+            assertEq(expected(name), ExecModeHarness::run_stdout(command(name, execution_mode),
+                ExecModeHarness::NativeCheck::None));
+        };
+    }
+
+    #! returns the case that compiles the fixture with qcc and compares the output of the program
+    private code qccCase(string name, int opt) {
+        return sub () {
+            skipWithoutDebugHooks(name);
+            checkQcc(name, opt);
+        };
     }
 
     #! skips a case of a fixture that needs the debug hooks of debug builds of the library, in other builds

@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - AOT code generation, linking and loading with a small main thread stack (ulimit -s)
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
@@ -30,6 +31,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class AotBatchHierarchyStackTest
 
@@ -111,11 +113,20 @@ class AotBatchHierarchyStackTest inherits QUnit::Test {
         return timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "300") : "";
     }
 
-    #! runs a command with the main thread stack size given and returns its output and exit status
-    private string run(string cmd, *int kb) {
+    #! runs a command with the main thread stack size given and returns its result
+    /** The command runs in its default environment; a warning of the module loader on stderr is not output
+    */
+    private hash<ExecModeHarness::ModeRunResult> run(string cmd, *int kb) {
         string limit = kb ? sprintf("ulimit -s %d && ", kb) : "";
-        return backquote(sprintf("cd %s && %senv LD_LIBRARY_PATH=%s QORE_LIBDIR=%s sh -c '%s%s' 2>&1; echo EXIT=$?",
-            tmp.path, prefix(), libqore_dir, libqore_dir, limit, cmd));
+        return ExecModeHarness::run_command(sprintf("cd %s && %senv LD_LIBRARY_PATH=%s QORE_LIBDIR=%s sh -c '%s%s'",
+            tmp.path, prefix(), libqore_dir, libqore_dir, limit, cmd), NOTHING, "QORE_JIT_TIMING=1");
+    }
+
+    #! checks that a run of an executable printed the output given and ended normally
+    private checkRun(hash<ExecModeHarness::ModeRunResult> r, string expected, string label) {
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     private checkQcc() {
@@ -130,27 +141,25 @@ class AotBatchHierarchyStackTest inherits QUnit::Test {
     testExecutable() {
         checkQcc();
         # the sources in this order make the object of the derived class the first image of the batch
-        string out = run(sprintf("%s -O3 -o exe main.q chain.q", qcc_bin));
-        assertRegex("\nEXIT=0\n$", "\n" + out, "compile: " + out);
+        hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s -O3 -o exe main.q chain.q", qcc_bin));
+        assertEq(0, r.rc, "compile: " + r.out);
         foreach int kb in (StackSizesKb) {
-            out = run("./exe", kb);
-            assertEq("loaded\nEXIT=0\n", out, sprintf("%dK", kb));
+            checkRun(run("./exe", kb), "loaded\n", sprintf("%dK", kb));
         }
         # the derived class has the member of the root class of the hierarchy
-        out = run("CONSTRUCT=1 ./exe", StackSizesKb.last());
-        assertEq("X: 7\nEXIT=0\n", out, "constructing the derived class");
+        checkRun(run("CONSTRUCT=1 ./exe", StackSizesKb.last()), "X: 7\n", "constructing the derived class");
     }
 
     testPreload() {
         checkQcc();
         mkdir(tmp.path + DirSep + "d1");
         mkdir(tmp.path + DirSep + "d2");
-        string out = run(sprintf("%s -O0 -c -o d2/chain.qo chain.q && %s -O0 -c -L d2 -o d1/main.qo main.q", qcc_bin,
-            qcc_bin));
-        assertRegex("\nEXIT=0\n$", "\n" + out, "objects: " + out);
+        hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s -O0 -c -o d2/chain.qo chain.q && %s -O0 -c -L d2 "
+            "-o d1/main.qo main.q", qcc_bin, qcc_bin));
+        assertEq(0, r.rc, "objects: " + r.out);
         # the -L directories in this order make the object of the derived class the first image of the batch
-        out = run(sprintf("%s -O0 -c -L d1 -L d2 -o target.qo target.q", qcc_bin));
-        assertRegex("\nEXIT=0\n$", "\n" + out, "target: " + out);
+        r = run(sprintf("%s -O0 -c -L d1 -L d2 -o target.qo target.q", qcc_bin));
+        assertEq(0, r.rc, "target: " + r.out);
         assertTrue(is_file(tmp.path + DirSep + "target.qo"), "target object");
     }
 }

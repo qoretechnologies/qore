@@ -204,8 +204,8 @@
           "message": "Téléverser un fichier en utilisant multipart/form-data"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure `FileDataType` (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
@@ -644,8 +644,8 @@
           "message": "Lister les contacts de l'espace de travail"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
-          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "Liste les contacts, du plus récent au plus ancien.\n\nCette action est exposée pour alimenter les listes déroulantes de contacts ; utilisez **Search Contacts** lorsqu'il s'agit d'obtenir un sous-ensemble de contacts.\n\nLa description d'Intercom ne déclare aucun paramètre de pagination pour cette opération bien qu'elle renvoie une enveloppe paginée ; `per_page` et `starting_after` sont ajoutés lors de l'importation du schéma. Voir @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "Liste les contacts, du plus récent au plus ancien.\n\nCette action est exposée pour alimenter les listes déroulantes de contacts ; utilisez **Search Contacts** lorsqu'il s'agit d'obtenir un sous-ensemble de contacts.\n\nLa description d'Intercom ne déclare aucun paramètre de pagination pour cette opération bien qu'elle renvoie une enveloppe paginée ; `per_page` et `starting_after` sont ajoutés lors de l'importation du schéma. Voir `IntercomSchema`."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
@@ -1900,8 +1900,8 @@
           "message": "Lister les articles du centre d'aide"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
-          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "Répertorie les articles du centre d'aide de l'espace de travail.\n\nLa description d'Intercom ne déclare aucun argument de pagination pour cette opération bien qu'elle réponde avec une enveloppe paginée ; `per_page` et `starting_after` sont ajoutés lors de l'importation du schéma. Voir @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "Répertorie les articles du centre d'aide de l'espace de travail.\n\nLa description d'Intercom ne déclare aucun argument de pagination pour cette opération bien qu'elle réponde avec une enveloppe paginée ; `per_page` et `starting_after` sont ajoutés lors de l'importation du schéma. Voir `IntercomSchema`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",

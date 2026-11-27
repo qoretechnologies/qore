@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class PrivateInternalRedeclaredMemberTest
 
@@ -81,9 +82,18 @@ new G: a=null A=1
         string exe = tmp.path + DirSep + "probes";
         string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, probes));
         if (is_file(exe)) {
-            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc");
+            checkExecutable(sprintf("%s %s", env, exe), Expected, "qcc");
         } else {
             assertRegex("AOT compilation requires %modern", out, "qcc refuses the code");
         }
+    }
+
+    #! runs the qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }
