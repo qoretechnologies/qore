@@ -125,10 +125,11 @@ class CatchScopeRethrowTest inherits QUnit::Test {
                 worker));
             assertTrue(is_file(exe), sprintf("qcc -O%s: %s", opt, compile_out));
             string label = "aot-O" + opt;
-            int rc;
-            string out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
-            assertEq(0, rc, label + ": exit code");
-            checkResults(label, parseOutput(label, out));
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+                "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, label + ": exit code");
+            checkResults(label, parseOutput(label, r.out));
         }
     }
 

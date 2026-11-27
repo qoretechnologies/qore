@@ -287,7 +287,9 @@ for (int c = 0; c < 3; ++c) {
         hash<string, int> calls = getCalls(out, "qcc " + opt);
         assertGt(0, calls.qore_rt_reload_chain_flush ?? 0, "qcc " + opt + ": the flushes are table calls");
         assertEq(0, calls.qore_rt_reload_chain_rotate ?? 0, "qcc " + opt + ": no rotation of a single local");
-        assertEq(expected, getResults(backquote(sprintf("%s %s 2>&1", lib_env, exe))), "qcc " + opt);
+        # the executable runs in its default environment; a warning of the module loader on stderr is not output
+        assertEq(expected, getResults(ExecModeHarness::run_command(sprintf("%s %s", lib_env, exe), NOTHING,
+            "QORE_JIT_TIMING=1").out), "qcc " + opt);
     }
 
     #! Returns the results of the code with the AST interpreter, which the other modes must give

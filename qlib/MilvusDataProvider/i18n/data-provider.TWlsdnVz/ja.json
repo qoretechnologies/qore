@@ -12,8 +12,8 @@
           "message": "Milvus / Zilliz Cloud オープンソースベクトルデータベース"
         },
         "app.TWlsdnVz.desc": {
-          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "[Milvus](https://milvus.io) および [Zilliz Cloud](https://zilliz.com)（マネージドMilvus）へのアクセスを提供します。十億規模の類似度検索をサポートするオープンソースのベクトルデータベースです。\n\n@ref QoreRagUtils::RagPipeline \"RagPipeline\" を介したサポート対象の取り込み/取得パスには、@ref qoreragutilsintro \"QoreRagUtils\" の @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" バックエンドを使用してください。"
+          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the `MilvusVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "[Milvus](https://milvus.io) および [Zilliz Cloud](https://zilliz.com)（マネージドMilvus）へのアクセスを提供します。十億規模の類似度検索をサポートするオープンソースのベクトルデータベースです。\n\n`RagPipeline` を介したサポート対象の取り込み/取得パスには、`QoreRagUtils` の `MilvusVectorStore` バックエンドを使用してください。"
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "multipart/form-dataを使用してファイルをアップロード"
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは`FileDataType`構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

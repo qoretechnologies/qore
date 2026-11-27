@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -46,13 +47,12 @@ class AOTLinkUnresolvedReferenceTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private hash<auto> run(string cmd) {
-        string out = backquote(sprintf("%s %s 2>&1; echo rc=$?", env, cmd));
-        *list<*string> m = out =~ x/rc=([0-9]+)\n$/;
-        return {
-            "rc": m ? m[0].toInt() : -1,
-            "out": out,
-        };
+    #! runs a command (qcc or an executable that it links) in its default environment
+    /** @return the result: its output (the output on stdout followed by the output on stderr, apart from the
+        warnings of the module loader, which are not output of the run: qore#7805) and its exit status
+    */
+    private hash<ExecModeHarness::ModeRunResult> run(string cmd) {
+        return ExecModeHarness::run_command(sprintf("%s %s", env, cmd), NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private write(string path, string body) {
@@ -172,8 +172,9 @@ main();
 "},
         ), exe);
         assertEq(0, r.rc, "the link succeeds: " + r.out);
-        hash<auto> pr = run(exe);
+        hash<ExecModeHarness::ModeRunResult> pr = run(exe);
         assertEq(0, pr.rc, "the executable ends normally: " + pr.out);
-        assertEq("21 application/json\nrc=0\n", pr.out, "the executable runs");
+        assertEq("21 application/json\n", pr.stdout, "the executable runs");
+        assertEq("", pr.stderr, "the executable writes nothing to stderr");
     }
 }

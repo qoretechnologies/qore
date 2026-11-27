@@ -57,7 +57,7 @@ public class VertexAiDataProviderCommon inherits DataProvider::AbstractDataProvi
                     DTT_FromLocation: True,
                 }),
                 "desc": "Location of a GCP service-account JSON key file, read via "
-                    "the @ref filelocationhandlerintro \"FileLocationHandler\" module "
+                    "the `FileLocationHandler` module "
                     "(a bare path or any registered scheme: `file://`, `http(s)://`, "
                     "`sftp://`, ...); when omitted, Application Default Credentials "
                     "resolution runs (`GOOGLE_APPLICATION_CREDENTIALS` env var, "

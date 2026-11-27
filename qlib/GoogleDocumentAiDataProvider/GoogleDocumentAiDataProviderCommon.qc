@@ -53,8 +53,7 @@ public class GoogleDocumentAiDataProviderCommon inherits DataProvider::AbstractD
                     DTT_FromLocation: True,
                 }),
                 "desc": "Location of a GCP service-account or authorized-user credential file, "
-                    "read via the @ref filelocationhandlerintro "
-                    "\"FileLocationHandler\" module (a bare path or any registered "
+                    "read via the `FileLocationHandler` module (a bare path or any registered "
                     "scheme: `file://`, `http(s)://`, `sftp://`, ...).  When omitted, "
                     "Application Default Credentials are used.",
                 "sensitive": True,

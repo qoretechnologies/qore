@@ -132,7 +132,9 @@ class WeakObjectSoftListTest inherits QUnit::Test {
             string compile_out = backquote(sprintf("%s %s -O%d --strip-source -o %s %s 2>&1", getEnv(), qcc_bin, opt,
                 exe, getWorker()));
             assertTrue(is_file(exe), label + ": " + compile_out);
-            checkWorkerOutput(label, backquote(sprintf("%s %s 2>&1", getEnv(), exe)));
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            checkWorkerOutput(label, ExecModeHarness::run_command(sprintf("%s %s", getEnv(), exe), NOTHING,
+                "QORE_JIT_TIMING=1").out);
         }
     }
 

@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 
 %exec-class AOTMemberInitNegativeOffsetsTest
@@ -80,7 +81,16 @@ printf(\"%y\\n\", (C1, C2, C3, C4, K::KC, K::SV, k.m, k.r, k.c, k.s));
             if (!is_file(exe)) {
                 continue;
             }
-            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc " + opt);
+            checkExecutable(sprintf("%s %s", env, exe), Expected, "qcc " + opt);
         }
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

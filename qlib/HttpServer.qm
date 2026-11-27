@@ -311,6 +311,16 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     After it has sent the \c GOAWAY frame of a connection error, the server closes the connection (RFC 9113 section
     5.4.1), as it does when a \c GOAWAY frame has been sent or received and no stream of the connection has work left.
 
+    A client that opens a stream over the connection's \c SETTINGS_MAX_CONCURRENT_STREAMS, once it has acknowledged
+    the setting, ends the connection: the server answers the stream's \c HEADERS frame with
+    <tt>GOAWAY(PROTOCOL_ERROR)</tt> ("request HEADERS: max concurrent streams exceeded"), which ends the other requests
+    and WebSocket connections of the connection too.  RFC 9113 makes the stream a stream error (section 5.1.2), and
+    allows an endpoint to treat a stream error as a connection error (section 5.4.1); the HTTP/2 library (nghttp2)
+    does so for this case, and its maintainers have declined to send <tt>RST_STREAM(REFUSED_STREAM)</tt> instead
+    (nghttp2 issue 687), as only a client that exceeds the limit set by its peer, which RFC 9113 section 5.1.2
+    forbids, gets there.  Before the client has acknowledged the setting, such a stream is reset with
+    <tt>RST_STREAM(REFUSED_STREAM)</tt> and can be retried (RFC 9113 section 8.7).
+
     The server ends its half of the stream of an HTTP/2 WebSocket connection (RFC 8441) when the WebSocket connection
     has closed: after the closing handshake, after the close timeout, or at once after its close frame when the
     handler has no close timeout.  If the client has not ended its half then, the server resets the stream with
@@ -3149,17 +3159,14 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
           session of the paired QUIC listener: the response of the request that runs the stop is not sent, and the
           responses in progress for the other clients of the QUIC listener can be cut off
 
-        @note The stop waits for the HTTP/1.1 requests of the listener whose handlers still run, without a timeout, and
-        a request whose handler never runs can stay counted:
-        - a request whose handler-pool task cannot run its handler because the async target's
-          @ref HttpServerAsyncIo::HttpAsyncTarget::saveDispatchContext() "saveDispatchContext()" raises an exception
-          (for example a target of an application that saves its thread-local state there, on an internal failure)
-          is not answered and stays counted: a later stop of the listener waits for the drain timeout, and then until
-          the server is stopped
-        - a request whose queued task the server's handler pool cancels stays counted; the pool cancels a queued task
-          only while the server stops and a thread cannot be started (a thread limit), and a stop of the listener that
-          runs at the same time then waits until the server's stop has ended, or, if the server's stop runs in one of
-          its own requests and its thread to stop the handler pool cannot be started, forever
+        @note The stop waits for the HTTP/1.1 requests of the listener whose handlers still run, without a timeout: a
+        request whose handler cannot run because the async target's
+        @ref HttpServerAsyncIo::HttpAsyncTarget::saveDispatchContext() "saveDispatchContext()" raises an exception is
+        not answered, its HTTP/1.1 connection is closed, and the stop waits only until it is closed (qore#7769); a
+        request that is still queued in the server's handler pool when the server stops is run by the server's stop,
+        except when the server is stopped in one of its own requests and the thread that stops its handler pool cannot
+        be started (a thread limit): the pool then cancels the requests still queued when it is destroyed, and a stop
+        of their listener that runs then waits for them without end (qore#7784)
 
         @note Stops of listeners that wait for each other (a request of listener A stops listener B while a request of
         B stops A, or a cycle of more listeners) wait forever: each stop waits for the requests of its listener

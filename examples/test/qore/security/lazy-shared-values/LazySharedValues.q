@@ -3,7 +3,7 @@
 # Process-wide values that a library module builds lazily with LazySharedMap and LazySharedValue are built as trusted
 # code for whichever caller needs them first: what the builder creates is marked as shared and takes neither the
 # sandbox nor the restrictions of that caller, unlike the plain lazy pattern; the builds are single-flight, a failed
-# build leaves nothing behind, and only trusted code can create the objects (qore#7684); see lazy-shared-values.qtest
+# build leaves nothing behind, and only trusted code can create the objects (qore#7684); see LazySharedValuesTest.qc
 
 %modern
 %enable-all-warnings
