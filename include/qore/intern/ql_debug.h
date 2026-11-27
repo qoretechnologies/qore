@@ -223,6 +223,10 @@ DLLLOCAL void qore_dbg_fs_swap_on_open(const char* fn);
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_received;
 
+//! the responses that the HTTP/3 servers of the process were given for streams that had closed before them, and
+//! did not send (qore#7803); see dbg_quic_responses_on_closed_streams()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_responses_on_closed_streams;
+
 //! the Retry packets that the QUIC servers of the process sent; see dbg_quic_server_retry_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_server_retries_sent;
 
