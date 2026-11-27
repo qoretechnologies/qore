@@ -6201,10 +6201,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
                     native_body_key = reader.readStringRef(ptr);
                 }
-                // the location of the closure (see v26), which its signature gets
+                // the locations of the closure's block (see v26), which its debug block gets, and of its signature
+                // (see v54), which its signature gets (qore#7787)
                 const QoreProgramLocation* closure_loc = nullptr;
+                const QoreProgramLocation* closure_sig_loc = nullptr;
                 if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                     closure_loc = qore_aot_read_source_location(reader, ptr, pgm);
+                }
+                if (reader.getHeader().version >= QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION) {
+                    closure_sig_loc = qore_aot_read_source_location(reader, ptr, pgm);
                 }
 
                 bool is_lambda = false, is_in_method = false, closure_needs_type_context = false,
@@ -6350,9 +6355,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
-                    closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
-                    closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
+                    closure_sig_has_varargs, closure_class,
+                    closure_sig_loc ? closure_sig_loc->getFile() : (closure_loc ? closure_loc->getFile() : nullptr),
+                    closure_sig_loc ? closure_sig_loc->start_line : (closure_loc ? closure_loc->start_line : 0),
+                    closure_sig_loc ? closure_sig_loc->end_line : (closure_loc ? closure_loc->end_line : 0),
                     std::vector<uint8_t>(), local_owner_pgm);
+                closure_variant->setAOTBlockLocation(closure_loc);
                 if (closure_needs_extra_args) {
                     closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
                 }

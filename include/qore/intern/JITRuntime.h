@@ -526,9 +526,17 @@ uint64_t qore_rt_coerce_return(const QoreTypeInfo* ti, uint64_t value, uint64_t*
 
 //! Applies the declared return type to a missing return value in a fast entry, as for a block without a return
 //! statement
-/** @return the converted value, which is also stored in @p cleanup when given
+/** @param ti the declared return type
+    @param loc the location of the signature of the code, which locates the error raised for a type that rejects
+    NOTHING, as the caller of a standard entry does (UserVariantBase::evalIntern(), qore#7787); if null, the error
+    has the runtime location
+    @param cleanup if not null, receives the converted value
+    @param xsink receives the error
+
+    @return the converted value, which is also stored in @p cleanup when given
 */
-uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, uint64_t* cleanup, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, const QoreProgramLocation* loc, uint64_t* cleanup,
+        ExceptionSink* xsink);
 
 //! Check if a NaN-boxed QoreValue is an int; returns 1 if int, 0 otherwise
 int64_t qore_rt_guard_int(uint64_t val);

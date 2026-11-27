@@ -735,10 +735,26 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //!        one operand, the request (an integer constant): the run decides; the maximum opcode in the AOT header is 447
 //!      - header flag QORE_AOT_FLAG_DEBUGGING (0x0008): the code was compiled with debugging (qcc -g; qore#7676);
 //!        readers before v54 ignore it, and qcc refuses to link objects with and without it
+//!      - no format change of the image, but a change of the native ABI (native code must be recompiled): the
+//!        runtime helper qore_rt_coerce_nothing_return_by_type_path_aot(), which the fast entry of code that ends
+//!        without a return statement calls to apply its declared return type to the missing value, takes the
+//!        location of the code's signature (a constant source location of the image) after the type path, and locates
+//!        the error of a type that rejects NOTHING there, as the caller of a standard entry does (qore#7787)
+//!      - a closure record (CLOSURE_CREATE) has the location of the closure's signature after the location of its
+//!        block (qore_aot_write_closure_locations()): the signature of a closure that is read gets it, as a parsed
+//!        closure's signature has it, and the debugger's block of the closure keeps the location of its block
+//!        (UserClosureVariant::getAOTBlockLocation()); the signature had the location of the block, and the errors
+//!        located at the signature, such as the error of a missing return value, had another line than in AST
+//!        (qore#7787)
 //! The shared format version for the changes of the AOT3 batch (see v54 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT3_VERSION = 54;
 //! First format version whose debug IR can have HandlerAbandonReturn (see v54 above, qore#7625).
 constexpr uint16_t QORE_AOT_HANDLER_ABANDON_RETURN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
+//! First format version whose native code passes the location of the signature to the missing return value helper
+//! of a fast entry (see v54 above, qore#7787)
+constexpr uint16_t QORE_AOT_MISSING_RETURN_LOCATION_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
+//! First format version whose closure records have the location of the closure's signature (see v54 above, qore#7787)
+constexpr uint16_t QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -782,7 +798,9 @@ constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AO
 //! and method return types (qore#7457) and their methods in the order of their names (qore#7458).
 //! Old compiled artifacts must be rebuilt (see v54 above): the reader refuses v53 and older images the same way; the
 //! debug IR of a v54 image has the release of what a handler compiled as a function of its own handed over on the
-//! paths of a debugger's requests that abandon its return (qore#7625)
+//! paths of a debugger's requests that abandon its return (qore#7625), its closure records have the location of the
+//! closure's signature, and its native code passes the location of the signature to the missing return value helper
+//! of a fast entry (qore#7787)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -937,6 +955,8 @@ static_assert(QORE_AOT_EXIT_RESTORE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERS
     && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
     "the format changes of the second AOT-identity batch share one format version (v53)");
 static_assert(QORE_AOT_HANDLER_ABANDON_RETURN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_MISSING_RETURN_LOCATION_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION == QORE_AOT_BATCH_AOT3_VERSION
     && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
     && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT3_VERSION,
     "the format changes of the AOT3 batch share one format version (v54), which the reader requires");
@@ -2529,10 +2549,17 @@ DLLLOCAL bool qore_aot_has_source_location(const QoreProgramLocation* loc);
 
 class UserClosureFunction;
 //! Returns the source location of a closure, which its record carries from format version 26 (#5816)
-/** the location of the block of its code, which the debugger's events of the closure are given with; its signature
-    when read from an AOT image gets it
+/** the location of the block of its code, which the debugger's events of the closure are given with (its signature
+    gets the location of its signature, which the record has after it from v54: qore_aot_write_closure_locations())
 */
 DLLLOCAL const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* ucf);
+
+//! Serializes the locations of a closure in its record: its block's (qore_aot_closure_location()), then its signature's
+/** The location of the signature (v54, qore#7787) locates the errors that the AST interpreter locates at the
+    declaration of the closure, such as the error of a missing return value; both are written without a location when
+    the writer omits source locations (QoreAOTBinaryWriter::omit_source_locations)
+*/
+DLLLOCAL void qore_aot_write_closure_locations(QoreAOTBinaryWriter& writer, const UserClosureFunction* ucf);
 
 //! Deserializes a source location written by qore_aot_write_source_location()
 /** @return the location, interned in the Program, or nullptr if none was written (lines 0) or there is no Program

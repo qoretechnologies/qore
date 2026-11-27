@@ -4053,10 +4053,27 @@ public:
 
 class UserClosureVariant : public UserFunctionVariant {
 protected:
+    //! the location of the block of a closure read from an AOT image, which has no block; see getAOTBlockLocation()
+    const QoreProgramLocation* aot_block_loc = nullptr;
+
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
         is_closure = true;
         signature.closure = true;
+    }
+
+    //! Sets the location of the block of a closure read from an AOT image (see getAOTBlockLocation())
+    DLLLOCAL void setAOTBlockLocation(const QoreProgramLocation* loc) {
+        aot_block_loc = loc;
+    }
+
+    //! Returns the location of the block of a closure read from an AOT image, or nullptr
+    /** The debugger's events of the closure's code are given with a block at this location
+        (getAOTClosureDebugBlock()), as the AST interpreter gives them with the closure's block, while its signature has
+        the location of its declaration, as a parsed closure's has (qore#7787)
+    */
+    DLLLOCAL const QoreProgramLocation* getAOTBlockLocation() const {
+        return aot_block_loc;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

@@ -2619,7 +2619,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         fast_lowering.setBatchCallees(&batch_callee_map);
         fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
         fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
-            nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
+            nullptr, callee_info.return_kind, sig->getReturnTypeInfo(), sig->getParseLocation());
         return fast_lowering.lowerFunction(*callee.ir_func, *module, error);
     };
 
