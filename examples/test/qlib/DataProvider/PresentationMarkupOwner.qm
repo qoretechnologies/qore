@@ -44,6 +44,7 @@ module PresentationMarkupOwner {
             "logo_file_name": "markup-provider.svg",
         });
 
+        QoreDataField name("name", "The name of the file; see \\c filename", new QoreStringDataType());
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": "QoreTestMarkupProvider",
             "path": "/upload",
@@ -53,14 +54,7 @@ module PresentationMarkupOwner {
             "desc": "Uploads a @ref DataProvider::FileDataType \"FileDataType\" structure",
             "action_code": DPAT_API,
             "output_type": new QoreHashDataType(),
-            "options": {
-                "name": <DataProviderOptionInfo>{
-                    "display_name": "Name",
-                    "short_desc": "The name of the file",
-                    "type": AbstractDataProviderType::get(StringType),
-                    "desc": "The name of the file; see \\c filename",
-                },
-            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields({"name": name}),
         });
     };
 }
