@@ -206,6 +206,11 @@ public:
     version_list_t version_list;
     // list of dependent modules to reexport
     name_vec_t rmod;
+    //! the modules that the module's own directives required directly, in the order of the directives
+    /** \c %%requires, \c %%requires(reexport) and successful \c %%try-module requests of a user module, the
+        dependencies that a binary module declares; reported as \c required-modules by get_module_hash() (#7796)
+    */
+    name_vec_t reqmod;
 
     // for binary modules
     DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, const char* d,
@@ -312,6 +317,18 @@ public:
 
     DLLLOCAL void addModuleReExport(const char* m) {
         rmod.push_back(m);
+    }
+
+    //! records a module that this module's own directives required directly; a module recorded already is ignored
+    /** the module manager mutex must be held when calling this method
+    */
+    DLLLOCAL void addModuleRequirement(const char* m) {
+        for (const std::string& r : reqmod) {
+            if (r == m) {
+                return;
+            }
+        }
+        reqmod.push_back(m);
     }
 
     //! sets the child modules declared by this module with the %try-child-module parse directive

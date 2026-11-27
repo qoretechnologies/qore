@@ -2569,6 +2569,18 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies)
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2603,6 +2615,18 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies)
 
     @par Example:
     @code{.py}
@@ -2642,6 +2666,18 @@ list<hash<auto>> get_module_list() {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies)
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2676,6 +2712,18 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
       - \c err: (only with \c "failed") the exception error string
       - \c desc: (only with \c "failed" and \c "skipped") the exception description or the reason the
         child module was not attached
+    - \c reexported-modules: (only present if the module reexports modules) a list of the names of the modules
+      that the module's @ref requires "%requires(reexport)" and @ref try-reexport-module "%try-reexport-module"
+      directives loaded, in the order of the directives; the same for a module loaded from its source and from its
+      compiled (AOT) form
+    - \c required-modules: (only present if the module requires modules; since %Qore 3.0) a list of the names of
+      the modules that the module requires directly, in the order of its directives: for a user module, loaded from
+      its source or from its compiled (AOT) form, the modules that its own @ref requires "%requires",
+      @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" directives loaded, including
+      the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
+      a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
+      module's code loads at run time; for a binary module, the dependencies that its module description declares
+      (\c QoreModuleInfo::dependencies)
 
     @par Example:
     @code{.py}

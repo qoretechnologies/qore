@@ -3778,6 +3778,11 @@ void set_reexport(QoreAbstractModule* m, bool reexport) {
         td->qmi |= 1;
 }
 
+QoreAbstractModule* get_reexport_module() {
+    // the low bit is the reexport flag of the module's own load
+    return (QoreAbstractModule*)(thread_data.get()->qmi & ~(uintptr_t)1);
+}
+
 // returns 1 if data structure is already on stack, 0 if not (=OK)
 int thread_push_container(const AbstractQoreNode* n) {
     std::pair<const_node_set_t::iterator, bool> rv = thread_data.get()->node_set.insert(n);
