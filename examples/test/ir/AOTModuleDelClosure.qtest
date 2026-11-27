@@ -42,6 +42,10 @@ class AOTModuleDelClosureTest inherits QUnit::Test {
         addTestCase("the del closure uses the static data of its module", \testDelUsesModuleState());
         addTestCase("the del closure of a module runs before those of the modules it requires, indirectly too",
             \testDelOrder());
+        addTestCase("the del closures of a cycle that requires a module run before the closure of that module",
+            \testDelOrderCycle());
+        addTestCase("the del closure of an AOT module runs before that of a module that it loaded at run time",
+            \testDelOrderRuntimeLoad());
         addTestCase("the del closure of a local module of a compiled script runs", \testScriptLocalModuleDel());
         addTestCase("the del closures of the local modules of a compiled script run in the order of their dependencies",
             \testScriptLocalModuleDelOrder());
@@ -310,6 +314,167 @@ printf(\"value=%%d\\n\", %s::value());
                     "the del closure of " + chain[0] + " runs before that of " + chain[2] + " with " + opt);
             }
         }
+    }
+
+    #! the del closures of the AOT modules of a dependency cycle run before the closure of the module that the cycle
+    #! requires (qore#7445)
+    /** One requires Base and the source module Src, which loads Two at run time; Two requires One: One, Src and Two
+        make a cycle that requires Base.  The modules of a cycle require each other: when only the cycle and Base were
+        left, every module looked held back by another, and the first one in the order of the module map was taken,
+        which could be Base, whose closure then ran before those of the modules that can use it.  The map is unordered,
+        so several sets of names are run, in both orders of the map (the test hook QORE_AOT_TEST_REVERSE_DEL_ORDER).
+    */
+    testDelOrderCycle() {
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-del-cycle-");
+            string dir = tmp.path;
+            mkdir(dir + "/mods");
+            string qm_env = sprintf("%s QORE_MODULE_DIR=%s/mods", env(), dir);
+            # base, one, source, two
+            list<list<string>> sets = (
+                ("AotCycBase", "AotCycOne", "AotCycSrc", "AotCycTwo"),
+                ("AotCycZBase", "AotCycAOne", "AotCycMSrc", "AotCycBTwo"),
+                ("AotRingA", "AotRingM", "AotRingS", "AotRingZ"),
+                ("AotRingZ2", "AotRingA2", "AotRingS2", "AotRingM2"),
+                ("AotLoopMid", "AotLoopAa", "AotLoopSrc", "AotLoopZz"),
+            );
+            foreach list<string> s in (sets) {
+                string base = s[0];
+                string one = s[1];
+                string src = s[2];
+                string two = s[3];
+                string marker = dir + "/marker-" + base + ".txt";
+                compileCycleModule(dir, qm_env, opt, base, orderModuleSource(base, marker));
+                # the source module, loaded from its source: it loads Two into its Program at run time
+                write(dir + "/mods/" + src + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"del closure order probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+public namespace %s {
+public sub load() { load_module(%y); }
+}
+", src, src, two));
+                compileCycleModule(dir, qm_env, opt, one, cycleModuleSource(one, marker, (base, src)));
+                compileCycleModule(dir, qm_env, opt, two, cycleModuleSource(two, marker, (one,)));
+                string probe = dir + "/probe-" + base + ".qr";
+                write(probe, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires %s
+%%requires %s
+%s::load();
+printf(\"value=%%d\\n\", %s::value());
+", dir, one, src, src, one));
+                foreach bool reverse in ((False, True)) {
+                    unlink(marker);
+                    string out = run(sprintf("%s%s %s -b %s", reverse ? "QORE_AOT_TEST_REVERSE_DEL_ORDER=1 " : "",
+                        env(), qore_bin, probe));
+                    string desc = sprintf("%s with %s%s", base, opt, reverse ? ", the map reversed" : "");
+                    assertEq("value=2\n", out, "output: " + desc);
+                    list<string> lines = is_file(marker)
+                        ? (map $1, ReadOnlyFile::readTextFile(marker).split("\n"), $1.val())
+                        : ();
+                    assertEq(3, lines.size(), "the three del closures ran: " + desc + ": " + lines.join(","));
+                    assertEq(base, lines.last(), "the closure of the module that the cycle requires runs last: " + desc
+                        + ": " + lines.join(","));
+                }
+            }
+        }
+    }
+
+    #! the del closure of an AOT module runs before that of an AOT module that its code loaded at run time (qore#7445)
+    /** The module loaded at run time is required by the module that loaded it (as for the order of the data of the
+        module Programs, qore#7432), but the del closure order used only the dependencies that an AOT module was
+        compiled with: the two closures had no order of their own, and ran in the order of the unordered module map.
+        Several sets of names are run, in both orders of the map.
+    */
+    testDelOrderRuntimeLoad() {
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-del-runtime-");
+            string dir = tmp.path;
+            mkdir(dir + "/mods");
+            string qm_env = sprintf("%s QORE_MODULE_DIR=%s/mods", env(), dir);
+            # the loader, the module that it loads at run time
+            list<list<string>> sets = (
+                ("AotRtLoaderA", "AotRtLoadedZ"),
+                ("AotRtLoaderZ", "AotRtLoadedA"),
+                ("AotRtMLoader", "AotRtBLoaded"),
+                ("AotRtBLoader", "AotRtMLoaded"),
+            );
+            foreach list<string> s in (sets) {
+                string loader = s[0];
+                string loaded = s[1];
+                string marker = dir + "/marker-" + loader + ".txt";
+                compileCycleModule(dir, qm_env, opt, loaded, orderModuleSource(loaded, marker));
+                compileCycleModule(dir, qm_env, opt, loader, sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"del closure order probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM\";
+    del = sub () {
+        File f();
+        f.open2(%y, O_WRONLY | O_CREAT | O_APPEND);
+        f.write(\"%s\\n\");
+    };
+}
+public namespace %s {
+public sub load() { load_module(%y); }
+}
+", loader, marker, loader, loader, loaded));
+                string probe = dir + "/probe-" + loader + ".qr";
+                write(probe, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires %s
+%s::load();
+print(\"loaded\\n\");
+", dir, loader, loader));
+                foreach bool reverse in ((False, True)) {
+                    unlink(marker);
+                    string out = run(sprintf("%s%s %s -b %s", reverse ? "QORE_AOT_TEST_REVERSE_DEL_ORDER=1 " : "",
+                        env(), qore_bin, probe));
+                    string desc = sprintf("%s with %s%s", loader, opt, reverse ? ", the map reversed" : "");
+                    assertEq("loaded\n", out, "output: " + desc);
+                    assertEq(loader + "\n" + loaded + "\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
+                        "the closure of the module that loaded the other one runs first: " + desc);
+                }
+            }
+        }
+    }
+
+    #! compiles a module of the cycle test to an AOT module
+    private compileCycleModule(string dir, string qm_env, string opt, string name, string source) {
+        write(dir + "/" + name + ".qm", source);
+        string qmod = dir + "/mods/" + name + ".qmod";
+        string out = run(sprintf("%s %s --module %s --output %s %s/%s.qm", qm_env, qcc_bin, opt, qmod, dir, name));
+        assertTrue(is_file(qmod), name + " compiled with " + opt + ": " + out);
+    }
+
+    #! the module source of the cycle test: requires the given modules and appends its name to the marker file
+    private string cycleModuleSource(string name, string marker, list<string> requires_names) {
+        return sprintf("%%modern
+%s
+module %s {
+    version = \"1.0\";
+    desc = \"del closure order probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM\";
+    del = sub () {
+        File f();
+        f.open2(%y, O_WRONLY | O_CREAT | O_APPEND);
+        f.write(\"%s\\n\");
+    };
+}
+public namespace %s {
+public int sub value() { return 2; }
+}
+", (foldl $1 + "\n" + $2, (map "%requires " + $1, requires_names)), name, marker, name, name);
     }
 
     #! the del closure of a source module that a script loads runs when the script ends; compiled with the module

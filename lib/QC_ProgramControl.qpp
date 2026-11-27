@@ -69,7 +69,7 @@ hashdecl StatementInfo {
     int end_line;
     //! list of assigned breakpoints, unavailable if @ref no-debugging "%no-debugging" (since 0.9)
     *list breakpoints;
-    //! the 0-based column of the first character of the statement in its start line, or -1 if unknown, as for a block or for a statement of AOT-compiled code; a column counts bytes (since %Qore 3.0)
+    //! the 0-based column of the first character of the statement in its start line, or -1 if unknown, as for a block; a column counts bytes (since %Qore 3.0)
     int start_column = -1;
     //! the 0-based column after the last character of the statement in its end line, or -1 if unknown (since %Qore 3.0)
     int end_column = -1;

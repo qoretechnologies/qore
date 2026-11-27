@@ -310,6 +310,42 @@ string sub check_self() {
     return sb.result(s);
 }
 
+# an earlier value of the local that is used after the append is the value that it had: the string is copied
+# (qore#7627)
+string sub check_live_read(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    list<auto> l;
+    for (int i = 0; i < Appends; ++i) {
+        l = (s, s += piece);
+    }
+    return sb.result(s) + sprintf(":%d:%d", l[0].size(), l[1].size());
+}
+
+# the same, with the append in a branch of its own
+string sub check_live_read_branch(string piece, bool append) {
+    Sandbox sb();
+    string s = sb.makeString();
+    list<auto> l;
+    for (int i = 0; i < Appends; ++i) {
+        l = (s, append ? (s += piece) : "");
+    }
+    return sb.result(s) + sprintf(":%d:%d", l[0].size(), l[1].size());
+}
+
+# the same with a local that holds a fresh string, which is appended to in place when nothing else reads it
+string sub check_live_read_fresh() {
+    string s = "ab";
+    list<auto> l = (s, s += "c");
+    return sprintf("%y", l);
+}
+
+string sub check_live_read_fresh_branch(bool append) {
+    string s = "ab";
+    list<auto> l = (s, append ? (s += "c") : "", s);
+    return sprintf("%y", l);
+}
+
 # a local that a closure also appends to
 string sub check_closure_bound(string piece) {
     Sandbox sb();
@@ -593,6 +629,10 @@ hash<string, code<string()>> checks = {
     "utf8": string sub () { return check_utf8(convert_encoding("\u00e9a", "ISO-8859-1")); },
     "shared": string sub () { return check_shared("ab"); },
     "self": \check_self(),
+    "live-read": string sub () { return check_live_read("ab"); },
+    "live-read-branch": string sub () { return check_live_read_branch("ab", True); },
+    "live-read-fresh": \check_live_read_fresh(),
+    "live-read-fresh-branch": string sub () { return check_live_read_fresh_branch(True); },
     "closure-bound": string sub () { return check_closure_bound("ab"); },
     "closure-local": string sub () { return check_closure_local("ab"); },
     "global": string sub () { return check_global("ab"); },

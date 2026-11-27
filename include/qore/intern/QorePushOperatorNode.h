@@ -39,6 +39,14 @@ protected:
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! pushes the operand \a res to the list of the lvalue that \a val holds; \a converted is the value that the last
+    //! round of a retry converted, which the operation does not use (qore#7391)
+    /** @return 0 if the operation was made (\a rv holds the value of the expression then), -1 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int pushOn(LValueHelper& val, QoreValue converted, QoreMutationOperandHolder& res, QoreValue& rv,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL static QoreString push_str;

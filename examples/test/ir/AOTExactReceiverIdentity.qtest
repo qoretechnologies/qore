@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of hoisted exact-class receiver checks
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTExactReceiverIdentityTest
+
+#! a call runs the method of the class of a receiver that set_local_var_value() put in a parameter (qore#7631)
+/** AOT code tested the exact class of the receiver in a local that the code does not write once in the function
+    entry, and every call in the function reused the result for its own receiver; after
+    <tt>set_local_var_value(1, "receiver", new IdentityDerived())</tt> in a callee, the next
+    <tt>receiver.next(0)</tt> ran \c IdentityBase::next() on the \c IdentityDerived object (\c qcc \c -O3).
+
+    The result is reused only for the receiver of the entry, which the entry cleanup of the local holds; an outlined
+    function-body helper (or a handler run out of line) that assigns the local releases that cleanup before it runs,
+    so the receiver of the entry can be freed and its address given to another object (qcc \c -O3 ran
+    \c IdentityBase::next() on an \c IdentityDerived object created by a second helper at that address): no check of
+    such a local is hoisted.  helper.q replaces the receiver in two outlined helpers; probe.q replaces it in
+    handlers (a local that a handler references is AST-visible, which no hoist takes either).
+*/
+class AOTExactReceiverIdentityTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTExactReceiverIdentity/probe.q";
+        string helper_probe = get_script_dir() + "/AOTExactReceiverIdentity/helper.q";
+        hash<string, string> ast_out;
+    }
+
+    public {
+        #! the environment of qcc that outlines the try blocks of helper.q into helpers
+        const ForceOutlineEnv = ("QORE_AOT_OUTLINE_FN_MIN_INSTS=20", "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1",
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=20");
+    }
+
+    constructor() : Test("AOT exact receiver identity", "1.0", \ARGV) {
+        addTestCase("AST sees the replaced receivers", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        addTestCase("AST sees the receivers replaced in outlined helpers", \helperAstReference());
+        addTestCase("compiled modes match AST with outlined helpers", \helperSourceModes());
+        addTestCase("qcc executables with outlined helpers match AST", \helperCompiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        assertEq("110:1001:101:101:24:110\n110\n110:110:22:110:110:22:110:110:22\nexact-receiver-identity: ok\n",
+            getAst(probe));
+    }
+
+    sourceModes() {
+        checkSourceModes(probe);
+    }
+
+    compiled() {
+        checkCompiled(probe, ());
+    }
+
+    helperAstReference() {
+        assertEq("110:110:110:110:110:110:100110:300110:300110:110:110:110\nexact-receiver-helper: ok\n",
+            getAst(helper_probe));
+    }
+
+    helperSourceModes() {
+        checkSourceModes(helper_probe);
+    }
+
+    helperCompiled() {
+        checkCompiled(helper_probe, ForceOutlineEnv);
+    }
+
+    private checkSourceModes(string script) {
+        string expected = getAst(script);
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, script)), mode);
+        }
+    }
+
+    #! compiles the script with qcc at -O0 and -O3, with and without debug information, and runs the executables
+    /** @param script the script
+        @param env the environment of qcc
+    */
+    private checkCompiled(string script, list<string> env) {
+        string expected = getAst(script);
+        foreach string level in ("-O0", "-O3") {
+            foreach bool stripped in ((False, True)) {
+                TmpDir dir("qore-aot-exact-receiver-identity-");
+                string exe = dir.path + "/probe";
+                list<string> args = (qcc_bin, level, "-o", exe, script);
+                if (stripped) {
+                    push args, "--strip-debug-info";
+                }
+                run(args, env);
+                assertEq(expected, run((exe, "-b", "--enable-debug")),
+                    sprintf("%s: qcc %s stripped: %y", basename(script), level, stripped));
+            }
+        }
+    }
+
+    private string getAst(string script) {
+        if (!exists ast_out{script}) {
+            ast_out{script} = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", script));
+        }
+        return ast_out{script};
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    /** @param args the command and its arguments
+        @param env more variables of its environment
+    */
+    private string run(list<string> args, list<string> env = ()) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1) + " ", env).join("") + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

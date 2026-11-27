@@ -310,6 +310,11 @@ public:
     QoreIRInstruction* createPopImplicitArg(QoreIRValue old_context, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createPushImplicitElement(QoreIRValue index, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc = nullptr);
+    //! Sets $# to \a index, the index of the next element of a foreach statement, which saved the enclosing element in
+    //! \a saved (the result of its PushImplicitElement): a PopImplicitElement with the two operands, which leaves the
+    //! push open (qore#7379)
+    QoreIRInstruction* createSetImplicitElement(QoreIRValue index, QoreIRValue saved,
+            const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
@@ -530,6 +535,9 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! The object-typed ReleaseOwnedTemp of a replaced pending return in debug IR (#7022).
+    void createReleaseReplacedReturn(QoreIRValue value, const QoreProgramLocation* loc);
 
     //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
     //! #6074); an invalid \a value is a return without a value

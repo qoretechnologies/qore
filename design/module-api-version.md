@@ -62,6 +62,8 @@ Adding new exported functions, or new types that old modules do not use, needs n
   256-byte, 16-byte-aligned buffer per calling frame. The module API stays at 2.3. AOT images using these entries
   require the matching AOT format and runtime identity.
 
+`QoreExternalConstant::getDomain()` adds a nonvirtual accessor for reflection under API 2.3 (#7506).
+
 ## Guard
 
 `tools/qore-module-api-headers.py` hashes the installed public header set: the files that

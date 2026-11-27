@@ -67,11 +67,13 @@ list<string> sub probes() {
         probe("OC<string>.l", auto sub () { hash<OC<string>> h(); return h.l; }),
         probe("OC<string>.hl", auto sub () { hash<OC<string>> h(); return h.hl; }),
         probe("OC<string>.hx", auto sub () { hash<OC<string>> h(); return h.hx; }),
-        # the object is a C<string>: its member takes no int
+        # the object is a C<string>: its member takes no int; the value is given at runtime, as an int given directly
+        # is refused when the probes are parsed, since the type of h.o.x is known there (*string; qore#7474)
         probe("OC<string>.o", auto sub () {
             hash<OC<string>> h();
             try {
-                h.o.x = 1;
+                auto wrong = 1;
+                h.o.x = wrong;
             } catch (hash<ExceptionInfo> ex) {
                 return ex.err;
             }
