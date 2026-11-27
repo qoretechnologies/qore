@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-platform: macos - JIT code generation and tiered promotion of inlined closure calls
 
@@ -9,6 +10,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class ClosureArgMismatchTieredTest
 
@@ -91,8 +93,13 @@ class ClosureArgMismatchTieredTest inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 file));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
-                libqore_dir, exe)), "qcc " + opt);
+            string lbl = "qcc " + opt;
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+                sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe));
+            assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", lbl, res.out));
+            assertEq(expected, res.stdout, lbl);
+            # the native compilation trace and the module loader's warnings are not output of the program
+            assertEq("", res.stderr, lbl + ": stderr");
         }
     }
 }

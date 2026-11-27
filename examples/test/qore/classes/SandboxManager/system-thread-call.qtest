@@ -22,7 +22,7 @@
 */
 class SystemThreadCallTest inherits QUnit::Test {
     constructor() : Test("SandboxManager::createSystemThreadCall()", "1.0", \ARGV) {
-        addTestCase("the creation is refused for sandboxed or bound callbacks and sandboxed code", \refusalTest());
+        addTestCase("the creation is refused for restricted or bound callbacks and restricted code", \refusalTest());
         addTestCase("the creation is refused outside a module's initialization", \outsideInitTest());
         addTestCase("the capability takes no arguments", \argumentsTest());
         addTestCase("a sandbox's policy, interrupts and limits do not reach the thread", \sandboxTest());
@@ -43,8 +43,9 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.capability);
         # qore#5741: the default sandbox refuses sandboxed code the uncontrolled API itself at run time
         assertRegex("^INVALID-FUNCTION-ACCESS: .*uncontrolled API.*createSystemThreadCall", refusals.governed);
-        # a sandbox that allows uncontrolled APIs: the creation itself refuses code that a sandbox governs
-        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed_allowed);
+        # a sandbox that allows uncontrolled APIs (a trusted, governed, sandbox): its code creates the capability as
+        # trusted code (qore#7737)
+        assertEq("created", refusals.governed_allowed);
     }
 
     outsideInitTest() {

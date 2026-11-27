@@ -3786,6 +3786,16 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
         return -1;
     }
     responded_streams_.insert(stream_id);
+    // a complete response to an extended CONNECT request rejects it (an accepted tunnel is answered by
+    // submitConnectResponse()): the client has nothing left to send on the stream, so if it has not ended its half,
+    // it is asked to stop sending, as for a request whose response the server gave before it read the request to its
+    // end (RFC 9114 section 4.1.2; qore#7786)
+    if (is_server_) {
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end() && sit->second->is_connect && !sit->second->body_complete) {
+            stopReadingStreamLocked(stream_id);
+        }
+    }
     // a buffered body is charged to its client until the client has acknowledged it, as a pumped one (qore#7653)
     if (drp) {
         addBoundBody(stream_id, body_len);
@@ -4008,6 +4018,22 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     if (end_stream) {
         sbd.eof = true;
+        // the server ends its half of a WebSocket tunnel (RFC 9220) when its WebSocket connection has closed, after
+        // which the client has nothing left to send: if it has not ended its half, it is asked to stop sending
+        // (STOP_SENDING with H3_NO_ERROR, RFC 9114 section 4.1.2), as for a request whose response the server gave
+        // before it read the request to its end.  Without this, a client that closes its WebSocket without ending
+        // its half (Chromium does) left the stream open for the life of the session, where it counted against the
+        // session's limit of bidirectional streams (qore#7786).  STOP_SENDING closes only the client's half: the
+        // data staged here is sent all the same.  Other CONNECT tunnels are not stopped: each side of a tunnel ends
+        // its half independently
+        if (is_server_) {
+            auto sit = streams_.find(stream_id);
+            // (body_complete: the client has ended its half; fin_received is not set for a server's CONNECT stream)
+            if (sit != streams_.end() && sit->second->is_connect && !sit->second->body_complete
+                    && sit->second->connect_protocol == "websocket") {
+                stopReadingStreamLocked(stream_id);
+            }
+        }
     }
 
     // Resume the deferred data reader if it was waiting
@@ -4978,6 +5004,17 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
         // be reclaimed later via streamCloseCallback or h3EndStreamCallback.
         const bool cta = it->second->connect_tunnel_active;
         const bool isc = it->second->is_connect;
+        // on the server, the record of a tunnel whose stream has closed is released now (qore#7786); one whose stream
+        // is still open is released when the stream closes (streamCloseCallback())
+        if (cta && is_server_ && it->second->tunnel_closed) {
+            ASYNC_IO_TRACE("QuicSession::cleanupStream ERASE_CLOSED_TUNNEL session=%lld stream_id=%lld\n",
+                (long long)getSessionId(), (long long)stream_id);
+            eraseClosedServerTunnelLocked(it);
+            return false;
+        }
+        if (cta && is_server_) {
+            it->second->tunnel_released = true;
+        }
         if (cta) {
             ASYNC_IO_TRACE("QuicSession::cleanupStream KEEP_CONNECT_TUNNEL session=%lld stream_id=%lld\n",
                 (long long)getSessionId(), (long long)stream_id);
@@ -5040,11 +5077,38 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
     return queued_frame;
 }
 
+void QuicSession::eraseClosedServerTunnelLocked(StreamMap::iterator it) {
+    assert(is_server_);
+    int64_t stream_id = it->first;
+    bool dispatched = it->second->dispatched;
+    streams_.erase(it);
+    {
+        std::lock_guard<std::mutex> lg(connect_data_mutex_);
+        // the data that no consumer took: the tunnel is closed and its handler has returned
+        eraseConnectStreamDataLocked(stream_id);
+    }
+    if (dispatched) {
+        dispatched_stream_count_.fetch_sub(1, std::memory_order_release);
+        notifyStreamData();
+    }
+    // the stream's record of a reset by the peer is released as for every stream that the application is done with,
+    // so that the session's records stay bounded by the streams it has open (qore#7750): a later send on the tunnel
+    // reports the stream as closed
+    releaseStream(stream_id);
+    updateKeepAliveAfterStreamStateChangeLocked();
+}
+
 void QuicSession::stopReadingStreamLocked(int64_t stream_id) {
     ASYNC_IO_TRACE("QuicSession::stopReadingStreamLocked session=%lld stream_id=%lld\n",
         (long long)getSessionId(), (long long)stream_id);
     if (h3_conn_) {
         nghttp3_conn_shutdown_stream_read(h3_conn_, stream_id);
+    }
+    {
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end()) {
+            sit->second->stop_sending_sent = true;
+        }
     }
     if (conn_) {
         int rv = ngtcp2_conn_shutdown_stream_read(conn_, 0, stream_id, NGHTTP3_H3_NO_ERROR);
@@ -5884,6 +5948,17 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 // For CONNECT tunnel streams, set body_complete directly without
                 // re-dispatching via markStreamComplete()
                 sit->second->body_complete = true;
+                // on the server, the record of a closed tunnel is released once its dispatch has returned
+                // (cleanupStream()); it was kept for the life of the session before, so that the session never ended
+                // after a drain or a GOAWAY (qore#7786)
+                if (session->is_server_ && sit->second->connect_tunnel_active) {
+                    if (sit->second->tunnel_released) {
+                        session->eraseClosedServerTunnelLocked(sit);
+                        sit = session->streams_.end();
+                    } else {
+                        sit->second->tunnel_closed = true;
+                    }
+                }
                 // on the client, the close of a tunnel (also when the peer reset it without END_STREAM) ends it: the
                 // stream is reported once more, so that takeCompletedStream() releases its record and the reader
                 // gets the end of the stream, or the reset recorded above as an error (issue #5862)
@@ -7030,6 +7105,10 @@ void QuicSession::recordPeerStreamReset(int64_t stream_id, uint64_t app_error_co
     // top of DataStream-v1 keeps pushing rows after the server has closed
     // the stream and never observes the failure.
     auto it = streams_.find(stream_id);
+    // a reset without an error that answers the server's STOP_SENDING ends the client's half as the server asked:
+    // the stream was not abandoned, so it is not reported (its persistent session is not closed for it, qore#7786)
+    bool answers_stop_sending = it != streams_.end() && it->second->stop_sending_sent
+        && app_error_code == NGHTTP3_H3_NO_ERROR;
     if (it != streams_.end()) {
         it->second->peer_stop_sending = true;
         it->second->peer_close_error_code = app_error_code;
@@ -7039,7 +7118,7 @@ void QuicSession::recordPeerStreamReset(int64_t stream_id, uint64_t app_error_co
     // arrive together for the same stream, and nghttp3 then asks us to mirror
     // them, so up to four callbacks can fire for one abandoned stream.
     // only a server's poll operation drains the reports; a STOP_SENDING without an error was not reported
-    if (is_server_) {
+    if (is_server_ && !answers_stop_sending) {
         auto pit = peer_reset_streams_.find(stream_id);
         if (pit == peer_reset_streams_.end() || pit->second == NGHTTP3_H3_NO_ERROR) {
             pending_peer_reset_reports_.push_back(stream_id);
@@ -7687,6 +7766,23 @@ void QuicSession::addBoundBody(int64_t stream_id, uint64_t buffered_size) {
 void QuicSession::eraseBoundBody(int64_t stream_id) {
     if (bound_bodies_.erase(stream_id)) {
         updateActiveInputStreams();
+        endSendRateWaitIfIdleUnlocked();
+    }
+}
+
+void QuicSession::endSendRateWaitIfIdleUnlocked() {
+    // the last body or send that waited for the client has left: the session leaves the I/O thread's check of its
+    // bodies, so the end of the wait is recorded now; otherwise the window stayed waiting, and the next body was
+    // charged for the idle time before it, so that a long-lived connection with many small responses ran out of credit
+    // and had a small response cancelled as soon as it waited (qorus#1335).  The measurement is kept across the waits,
+    // so that a client cannot reset it with each response; a verdict that no waiting body ends is not left for a
+    // later, unrelated wait, as when a send of a handler thread leaves
+    if (!pump_send_rate_.enabled() || isConnectionWaitingUnlocked(-1)) {
+        return;
+    }
+    if (pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), false,
+            q_clock_getmicros_monotonic() / 1000)) {
+        pump_send_rate_.restart();
     }
 }
 

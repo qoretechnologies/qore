@@ -210,6 +210,8 @@ w.close();
 
         #! Opens the file for writing
         private openFile(*hash<auto> opts) {
+            # the path is the creator's input (qore#7806)
+            check_creator_file_access("the path of an EDIFACT file writer");
             m_file = new File();
             int flags = opts.file_flags ?? (O_CREAT | O_WRONLY | O_TRUNC);
             m_file.open2(m_path, flags, 0644, m_encoding);

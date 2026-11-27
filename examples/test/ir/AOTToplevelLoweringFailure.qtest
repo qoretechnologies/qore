@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 # test-platform: macos - qcc code generation and linking of an executable, the exit status of the build
 
 # Copyright 2026 Qore Technologies, s.r.o.
@@ -10,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTToplevelLoweringFailureTest
@@ -88,7 +90,7 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
 
     #! returns the output of a compiled executable
     private string runExe(string exe) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe));
+        return run_executable(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe));
     }
 
     #! skips the test case if qcc cannot compile the program; the cases that expect a failed build need it to tell one
@@ -159,5 +161,15 @@ printf(\"%d\\n\", aot_hook_target(40, 2));
         assertTrue(rc != 0, "qore --compile fails the build: " + out);
         assertFalse(is_file(exe), "qore --compile wrote no executable");
         assertTrue(out =~ /top-level code/, "the error names the top-level code: " + out);
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }

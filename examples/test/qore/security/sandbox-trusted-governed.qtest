@@ -1,0 +1,550 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxTrustedGovernedTest
+
+#! The rules that restrict what code may do apply only to code that a restricting sandbox governs (qore#7737)
+/** A sandbox manager that allows uncontrolled APIs (SandboxManager::setUncontrolledApiPolicy()) is a trusted
+    (governed) manager: a host attaches it to trusted code for its interrupts, limits and I/O policies, and the code
+    keeps the rights of trusted code; a manager that refuses uncontrolled APIs (the default) is a restricting manager.
+    Each case runs the same operation in the code of a tenant Program (a) without a manager, (b) with a trusted
+    manager and (c) with a restricting manager: (a) and (b) are allowed, (c) is refused.  The interrupts, limits and
+    the cancellation of code that a trusted manager governs still apply.
+*/
+
+#! a class of the host that the tenant's code relates by injection (the case of qore#7730)
+class QdspClient inherits Qore::SQL::AbstractDatasource {}
+
+#! a Program that the host builds, with an injected class
+class HostProgram inherits Program {
+    constructor() : Program(PO_NO_SYSTEM_API | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE) {
+        importClass("QdspClient", "Qore::SQL::DatasourcePool", True);
+        importSystemApi();
+    }
+}
+
+#! an object that the host shares with every Program
+class SharedBox {
+    public {
+        int v = 1;
+    }
+}
+
+#! a serializable object that the host shares with every Program
+class SharedSerBox inherits Serializable {
+    public {
+        int v = 1;
+    }
+}
+
+#! a library class that keeps values in the per-Program cache of its callers
+class CacheOwner {
+    *string get(string key) {
+        return SandboxManager::getProgramCacheValue(self, key);
+    }
+
+    set(string key, string value) {
+        SandboxManager::setProgramCacheValue(self, key, value);
+    }
+}
+
+#! an object that a lazy value of the host builds: its method has a cancellation point
+class LazyWorker {
+    string run() {
+        Mutex m();
+        m.lock();
+        m.unlock();
+        return "ran";
+    }
+}
+
+#! a process-shared lazy value of the host, which the first caller builds
+our LazySharedValue lazy_worker;
+
+#! the tenant needs the host's lazy value first
+sub need_lazy_worker() {
+    lazy_worker.get();
+}
+
+#! the debug hook of the barrier of a trusted build: true if the barrier would hide nothing of the caller; called only
+#! in debug builds (Option::HAVE_LIBRARY_DEBUGGING), which have the hook
+bool sub hides_nothing() {
+%ifdef QoreDebug
+    return call_function("dbg_trusted_build_hides_nothing");
+%else
+    throw "DEBUG-BUILTIN-ERROR", "dbg_trusted_build_hides_nothing() is only available in debug builds";
+%endif
+}
+
+#! the sandbox manager of the current case, for interrupt_me()
+our *SandboxManager current_sm;
+
+#! the shared objects and the cache owner of the host
+our SharedBox shared_box;
+our SharedSerBox shared_ser_box;
+our CacheOwner cache_owner;
+
+#! builds a Program that injects a class of the host (#7730)
+string sub build_host_program(string label) {
+    HostProgram p();
+    return label + ": built";
+}
+
+#! a trusted build capability that the host created at startup
+our code build_cap;
+
+code sub host_build_cap() {
+    return build_cap;
+}
+
+#! a system-policy capability that the host created at startup
+our code policy_cap;
+
+code sub host_policy_cap() {
+    return policy_cap;
+}
+
+#! the host's code relates the classes under a policy barrier for its caller
+string sub inject_via_policy() {
+    return SandboxManager::callWithSystemPolicy(string sub () { return build_host_program("policy"); });
+}
+
+object sub get_shared_box() {
+    return shared_box;
+}
+
+object sub get_shared_ser_box() {
+    return shared_ser_box;
+}
+
+object sub get_cache_owner() {
+    return cache_owner;
+}
+
+#! requests the interrupt of the current sandbox: the host's code, called by the tenant
+sub interrupt_me() {
+    current_sm.requestInterrupt();
+}
+
+#! the host creates a Program with a trusted manager of its own for its caller: the Program keeps the sandbox of the
+#! code that created it as well, and is restricted if that sandbox is (a composite manager)
+string sub composite_child() {
+    SandboxManager sm();
+    sm.setUncontrolledApiPolicy(True);
+    sm.setFilesystemDefaultPolicy(True);
+    sm.setNetworkDefaultPolicy(True);
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(sm);
+    p.parse("auto sub f() { return (SandboxManager::isRestricted() ? 'restricted' : 'trusted') + '/'
+        + (get_app_registry('qore-7737-key') ?? 'none') + '/' + (SandboxManager::createsSharedObjects() ? 'shares'
+        : 'private'); }", "composite-child");
+    return p.callFunction("f");
+}
+
+class SandboxTrustedGovernedTest inherits QUnit::Test {
+    public {
+        #! the modes of the tenant: no manager, a trusted manager and a restricting manager
+        const Modes = ("none", "trusted", "restricting");
+
+        #! the code of the tenant
+        const TenantSource = "%requires reflection
+string sub run(code c) {
+    try {
+        return sprintf('%y', c());
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+
+string sub inject() {
+    return run(sub () { return build_host_program('direct'); });
+}
+
+string sub inject_cap() {
+    return run(sub () { return host_build_cap()('cap'); });
+}
+
+string sub inject_policy() {
+    return run(sub () { return inject_via_policy(); });
+}
+
+string sub inject_policy_cap() {
+    return run(sub () { return host_policy_cap()('policy-cap'); });
+}
+
+string sub change_shared() {
+    return run(sub () { object o = get_shared_box(); o.v = 2; return o.v; });
+}
+
+string sub copy_shared() {
+    return run(sub () { object o = get_shared_box(); object c = o.copy(); return c.v; });
+}
+
+string sub serialize_shared() {
+    return run(sub () { return Serializable::serialize(get_shared_ser_box()).typeCode() == NT_BINARY; });
+}
+
+string sub creates_shared() {
+    return run(sub () { return SandboxManager::createsSharedObjects() + '/' + SandboxManager::canShareObjects(); });
+}
+
+string sub lazy_shared() {
+    return run(sub () {
+        LazySharedValue v(sub () { return 7; }, True);
+        return v.get();
+    });
+}
+
+string sub app_registry() {
+    return run(sub () { return get_app_registry('qore-7737-key'); });
+}
+
+string sub module_option() {
+    return run(sub () { return get_module_option('qore-7737-module', 'opt'); });
+}
+
+string sub cache() {
+    return run(sub () { return get_cache_owner().get('k'); });
+}
+
+string sub server_owned() {
+    return run(sub () { Socket s(); return s.setServerOwned(); });
+}
+
+string sub trusted_build() {
+    return run(sub () { code c = SandboxManager::createTrustedBuildCall(sub () { return 1; }); return c(); });
+}
+
+string sub system_policy() {
+    return run(sub () { code c = SandboxManager::createSystemPolicyCall(sub () { return 2; }); return c(); });
+}
+
+string sub capability_scope() {
+    return run(sub () {
+        return ThreadCapabilityScope::call({'qore-7737': sub () {}}, sub () {
+            return exists get_thread_capability('qore-7737');
+        });
+    });
+}
+
+string sub reexport() {
+    return run(sub () {
+        Program p(PO_NEW_STYLE);
+        p.importClass('Qore::SQL::DatasourcePool', 'Qore7737DsPool', False, CSP_UNCHANGED, True);
+        return 'imported';
+    });
+}
+
+string sub interrupted() {
+    return run(sub () {
+        interrupt_me();
+        Mutex m();
+        m.lock();
+        return 'not interrupted';
+    });
+}
+
+string sub deferral() {
+    string inside = 'completed';
+    try {
+        defer_thread_cancel(sub () {
+            interrupt_me();
+            try {
+                Mutex m();
+                m.lock();
+                m.unlock();
+            } catch (hash<ExceptionInfo> ex) {
+                inside = ex.err;
+                rethrow;
+            }
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        return inside + '/' + ex.err;
+    }
+    try {
+        Mutex m();
+        m.lock();
+    } catch (hash<ExceptionInfo> ex) {
+        return inside + '/after: ' + ex.err;
+    }
+    return inside + '/none';
+}
+
+class PrivBox {
+    private {
+        string secret = 's3';
+    }
+}
+
+string sub reflect_private() {
+    return run(sub () { object o = new PrivBox(); return Class::getClass(o).getMember('secret').getValue(o); });
+}
+
+string sub need_lazy() {
+    return run(sub () { need_lazy_worker(); return 'built'; });
+}
+
+string sub barrier_hides() {
+    return run(sub () { return hides_nothing(); });
+}
+
+string sub memory_limit() {
+    return run(sub () { string s = strmul('x', 32 * 1024 * 1024); return s.size(); });
+}
+
+string sub composite() {
+    return run(sub () { return composite_child(); });
+}
+";
+    }
+
+    constructor() : QUnit::Test("SandboxTrustedGovernedTest", "1.0") {
+        addTestCase("injection by a host function (qore#7730)", \injectionTest());
+        addTestCase("injection through a trusted build of the host", \injectionCapTest());
+        addTestCase("injection under a policy barrier", \injectionPolicyTest());
+        addTestCase("a manager's classification is evaluated at each check", \liveClassificationTest());
+        addTestCase("a change of a shared object", \changeSharedTest());
+        addTestCase("a copy of a shared object", \copySharedTest());
+        addTestCase("the serialization of a shared object", \serializeSharedTest());
+        addTestCase("objects created as shared", \createsSharedTest());
+        addTestCase("a process-shared lazy value", \lazySharedTest());
+        addTestCase("the application registry and module options", \processStateTest());
+        addTestCase("the per-Program cache", \cacheTest());
+        addTestCase("a server-owned socket", \serverOwnedTest());
+        addTestCase("capabilities of trusted code", \capabilitiesTest());
+        addTestCase("re-export of an imported class", \reexportTest());
+        addTestCase("private access through reflection", \reflectionTest());
+        addTestCase("a composite manager", \compositeTest());
+        addTestCase("interrupts", \interruptTest());
+        addTestCase("cancellation deferral", \deferralTest());
+        addTestCase("limits", \limitTest());
+        addTestCase("a lazy value of the host built for a governed first caller", \lazyFirstCallerTest());
+        addTestCase("the classification of a manager", \classificationTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        shared_box = new SharedBox();
+        SandboxManager::shareObject(shared_box);
+        shared_ser_box = new SharedSerBox();
+        SandboxManager::shareObject(shared_ser_box);
+        cache_owner = new CacheOwner();
+        cache_owner.set("k", "host");
+        set_app_registry("qore-7737-key", "registry");
+        build_cap = SandboxManager::createTrustedBuildCall(\build_host_program());
+        policy_cap = SandboxManager::createSystemPolicyCall(\build_host_program());
+        set_module_option("qore-7737-module", "opt", "option");
+    }
+
+    #! returns a new manager for \a mode, or NOTHING for no manager
+    private static *SandboxManager manager(string mode, *int memory_limit) {
+        if (mode == "none") {
+            return;
+        }
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        if (mode == "trusted") {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        if (memory_limit) {
+            sm.setMemoryLimit(memory_limit);
+        }
+        return sm;
+    }
+
+    #! returns a new tenant Program with the host's functions and \a sm, if any
+    private static Program tenant(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        foreach string f in (("build_host_program", "host_build_cap", "get_shared_box", "get_shared_ser_box",
+                "get_cache_owner", "interrupt_me", "composite_child", "inject_via_policy", "host_policy_cap", "need_lazy_worker", "hides_nothing")) {
+            p.importFunction(f);
+        }
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! runs \a func in a new tenant Program for each mode; returns the result for each mode
+    private hash<auto> runAll(string func, *int memory_limit) {
+        hash<auto> rv;
+        foreach string mode in (Modes) {
+            current_sm = manager(mode, memory_limit);
+            Program p = tenant(current_sm);
+            rv{mode} = p.callFunction(func);
+            remove current_sm;
+        }
+        return rv;
+    }
+
+    #! checks that \a func gives \a allowed without a manager and with a trusted manager, and \a refused with a
+    #! restricting manager
+    private check(string func, string allowed, string refused) {
+        hash<auto> rv = runAll(func);
+        assertEq(allowed, rv.none, func + ": no manager");
+        assertEq(allowed, rv.trusted, func + ": trusted manager");
+        assertEq(refused, rv.restricting, func + ": restricting manager");
+    }
+
+    injectionTest() {
+        check("inject", "\"direct: built\"", "error: CLASS-IMPORT-ERROR");
+    }
+
+    #! a trusted build that the host created builds the Program also for restricted code
+    injectionCapTest() {
+        check("inject_cap", "\"cap: built\"", "\"cap: built\"");
+    }
+
+    #! a policy barrier (SandboxManager::callWithSystemPolicy(), a capability of
+    #! SandboxManager::createSystemPolicyCall()) does not hide restricted code from the rules that restrict what code
+    #! may do; only a trusted build does
+    injectionPolicyTest() {
+        check("inject_policy", "\"policy: built\"", "error: CLASS-IMPORT-ERROR");
+        check("inject_policy_cap", "\"policy-cap: built\"", "error: CLASS-IMPORT-ERROR");
+    }
+
+    #! the policy of a manager is read at each check: a trusted manager that is tightened restricts its code from then
+    #! on, and a restricting manager that the host relaxes does not
+    liveClassificationTest() {
+        current_sm = manager("trusted");
+        Program p = tenant(current_sm);
+        assertEq("\"direct: built\"", p.callFunction("inject"));
+        current_sm.setUncontrolledApiPolicy(False);
+        assertEq("error: CLASS-IMPORT-ERROR", p.callFunction("inject"));
+        current_sm.setUncontrolledApiPolicy(True);
+        assertEq("\"direct: built\"", p.callFunction("inject"));
+        remove current_sm;
+    }
+
+    changeSharedTest() {
+        check("change_shared", "2", "error: SHARED-OBJECT-ERROR");
+        shared_box.v = 1;
+    }
+
+    copySharedTest() {
+        check("copy_shared", "1", "error: SHARED-OBJECT-ERROR");
+    }
+
+    serializeSharedTest() {
+        check("serialize_shared", "True", "error: SHARED-OBJECT-ERROR");
+    }
+
+    createsSharedTest() {
+        check("creates_shared", "\"1/1\"", "\"0/0\"");
+    }
+
+    lazySharedTest() {
+        check("lazy_shared", "7", "error: SANDBOX-CAPABILITY-ERROR");
+    }
+
+    processStateTest() {
+        check("app_registry", "\"registry\"", "null");
+        check("module_option", "\"option\"", "null");
+    }
+
+    #! code that a trusted manager governs uses the cache of the host, as trusted code does; restricted code has a
+    #! cache of its own Program
+    cacheTest() {
+        check("cache", "\"host\"", "null");
+    }
+
+    serverOwnedTest() {
+        check("server_owned", "True", "False");
+    }
+
+    capabilitiesTest() {
+        # refused to restricted code by the UNCONTROLLED_API domain of the builtins, and by the rule of the
+        # capability (SANDBOX-CAPABILITY-ERROR) where the domain does not refuse it
+        hash<auto> rv = runAll("trusted_build");
+        assertEq("1", rv.none);
+        assertEq("1", rv.trusted);
+        assertRegex("^error: (INVALID-FUNCTION-ACCESS|SANDBOX-CAPABILITY-ERROR)$", rv.restricting);
+        rv = runAll("system_policy");
+        assertEq("2", rv.none);
+        assertEq("2", rv.trusted);
+        # refused by its UNCONTROLLED_API domain before the capability is created
+        assertRegex("^error: (INVALID-FUNCTION-ACCESS|SANDBOX-CAPABILITY-ERROR)$", rv.restricting);
+        check("capability_scope", "True", "error: THREAD-CAPABILITY-ERROR");
+    }
+
+    reexportTest() {
+        check("reexport", "\"imported\"", "error: CLASS-IMPORT-ERROR");
+    }
+
+    #! the code of a trusted manager reads a private member through reflection outside the class, as trusted code
+    #! does; the language's member access applies to restricted code
+    reflectionTest() {
+        hash<auto> rv = runAll("reflect_private");
+        assertEq("\"s3\"", rv.none);
+        assertEq("\"s3\"", rv.trusted);
+        assertEq("error: REFLECTION-ACCESS-ERROR", rv.restricting);
+    }
+
+    #! a Program that the host creates for the tenant's code with a trusted manager of its own keeps the sandbox of
+    #! the tenant: the composite is restricted if the tenant's is
+    compositeTest() {
+        check("composite", "\"trusted/registry/shares\"", "\"restricted/none/private\"");
+    }
+
+    #! the interrupt of a trusted manager interrupts the code that it governs
+    interruptTest() {
+        hash<auto> rv = runAll("interrupted");
+        assertEq("error: PROGRAM-INTERRUPTED", rv.trusted);
+        assertEq("error: PROGRAM-INTERRUPTED", rv.restricting);
+    }
+
+    #! the code of a trusted manager keeps its deferral, and is interrupted at the next cancellation point after it;
+    #! restricted code is interrupted in the deferred code
+    deferralTest() {
+        hash<auto> rv = runAll("deferral");
+        assertEq("completed/after: PROGRAM-INTERRUPTED", rv.trusted);
+        assertEq("PROGRAM-INTERRUPTED/PROGRAM-INTERRUPTED", rv.restricting);
+    }
+
+    #! a process-shared lazy value of the host that code that any manager governs needs first is built behind the
+    #! barrier of a trusted build, also for a trusted (governed) manager: what it builds takes none of the caller's
+    #! sandbox, so an interrupt of that sandbox does not reach a later use of the value (qorus#1209)
+    lazyFirstCallerTest() {
+        foreach string mode in (("trusted", "restricting")) {
+            lazy_worker = new LazySharedValue(LazyWorker sub () { return new LazyWorker(); }, True);
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            assertEq("\"built\"", p.callFunction("need_lazy"), mode);
+            # the debug hook is refused to restricted code, as an uncontrolled API
+            if (Option::HAVE_LIBRARY_DEBUGGING && mode == "trusted") {
+                # the barrier hides the governing sandbox of the caller, also a trusted (governed) one
+                assertEq("False", p.callFunction("barrier_hides"), mode + ": the barrier hides the caller");
+            }
+            current_sm.requestInterrupt();
+            assertEq("ran", lazy_worker.get().run(), mode + ": the value is not governed by the caller's sandbox");
+            remove current_sm;
+        }
+    }
+
+    #! the limits of a trusted manager apply to the code that it governs
+    limitTest() {
+        hash<auto> rv = runAll("memory_limit", 4 * 1024 * 1024);
+        assertEq(sprintf("%y", 32 * 1024 * 1024), rv.none);
+        assertEq("error: SANDBOX-MEMORY-LIMIT", rv.trusted);
+        assertEq("error: SANDBOX-MEMORY-LIMIT", rv.restricting);
+    }
+
+    #! the classification of a manager: restricting by default, trusted (governed) once it allows uncontrolled APIs
+    classificationTest() {
+        SandboxManager sm();
+        assertFalse(sm.trustsUncontrolledApis());
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.trustsUncontrolledApis());
+        sm.setUncontrolledApiPolicy(False);
+        assertFalse(sm.trustsUncontrolledApis());
+    }
+}

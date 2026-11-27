@@ -273,6 +273,16 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
         return True;
     }
 
+    #! The domains of the local files and locations that the caller names in its options (qore#7806)
+    /** The connection's policy decides the location that it resolves to, with the options that it gives
+        (FileLocationCallerExemption); an option that the caller adds and that names a local file or a location (such
+        as \c ssl_cert_path, which replaces the connection's own) is the caller's, so it is judged before the
+        connection is resolved, whatever the handler that the location resolves to, also by checkCallerLocation()
+    */
+    private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
+        return AbstractFileLocationHandler::getOptionCallerDomains(opts);
+    }
+
     #! Resolves a connection location to a target handler, location, and options
     /** @param scheme the scheme being used
         @param location the location string without the scheme; \c "<connection-name>/<path>"

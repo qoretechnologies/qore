@@ -41,6 +41,8 @@ public class ModelArtifactInspector {
         @throw ML-REGISTRY-ERROR if the file cannot be inspected
     */
     static hash<ModelArtifactInfo> inspectFile(string path, *string artifact_name) {
+        # the path is the caller's input (qore#7806)
+        check_caller_file_access("the path of a model artifact");
         if (!is_file(path)) {
             throw "ML-REGISTRY-ERROR", sprintf("artifact file '%s' not found", path);
         }
@@ -81,6 +83,8 @@ public class ModelArtifactInspector {
     */
     static hash<ModelVersionInfo> inspectDirectory(string path, string name,
             *hash<auto> options) {
+        # the path is the caller's input (qore#7806)
+        check_caller_file_access("the path of a model package");
         if (!is_dir(path)) {
             throw "ML-REGISTRY-ERROR", sprintf("model package directory '%s' not found", path);
         }

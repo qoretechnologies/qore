@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH3StreamRecords.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/3 (QUIC) WebSocket streams, their stream limit and the drain of their session
+#
+# qoretechnologies/qore#7786: the HTTP/3 server ends its half of the stream of a WebSocket connection (RFC 9220) when
+# the connection has closed; a stream that the client then did not end stayed open for the life of the QUIC session,
+# where it counted against the session's limit of bidirectional streams, and the server kept the record of every
+# WebSocket stream until the session ended, also of the streams that had closed, so that a drain of the server never
+# ended while the session was open.  The server now stops the client's half of such a stream (STOP_SENDING with
+# H3_NO_ERROR, RFC 9114 section 4.1.2) and releases the record of a WebSocket stream once it has closed and its
+# handler has returned (the HTTP/2 counterpart is qore#7770, HttpServerH2StreamLimit.qtest).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH3StreamRecordsTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The limit of bidirectional streams of a QUIC session of the server (QUIC_INITIAL_MAX_STREAMS_BIDI)
+const StreamLimit = 100;
+
+#! Echoes each message and reports its close code when it has closed
+class EchoConnection inherits WebSocketConnection {
+    private {
+        Queue closed;
+    }
+
+    constructor(WebSocketHandler handler, Queue closed) : WebSocketConnection(handler) {
+        self.closed = closed;
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        closed.push(getCloseCode());
+    }
+}
+
+#! The WebSocket handler of the test's server
+class EchoHandler inherits WebSocketHandler {
+    public {
+        #! gets the close code of each connection when it has closed
+        Queue closed();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self, closed);
+    }
+}
+
+#! Rejects every request with 404, as a server rejects an extended CONNECT request that it does not serve
+class RejectHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(404, "no tunnel here", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Answers every other request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerH3StreamRecordsTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        #! the WebSocket handler of the server of the current case
+        EchoHandler ws_handler;
+    }
+
+    constructor() : QUnit::Test("HttpServerH3StreamRecords", "1.0") {
+        addTestCase("HTTP/3: WebSocket streams that the client does not end do not use up the session's stream limit",
+            \testStreamLimit());
+        addTestCase("HTTP/3: a drain ends after WebSocket connections that the client closed without ending its half",
+            \testDrainAfterClose());
+        addTestCase("HTTP/3: a drain ends after WebSocket connections whose streams the client canceled",
+            \testDrainAfterCancel());
+        addTestCase("HTTP/3: extended CONNECT requests that the server answers with a response do not use up the "
+            "session's stream limit", \testRejectedConnect());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("h3-records", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        logger.addAppender(new StdoutAppender());
+    }
+
+    #! Starts a server with HTTP/3, the WebSocket handler on /ws and the plain handler on every other path
+    private int startServer(HttpServer hs) {
+        ws_handler = new EchoHandler({"logger": logger});
+        hs.setHandler("ws", "/ws", NOTHING, ws_handler);
+        hs.setHandler("reject", "/reject", NOTHING, new RejectHandler());
+        hs.setDefaultHandler("plain", new PlainHandler());
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        hs.waitForAsyncIo();
+        return port;
+    }
+
+    #! Returns a connection manager whose requests share one HTTP/3 connection
+    private HttpClientIo::HttpClientConnectionManager getManager() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    #! Opens a WebSocket connection, exchanges a message and closes the connection as Chromium does
+    /** The client sends its close frame and does not end its half of the stream; the server answers it and ends its
+        half.  With @p cancel, the client cancels the stream afterwards.
+
+        @return the session ID of the client's connection
+    */
+    private int openAndClose(HttpClientIo::HttpClientConnectionManager mgr, int port, bool cancel) {
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/ws", port));
+        stream.startStreaming("CONNECT", "/ws", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto rh = stream.readData(HangGuard);
+        assertEq(200, rh.status_code, "the server accepts the WebSocket connection");
+        # client frames are masked
+        stream.sendData(ws_encode_message("hello", WSOP_Text, True));
+        stream.sendData(ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));
+        # the echo and the server's close frame, then the end of the server's half of the stream
+        while (True) {
+            auto d = stream.readData(HangGuard);
+            if (!exists d || (d.typeCode() == NT_HASH && (d.error || d.err))) {
+                break;
+            }
+        }
+        # the server's connection closed cleanly: the client's reset that answers the server's STOP_SENDING (or the
+        # cancel below) is no error for it
+        assertEq(WSCC_NormalClosure, ws_handler.closed.get(HangGuard), "the server's connection closed normally");
+        if (cancel) {
+            stream.cancel();
+        }
+        return cast<HttpClientIo::Http3ClientConnection>(stream.getConnection()).getSessionId();
+    }
+
+    #! More WebSocket connections than the session's stream limit, none of whose streams the client ends
+    testStreamLimit() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        *int session_id;
+        for (int i = 0; i < StreamLimit + 5; ++i) {
+            int sid = openAndClose(mgr, port, False);
+            if (!exists session_id) {
+                session_id = sid;
+            }
+            assertEq(session_id, sid, "every WebSocket connection uses the same session");
+        }
+        # a request on the same session: without the fix the session had no stream left for it, and the request
+        # waited for one until the hang guard
+        assertEq(200, mgr.request(sprintf("https://localhost:%d", port), "GET", "/plain", NOTHING, NOTHING).status_code,
+            "a request after the WebSocket connections is answered");
+    }
+
+    #! A drain of the server ends once the requests in progress have been answered and the sessions have closed
+    private drainImpl(bool cancel) {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        for (int i = 0; i < 5; ++i) {
+            openAndClose(mgr, port, cancel);
+        }
+        HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = hs.getHttpAsyncIo();
+        ctrl.startDrain();
+        # without the fix, the server's session kept the records of the WebSocket streams, which kept it open, and
+        # the drain ended only at the hang guard
+        assertTrue(ctrl.waitDrain(HangGuard), "the drain ends");
+    }
+
+    testDrainAfterClose() {
+        drainImpl(False);
+    }
+
+    testDrainAfterCancel() {
+        drainImpl(True);
+    }
+
+    #! More extended CONNECT requests than the session's stream limit that the server rejects (404), whose streams the
+    #! client does not end: the server answers each with a complete response, which rejects the tunnel
+    testRejectedConnect() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        for (int i = 0; i < StreamLimit + 5; ++i) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/reject",
+                port));
+            stream.startStreaming("CONNECT", "/reject", {
+                ":protocol": "websocket",
+                "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+                "Sec-WebSocket-Version": "13",
+            }, True);
+            # the response and its end; the client does not end its half of the stream
+            int got = 0;
+            while (True) {
+                auto d = stream.readData(HangGuard);
+                if (!exists d || (d.typeCode() == NT_HASH && (d.end_stream || d.error || d.err))) {
+                    break;
+                }
+                ++got;
+            }
+            assertGt(0, got, "the server answers the request");
+        }
+        # without the fix the session had no stream left for this request
+        assertEq(200, mgr.request(sprintf("https://localhost:%d", port), "GET", "/plain", NOTHING, NOTHING).status_code,
+            "a request after the rejected requests is answered");
+    }
+}
