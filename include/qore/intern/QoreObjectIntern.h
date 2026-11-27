@@ -450,6 +450,24 @@ public:
     */
     DLLLOCAL QoreValue runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink);
 
+    //! Runs the C++ \a update in an update scope for the code of the object's Program; see
+    //! qore_update_shared_object()
+    /** @return the value that \a update returns, or no value with an exception raised if the scope cannot be opened
+    */
+    DLLLOCAL QoreValue runSharedUpdateNative(q_shared_object_update_t update, void* arg, ExceptionSink* xsink);
+
+    //! Returns 0 if an update scope can be opened for the object for the code of \a scope_pgm, or raises
+    //! SHARED-OBJECT-ERROR and returns -1
+    /** The checks of runSharedUpdate() and runSharedUpdateNative() that do not concern a closure: the object is
+        shared, \a scope_pgm is a Program that no sandbox governs, and the calling code is not code that sandboxed code
+        called in an open update scope
+
+        @param scope_pgm the Program whose code changes the object in the scope, or nullptr if there is none
+        @param native true for runSharedUpdateNative(), for the message of the exception
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkOpenSharedUpdateScope(const QoreProgram* scope_pgm, bool native, ExceptionSink* xsink) const;
+
     //! Returns 0 if \a callback may run on behalf of the calling code while the object is changed, or raises
     //! SHARED-OBJECT-ERROR and returns -1; see SandboxManager::checkSharedObjectCallback()
     DLLLOCAL int checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,

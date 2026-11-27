@@ -1188,6 +1188,10 @@ authenticate();
     with the reflection API (in C++: \c qore_check_caller_deletes_object()), for member writes and for every
     serialization API; a system constant object is refused before both rules (\c SYSTEM-OBJECT-ERROR).
 
+    A binary module protects the objects that it keeps for every %Program in the same way with the C++ API in
+    <tt>qore/QoreSharedObject.h</tt> (\c qore_share_object(), \c qore_update_shared_object() and their relatives; see
+    @ref interruptible_io_sandbox_shared_objects).
+
     @since %Qore 3.0
 
     @subsection sandbox_lazy_shared_values Process-Wide Values Built on First Use

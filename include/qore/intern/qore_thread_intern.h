@@ -3011,14 +3011,10 @@ DLLLOCAL bool qore_calling_class_is_restricted();
 */
 DLLLOCAL bool qore_caller_is_restricted_or_untrusted();
 
-//! returns true if what the calling code creates may be shared by every Program: the code is not restricted (see
-//! qore_caller_is_restricted()), or the governing sandbox cannot be resolved (fails closed: such an object is treated
-//! as shared, which restricted code cannot change)
-/** A trusted (governed) sandbox's code creates shared objects, and may change them (qore#7737)
-*/
-DLLLOCAL inline bool qore_caller_creates_shared_objects() {
-    return qore_caller_restricted_state() != 1;
-}
+// qore_caller_creates_shared_objects(), which returns true if what the calling code creates may be shared by every
+// Program (qore_caller_restricted_state() != 1: the code is not restricted, or the governing sandbox cannot be
+// resolved; a trusted (governed) sandbox's code creates shared objects, qore#7737), is exported in the public header
+// qore/QoreSharedObject.h (qore#7669)
 
 class QoreCallerSandboxHelper;
 

@@ -1123,18 +1123,48 @@ int qore_object_private::checkSharedChangeIntern(const char* mem, ExceptionSink*
     return -1;
 }
 
-QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
+int qore_object_private::checkOpenSharedUpdateScope(const QoreProgram* scope_pgm, bool native,
+        ExceptionSink* xsink) const {
     if (!isShared()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "an object of class '%s' is not shared; an update scope is only "
             "for a shared object", theclass->getName());
-        return QoreValue();
+        return -1;
     }
-    // the code that calls: the code of a Program that no restricting sandbox governs (qore#7737)
-    const QoreProgram* pgm = getProgram();
-    // also the code of a class that restricted code declared (qore#7737)
-    if (!pgm || qore_program_is_restricted(pgm) || qore_calling_class_is_restricted()) {
-        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
-            "object of class '%s'", theclass->getName());
+    // the code that changes the object in the scope: the code of a Program that is not restricted
+    // (qore#7737); for an update closure also not the code of a class that restricted code declared, as the calling
+    // code is the scope's code (a C++ update is the module's own code, whose scope is that of the object's Program:
+    // its caller may be restricted, see qore_update_shared_object())
+    if (!scope_pgm || qore_program_is_restricted(scope_pgm) || (!native && qore_calling_class_is_restricted())) {
+        if (!native) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
+                "object of class '%s'", theclass->getName());
+        } else if (pgm) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope cannot be opened for an object of class "
+                "'%s' whose Program is restricted", theclass->getName());
+        } else if (isShared() && qore_caller_may_share_objects() && !getProgram()) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
+                "Program cannot be opened by code that runs in no Program", theclass->getName());
+        } else {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
+                "Program can only be opened by code that may share objects", theclass->getName());
+        }
+        return -1;
+    }
+    // a scope is not opened in code that restricted code called in an open scope: such code acts for restricted code
+    // (qore_thread_sandboxed_entered_since() counts restricted Programs only, qore#7737)
+    if (!qore_shared_update_scopes.empty()
+        && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
+            "for an object of class '%s'", theclass->getName());
+        return -1;
+    }
+    return 0;
+}
+
+QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
+    // the code that calls: the code of a Program that is not restricted (qore#7737)
+    const QoreProgram* call_pgm = getProgram();
+    if (checkOpenSharedUpdateScope(call_pgm, false, xsink)) {
         return QoreValue();
     }
     // the update: a closure that a method of a class of the object created, in the code of the same Program, which
@@ -1147,7 +1177,7 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     // restricting sandbox governs (checked above)
     if (!closure_class || closure_class->sandbox_ctx
         || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
-        || qore_closure_code_program(closure) != pgm) {
+        || qore_closure_code_program(closure) != call_pgm) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
@@ -1162,13 +1192,6 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
-    // a scope is not opened in code that restricted code called in an open scope: such code acts for restricted code
-    if (!qore_shared_update_scopes.empty()
-        && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
-        xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
-            "for an object of class '%s'", theclass->getName());
-        return QoreValue();
-    }
     // a closure runs in an update scope once only: code that obtains it cannot run the update again
     if (!closure->takeSharedUpdate()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update closure of an object of class '%s' has already been "
@@ -1179,6 +1202,29 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     return update->execValue(nullptr, xsink);
 }
 
+QoreValue qore_object_private::runSharedUpdateNative(q_shared_object_update_t update, void* arg,
+        ExceptionSink* xsink) {
+    // the code that changes the object in the scope: the code of the object's Program; for an object that no Program
+    // owns (an object of a builtin class that C++ code created), the code that calls, if it may share objects
+    // (fails closed)
+    const QoreProgram* scope_pgm = pgm;
+    if (!scope_pgm && isShared() && qore_caller_may_share_objects()) {
+        scope_pgm = getProgram();
+    }
+    if (checkOpenSharedUpdateScope(scope_pgm, true, xsink)) {
+        return QoreValue();
+    }
+    // the scope is taken where the code that calls runs; the update then runs as the code of the scope's Program, as a
+    // closure of a class of the object runs in its own Program, so that code that the calling code supplied and that
+    // the update calls is code that the scope's code called (see qore_thread_sandboxed_entered_since())
+    SharedUpdateScopeHelper scope(this, scope_pgm, qore_thread_program_marker());
+    ProgramThreadCountContextHelper pch(xsink, const_cast<QoreProgram*>(scope_pgm), true);
+    if (pch.enterFailed()) {
+        return QoreValue();
+    }
+    return update(obj, arg, xsink);
+}
+
 int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
         ExceptionSink* xsink) const {
     // fails closed, as checkSharedChangeIntern()
@@ -1187,7 +1233,8 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
     }
     // a closure that the code of a trusted library class created; not code of the caller or of another restricted
     // Program
-    const QoreClosureBase* closure = callback->getType() == NT_RUNTIME_CLOSURE
+    // no callback is not a closure of a trusted class (C++ API, qore_check_shared_object_callback())
+    const QoreClosureBase* closure = callback && callback->getType() == NT_RUNTIME_CLOSURE
         ? static_cast<const QoreClosureBase*>(callback) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
@@ -1286,6 +1333,126 @@ int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
         "serialize an object of class '%s': the object is shared by every Program of the process",
         theclass->getName());
     return -1;
+}
+
+namespace {
+//! raises an exception for a C++ exception caught at the boundary of the shared object C++ API (qore#7669); no C++
+//! exception leaves it
+void qore_shared_object_api_raise(ExceptionSink* xsink, const char* err, const char* desc) noexcept {
+    if (!xsink) {
+        return;
+    }
+    try {
+        xsink->raiseException(err, "%s", desc);
+    } catch (...) {
+        // without memory for the exception, nothing more can be reported
+    }
+}
+}
+
+bool qore_caller_creates_shared_objects() {
+    // only restricted code creates objects that are not shared (qore#7737): the code of a trusted (governed) sandbox
+    // creates shared objects as other trusted code does; fails closed: an object of a caller whose sandbox cannot be
+    // resolved is treated as shared
+    try {
+        return qore_caller_restricted_state() != 1;
+    } catch (...) {
+        return true;
+    }
+}
+
+bool qore_caller_can_share_objects() {
+    try {
+        return qore_caller_may_share_objects();
+    } catch (...) {
+        // fails closed
+        return false;
+    }
+}
+
+int qore_share_object(QoreObject* obj, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "no object was given to mark as shared");
+        return -1;
+    }
+    try {
+        return qore_object_private::get(*obj)->shareChecked(xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while marking an object as shared");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "an object could not be marked as shared");
+    }
+    return -1;
+}
+
+bool qore_object_is_shared(const QoreObject* obj) {
+    return obj && qore_object_private::get(*obj)->isShared();
+}
+
+int qore_check_shared_object_change(const QoreObject* obj, const char* what, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        return 0;
+    }
+    try {
+        return qore_object_private::get(*obj)->checkSharedMethodChange(what ? what : "change the object", xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while checking a change of a shared "
+            "object");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the change of a shared object could not be "
+            "checked");
+    }
+    // fails closed
+    return -1;
+}
+
+int qore_check_shared_object_callback(const QoreObject* obj, const ResolvedCallReferenceNode* callback,
+        const char* what, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        return 0;
+    }
+    try {
+        return qore_object_private::get(*obj)->checkSharedCallback(callback, what ? what : "run code", xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while checking a callback of a shared "
+            "object");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the callback of a shared object could not be "
+            "checked");
+    }
+    // fails closed
+    return -1;
+}
+
+QoreValue qore_update_shared_object(QoreObject* obj, q_shared_object_update_t update, void* arg,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj || !update) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", obj
+            ? "no update was given for the update scope of a shared object"
+            : "no object was given for an update scope");
+        return QoreValue();
+    }
+    // the scope ends on every path out of runSharedUpdateNative(), also when the update throws a C++ exception
+    try {
+        return qore_object_private::get(*obj)->runSharedUpdateNative(update, arg, xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory in the update scope of a shared object");
+    } catch (const std::exception& e) {
+        try {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "the C++ update of a shared object of class '%s' threw a "
+                "C++ exception: %s", obj->getClassName(), e.what());
+        } catch (...) {
+            // without memory for the exception, nothing more can be reported
+        }
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the C++ update of a shared object threw a C++ "
+            "exception");
+    }
+    return QoreValue();
 }
 
 void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
