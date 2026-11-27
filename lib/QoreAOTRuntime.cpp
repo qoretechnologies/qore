@@ -41,6 +41,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreForkHandlers.h"
