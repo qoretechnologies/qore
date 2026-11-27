@@ -106,6 +106,12 @@
     that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
     @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
 
+    @par Data Provider Actions Refuse Local Paths of Code Restricted From the File System
+    Code restricted from the file system cannot give a local path or file location in the request of a qlib data
+    provider action, also with a provider that the host lent it, or create a provider with a path; a host gives such
+    code files with a sandbox or a confined provider (see @ref sandbox_caller_domains;
+    <a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @par Library Code Gives Restricted Code No Values of the Host's Environment
     For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
     URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
@@ -3369,6 +3375,10 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - qlib data provider actions refuse a local path or file location in a request from a caller restricted from the
+      file system, also with a lent provider, and providers created with a path refuse such a creator; see
+      @ref Util::check_caller_file_access() "check_caller_file_access()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)

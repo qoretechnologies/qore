@@ -129,6 +129,8 @@ module FilePoller {
     @section file_poller_relnotes FilePoller Release Notes
 
     @subsection file_poller_2_1 FilePoller v2.1
+    - a poller refuses a creator restricted from the file system (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - a started poller whose last reference is dropped is destroyed, which stops its polling thread: the thread holds
       the poller only for each poll; before, the thread kept the poller, and itself, alive
     - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
@@ -409,6 +411,8 @@ public class FilePoller {
         @throw FILEPOLLER-CONSTRUCTOR-ERROR invalid option
     */
     constructor(string n_path, string n_mask, *hash<auto> n_opts) {
+        # the directory is the creator's input (qore#7806)
+        check_creator_file_access("the path of a file poller");
         path = n_path;
         mask = n_mask;
 

@@ -147,6 +147,9 @@ module FtpClientDataProvider {
     @section ftpclientdataprovider_relnotes Release Notes
 
     @subsection ftpclientdataprovider_v2_1 FtpClientDataProvider v2.1
+    - the \c get-file-location and \c create-file-location actions refuse a \c location that code restricted from
+      its functional domain gives, also with a lent provider (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - the \c get-file request checks text in its encoding and takes the \c encoding_errors field: \c "raise" (the
       default) raises \c INVALID-ENCODING, \c "latin1" returns text that is not valid as \c ISO-8859-1, \c "keep"
       returns it without a check (see @ref encoding_errors)

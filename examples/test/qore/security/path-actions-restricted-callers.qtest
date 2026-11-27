@@ -1,0 +1,435 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - file-system policy of a sandbox and the file-system restrictions of lent objects' callers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileLocationHandler
+%requires FileDataProvider
+%requires UnstructuredRestClient
+%requires UnstructuredDataProvider
+%requires AwsTextractRestClient
+%requires AwsTextractDataProvider
+%requires AzureDocumentIntelligenceDataProvider
+%requires GoogleDocumentAiDataProvider
+%requires LlamaParseRestClient
+%requires LlamaParseDataProvider
+%requires OpenAiRestClient
+%requires OpenAiDataProvider
+%requires FtpClientDataProvider
+%requires CsvUtil
+%requires QoreModelRegistry
+
+%exec-class PathActionsRestrictedCallersTest
+
+#! A partition client that records the document that it is given and makes no request
+class RecordingUnstructuredRestClientIo inherits UnstructuredRestClient::UnstructuredRestClientIo {
+    public {
+        *data last_body;
+    }
+
+    constructor() : UnstructuredRestClientIo({"apikey": "fake-key"}) {}
+
+    list<hash<auto>> partition(string filename, string content_type, data body, *hash<auto> options) {
+        last_body = body;
+        return ({"type": "NarrativeText", "text": "x"},);
+    }
+}
+
+#! Tests that the actions that read or write a local path that their caller gives refuse a caller restricted from
+#! the file system (qore#7806)
+/** A caller restricted from the file system by a parse option (PO_NO_FILESYSTEM) is refused with PERMISSION-DENIED
+    before the path is read or written and before any other call, whether it created the provider or the host created
+    it and lent it; a caller that a sandbox governs is refused by the sandbox's file-system policy
+    (FILESYSTEM-ACCESS-DENIED) unless the policy allows the path; an unrestricted caller uses the path.
+*/
+class PathActionsRestrictedCallersTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        const Source = "%modern
+%requires DataProvider
+%requires FileLocationHandler
+%requires FileDataProvider
+%requires UnstructuredDataProvider
+%requires ConnectionProvider
+%requires QoreModelRegistry
+# creates the provider and makes the request
+string sub direct(string cls, auto arg, *string child, hash<auto> req) {
+    return direct_args(cls, arg, child, \"request\", req);
+}
+# creates the provider with the given constructor arguments and makes the request or creates the record
+string sub direct_args(string cls, *softlist<auto> args, *string child, string op, hash<auto> req) {
+    try {
+        AbstractDataProvider dp = create_object_args(cls, args);
+        if (child) {
+            dp = dp.getChildProviderEx(child);
+        }
+        return use(dp, op, req);
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+# makes the request with a provider that the host created
+string sub lent(AbstractDataProvider dp, hash<auto> req) {
+    return lent_op(dp, \"request\", req);
+}
+# makes the request or creates the record with a provider that the host created
+string sub lent_op(AbstractDataProvider dp, string op, hash<auto> req) {
+    try {
+        return use(dp, op, req);
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+# the error, also of a record creation, which the data provider wraps in CREATE-RECORD-ERROR
+string sub err(hash<ExceptionInfo> ex) {
+    if (ex.err == \"CREATE-RECORD-ERROR\") {
+        *string e = (ex.desc =~ x/^([A-Z0-9-]+):/)[0];
+        if (e) {
+            return e;
+        }
+    }
+    return ex.err;
+}
+string sub use(AbstractDataProvider dp, string op, hash<auto> req) {
+    if (op == \"create\") {
+        dp.createRecord(req);
+    } else {
+        dp.doRequest(req);
+    }
+    return \"ok\";
+}
+# makes the request with a copy of a provider that the host created
+string sub lent_copy(AbstractDataProvider dp, hash<auto> req) {
+    try {
+        AbstractDataProvider copy = Serializable::deserialize(Serializable::serialize(dp));
+        copy.doRequest(req);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# makes the request with a child of a provider that the host created
+string sub lent_child(AbstractDataProvider dp, string child, hash<auto> req) {
+    try {
+        dp.getChildProviderEx(child).doRequest(req);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# makes the request with the data provider of a connection that the host created
+string sub lent_conn(AbstractConnection conn, string child, hash<auto> req) {
+    try {
+        conn.getDataProvider().getChildProviderEx(child).doRequest(req);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    private {
+        #! the directory of the test with its file
+        TmpDir tmp("qore-7806-");
+        string secret;
+        #! a readable file of the system
+        string system_file;
+    }
+
+    constructor() : QUnit::Test("PathActionsRestrictedCallers", "1.0", \ARGV) {
+        secret = tmp.path + "/secret.txt";
+        writeFile(secret, "secret-7806\n");
+        system_file = is_readable("/etc/hostname") ? "/etc/hostname" : "/etc/passwd";
+
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("partition-file, " + m, sub () { testPartitionFile(m); });
+            addTestCase("partition-file, unreachable endpoint, " + m, sub () { testPartitionFileUnreachable(m); });
+            addTestCase("file actions, " + m, sub () { testFileActions(m); });
+            addTestCase("other actions, " + m, sub () { testOtherActions(m); });
+            addTestCase("file provider confined by its creator, " + m, sub () { testFileConfined(m); });
+        }
+        set_return_value(main());
+    }
+
+    private testPartitionFile(string mode) {
+        string cls = "UnstructuredDataProvider::UnstructuredPartitionFileDataProvider";
+        foreach string path in ((secret, system_file)) {
+            hash<auto> req = {"file_path": path};
+            foreach string kind in ("nofs", "sandbox") {
+                string err = kind == "nofs" ? "PERMISSION-DENIED" : "FILESYSTEM-ACCESS-DENIED";
+                Program p = getProgram(kind, mode);
+                RecordingUnstructuredRestClientIo rest();
+                assertEq(err, p.callFunction("direct", cls, rest, NOTHING, req), sprintf("%s direct %s %s", kind,
+                    path, mode));
+                assertNothing(rest.last_body, sprintf("%s direct %s %s: nothing sent", kind, path, mode));
+                AbstractDataProvider dp = create_object(cls, rest);
+                assertEq(err, p.callFunction("lent", dp, req), sprintf("%s lent %s %s", kind, path, mode));
+                assertNothing(rest.last_body, sprintf("%s lent %s %s: nothing sent", kind, path, mode));
+            }
+        }
+
+        # a sandbox that allows the directory: the file is read
+        {
+            Program p = getProgram("sandbox-allowed", mode);
+            RecordingUnstructuredRestClientIo rest();
+            assertEq("ok", p.callFunction("direct", cls, rest, NOTHING, {"file_path": secret}), "allowed " + mode);
+            assertEq(binary("secret-7806\n"), rest.last_body, "allowed " + mode);
+            # the sandbox still refuses a path that it does not allow
+            assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("direct", cls, new RecordingUnstructuredRestClientIo(),
+                NOTHING, {"file_path": system_file}), "allowed sandbox, system file " + mode);
+        }
+
+        # an unrestricted caller reads the file
+        {
+            Program p = getProgram("unrestricted", mode);
+            RecordingUnstructuredRestClientIo rest();
+            assertEq("ok", p.callFunction("direct", cls, rest, NOTHING, {"file_path": secret}),
+                "unrestricted " + mode);
+            assertEq(binary("secret-7806\n"), rest.last_body, "unrestricted " + mode);
+        }
+
+        # inline data is not a path
+        {
+            Program p = getProgram("nofs", mode);
+            RecordingUnstructuredRestClientIo rest();
+            assertEq("ok", p.callFunction("direct", cls, rest, NOTHING, {"file_data": binary("x")}),
+                "nofs inline data " + mode);
+            assertEq(binary("x"), rest.last_body, "nofs inline data " + mode);
+        }
+    }
+
+    #! the error is the access error, raised before any connection is made
+    private testPartitionFileUnreachable(string mode) {
+        string cls = "UnstructuredDataProvider::UnstructuredPartitionFileDataProvider";
+        hash<auto> opts = {"url": sprintf("http://127.0.0.1:%d", get_free_port()), "apikey": "x"};
+        foreach string kind in ("nofs", "sandbox") {
+            string err = kind == "nofs" ? "PERMISSION-DENIED" : "FILESYSTEM-ACCESS-DENIED";
+            Program p = getProgram(kind, mode);
+            assertEq(err, p.callFunction("direct", cls, opts, NOTHING, {"file_path": secret}),
+                sprintf("%s direct %s", kind, mode));
+            assertEq(err, p.callFunction("lent", create_object(cls, opts), {"file_path": system_file}),
+                sprintf("%s lent %s", kind, mode));
+        }
+        # an unrestricted caller reads the file and fails to connect
+        string rv = getProgram("unrestricted", mode).callFunction("direct", cls, opts, NOTHING,
+            {"file_path": secret});
+        assertNeq("ok", rv, "unrestricted " + mode);
+        assertNeq("PERMISSION-DENIED", rv, "unrestricted " + mode);
+        assertNeq("FILESYSTEM-ACCESS-DENIED", rv, "unrestricted " + mode);
+    }
+
+    #! the other actions that read or write a local path or file location given in the request; each is given an
+    #! endpoint where nothing listens, so an unrestricted caller reads the file and then fails to connect
+    private testOtherActions(string mode) {
+        int port = get_free_port();
+        string url = sprintf("http://127.0.0.1:%d", port);
+        string target = tmp.path + "/downloaded";
+        # name: class, constructor arguments (a closure that creates them in the host), operation, request
+        hash<string, list<auto>> uses = {
+            "textract": ("AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider",
+                auto sub () { return new AwsTextractRestClient::AwsTextractRestClientIo({"url": url, "aws_keyid": "x",
+                    "aws_secret": "y", "aws_region": "us-east-1"}); },
+                "request", {"document_path": "%s"}),
+            "azure": ("AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeDocumentDataProvider",
+                auto sub () { return {"url": url, "apikey": "x"}; },
+                "request", {"model_id": "prebuilt-read", "document_path": "%s"}),
+            "google documentai": ("GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentDataProvider",
+                auto sub () { return {"url": url, "gcp_project_id": "p", "gcp_region": "us"}; },
+                "request", {"processor_id": "x", "document_path": "%s"}),
+            "llamaparse": ("LlamaParseDataProvider::LlamaParseUploadFileDataProvider",
+                auto sub () { return new LlamaParseRestClient::LlamaParseRestClientIo({"url": url, "apikey": "x"}); },
+                "request", {"file_path": "%s"}),
+            "openai upload from location": ("OpenAiDataProvider::OpenAiFileUploadFromLocationDataProvider",
+                auto sub () { return new OpenAiRestClient::OpenAiRestClientIo({"url": url, "api_key": "x"}); },
+                "request", {"purpose": "assistants", "location": "file://%s"}),
+            "ftp create file from location": ("FtpClientDataProvider::FtpClientCreateFileLocationDataProvider",
+                auto sub () { return {"url": sprintf("ftp://127.0.0.1:%d", port)}; },
+                "request", {"path": "x", "location": "%s"}),
+            "ftp get file to location": ("FtpClientDataProvider::FtpClientGetFileLocationDataProvider",
+                auto sub () { return {"url": sprintf("ftp://127.0.0.1:%d", port)}; },
+                "request", {"path": "x", "location": target}),
+            "csv profile": ("CsvUtil::CsvProfileDataProvider", auto sub () {}, "request", {"path": "%s"}),
+            "model registry package": ("QoreModelRegistry::ModelVersionsDataProvider",
+                auto sub () { return (new QoreModelRegistry::ModelRegistry({"path": tmp.path + "/registry"}), "m"); },
+                "create", {"package_path": "%s"}),
+            "model registry artifact": ("QoreModelRegistry::ModelVersionArtifactsDataProvider",
+                auto sub () { return (new QoreModelRegistry::ModelRegistry({"path": tmp.path + "/registry"}), "m", "1"); },
+                "create", {"artifact_name": "a", "artifact_path": "%s"}),
+        };
+        foreach hash<auto> i in (uses.pairIterator()) {
+            string cls = i.value[0];
+            code args = i.value[1];
+            string op = i.value[2];
+            foreach string path in ((secret, system_file)) {
+                hash<auto> req = map {$1.key: $1.value.typeCode() == NT_STRING ? sprintf($1.value, path) : $1.value},
+                    i.value[3].pairIterator();
+                foreach string kind in ("nofs", "sandbox") {
+                    # a write to a location is refused by the sandbox's write policy
+                    string err = kind == "nofs" ? "PERMISSION-DENIED" : "FILESYSTEM-ACCESS-DENIED";
+                    Program p = getProgram(kind, mode);
+                    string desc = sprintf("%s: %s %s %s", i.key, kind, path, mode);
+                    assertEq(err, p.callFunction("direct_args", cls, args(), NOTHING, op, req), "direct " + desc);
+                    AbstractDataProvider dp = create_object_args(cls, args());
+                    assertEq(err, p.callFunction("lent_op", dp, op, req), "lent " + desc);
+                }
+                assertFalse(is_file(target), i.key + ": nothing written " + mode);
+            }
+            # an unrestricted caller uses the path and then fails to connect, or succeeds
+            hash<auto> req = map {$1.key: $1.value.typeCode() == NT_STRING ? sprintf($1.value, secret) : $1.value},
+                i.value[3].pairIterator();
+            string rv = getProgram("unrestricted", mode).callFunction("direct_args", cls, args(), NOTHING, op, req);
+            assertNeq("PERMISSION-DENIED", rv, i.key + ": unrestricted " + mode);
+            assertNeq("FILESYSTEM-ACCESS-DENIED", rv, i.key + ": unrestricted " + mode);
+            if (is_file(target)) {
+                unlink(target);
+            }
+        }
+    }
+
+    #! every action of the file data provider
+    private testFileActions(string mode) {
+        string d = tmp.path;
+        string before = listing(d);
+        # the action, its request, and the file that the request reads or changes
+        list<list<auto>> uses = (
+            ("get", {"path": secret}),
+            ("get", {"path": system_file}),
+            ("stat", {"path": secret}),
+            ("list", {"path": d}),
+            ("create", {"path": d + "/created", "data": "x"}),
+            ("delete", {"path": secret}),
+            ("mkdir", {"path": d + "/dir"}),
+            ("copy", {"source": secret, "target": d + "/copied"}),
+            ("move", {"source": secret, "target": d + "/moved"}),
+        );
+        string cls = "FileDataProvider::FileDataProvider";
+        foreach list<auto> use in (uses) {
+            foreach string kind in ("nofs", "sandbox") {
+                string err = kind == "nofs" ? "PERMISSION-DENIED" : "FILESYSTEM-ACCESS-DENIED";
+                Program p = getProgram(kind, mode);
+                string desc = sprintf("%s %s %y %s", kind, use[0], use[1], mode);
+                assertEq(err, p.callFunction("direct", cls, NOTHING, use[0], use[1]), "direct " + desc);
+                AbstractDataProvider dp = (new FileDataProvider()).getChildProviderEx(use[0]);
+                assertEq(err, p.callFunction("lent", dp, use[1]), "lent " + desc);
+                # a root without lock is no confinement
+                dp = (new FileDataProvider({"root": "/", "lock": False})).getChildProviderEx(use[0]);
+                assertEq(err, p.callFunction("lent", dp, use[1]), "lent, root without lock " + desc);
+            }
+        }
+        assertEq(before, listing(d), "the directory after the restricted uses, " + mode);
+
+        # an unrestricted caller reads and stats the file
+        Program p = getProgram("unrestricted", mode);
+        assertEq("ok", p.callFunction("direct", cls, NOTHING, "get", {"path": secret}), "unrestricted get " + mode);
+        assertEq("ok", p.callFunction("direct", cls, NOTHING, "stat", {"path": secret}), "unrestricted stat " + mode);
+    }
+
+    #! a file data provider that code that may use the file system confined to a root directory is used by
+    #! restricted code inside the root only (the data provider of a lent file connection, for example)
+    private testFileConfined(string mode) {
+        string d = tmp.path;
+        Program p = getProgram("nofs", mode);
+        AbstractDataProvider dp = (new FileDataProvider({"root": d})).getChildProviderEx("get");
+        assertEq("ok", p.callFunction("lent", dp, {"path": secret}), "confined, inside the root " + mode);
+        assertEq("SANDBOX-ERROR", p.callFunction("lent", dp, {"path": system_file}),
+            "confined, outside the root " + mode);
+        # the provider of a lent file connection
+        FilesystemConnection conn("fs", "fs", "file://" + d);
+        assertEq("ok", p.callFunction("lent_conn", conn, "get", {"path": secret}), "lent connection " + mode);
+        assertEq("SANDBOX-ERROR", p.callFunction("lent_conn", conn, "get", {"path": system_file}),
+            "lent connection, outside the root " + mode);
+        # restricted code that confines a provider itself is refused
+        assertEq("PERMISSION-DENIED", p.callFunction("direct", "FileDataProvider::FileDataProvider",
+            {"root": d}, "get", {"path": secret}), "confined by restricted code " + mode);
+        # a child provider that restricted code creates from a provider that it confined is refused
+        assertEq("PERMISSION-DENIED", p.callFunction("direct", "FileDataProvider::FileGetDataProvider",
+            {"root": "/"}, NOTHING, {"path": system_file}), "child confined by restricted code " + mode);
+
+        # a copy of a confined provider that restricted code makes by serialization is not confined by the host
+        AbstractDataProvider confined = (new FileDataProvider({"root": d})).getChildProviderEx("get");
+        assertEq("PERMISSION-DENIED", p.callFunction("lent_copy", confined, {"path": secret}),
+            "deserialized copy " + mode);
+        # a confined read-only provider gives no writable child, and restricted code cannot confine one itself
+        AbstractDataProvider ro = new FileDataProvider({"root": d, "readonly": True});
+        assertEq("READONLY-ERROR", p.callFunction("lent_child", ro, "create", {"path": d + "/created", "data": "x"}),
+            "read-only confined, create " + mode);
+        assertEq("PERMISSION-DENIED", p.callFunction("direct_args", "FileDataProvider::FileCreateDataProvider",
+            (d, True, False), NOTHING, "request", {"path": d + "/created", "data": "x"}),
+            "writable provider confined by restricted code " + mode);
+        assertFalse(is_file(d + "/created"), "nothing created " + mode);
+        # restricted code cannot override the checks of a file provider
+        hash<string, string> overrides = {
+            "checkCallerFileAccess": "",
+            "checkPath": "reference<string> path",
+            "checkReadOnly": "string op",
+        };
+        foreach hash<auto> i in (overrides.pairIterator()) {
+            Program evil(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            evil.setExecMode(Modes{mode});
+            string src = sprintf("%%requires FileDataProvider\nclass Evil inherits FileDataProvider::FileGetDataProvider "
+                "{ private %s(%s) {} }\n", i.key, i.value);
+            assertThrows("PARSE-EXCEPTION", \evil.parse(), (src, "evil"), "override " + i.key + " " + mode);
+        }
+    }
+
+    #! returns a Program of the given kind
+    private Program getProgram(string kind, string mode) {
+        Program p;
+        switch (kind) {
+            case "nofs":
+                p = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+                break;
+            case "sandbox":
+            case "sandbox-allowed": {
+                SandboxManager sm();
+                sm.setFilesystemDefaultPolicy(False);
+                if (kind == "sandbox-allowed") {
+                    sm.addFilesystemAllowedPath(tmp.path, QSEC_READ);
+                }
+                p = new Program(PO_NEW_STYLE);
+                p.setSandboxManager(sm);
+                break;
+            }
+            default:
+                p = new Program(PO_NEW_STYLE);
+                break;
+        }
+        p.setExecMode(Modes{mode});
+        p.parse(Source, kind);
+        return p;
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+
+    #! returns the sorted paths under a directory with the contents of the files
+    private static string listing(string dir) {
+        list<string> rv;
+        Dir d();
+        d.chdir(dir);
+        foreach string e in (d.list() ?? ()) {
+            string path = dir + "/" + e;
+            if (is_dir(path)) {
+                rv += e + "/";
+            } else {
+                rv += e + ":" + ReadOnlyFile::readTextFile(path);
+            }
+        }
+        return (sort(rv) ?? ()).join(",");
+    }
+}

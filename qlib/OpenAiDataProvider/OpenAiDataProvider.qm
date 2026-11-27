@@ -588,6 +588,9 @@ module OpenAiDataProvider {
 /** @page openaidataprovider_relnotes Release Notes
 
     @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - the file upload from a location refuses a \c location that code restricted from its functional domain gives,
+      also with a lent provider (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - the \c multipart/form-data boundary of a file upload is random; it was made from the current time
       (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - a failed request is not retried while

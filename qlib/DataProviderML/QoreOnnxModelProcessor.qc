@@ -505,6 +505,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             device_binding_enabled = True;
         }
 
+        # the model path and profile file prefix are the creator's input (qore#7806)
+        check_creator_file_access("the 'model_path' option");
         # Load the model
         if (session_config.providers || exists session_config.intra_op_threads
                 || exists session_config.inter_op_threads

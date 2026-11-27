@@ -461,6 +461,8 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     */
     constructor(string path, *hash<auto> opts) {
         object_name = path;
+        # the path is the creator's input (qore#7806)
+        check_creator_file_access("the path of a CSV read data provider");
         i = new CsvFileIterator(path, opts);
     }
 

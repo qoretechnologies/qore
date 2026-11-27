@@ -232,6 +232,9 @@ module CsvUtil {
 
 
     @section csvutil_v1_13 Version 1.13
+    - the data providers created with a file path refuse a creator restricted from the file system
+      (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - the CSV \c profile action takes the \c "header_row" option: the 1-based row holding the column names, or \c 0
       if the data has none, for when the person who knows the file says where the column names are
 
