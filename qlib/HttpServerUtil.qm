@@ -5966,7 +5966,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @param cx the raw request context, which the authenticator and the handler change
         @param changes set to the keys of \a cx that the trusted authenticator added (\c added) and the values before
         the authentication of those that it changed (\c changed), other than the keys of the request context that the
-        request filter gives and the authenticator's platform context keys, for withholdCredentialsForDispatch()
+        request filter gives and the authenticator's platform context keys, and to the options of the request filter
+        for the authenticator that authenticated the request (\c filter_options), for withholdCredentialsForDispatch():
+        the handler's authenticator is read once for the request, so a change of the handler's member while the
+        request is served does not change how it is authenticated or filtered
 
         @return the response of a failed authentication, if any
 
@@ -5976,20 +5979,26 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             reference<hash<auto>> cx, reference<*hash<auto>> changes) {
         *HttpPlatformAuthentication mark;
         on_exit delete mark;
+        # the authenticator is read once for the request: a change of the handler's member while the request is
+        # authenticated or served (by the code of the handler) does not change how it is authenticated or filtered
+        *AbstractAuthenticator authenticator = auth;
         bool trusted;
-        if (auth) {
+        if (authenticator) {
             try {
-                trusted = !SandboxManager::isFromRestrictedProgram(auth);
+                trusted = !SandboxManager::isFromRestrictedProgram(authenticator);
             } catch (hash<ExceptionInfo> ex) {
                 trusted = False;
             }
         }
         if (trusted) {
-            if (*hash<HttpResponseInfo> ah = authenticateTrusted(listener, hdr, \cx, \changes)) {
+            if (*hash<HttpResponseInfo> ah = authenticateTrusted(authenticator, listener, hdr, \cx, \changes)) {
                 return ah;
             }
             mark = new HttpPlatformAuthentication(self, cx);
         }
+        # the filter of the request for the handler's code, for the rest of the request (see
+        # withholdCredentialsForDispatch())
+        changes = (changes ?? {}) + {"filter_options": getRequestFilterOptionsFor(authenticator)};
         # the handler's own code gets the request without its credentials
         hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr, changes);
         hash<auto> fcx = filtered.cx;
@@ -5999,16 +6008,16 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! Authenticates the raw request with the handler's trusted authenticator; returns the response of a failure
-    private:internal *hash<HttpResponseInfo> authenticateTrusted(HttpListenerInterface listener, hash<auto> hdr,
-            reference<hash<auto>> cx, reference<*hash<auto>> changes) {
+    private:internal *hash<HttpResponseInfo> authenticateTrusted(AbstractAuthenticator authenticator,
+            HttpListenerInterface listener, hash<auto> hdr, reference<hash<auto>> cx, reference<*hash<auto>> changes) {
         hash<auto> before = cx;
-        if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
+        if (*hash<HttpResponseInfo> ah = authenticator.authenticateRequest(listener, hdr, \cx)) {
             return ah;
         }
         # the keys that the handler's code gets: those that the request filter gives and the platform's keys
         hash<string, bool> kept = map {$1: True}, AbstractStreamRequest::ContextKeys;
         try {
-            map kept{$1} = True, auth.getPlatformContextKeys();
+            map kept{$1} = True, authenticator.getPlatformContextKeys();
         } catch (hash<ExceptionInfo> ex) {
             # fails closed: none of the authenticator's keys is kept
         }
@@ -6059,8 +6068,9 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @param cx the raw request context
         @param hdr the raw request header fields
         @param platform_changes the keys that the handler's trusted authenticator added (\c added) and the values
-        before the authentication of those that it changed (\c changed), as authenticateRestrictedRequest() returns them in its
-        \a changes argument
+        before the authentication of those that it changed (\c changed), and the options of the request filter for
+        the authenticator that authenticated the request (\c filter_options), as authenticateRestrictedRequest()
+        returns them in its \a changes argument
 
         @return the request without its credentials; \c withheld lists what was withheld
 
@@ -6068,7 +6078,11 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     */
     final hash<HttpFilteredRequestInfo> withholdCredentialsForDispatch(hash<auto> cx, hash<auto> hdr,
             *hash<auto> platform_changes) {
-        hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, hdr);
+        # the filter of the authenticator that authenticated the request, if any (authenticateRestrictedRequest())
+        hash<HttpFilteredRequestInfo> filtered = platform_changes.filter_options
+            ? AbstractStreamRequest::filterRequest(cx, hdr,
+                cast<hash<HttpRequestFilterOptions>>(platform_changes.filter_options))
+            : filterRequestForHandler(cx, hdr);
         # the raw Authorization value
         hash<auto> rcx = cx - "auth";
         # the parts of the context that hold the credentials of the request, as the filter has them
@@ -6301,15 +6315,20 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
     #! returns the options of the filter of this handler: its authenticator and setRequestCredentialHeaders()
     private:internal hash<HttpRequestFilterOptions> getRequestFilterOptions() {
+        return getRequestFilterOptionsFor(auth);
+    }
+
+    #! returns the options of the filter of this handler with the given authenticator, which is read once
+    private:internal hash<HttpRequestFilterOptions> getRequestFilterOptionsFor(*AbstractAuthenticator authenticator) {
         hash<HttpRequestFilterOptions> opts = <HttpRequestFilterOptions>{
             # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
-            "platform_authenticated": exists auth && !(auth instanceof PermissiveAuthenticator),
+            "platform_authenticated": exists authenticator && !(authenticator instanceof PermissiveAuthenticator),
             "own_headers": request_credential_headers,
         };
         # the authorization context that the authenticator of trusted code sets
-        if (auth && !HttpRequestHandoff::isRestricted(auth)) {
+        if (authenticator && !HttpRequestHandoff::isRestricted(authenticator)) {
             try {
-                opts.platform_context_keys = auth.getPlatformContextKeys();
+                opts.platform_context_keys = authenticator.getPlatformContextKeys();
             } catch (hash<ExceptionInfo> ex) {
                 # fails closed: no key is kept
             }
