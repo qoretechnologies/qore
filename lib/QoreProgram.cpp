@@ -1893,6 +1893,7 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
         // a change for the whole Program, made while the module header's options are in effect
         SharedParseOptionsWrite spw;
         pwo.parse_options &= ~QoreParseOptions(removed);
+        noteOwnOptionsChanged();
     }
     // the module's %ifdef directives see the options it has
     for (auto& i : pomaps.pomap) {
@@ -1916,7 +1917,7 @@ QoreValue qore_program_private_base::getRestrictedProcessInfoValue(const Var* v)
 
 bool qore_program_private_base::withholdProcessInfo() const {
     // a Program counts as restricted only once its variables were emptied: every other Program fails closed
-    return !(process_info_cleared.load(std::memory_order_acquire) && restrictsExternalInfo())
+    return !(processInfoCleared() && restrictsExternalInfo())
         && qore_caller_restricts_domain(QDOM_EXTERNAL_INFO);
 }
 
@@ -1964,16 +1965,18 @@ void qore_program_private_base::initProcessInfoVars(bool no_external_info) {
     env_var = createProcessInfoVar("ENV", hashTypeInfo, true, no_external_info);
     // the variables are empty from the start in a Program created with the restriction
     if (no_external_info && argv_var && qore_argv_var && env_var) {
-        process_info_cleared.store(true, std::memory_order_release);
+        process_info_cleared.store(1, std::memory_order_release);
     }
 }
 
 void qore_program_private_base::processInfoRestrictionChanged(ExceptionSink* xsink) {
     if (!restrictsExternalInfo()) {
-        process_info_cleared.store(false, std::memory_order_release);
+        resetProcessInfoCleared();
         return;
     }
-    if (process_info_cleared.load(std::memory_order_acquire)) {
+    // the generation of the flag when the emptying starts: a reset meanwhile keeps it from being set below
+    uint64_t start = process_info_cleared.load(std::memory_order_acquire);
+    if (start & 1) {
         return;
     }
     // the variables get the values that they have in a Program created with the restriction; until all of them are
@@ -2011,10 +2014,12 @@ void qore_program_private_base::processInfoRestrictionChanged(ExceptionSink* xsi
         }
     }
     if (cleared) {
-        process_info_cleared.store(true, std::memory_order_release);
-        // a change that removed the restriction meanwhile reset the flag before it was set here
+        // set only in the generation in which the emptying started: if the restriction was removed meanwhile (and
+        // possibly added again by another change, which empties the variables itself), the flag stays reset
+        process_info_cleared.compare_exchange_strong(start, start | 1, std::memory_order_acq_rel);
+        // a change that removed the restriction after the flag was set here resets it
         if (!restrictsExternalInfo()) {
-            process_info_cleared.store(false, std::memory_order_release);
+            resetProcessInfoCleared();
         }
     }
 }
@@ -6453,10 +6458,15 @@ QoreHashNode* QoreProgram::getGlobalVars() const {
             }
             std::string key = std::string("Qore::") + v->getName();
             if (h->existsKey(key.c_str())) {
-                // the value replaced can be the last reference, if the variable was assigned meanwhile: it is
-                // released as the values of an emptied variable are (no destructor runs here)
-                priv->parkProcessInfoValue(h->takeKeyValue(key.c_str()));
+                // the value replaced is released here, where no lock is held: it is the last reference only if the
+                // variable was assigned meanwhile, and then the code of a destructor can run, whose exception is
+                // reported, as this function has no caller to raise it to
+                ExceptionSink xsink;
+                h->takeKeyValue(key.c_str()).discard(&xsink);
                 h->setKeyValue(key.c_str(), priv->getRestrictedProcessInfoValue(v), nullptr);
+                if (xsink) {
+                    xsink.handleExceptions();
+                }
             }
         }
     }

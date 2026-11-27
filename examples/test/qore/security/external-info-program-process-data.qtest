@@ -38,6 +38,12 @@ hash<auto> sub by_name(Program h) {
     }
     return rv;
 }
+int sub all_n(Program h, int n) {
+    for (int i = 0; i < n; ++i) {
+        h.getGlobalVars();
+    }
+    return n;
+}
 hash<auto> sub all(Program h) {
     hash<auto> g = h.getGlobalVars();
     return map {$1: shape(g{$1})}, (\"Qore::ARGV\", \"Qore::QORE_ARGV\", \"Qore::ENV\", \"x\");
@@ -80,6 +86,7 @@ hash<auto> sub child() {
         addTestCase("Program created for a debugger", \evalProgramTest());
         addTestCase("reads while a restriction is added", \restrictionWindowTest());
         addTestCase("destructors of the emptied values", \destructorTest());
+        addTestCase("values replaced in the whole-hash form", \wholeHashReleaseTest());
         set_return_value(main());
     }
 
@@ -245,6 +252,19 @@ hash<auto> sub child() {
             "pushed");
         assertEq(0, k.getGlobalVariable("ARGV").size());
         assertThrows("DTOR-ERR", sub () { delete k; });
+    }
+
+    wholeHashReleaseTest() {
+        # the values that getGlobalVars() replaces for restricted code are released at once: no reference to an
+        # object in the variables is kept, however often it is called
+        Program h(PO_NEW_STYLE);
+        h.parse("our int dtors = 0; class D { destructor() { ++dtors; } } "
+            "sub fill() { ARGV = (new D(),); } sub drop() { ARGV = (); } int sub count() { return dtors; }", "host");
+        h.run();
+        h.callFunction("fill");
+        assertEq(1000, getReader().callFunction("all_n", h, 1000));
+        h.callFunction("drop");
+        assertEq(1, h.callFunction("count"));
     }
 
     # returns an unrestricted Program with a variable of its own

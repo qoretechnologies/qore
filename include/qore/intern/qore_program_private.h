@@ -915,7 +915,15 @@ public:
         it (noteOwnOptionsChanged()).  Only a Program with this flag set and the restriction has its variables read as
         they are by code restricted from external information: every other Program fails closed (withholdProcessInfo())
     */
-    std::atomic<bool> process_info_cleared{false};
+    /** Bit 0 is the flag; the other bits are a generation that every reset increments, so that an emptying that
+        started before a reset cannot set the flag after it (processInfoRestrictionChanged())
+    */
+    std::atomic<uint64_t> process_info_cleared{0};
+
+    //! returns true if the process-information variables are known to be empty (see process_info_cleared)
+    DLLLOCAL bool processInfoCleared() const {
+        return process_info_cleared.load(std::memory_order_acquire) & 1;
+    }
 
     //! the old values of the process-information variables that were emptied on a path that has no exception sink
     /** They are released with the Program's data (releaseParkedProcessInfo()), as their release can run the code of
@@ -962,7 +970,15 @@ public:
     */
     DLLLOCAL void noteOwnOptionsChanged() {
         if (!restrictsExternalInfo()) {
-            process_info_cleared.store(false, std::memory_order_release);
+            resetProcessInfoCleared();
+        }
+    }
+
+    //! resets process_info_cleared and starts a new generation of it
+    DLLLOCAL void resetProcessInfoCleared() {
+        uint64_t s = process_info_cleared.load(std::memory_order_acquire);
+        while (!process_info_cleared.compare_exchange_weak(s, (s + 2) & ~static_cast<uint64_t>(1),
+            std::memory_order_acq_rel)) {
         }
     }
 
