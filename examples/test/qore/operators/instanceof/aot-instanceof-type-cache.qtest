@@ -2,12 +2,14 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-platform: macos - AOT code generation and a qcc executable compiled and linked from the driver
+# test-exec-mode: children - its checks run in a qcc executable
 
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AotInstanceofTypeCacheTest
@@ -41,12 +43,16 @@ class AotInstanceofTypeCacheTest inherits QUnit::Test {
         string exe = tmp.path + DirSep + "probe";
         string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        string res = backquote(sprintf("%s %s 2>&1", env, exe));
+        # the executable runs in its default environment; a warning of the module loader on stderr is not output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("exit status (output: %y)", r.out));
         # each of the two paths is resolved once (the first evaluation), not on every one; six paths in a cycle miss on
         # every evaluation (the least recently used way is replaced) except the first two, whose paths (A and B) the
         # first loop left in the set; every result is right while ways are replaced
         assertEq("two paths: hits=2000 resolves=2\nsix paths: hits=6000 resolves=5998\n"
-            "matrix: checks=36000 mismatches=0\n", res);
+            "matrix: checks=36000 mismatches=0\n", r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     #! Returns the path of \a cmd: \a cmd itself if it has a directory, else the file that the PATH names

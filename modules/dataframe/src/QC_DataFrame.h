@@ -19,6 +19,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include "qore/intern/qore_keyed_hash.h"
+
+//! the index of the columns of a DataFrame by name, with the keyed hash of the process (qore#7750)
+/** The hash tables of the module that are keyed by values use the keyed hash of the process, whose key the module's
+    initialization creates, so that constructing them cannot fail
+*/
+typedef qore_keyed_string_map<size_t> df_col_index_t;
+
 // Forward declarations for QPP
 DLLEXPORT extern qore_classid_t CID_DATAFRAME;
 DLLLOCAL extern QoreClass* QC_DATAFRAME;
@@ -263,7 +271,7 @@ public:
 
     //! Access to internal columns for GroupedDataFrame (friend access)
     DLLLOCAL const std::vector<Column>& getColumns() const { return columns; }
-    DLLLOCAL const std::unordered_map<std::string, size_t>& getColIndex() const {
+    DLLLOCAL const df_col_index_t& getColIndex() const {
         return col_index;
     }
     DLLLOCAL int64_t getNumRows() const { return n_rows; }
@@ -283,7 +291,7 @@ private:
     friend class QoreGroupedDataFrame;
 
     std::vector<Column> columns;
-    std::unordered_map<std::string, size_t> col_index;
+    df_col_index_t col_index;
     int64_t n_rows = 0;
     mutable std::mutex mtx;
 

@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -126,7 +138,8 @@ script.write(code);
 script.close();
 
 string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
-string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+# the qore run that the executables' output is compared with runs the same way
+string ast = run_executable(sprintf("%s %s --exec-mode=ast %s",
     env, qore_bin, script_path));
 
 string sub runAot(string suffix, string compile_env) {
@@ -138,7 +151,7 @@ string sub runAot(string suffix, string compile_env) {
         printf("AOT compile failed (%s):\n%s", suffix, compile_out);
         exit(2);
     }
-    return backquote(sprintf("%s %s 2>&1", env, exe));
+    return run_executable(sprintf("%s %s", env, exe));
 }
 
 string expected = "10:10:1000\n";

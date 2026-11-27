@@ -611,6 +611,9 @@ private:
 #else
     //! the number of zones loaded from paths in the process
     unsigned path_zone_count = 0;
+    //! the number of zones of spellings of time zone keys: names that differ from a key's stored name in case
+    //! (qore#7783; at most MaxSpellingZones)
+    size_t win_spelling_zones = 0;
 #endif
 
     // standard (unlocked) zone offset map

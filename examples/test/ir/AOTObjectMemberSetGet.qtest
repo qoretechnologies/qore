@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -205,7 +217,8 @@ file.write(source);
 file.close();
 
 string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
-string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+# the qore run that the executables' output is compared with runs the same way
+string ast = run_executable(sprintf("%s %s --exec-mode=ast %s",
     env, qore_bin, source_path));
 
 string enabled_exe = root + "/enabled";
@@ -254,16 +267,16 @@ if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
     exit(2);
 }
 
-string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
-string separate_read = backquote(sprintf(
-    "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s 2>&1",
+string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
+string separate_read = run_executable(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s",
     env, enabled_exe));
-string direct_scalar_disabled = backquote(sprintf(
-    "%s QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR=1 %s 2>&1",
+string direct_scalar_disabled = run_executable(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR=1 %s",
     env, enabled_exe));
-string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
-string native_disabled = backquote(sprintf(
-    "%s %s 2>&1", env, native_disabled_exe));
+string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
+string native_disabled = run_executable(sprintf(
+    "%s %s", env, native_disabled_exe));
 if (ast != "7:True:True:True:1004:9:1:hash<auto>:11:13:13:8020\n"
         || enabled != ast || separate_read != ast
         || direct_scalar_disabled != ast || disabled != ast

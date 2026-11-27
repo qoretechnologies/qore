@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 %modern
 %no-child-restrictions
@@ -7,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTInvokeCleanupArraySizeTest
@@ -226,8 +228,7 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
         string bin = tmp.path + "/probe";
         compile(bin, sprintf("printf(\"%%d %%d\\n\", big_cleanup_probe(\"x\", %d, -1), "
             "small_cleanup_probe(\"x\", %d, -1));\n", Depth, Depth));
-        string out = backquote(sprintf("%s %s 2>&1", env, bin));
-        trim out;
+        string out = runProbe(bin);
         assertEq(sprintf("%d %d", expected(BigTemps, Depth), expected(SmallTemps, Depth)), out);
     }
 
@@ -250,9 +251,20 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
             "    }\n"
             "}\n"
             "printf(\"%%d\\n\", big_cleanup_probe(\"x\", 2, -1));\n", Depth / 2, Depth, Depth));
-        string out = backquote(sprintf("%s %s 2>&1", env, bin));
-        trim out;
+        string out = runProbe(bin);
         assertEq(sprintf("PROBE-ERROR: depth 0\nPROBE-ERROR: depth 0\n"
             "PROBE-ERROR: depth %d\nPROBE-ERROR: depth %d\n%d", Depth / 2, Depth / 2, expected(BigTemps, 2)), out);
+    }
+
+    #! runs a probe in its default environment and returns its output on stdout, trimmed; it must end normally and
+    #! write nothing to stderr (a warning of the module loader on stderr is not output: qore#7805)
+    private string runProbe(string bin) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, bin), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("exit status (output: %y)", r.out));
+        assertEq("", r.stderr, "stderr");
+        string out = r.stdout;
+        trim out;
+        return out;
     }
 }

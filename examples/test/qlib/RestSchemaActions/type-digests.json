@@ -1,6 +1,6 @@
 {
   "Stripe": {
-    "make-api-call": "metadata:1574780715338844 output:66e4f18413704210 options:be86034f62051ef1",
+    "make-api-call": "metadata:1574780715338844 output:66e4f18413704210 options:1315809a5fbd7931",
     "get-account": "metadata:bda6f6ccb2317cb9 output:6423fe7c704e97d7 options:185bf9d9a0b470f9",
     "get-balance": "metadata:f07681ab387854f9 output:3571c5785969a6d1 options:185bf9d9a0b470f9",
     "list-balance-transactions": "metadata:6e22463bcff4cbba output:feeb4440fbdbfc43 options:0dd5eb30103e31e2",
@@ -62,7 +62,7 @@
     "call": "metadata:60e32d4b7320c0ad output:342adca2d8a7478d options:891529a896a16e62"
   },
   "AzureOpenAI": {
-    "make-api-call": "metadata:0f04848395c249bb output:66e4f18413704210 options:be86034f62051ef1",
+    "make-api-call": "metadata:0f04848395c249bb output:66e4f18413704210 options:1315809a5fbd7931",
     "create-speech": "metadata:fbe7e91f808bb46a output:750843fda41f953a options:e1eeeb40e93922da",
     "create-batch": "metadata:29036e9bffd6cb49 output:6244eda9caeb8acd options:f190c6863a42cfe4",
     "list-batches": "metadata:8a26cad69db49226 output:3aa1c65b8d35e971 options:fedcf1670f29ba8d",
@@ -164,7 +164,7 @@
     "create-translation": "metadata:719b3ec8ce9121e3 output:24482c01459490e8 options:791f8cd64fc7a847"
   },
   "AWSBedrock": {
-    "make-api-call": "metadata:e6039afdfad9f907 output:66e4f18413704210 options:be86034f62051ef1",
+    "make-api-call": "metadata:e6039afdfad9f907 output:66e4f18413704210 options:1315809a5fbd7931",
     "batch-delete-advanced-prompt-optimization-job": "metadata:9bdd17507483f95b output:8467db8b9acf1afc options:92cabc8e1ad5e827",
     "batch-delete-evaluation-job": "metadata:b3dd5cbedef5552d output:bcfb11ac0ec2dfbc options:48c146fc591457d4",
     "cancel-automated-reasoning-policy-build-workflow": "metadata:fdbaed25994368de output:4c5eb65f14c8a2c8 options:e847bc7fd097bf04",

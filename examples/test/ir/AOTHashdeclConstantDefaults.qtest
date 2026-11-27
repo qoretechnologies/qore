@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -7,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTHashdeclConstantDefaultsTest
@@ -117,7 +119,15 @@ printf(\"ok\\n\");
         string batch_out = backquote(sprintf("%y -O3 -o %y %y %y %y 2>&1",
             qcc_bin, exe, options_path, constants_path, main_path));
         assertTrue(is_file(exe), "split declarations compile: " + batch_out);
-        string run_out = backquote(sprintf("%y 2>&1", exe));
-        assertEq("ok\n", run_out, "defaults bind constants across object files: " + run_out);
+        checkExecutable(sprintf("%y", exe), "ok\n", "defaults bind constants across object files");
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

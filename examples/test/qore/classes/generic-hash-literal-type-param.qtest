@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-platform: macos - JIT and AOT code for hash literals in generic classes and functions
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 
@@ -9,6 +10,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class GenericHashLiteralTypeParamTest
 
@@ -108,8 +110,8 @@ class GenericHashLiteralTypeParamTest inherits QUnit::Test {
                 string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                     file));
                 assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
-                assertEq(Expected + ExpectedLexical, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
-                    "%s 2>&1", libqore_dir, libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+                checkExecutable(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir,
+                    exe), Expected + ExpectedLexical, sprintf("%s: qcc %s", label, opt));
             }
         }
     }
@@ -119,5 +121,14 @@ class GenericHashLiteralTypeParamTest inherits QUnit::Test {
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(data);
         f.close();
+    }
+
+    #! runs the qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

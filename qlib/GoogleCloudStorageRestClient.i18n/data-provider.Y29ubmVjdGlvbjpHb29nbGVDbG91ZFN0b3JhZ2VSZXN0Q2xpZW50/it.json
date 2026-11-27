@@ -4,8 +4,8 @@
     "it": {
       "messages": {
         "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.desc": {
-          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via @ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or Application Default Credentials.",
-          "message": "Una connessione a [Google Cloud Storage](https://cloud.google.com/storage) — il servizio di archiviazione oggetti di Google. L'autenticazione avviene tramite @ref gcpauthintro \"GcpAuth\" utilizzando una chiave JSON per account di servizio esplicita o le credenziali predefinite dell'applicazione."
+          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via `GcpAuth` using an explicit service-account JSON key or Application Default Credentials.",
+          "message": "Una connessione a [Google Cloud Storage](https://cloud.google.com/storage) — il servizio di archiviazione oggetti di Google. L'autenticazione avviene tramite `GcpAuth` utilizzando una chiave JSON per account di servizio esplicita o le credenziali predefinite dell'applicazione."
         },
         "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.display_name": {
           "source": "Google Cloud Storage Connection",

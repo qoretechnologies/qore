@@ -75,11 +75,11 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
         });
         addTestCase("no old value copied, qcc -O0", sub () {
             skipWithoutDebugging();
-            checkNoCopy(runQcc(0, no_copy_fixture));
+            checkNoCopy(runQcc(0, no_copy_fixture).out);
         });
         addTestCase("no old value copied, qcc -O3", sub () {
             skipWithoutDebugging();
-            checkNoCopy(runQcc(3, no_copy_fixture));
+            checkNoCopy(runQcc(3, no_copy_fixture).out);
         });
 
         set_return_value(main());
@@ -114,18 +114,23 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
     }
 
     private checkQcc(int opt) {
-        assertEq(expected, runQcc(opt, fixture));
+        hash<ExecModeHarness::ModeRunResult> r = runQcc(opt, fixture);
+        assertEq(0, r.rc, sprintf("exit status (output: %y)", r.out));
+        assertEq(expected, r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
-    #! compiles the script with qcc and returns the output of the program
-    private string runQcc(int opt, string script) {
+    #! compiles the script with qcc and returns the result of the program, run in its default environment; a warning
+    #! of the module loader on stderr is not output
+    private hash<ExecModeHarness::ModeRunResult> runQcc(int opt, string script) {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
         string program = dir + "/unused-post-incdec-errors";
-        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(getQcc()), opt, shellQuote(program),
+        string qcc_bin = getQcc();
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
             shellQuote(script)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        return backquote(shellQuote(program) + " 2>&1");
+        return ExecModeHarness::run_command(shellQuote(program), NOTHING, "QORE_JIT_TIMING=1");
     }
 
     #! skips a check of UnusedPostNoCopy.q in a build without debugging, which has no count of copies; the library

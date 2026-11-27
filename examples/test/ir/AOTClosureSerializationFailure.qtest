@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 %modern
 %no-child-restrictions
@@ -8,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTClosureSerializationFailureTest
@@ -89,7 +91,7 @@ printf(\"%d\\n\", c());
                 hash<auto> rv = compile(tmp.path, i.key, i.value, opt);
                 assertEq(0, rv.rc, sprintf("%s -O%s: %s", i.key, opt, rv.out));
                 assertTrue(is_file(rv.exe), sprintf("%s -O%s: %s", i.key, opt, rv.out));
-                assertEq("42\n", backquote(sprintf("%s %s 2>&1", env, rv.exe)), sprintf("%s -O%s", i.key, opt));
+                checkExecutable(sprintf("%s %s", env, rv.exe), "42\n", sprintf("%s -O%s", i.key, opt));
             }
         }
     }
@@ -99,7 +101,7 @@ printf(\"%d\\n\", c());
         TmpDir tmp("qore-aot-closure-serialization-");
         hash<auto> rv = compile(tmp.path, "function", Scripts.function, "0", "no-such-ir-function");
         assertEq(0, rv.rc, rv.out);
-        assertEq("42\n", backquote(sprintf("%s %s 2>&1", env, rv.exe)));
+        checkExecutable(sprintf("%s %s", env, rv.exe), "42\n", "no matching function");
     }
 
     testFailureReported() {
@@ -147,5 +149,14 @@ printf(\"%d\\n\", c());
     #! quotes @a str for the shell
     private static string quote(string str) {
         return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

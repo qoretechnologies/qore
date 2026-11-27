@@ -3103,8 +3103,9 @@
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
       running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
-    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
-      through links to directories), such as those in data, no longer add a time zone each without bound
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS and in
+      directories that do not distinguish case, names through links to directories, case variants of Windows time zone
+      names), such as those in data, no longer add a time zone each without bound
       (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
     - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when

@@ -211,13 +211,15 @@ class AotIrValueIdsBase inherits QUnit::Test {
 
     #! runs runner.q with the module from the directory; returns its output and exit status
     private hash<auto> run(string dir, *string mode, bool debug = False, *string exe) {
-        int rc;
         string cmd = exe ?? sprintf("%s -b %s%s", qore_bin, mode ? "--exec-mode=" + mode + " " : "",
             get_script_dir() + "/runner.q");
-        string out = backquote(sprintf("ulimit -t %d 2>/dev/null; %sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
-            "QORE_MODULE_DIR=%s %s 2>&1", CpuLimitSecs, debug ? "AOT_IR_VALUE_IDS_DEBUGGER=1 " : "", libqore_dir,
-            libqore_dir, dir, cmd), \rc);
-        return {"out": out, "rc": rc};
+        # the run is in its default environment; its output is the output on stdout followed by the output on
+        # stderr, apart from the warnings of the module loader, which are not output of the run (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("ulimit -t %d 2>/dev/null; "
+            "%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s", CpuLimitSecs,
+            debug ? "AOT_IR_VALUE_IDS_DEBUGGER=1 " : "", libqore_dir, libqore_dir, dir, cmd), NOTHING,
+            "QORE_JIT_TIMING=1");
+        return {"out": r.out, "rc": r.rc};
     }
 
     valid() {

@@ -126,7 +126,12 @@ class DateLiteralSubtypesTest inherits QUnit::Test {
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
             shellQuote(fixture)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        # the program runs in its default environment; a warning of the module loader on stderr is not output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("exit status (output: %y)", r.out));
+        assertEq(expected, r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     private qccParseError() {
@@ -138,7 +143,8 @@ class DateLiteralSubtypesTest inherits QUnit::Test {
         f.write("%modern\nsub t(date<absolute> d) {}\nt(1s);\n");
         f.close();
         string program = dir + "/mismatch";
-        string output = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(getQcc()), shellQuote(program),
+        string qcc_bin = getQcc();
+        string output = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(program),
             shellQuote(source)));
         assertFalse(is_file(program), output);
         assertRegex("PARSE-TYPE-ERROR", output);
