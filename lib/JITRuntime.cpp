@@ -6483,7 +6483,8 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
         const QoreTypeInfo* receiver_type_info = nullptr;
         const TypedHashDecl* hd = nullptr;
     };
-    static constexpr size_t HASHDECL_FRONT_CACHE_SIZE = 8;
+    // large enough for the hashdecls that a request path uses, so that they do not evict each other (qore#7765)
+    static constexpr size_t HASHDECL_FRONT_CACHE_SIZE = 64;
     thread_local HashDeclFrontCacheEntry front_cache[HASHDECL_FRONT_CACHE_SIZE];
     uintptr_t hash = reinterpret_cast<uintptr_t>(hd_path) >> 4;
     hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
@@ -6522,7 +6523,13 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
                 front_entry.generation = ctx->hashdecl_cache_generation;
                 front_entry.epoch = epoch;
                 front_entry.path_address = hd_path;
-                front_entry.path = hd_path;
+                // the text is compared only for a receiver-dependent path (see above); an entry of another path has
+                // none, so that no receiver-dependent lookup matches it
+                if (receiver_dependent) {
+                    front_entry.path = hd_path;
+                } else {
+                    front_entry.path.clear();
+                }
                 front_entry.receiver_type_info = receiver_type_info;
                 front_entry.hd = i->second;
             }
@@ -6543,7 +6550,13 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
         front_entry.generation = ctx->hashdecl_cache_generation;
         front_entry.epoch = epoch;
         front_entry.path_address = hd_path;
-        front_entry.path = hd_path;
+        // the text is compared only for a receiver-dependent path (see above); an entry of another path has none, so
+        // that no receiver-dependent lookup matches it
+        if (receiver_dependent) {
+            front_entry.path = hd_path;
+        } else {
+            front_entry.path.clear();
+        }
         front_entry.receiver_type_info = receiver_type_info;
         front_entry.hd = hd;
     }
@@ -7017,7 +7030,8 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
         const QoreTypeInfo* receiver_type_info = nullptr;
         const QoreTypeInfo* type_info = nullptr;
     };
-    static constexpr size_t TYPE_PATH_FRONT_CACHE_SIZE = 8;
+    // large enough for the types that a request path uses, so that they do not evict each other (qore#7765)
+    static constexpr size_t TYPE_PATH_FRONT_CACHE_SIZE = 64;
     thread_local TypePathFrontCacheEntry front_cache[TYPE_PATH_FRONT_CACHE_SIZE];
     uintptr_t hash = reinterpret_cast<uintptr_t>(type_path) >> 4;
     hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
@@ -8982,6 +8996,8 @@ static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
     }
     const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
     const qore_hash_private* hp = qore_hash_private::get(*hash);
+    // the members are walked directly (qore#7569)
+    hp->assertNotReleasing();
     if (hp->hashdecl && slot >= 0
             && static_cast<size_t>(slot) < hp->size()) {
         const HashMember* member = hp->member_list.front();
@@ -15203,7 +15219,11 @@ extern "C" DLLEXPORT int qore_rt_try_enter_native_method_v1(void* storage, QoreA
         }
     }
     if (obj) {
-        if (!obj->isValid() || obj->getClass() != target.qc || qore_object_private::get(*obj)->sandbox_provenance
+        // an object that another thread destroys is entered on the generic path, which refuses the call while the
+        // destructor runs (qore_object_private::startCall(), qore#7509), as is one that has been deleted, which raises
+        // the error
+        if (qore_object_private::checkFastCallEntry(obj) || obj->getClass() != target.qc
+                || qore_object_private::get(*obj)->sandbox_provenance
                 || target.method->getNameStr() == "copy") {
             return 0;
         }
@@ -23836,7 +23856,12 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     if (o->getClass() != qc && o->getClass() != method->getClass() && !method->isStatic()) {
         return false;
     }
-    if (!o->isValid()) {
+    if (int entry = qore_object_private::checkFastCallEntry(o)) [[unlikely]] {
+        if (entry > 0) {
+            // another thread destroys the object: the slow path refuses the call while the destructor runs, as the
+            // AST interpreter does (qore_object_private::startCall(), qore#7509)
+            return false;
+        }
         // as the AST interpreter raises it (issue #5784)
         qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
         result = toBits(QoreValue());
@@ -25402,7 +25427,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
     }
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
     }
@@ -25461,7 +25488,9 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
             ctx, slot, base_bits, nullptr, 0, xsink));
     } else {
         QoreObject* object = base.get<QoreObject>();
-        if (!object->isValid() || object->getClass() != target.qc) {
+        // an object that another thread destroys is called on the generic path, which refuses the call while
+        // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+        if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
             value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
                 ctx, slot, base_bits, nullptr, 0, xsink));
         } else {
@@ -25534,7 +25563,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     }
 
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, args, nargs, xsink);
     }
@@ -25618,7 +25649,9 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             ctx, slot, base_bits, args, nargs, xsink));
     } else {
         QoreObject* object = base.get<QoreObject>();
-        if (!object->isValid() || object->getClass() != target.qc) {
+        // an object that another thread destroys is called on the generic path, which refuses the call while
+        // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+        if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
             fallback = fromBits(qore_rt_dot_eval_object_method_direct_aot(
                 ctx, slot, base_bits, args, nargs, xsink));
         } else {
@@ -25746,7 +25779,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     }
 
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, args, nargs, xsink);
     }

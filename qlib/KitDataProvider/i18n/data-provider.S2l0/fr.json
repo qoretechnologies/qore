@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Create a Subscriber",
+          "source": "Create a subscriber",
           "message": "Créer un abonné"
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Une table de hachage des valeurs de champs personnalisés à définir sur l'abonné"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Update a Subscriber",
+          "source": "Update a subscriber",
           "message": "Mettre à jour un abonné"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Une table de hachage des valeurs de champs personnalisés à définir sur l'abonné"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
-          "source": "Unsubscribe a Subscriber",
+          "source": "Unsubscribe a subscriber",
           "message": "Désabonner un abonné"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
@@ -484,7 +484,7 @@
           "message": "L'identifiant unique de l'abonné à désabonner"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Create Subscribers",
+          "source": "Bulk create subscribers",
           "message": "Créer des abonnés en masse"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
@@ -576,7 +576,7 @@
           "message": "Une URL qui recevra un webhook lorsque l'opération en masse sera terminée"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Subscribers",
+          "source": "List subscribers",
           "message": "Lister les abonnés"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
@@ -676,7 +676,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
-          "source": "Get a Subscriber",
+          "source": "Get a subscriber",
           "message": "Obtenir un abonné"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
@@ -696,7 +696,7 @@
           "message": "L'ID de l'abonné"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Créer une étiquette"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Le nom du tag à créer"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "Mettre à jour une étiquette"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -756,7 +756,7 @@
           "message": "Le nouveau nom de l'étiquette"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
-          "source": "Tag a Subscriber",
+          "source": "Tag a subscriber",
           "message": "Ajouter un tag à un abonné"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
@@ -792,7 +792,7 @@
           "message": "L'adresse e-mail de l'abonné auquel ajouter un tag"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
-          "source": "Untag a Subscriber",
+          "source": "Untag a subscriber",
           "message": "Supprimer un tag d'un abonné"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
@@ -828,7 +828,7 @@
           "message": "L'identifiant unique de l'abonné dont supprimer le tag"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Tag Subscribers",
+          "source": "Bulk tag subscribers",
           "message": "Appliquer des tags aux abonnés en masse"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Une liste d'adresses e-mail d'abonnés à taguer"
         },
         "app.S2l0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Lister les étiquettes"
         },
         "app.S2l0.action.bGlzdC10YWdz.short_desc": {
@@ -900,7 +900,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "List Tag Subscribers",
+          "source": "List tag subscribers",
           "message": "Lister les abonnés d'un tag"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "Créer un champ personnalisé"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Le libellé d'affichage du champ personnalisé à créer"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "Mettre à jour un champ personnalisé"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Le nouveau libellé d'affichage pour le champ personnalisé"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "Supprimer un champ personnalisé"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "L'identifiant unique du champ personnalisé à supprimer"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "Lister les champs personnalisés"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Create a Broadcast",
+          "source": "Create a broadcast",
           "message": "Créer une diffusion"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Le texte d'aperçu affiché dans les clients de messagerie avant l'ouverture de l'e-mail"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Update a Broadcast",
+          "source": "Update a broadcast",
           "message": "Mettre à jour une diffusion"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Le texte d'aperçu affiché dans les clients de messagerie avant l'ouverture de l'e-mail"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Delete a Broadcast",
+          "source": "Delete a broadcast",
           "message": "Supprimer une diffusion"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "L'identifiant unique de la diffusion à supprimer"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
-          "source": "Get Broadcast Stats",
+          "source": "Get broadcast stats",
           "message": "Obtenir les statistiques de la diffusion"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "L'identifiant unique de la diffusion dont obtenir les statistiques"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "Lister les diffusions"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get a Broadcast",
+          "source": "Get a broadcast",
           "message": "Obtenir une diffusion"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "L'ID de la diffusion"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
-          "source": "Add Subscriber to Form",
+          "source": "Add subscriber to form",
           "message": "Ajouter un abonné au formulaire"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "Le prénom de l'abonné"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "Lister les formulaires"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
-          "source": "List Form Subscribers",
+          "source": "List form subscribers",
           "message": "Lister les abonnés d'un formulaire"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
-          "source": "Add Subscriber to Sequence",
+          "source": "Add subscriber to sequence",
           "message": "Ajouter un abonné à la séquence"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "L'adresse e-mail de l'abonné à ajouter à la séquence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
-          "source": "List Sequences",
+          "source": "List sequences",
           "message": "Lister les séquences"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Sequence Subscribers",
+          "source": "List sequence subscribers",
           "message": "Lister les abonnés d'une séquence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
-          "source": "Create a Purchase",
+          "source": "Create a purchase",
           "message": "Créer un achat"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Le statut actuel de l'achat"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
-          "source": "List Purchases",
+          "source": "List purchases",
           "message": "Lister les achats"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Résultats maximums"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
-          "source": "Get a Purchase",
+          "source": "Get a purchase",
           "message": "Obtenir un achat"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "L'ID de l'achat"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
-          "source": "Subscriber Activated",
+          "source": "Subscriber activated",
           "message": "Abonné activé"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Se déclenche lorsqu'un abonné est activé dans Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
-          "source": "Subscriber Unsubscribed",
+          "source": "Subscriber unsubscribed",
           "message": "Abonné désabonné"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Se déclenche lorsqu'un abonné se désabonne dans Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
-          "source": "Subscriber Bounced",
+          "source": "Subscriber bounced",
           "message": "E-mail de l'abonné rejeté"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Se déclenche lorsqu'un e-mail d'abonné est rejeté dans Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
-          "source": "Subscriber Complained",
+          "source": "Subscriber complained",
           "message": "Plainte d'un abonné"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Se déclenche lorsqu'un abonné signale un e-mail comme spam dans Kit"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
-          "source": "Form Subscription",
+          "source": "Form subscription",
           "message": "Inscription à un formulaire"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Se déclenche lorsqu'un abonné s'inscrit via un formulaire dans Kit"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
-          "source": "Course Subscription",
+          "source": "Course subscription",
           "message": "Inscription à un cours"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {

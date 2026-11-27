@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
-          "source": "Create Tracking",
+          "source": "Create tracking",
           "message": "建立追蹤"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
@@ -748,7 +748,7 @@
           "message": "用於此追蹤的物流商連線識別碼"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "取得追蹤"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -772,7 +772,7 @@
           "message": "要擷取的 Aftership 追蹤 ID"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
-          "source": "Search Trackings",
+          "source": "Search trackings",
           "message": "搜尋物流追蹤"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "每頁物流追蹤數量（最多 200 筆）"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
-          "source": "Update Tracking",
+          "source": "Update tracking",
           "message": "更新物流追蹤"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "結帳時選擇的配送方式"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
-          "source": "Delete Tracking",
+          "source": "Delete tracking",
           "message": "刪除追蹤"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "要重新追蹤的 Aftership 追蹤 ID（重新啟用過期的追蹤）"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
-          "source": "Mark as Completed",
+          "source": "Mark as completed",
           "message": "標記為已完成"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "完成事件發生的時間戳記。若未提供，將使用當前時間"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "取得最新檢查點"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "要取得最新檢查點的 Aftership 追蹤 ID"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "列出物流業者"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "檢索 Aftership 支援的所有物流業者清單"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
-          "source": "Detect Courier",
+          "source": "Detect courier",
           "message": "偵測物流業者"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "用於多物流代碼檢測的物流商群組代碼（例如：`fedex-group`）"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
-          "source": "Search Returns",
+          "source": "Search returns",
           "message": "搜尋退貨"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "每頁退貨數量（1-50，預設為 `10`）"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
+          "source": "Create return",
           "message": "建立退貨"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "若原因允許，則提供次要原因"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "取得退貨"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "要擷取的 Aftership 退貨 ID 或 RMA 號碼"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
-          "source": "Approve Return",
+          "source": "Approve return",
           "message": "核准退貨"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "要核准的 Aftership 退貨 ID"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
-          "source": "Reject Return",
+          "source": "Reject return",
           "message": "拒絕退貨"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "拒絕退貨的原因"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
-          "source": "Resolve Return",
+          "source": "Resolve return",
           "message": "解決退貨"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "要標記為已解決的 Aftership 退貨 ID"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
-          "source": "Add Return Shipment",
+          "source": "Add return shipment",
           "message": "新增退貨貨件"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "退貨貨件的物流商代碼（例如：`fedex`、`ups`）"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Tracking Status Changed",
+          "source": "Tracking status changed",
           "message": "物流追蹤狀態已變更"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Lister les produits"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -548,7 +548,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Obtenir le produit"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "L'ID du produit"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Créer un produit"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Si `True`, le produit est automatiquement assemblé sur les commandes client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Mettre à jour le produit"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "Si `True`, le produit est archivé (masqué des listes actives)"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Supprimer le produit"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "ID du produit à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.display_name": {
-          "source": "List Materials",
+          "source": "List materials",
           "message": "Lister les matériaux"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.display_name": {
-          "source": "Get Material",
+          "source": "Get material",
           "message": "Obtenir le matériau"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "L'identifiant du matériau"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Create Material",
+          "source": "Create material",
           "message": "Créer un matériau"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "ID de collection de champs personnalisés"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Update Material",
+          "source": "Update material",
           "message": "Mettre à jour le matériau"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Si `True`, le matériau est archivé (masqué des listes actives)"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.display_name": {
-          "source": "Delete Material",
+          "source": "Delete material",
           "message": "Supprimer le matériau"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Identifiant du matériau à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.display_name": {
-          "source": "List Variants",
+          "source": "List variants",
           "message": "Lister les variantes"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.display_name": {
-          "source": "Get Variant",
+          "source": "Get variant",
           "message": "Obtenir la variante"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "L'identifiant de la variante"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Create Variant",
+          "source": "Create variant",
           "message": "Créer une variante"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Valeur du champ personnalisé"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Update Variant",
+          "source": "Update variant",
           "message": "Mettre à jour la variante"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Valeur du champ personnalisé"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.display_name": {
-          "source": "Delete Variant",
+          "source": "Delete variant",
           "message": "Supprimer la variante"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "ID de la variante à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "List Manufacturing Orders",
+          "source": "List manufacturing orders",
           "message": "Lister les ordres de fabrication"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
@@ -2732,7 +2732,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Get Manufacturing Order",
+          "source": "Get manufacturing order",
           "message": "Obtenir l'ordre de fabrication"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "L'identifiant de l'ordre de fabrication"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Create Manufacturing Order",
+          "source": "Create manufacturing order",
           "message": "Créer un ordre de fabrication"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Quantité déplacée dans ou hors du lot"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Update Manufacturing Order",
+          "source": "Update manufacturing order",
           "message": "Mettre à jour l'ordre de fabrication"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Date à laquelle l'ordre de fabrication a été terminé"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Delete Manufacturing Order",
+          "source": "Delete manufacturing order",
           "message": "Supprimer l'ordre de fabrication"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Identifiant de l'OF à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "Lister les commandes client"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Obtenir la commande client"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "L'identifiant de la commande client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Créer une commande client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "Tableau associatif libre des valeurs de champs personnalisés (les clés dépendent de la collection de champs personnalisés configurée pour la commande client dans Katana)"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Mettre à jour la commande client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -4212,7 +4212,7 @@
           "message": "Date à laquelle le taux de conversion s'applique"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Supprimer la commande client"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -4236,7 +4236,7 @@
           "message": "ID de la commande client à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.display_name": {
-          "source": "List Sales Order Rows",
+          "source": "List sales order rows",
           "message": "Lister les lignes de commande client"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Sales Order Row",
+          "source": "Get sales order row",
           "message": "Obtenir la ligne de commande client"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4388,7 +4388,7 @@
           "message": "L'identifiant de la ligne de commande client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Sales Order Row",
+          "source": "Create sales order row",
           "message": "Créer une ligne de commande client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4532,7 +4532,7 @@
           "message": "Table de hachage libre de valeurs de champs personnalisés"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Sales Order Row",
+          "source": "Update sales order row",
           "message": "Mettre à jour la ligne de commande client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4676,7 +4676,7 @@
           "message": "Table de hachage libre de valeurs de champs personnalisés"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Sales Order Row",
+          "source": "Delete sales order row",
           "message": "Supprimer la ligne de commande client"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4700,7 +4700,7 @@
           "message": "ID de la ligne à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.display_name": {
-          "source": "List Sales Order Addresses",
+          "source": "List sales order addresses",
           "message": "Lister les adresses de commande client"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.short_desc": {
@@ -4840,7 +4840,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Get Sales Order Address",
+          "source": "Get sales order address",
           "message": "Obtenir l'adresse de commande client"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -4860,7 +4860,7 @@
           "message": "L'identifiant de l'adresse"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Create Sales Order Address",
+          "source": "Create sales order address",
           "message": "Créer une adresse de commande client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "Pays"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Update Sales Order Address",
+          "source": "Update sales order address",
           "message": "Mettre à jour l'adresse de la commande client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "Pays"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Sales Order Address",
+          "source": "Delete sales order address",
           "message": "Supprimer l'adresse de commande client"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5192,7 +5192,7 @@
           "message": "Identifiant de l'adresse à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "Lister les bons de commande"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -5368,7 +5368,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "Obtenir le bon de commande"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5388,7 +5388,7 @@
           "message": "L'identifiant du bon de commande"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
+          "source": "Create purchase order",
           "message": "Créer un bon de commande"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5676,7 +5676,7 @@
           "message": "ID de la variante achetée"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
+          "source": "Update purchase order",
           "message": "Mettre à jour le bon de commande"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5840,7 +5840,7 @@
           "message": "ID de l'emplacement de suivi"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
+          "source": "Delete purchase order",
           "message": "Supprimer le bon de commande"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5864,7 +5864,7 @@
           "message": "ID du bon de commande à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.display_name": {
-          "source": "List Purchase Order Rows",
+          "source": "List purchase order rows",
           "message": "Lister les lignes de bon de commande"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.short_desc": {
@@ -5996,7 +5996,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Purchase Order Row",
+          "source": "Get purchase order row",
           "message": "Obtenir la ligne de bon de commande"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6016,7 +6016,7 @@
           "message": "L'identifiant de la ligne de bon de commande"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Purchase Order Row",
+          "source": "Create purchase order row",
           "message": "Créer une ligne de bon de commande"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "Code de devise ISO 4217 pour cette ligne (remplace la devise du bon de commande)"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Purchase Order Row",
+          "source": "Update purchase order row",
           "message": "Mettre à jour la ligne de bon de commande"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "Date et heure de réception de la ligne"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Purchase Order Row",
+          "source": "Delete purchase order row",
           "message": "Supprimer la ligne de bon de commande"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6328,7 +6328,7 @@
           "message": "ID de la ligne à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Lister les clients"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -6520,7 +6520,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtenir le client"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -6540,7 +6540,7 @@
           "message": "L'ID du client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Créer un client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -6872,7 +6872,7 @@
           "message": "Code postal"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Mettre à jour le client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "ID de l'adresse de livraison par défaut"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Supprimer le client"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -7064,7 +7064,7 @@
           "message": "Identifiant du client à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.display_name": {
-          "source": "List Customer Addresses",
+          "source": "List customer addresses",
           "message": "Lister les adresses des clients"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.short_desc": {
@@ -7204,7 +7204,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Get Customer Address",
+          "source": "Get customer address",
           "message": "Obtenir l'adresse client"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7224,7 +7224,7 @@
           "message": "L'identifiant de l'adresse"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create Customer Address",
+          "source": "Create customer address",
           "message": "Créer une adresse client"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7388,7 +7388,7 @@
           "message": "Pays"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update Customer Address",
+          "source": "Update customer address",
           "message": "Mettre à jour l'adresse client"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7532,7 +7532,7 @@
           "message": "Pays"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Customer Address",
+          "source": "Delete customer address",
           "message": "Supprimer l'adresse client"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7556,7 +7556,7 @@
           "message": "Identifiant de l'adresse à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.display_name": {
-          "source": "List Suppliers",
+          "source": "List suppliers",
           "message": "Lister les fournisseurs"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.short_desc": {
@@ -7688,7 +7688,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "Obtenir le fournisseur"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -7708,7 +7708,7 @@
           "message": "L'ID du fournisseur"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "Créer un fournisseur"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -7912,7 +7912,7 @@
           "message": "Code postal"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "Mettre à jour le fournisseur"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "Devise par défaut"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.display_name": {
-          "source": "Delete Supplier",
+          "source": "Delete supplier",
           "message": "Supprimer le fournisseur"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.short_desc": {
@@ -8020,7 +8020,7 @@
           "message": "ID du fournisseur à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
+          "source": "List locations",
           "message": "Lister les emplacements"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
@@ -8144,7 +8144,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
+          "source": "Get location",
           "message": "Obtenir l'emplacement"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.short_desc": {
@@ -8164,7 +8164,7 @@
           "message": "L'identifiant de l'emplacement"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
+          "source": "List inventory",
           "message": "Lister l'inventaire"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.display_name": {
-          "source": "Set Inventory Safety Stock Level",
+          "source": "Set inventory safety stock level",
           "message": "Définir le niveau de stock de sécurité de l'inventaire"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "Valeur seuil à définir (niveau de stock de sécurité ou quantité du point de réapprovisionnement)"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.display_name": {
-          "source": "Set Inventory Reorder Point",
+          "source": "Set inventory reorder point",
           "message": "Définir le point de réapprovisionnement de l'inventaire"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "Valeur seuil à définir (niveau de stock de sécurité ou quantité du point de réapprovisionnement)"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.display_name": {
-          "source": "List Stock Adjustments",
+          "source": "List stock adjustments",
           "message": "Lister les ajustements de stock"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "Obtenir l'ajustement de stock"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8544,7 +8544,7 @@
           "message": "L'identifiant de l'ajustement de stock"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "Créer un ajustement de stock"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8700,7 +8700,7 @@
           "message": "ID de la variante ajustée"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "Mettre à jour l'ajustement de stock"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8784,7 +8784,7 @@
           "message": "Informations complémentaires libres"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "Supprimer l'ajustement de stock"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8808,7 +8808,7 @@
           "message": "ID de l'ajustement de stock à supprimer"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.display_name": {
-          "source": "List Batch Stocks",
+          "source": "List batch stocks",
           "message": "Lister les stocks par lot"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.short_desc": {
@@ -8948,7 +8948,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "Lister les taux de taxe"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -9072,7 +9072,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "Créer un taux de taxe"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -9108,7 +9108,7 @@
           "message": "Taux de taxe sous forme de pourcentage (requis, 0-999.999)"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Lister les webhooks"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9232,7 +9232,7 @@
           "message": "Si `True`, inclut les enregistrements supprimés de manière réversible dans la réponse"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Obtenir le webhook"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -9252,7 +9252,7 @@
           "message": "L'identifiant du webhook"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Créer un webhook"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9536,7 +9536,7 @@
           "message": "Description du webhook"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Mettre à jour le webhook"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9844,7 +9844,7 @@
           "message": "Si `True`, le webhook est actif"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Supprimer le webhook"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9868,7 +9868,7 @@
           "message": "ID du webhook à supprimer"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Sales Order Created",
+          "source": "Sales order created",
           "message": "Commande client créée"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.short_desc": {
@@ -9880,7 +9880,7 @@
           "message": "Se déclenche lorsqu'une nouvelle commande client est créée dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Sales Order Updated",
+          "source": "Sales order updated",
           "message": "Commande client mise à jour"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Se déclenche lorsqu'un bon de commande client est mis à jour dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Sales Order Deleted",
+          "source": "Sales order deleted",
           "message": "Commande client supprimée"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.short_desc": {
@@ -9904,7 +9904,7 @@
           "message": "Se déclenche lorsqu'un bon de commande client est supprimé dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.display_name": {
-          "source": "Sales Order Packed",
+          "source": "Sales order packed",
           "message": "Commande client emballée"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "Se déclenche lorsqu'un bon de commande client est emballé dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.display_name": {
-          "source": "Sales Order Delivered",
+          "source": "Sales order delivered",
           "message": "Commande client livrée"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.short_desc": {
@@ -9928,7 +9928,7 @@
           "message": "Se déclenche lorsqu'un bon de commande client est livré dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Purchase Order Created",
+          "source": "Purchase order created",
           "message": "Commande d'achat créée"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "Se déclenche lorsqu'un nouveau bon de commande fournisseur est créé dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Purchase Order Updated",
+          "source": "Purchase order updated",
           "message": "Commande d'achat mise à jour"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.short_desc": {
@@ -9952,7 +9952,7 @@
           "message": "Se déclenche lorsqu'un bon de commande fournisseur est mis à jour dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Purchase Order Deleted",
+          "source": "Purchase order deleted",
           "message": "Commande d'achat supprimée"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "Se déclenche lorsqu'un bon de commande fournisseur est supprimé dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Partially Received",
+          "source": "Purchase order partially received",
           "message": "Commande d'achat partiellement reçue"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.short_desc": {
@@ -9976,7 +9976,7 @@
           "message": "Se déclenche lorsqu'un bon de commande fournisseur est partiellement reçu dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.display_name": {
-          "source": "Purchase Order Received",
+          "source": "Purchase order received",
           "message": "Commande d'achat reçue"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.short_desc": {
@@ -9988,7 +9988,7 @@
           "message": "Se déclenche lorsqu'un bon de commande fournisseur est entièrement reçu dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.display_name": {
-          "source": "Purchase Order Row Created",
+          "source": "Purchase order row created",
           "message": "Ligne de commande d'achat créée"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.short_desc": {
@@ -10000,7 +10000,7 @@
           "message": "Se déclenche lorsqu'une ligne de bon de commande fournisseur est créée dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.display_name": {
-          "source": "Purchase Order Row Updated",
+          "source": "Purchase order row updated",
           "message": "Ligne de commande d'achat mise à jour"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.short_desc": {
@@ -10012,7 +10012,7 @@
           "message": "Se déclenche lorsqu'une ligne de bon de commande fournisseur est mise à jour dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.display_name": {
-          "source": "Purchase Order Row Deleted",
+          "source": "Purchase order row deleted",
           "message": "Ligne de commande d'achat supprimée"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.short_desc": {
@@ -10024,7 +10024,7 @@
           "message": "Se déclenche lorsqu'une ligne de bon de commande fournisseur est supprimée dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Row Received",
+          "source": "Purchase order row received",
           "message": "Ligne de commande d'achat reçue"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.short_desc": {
@@ -10036,7 +10036,7 @@
           "message": "Se déclenche lorsqu'une ligne de bon de commande fournisseur est reçue dans Katana (webhook natif)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.display_name": {
-          "source": "New Products",
+          "source": "New products",
           "message": "Nouveaux produits"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "Se déclenche lorsqu'un nouveau produit est détecté dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.display_name": {
-          "source": "Updated Products",
+          "source": "Updated products",
           "message": "Produits mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.short_desc": {
@@ -10060,7 +10060,7 @@
           "message": "Se déclenche lorsqu'un produit est mis à jour dans Katana (via interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.display_name": {
-          "source": "New Materials",
+          "source": "New materials",
           "message": "Nouveaux matériels"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.short_desc": {
@@ -10072,7 +10072,7 @@
           "message": "Se déclenche lorsqu'un nouveau matériel est détecté dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.display_name": {
-          "source": "Updated Materials",
+          "source": "Updated materials",
           "message": "Matériaux mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.short_desc": {
@@ -10084,7 +10084,7 @@
           "message": "Se déclenche lorsqu'un matériau est mis à jour dans Katana (via interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.display_name": {
-          "source": "New Manufacturing Orders",
+          "source": "New manufacturing orders",
           "message": "Nouveaux ordres de fabrication"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.short_desc": {
@@ -10096,7 +10096,7 @@
           "message": "Se déclenche lorsqu'un nouvel ordre de fabrication est détecté dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "Updated Manufacturing Orders",
+          "source": "Updated manufacturing orders",
           "message": "Ordres de fabrication mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
@@ -10108,7 +10108,7 @@
           "message": "Se déclenche lorsqu'un ordre de fabrication est mis à jour dans Katana (via interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.display_name": {
-          "source": "New Sales Orders (Polling)",
+          "source": "New sales orders (polling)",
           "message": "Nouveaux bons de commande client (scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.short_desc": {
@@ -10120,7 +10120,7 @@
           "message": "Se déclenche lorsqu'un nouveau bon de commande client est détecté dans Katana (par scrutation) ; complète l'événement de webhook `sales-order-created`"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "Updated Sales Orders (Polling)",
+          "source": "Updated sales orders (polling)",
           "message": "Commandes client mises à jour (interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -10132,7 +10132,7 @@
           "message": "Se déclenche lorsqu'une commande client est mise à jour dans Katana (via interrogation) ; complète l'événement de webhook `sales-order-updated`"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.display_name": {
-          "source": "New Purchase Orders (Polling)",
+          "source": "New purchase orders (polling)",
           "message": "Nouveaux bons de commande fournisseur (scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.short_desc": {
@@ -10144,7 +10144,7 @@
           "message": "Se déclenche lorsqu'un nouveau bon de commande fournisseur est détecté dans Katana (par scrutation) ; complète l'événement de webhook `purchase-order-created`"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "Updated Purchase Orders (Polling)",
+          "source": "Updated purchase orders (polling)",
           "message": "Bons de commande mis à jour (interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "Se déclenche lorsqu'un bon de commande est mis à jour dans Katana (via interrogation) ; complète l'événement de webhook `purchase-order-updated`"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.display_name": {
-          "source": "New Customers",
+          "source": "New customers",
           "message": "Nouveaux clients"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.short_desc": {
@@ -10168,7 +10168,7 @@
           "message": "Se déclenche lorsqu'un nouveau client est détecté dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.display_name": {
-          "source": "Updated Customers",
+          "source": "Updated customers",
           "message": "Clients mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "Se déclenche lorsqu'un client est mis à jour dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.display_name": {
-          "source": "New Suppliers",
+          "source": "New suppliers",
           "message": "Nouveaux fournisseurs"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "Se déclenche lorsqu'un nouveau fournisseur est détecté dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.display_name": {
-          "source": "Updated Suppliers",
+          "source": "Updated suppliers",
           "message": "Fournisseurs mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.short_desc": {
@@ -10204,7 +10204,7 @@
           "message": "Se déclenche lorsqu'un fournisseur est mis à jour dans Katana (via interrogation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.display_name": {
-          "source": "Inventory Updated",
+          "source": "Inventory updated",
           "message": "Inventaire mis à jour"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.short_desc": {
@@ -10216,7 +10216,7 @@
           "message": "Se déclenche lorsque le niveau de stock d'une entrée d'inventaire change dans Katana (par scrutation)"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "New Stock Adjustments",
+          "source": "New stock adjustments",
           "message": "Nouveaux ajustements de stock"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.short_desc": {

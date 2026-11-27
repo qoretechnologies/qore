@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
-          "source": "Transcribe File",
+          "source": "Transcribe file",
           "message": "Transcribir archivo"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Cuando se proporciona, Deepgram responde de inmediato y envía mediante POST la transcripción final a esta URL cuando esté lista. Utilícelo para archivos largos."
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
-          "source": "Synthesize Speech",
+          "source": "Synthesize speech",
           "message": "Sintetizar voz"
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {

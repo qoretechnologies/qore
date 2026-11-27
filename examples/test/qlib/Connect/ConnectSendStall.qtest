@@ -71,6 +71,7 @@ class ConnectSendStallTest inherits QUnit::Test {
         handler = new RecordingConnectHandler(codec);
         # the response's stream is held, so that its send buffer fills; each write is timed and its end recorded
         handler.registerServerStream("Test", "Stall",
+            # debug-builtin-guard: only stalledTest() calls Test/Stall, which setUp() skips without library debugging
             sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
                 call_function("dbg_quic_hold_stream_data", stream.getSessionId(), stream.getStreamId());
                 started.push(True);

@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "채팅 완성"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -948,7 +948,7 @@
           "message": "캐시 및 스케줄링 격리용 의사 이름 식별자. 영문자, 숫자, 밑줄 또는 하이픈만 사용 가능; 최대 512자. 개인 정보를 포함하지 마세요."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "모델 목록"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "워크플로우에 사용 가능한 모델 찾기."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
+          "source": "Get balance",
           "message": "잔액 가져오기"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -972,7 +972,7 @@
           "message": "AI 워크플로우 실행 전 사용 가능한 크레딧 확인합니다.\n\n토큰 생성 없이 크레딧 가용성과 잔액을 반환합니다."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
+          "source": "Fill in the middle",
           "message": "중간 채우기"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "`0`에서 `20`까지의 대체 토큰 확률 수."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "응답 생성"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "캐시 및 스케줄링 격리용 의사 이름 식별자. 영문자, 숫자, 밑줄 또는 하이픈만 사용 가능; 최대 512자. 개인 정보를 포함하지 마세요."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
+          "source": "Upload image file",
           "message": "이미지 업로드"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "자동으로 `3600`에서 `2592000`초 후 파일을 삭제합니다. 유지하려면 생략하세요."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
+          "source": "List image files",
           "message": "이미지 파일 목록"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "사용자 데이터"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
+          "source": "Get image file",
           "message": "이미지 파일 가져오기"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "업로드된 이미지 파일을 선택하세요."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
+          "source": "Delete image file",
           "message": "이미지 파일 삭제"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {

@@ -258,7 +258,10 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
             testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
         }
         hash<ReleaseInRequestInfo> info = releaseInRequest(NOTHING, True);
-        assertEq(info.request_tid, info.destroyed_tid, "the request's thread destroys the server");
+        # the request and the stop of the listener hold the server until they end (qore#7509): the one that ends last
+        # destroys it
+        assertTrue(info.destroyed_tid == info.request_tid || info.destroyed_tid == info.listener_stopping_tid,
+            "the request's thread or the thread of the listener's stop destroys the server");
         # the stop in progress ends the listener's stop, and runs its callback, once the request no longer counts
         assertEq(info.listener_stopping_tid, info.listener_stopped_tid,
             "the stop of the listener in progress in another thread does not wait for the request, which waits for "

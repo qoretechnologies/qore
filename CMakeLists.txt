@@ -2996,6 +2996,10 @@ add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
 target_include_directories(qore-hash-lookup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-keyed-hash-test examples/test/qore/misc/keyed_hash.cpp)
+target_include_directories(qore-keyed-hash-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-keyed-hash-test PRIVATE libqore)
 add_executable(qore-aot-dot-target-test examples/test/ir/aot_dot_target.cpp)
 target_include_directories(qore-aot-dot-target-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)

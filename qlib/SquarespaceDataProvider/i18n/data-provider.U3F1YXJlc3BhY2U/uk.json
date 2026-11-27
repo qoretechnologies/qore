@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Створити замовлення"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Сума грошових коштів у вигляді рядка (наприклад, \"9.99\")"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
-          "source": "Fulfill an Order",
+          "source": "Fulfill an order",
           "message": "Виконати замовлення"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "URL для відстеження відправки"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Список замовлень"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Отримати замовлення"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "ID замовлення"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "Створити товар"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Чи варіант має необмежений запас"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "Оновити товар"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Список назв атрибутів варіанта (наприклад, Розмір, Колір)"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
+          "source": "Delete a product",
           "message": "Видалити товар"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "ID продукту для видалення"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Список продуктів"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Отримати товар"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Ідентифікатор товару"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Create a Product Variant",
+          "source": "Create a product variant",
           "message": "Створити варіант товару"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Значення ваги"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Update a Product Variant",
+          "source": "Update a product variant",
           "message": "Оновити варіант товару"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Значення ваги"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Delete a Product Variant",
+          "source": "Delete a product variant",
           "message": "Видалити варіант товару"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "Ідентифікатор варіанта для видалення"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
-          "source": "List Product Variants",
+          "source": "List product variants",
           "message": "Список варіантів товару"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Upload a Product Image",
+          "source": "Upload a product image",
           "message": "Завантажити зображення продукту"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Альтернативний текст для зображення"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Assign a Product Image",
+          "source": "Assign a product image",
           "message": "Призначити зображення товару"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Ідентифікатор варіанта, якому призначається зображення"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Update a Product Image",
+          "source": "Update a product image",
           "message": "Оновити зображення товару"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Альтернативний текст, який слід установити для зображення товару"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Delete a Product Image",
+          "source": "Delete a product image",
           "message": "Видалити зображення товару"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Ідентифікатор зображення для видалення"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
-          "source": "Update Stock Quantities",
+          "source": "Update stock quantities",
           "message": "Оновити кількість запасів"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Зменшити запаси"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
+          "source": "List inventory",
           "message": "Список запасів"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
-          "source": "Get Inventory",
+          "source": "Get inventory",
           "message": "Отримати запаси"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
@@ -2744,7 +2744,7 @@
           "message": "ID варіанта"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "Список транзакцій"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get a Transaction",
+          "source": "Get a transaction",
           "message": "Отримати транзакцію"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Ідентифікатор транзакції"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Замовлення створено/оновлено"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Created/Updated",
+          "source": "Product created/updated",
           "message": "Товар створено/оновлено"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
-          "source": "Transaction Created/Updated",
+          "source": "Transaction created/updated",
           "message": "Транзакцію створено/оновлено"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {

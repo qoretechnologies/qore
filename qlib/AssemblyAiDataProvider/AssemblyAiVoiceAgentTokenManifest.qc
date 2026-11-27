@@ -38,7 +38,7 @@ public class AssemblyAiVoiceAgentTokenManifest {
                 "method": "GET",
                 "path": "/v1/token",
                 "operation_id": "generateVoiceAgentToken",
-                "display_name": "Create Voice Agent Token",
+                "display_name": "Create voice agent token",
                 "short_desc": "Issue a temporary credential for a voice agent session",
                 "desc": "Create a one-use temporary token for a Voice Agent WebSocket session. Usage is attributed to the project that owns this connection.",
                 "groups": ("Voice Agents",),

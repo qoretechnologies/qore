@@ -16,7 +16,7 @@
           "message": "Універсальний сервер REST"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.display_name": {
-          "source": "Call REST API / Webhook",
+          "source": "Call REST API / webhook",
           "message": "Викликати REST API / вебхук"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.short_desc": {

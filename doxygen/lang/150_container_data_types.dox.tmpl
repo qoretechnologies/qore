@@ -499,6 +499,11 @@ ColumnarResult again = df.toColumnarResult();
     does not change the order of the keys, the results of any operation or the code that accesses the hash, in any
     @ref execution_modes "execution mode".\n\n
 
+    @anchor keyed_internal_tables
+    The internal hash tables of %Qore whose keys the data that it processes can choose, with no bound on their number,
+    use the same keyed hash function with the same secret key of the process from the start, or are ordered maps.  If no random source works when the key is
+    first needed, the operation that needs it raises a \c HASH-SECRET-KEY-ERROR exception.\n\n
+
     @anchor hash_max_size
     A hash can have at most 2^31 (2147483648) keys; adding a key beyond that fails as an allocation does when memory
     is exhausted (see @ref exception_memory).\n\n

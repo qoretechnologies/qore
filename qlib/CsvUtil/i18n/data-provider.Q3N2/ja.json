@@ -16,7 +16,7 @@
           "message": "CSVファイルデータの読み書き"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "CSV ファイルの読み取り"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "`true`（デフォルト: `false`）の場合、他の行と列数またはフィールド数が異なる行が解析されると、`CSVFILEITERATOR-DATA-ERROR` 例外が発生します\n\nこのオプションを有効にするとパフォーマンスが低下することに注意してください"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "CSV インラインデータの読み取り"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "`true`（デフォルト: `false`）の場合、他の行と列数またはフィールド数が異なる行が解析されると、`CSVFILEITERATOR-DATA-ERROR` 例外が発生します\n\nこのオプションを有効にするとパフォーマンスが低下することに注意してください"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "CSV データをプロファイル"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "`True` (既定) の場合、サンプル値と反例はその形に置き換えて伏せられます。文字は `x` または `X`、数字は `9` になるため、データを含めずにプロファイルを共有できます"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "CSV データの書き込み"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "ヘッダーの出力を抑制するには `false` に設定します。デフォルトは `true` で、ヘッダーが存在する場合は出力することを意味します"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "CSV データを作成"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

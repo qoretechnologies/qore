@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "顧客を検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Cin7Coreから顧客のリストを取得します（名前、ID、または変更日によるフィルタリングのオプションあり）。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "顧客を作成"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "顧客のカンマ区切りタグ"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "顧客を取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -744,7 +744,7 @@
           "message": "取得する顧客の一意の識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "顧客を更新"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "顧客のカンマ区切りタグ"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
+          "source": "Search suppliers",
           "message": "サプライヤーを検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Cin7Coreからサプライヤーのリストを取得します（オプションのフィルタリングあり）。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "サプライヤーを作成"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "サプライヤーのカンマ区切りタグ"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "サプライヤーの取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "取得するサプライヤーの一意の識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "サプライヤーを更新"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "このサプライヤーに関連付けられたタグ"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "商品の検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Cin7Coreから製品のリストを取得します（SKU、名前、カテゴリ、またはブランドによるフィルタリングのオプションあり）。"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "製品の取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "取得する製品の一意の識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
+          "source": "Find product availability",
           "message": "製品の在庫状況を検索"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "倉庫ロケーション全体の製品の在庫状況と在庫レベルを確認します。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
+          "source": "Search sales",
           "message": "販売を検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "オプションのフィルターを適用してCin7Coreから販売注文のリストを取得します。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
+          "source": "Create sale",
           "message": "販売を作成"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
@@ -2368,7 +2368,7 @@
           "message": "この行の合計"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
+          "source": "Get sale",
           "message": "販売注文の取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "取得する販売注文の一意の識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
+          "source": "Update sale",
           "message": "販売を更新"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "この請求の合計金額。"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
+          "source": "Delete sale",
           "message": "販売を削除"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "削除/無効化する販売の一意識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
+          "source": "Search sale payments",
           "message": "売上支払いを検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "販売に対する支払いのリストを取得します。"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
+          "source": "Add sale payment",
           "message": "販売支払いの追加"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "支払いを記録する勘定科目"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
+          "source": "Update sale payment",
           "message": "販売支払いの更新"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "支払いの参照番号またはメモ"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
+          "source": "Delete sale payment",
           "message": "販売支払いを削除"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "削除する支払いの一意識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
+          "source": "Add sale attachment",
           "message": "販売添付ファイルを追加"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Base64文字列としてエンコードされたファイルコンテンツ"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
+          "source": "Delete sale attachment",
           "message": "販売添付ファイルを削除"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "削除する添付ファイルの一意識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
+          "source": "Add sale pack",
           "message": "販売梱包の追加"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
@@ -3496,7 +3496,7 @@
           "message": "梱包を行う倉庫ロケーション"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
+          "source": "Get sale pack",
           "message": "販売パックの取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "特定のパックレコードを取得するためのオプションのタスクID"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
+          "source": "Add sale shipment",
           "message": "販売配送を追加"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "発送が必要な期日"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
+          "source": "Find sale fulfilment",
           "message": "販売フルフィルメントを検索"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "販売のフルフィルメント、ピッキング、梱包タスクを検索します。"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
+          "source": "Find sale invoices",
           "message": "販売請求書を検索"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "販売注文に関連付けられた請求書を検索します。"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
+          "source": "Find sale credit notes",
           "message": "販売クレジットノートを検索"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "販売注文に関連付けられたクレジットノートを検索します。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
+          "source": "Search stock adjustments",
           "message": "在庫調整を検索"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "Cin7Coreから在庫調整のリストを取得します。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "在庫調整を作成"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "調整の単位コスト"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "在庫調整の取得"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "取得する在庫調整の一意の識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "在庫調整を更新"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4180,7 +4180,7 @@
           "message": "調整のステータス（Draft、Authorized、Void）"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "在庫調整を削除"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "削除/無効化する在庫調整の一意識別子（GUID）"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
+          "source": "Find assemblies",
           "message": "組立を検索"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "組立および完成品タスクを検索します。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新規支払い"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "ポーリングによって販売に対する新しい支払いが検出されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
+          "source": "New sale credit note authorized",
           "message": "新しい販売クレジットノートの承認"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "ポーリングによって新しい販売クレジットノートが承認されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
+          "source": "New sale invoice authorized",
           "message": "新しい販売請求書の承認"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
@@ -4252,7 +4252,7 @@
           "message": "ポーリングによって新しい販売請求書が承認されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
+          "source": "Sale tracking changed",
           "message": "販売追跡情報の変更"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "ポーリングによって販売の追跡情報または配送情報が変更されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
+          "source": "Sale voided",
           "message": "販売の無効化"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
@@ -4276,7 +4276,7 @@
           "message": "ポーリングによって販売注文が無効化されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
+          "source": "Stock level update",
           "message": "在庫レベルの更新"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "ポーリングによって製品の在庫レベルが変更されたときに発火します。"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "顧客更新"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4300,7 +4300,7 @@
           "message": "ポーリングにより顧客が作成または変更されたときにトリガーされます。"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
+          "source": "Supplier updated",
           "message": "サプライヤーが更新されました"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {

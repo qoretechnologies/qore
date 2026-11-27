@@ -435,7 +435,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts",
                 "operation_id": "Gateway_ListAccounts",
-                "display_name": "List Accounts",
+                "display_name": "List accounts",
                 "short_desc": "List Accounts in Fireworks AI",
                 "desc": "List Accounts. Choose the account to use in subsequent Fireworks operations. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -471,7 +471,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}",
                 "operation_id": "Gateway_GetAccount",
-                "display_name": "Get Account",
+                "display_name": "Get account",
                 "short_desc": "Get Account in Fireworks AI",
                 "desc": "Get Account. Choose the account to use in subsequent Fireworks operations.",
                 "groups": (
@@ -502,7 +502,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/accountUsageFilterOptions",
                 "operation_id": "Gateway_GetAccountUsageFilterOptions",
-                "display_name": "Get Account Usage Filter Options",
+                "display_name": "Get account usage filter options",
                 "short_desc": "Get Account Usage Filter Options in Fireworks AI",
                 "desc": "Get Account Usage Filter Options. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -559,7 +559,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/auditLogs",
                 "operation_id": "Gateway_ListAuditLogs",
-                "display_name": "List Audit Logs",
+                "display_name": "List audit logs",
                 "short_desc": "List Audit Logs in Fireworks AI",
                 "desc": "List Audit Logs. Review account activity for operational investigations. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -619,7 +619,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/batchInferenceJobs",
                 "operation_id": "Gateway_ListBatchInferenceJobs",
-                "display_name": "List Batch Inference Jobs",
+                "display_name": "List batch inference jobs",
                 "short_desc": "List Batch Inference Jobs in Fireworks AI",
                 "desc": "List Batch Inference Jobs. Run large inference workloads asynchronously and inspect their results. **Creating jobs incurs inference charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -668,7 +668,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/batchInferenceJobs",
                 "operation_id": "Gateway_CreateBatchInferenceJob",
-                "display_name": "Create Batch Inference Job",
+                "display_name": "Create batch inference job",
                 "short_desc": "Create Batch Inference Job in Fireworks AI",
                 "desc": "Create Batch Inference Job. Run large inference workloads asynchronously and inspect their results. **Creating jobs incurs inference charges.**",
                 "groups": (
@@ -967,7 +967,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
                 "operation_id": "Gateway_GetBatchInferenceJob",
-                "display_name": "Get Batch Inference Job",
+                "display_name": "Get batch inference job",
                 "short_desc": "Get Batch Inference Job in Fireworks AI",
                 "desc": "Get Batch Inference Job. Run large inference workloads asynchronously and inspect their results. **Creating jobs incurs inference charges.**",
                 "groups": (
@@ -1010,7 +1010,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
                 "operation_id": "Gateway_DeleteBatchInferenceJob",
-                "display_name": "Delete Batch Inference Job",
+                "display_name": "Delete batch inference job",
                 "short_desc": "Delete Batch Inference Job in Fireworks AI",
                 "desc": "Delete Batch Inference Job. Run large inference workloads asynchronously and inspect their results. **Creating jobs incurs inference charges.** **Deletion is permanent.**",
                 "groups": (
@@ -1050,7 +1050,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/billing/summary",
                 "operation_id": "Gateway_GetBillingSummary",
-                "display_name": "Get Billing Summary",
+                "display_name": "Get billing summary",
                 "short_desc": "Get Billing Summary in Fireworks AI",
                 "desc": "Get Billing Summary. Inspect billing information to track spending.",
                 "groups": (
@@ -1100,7 +1100,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/usageCosts:query",
                 "operation_id": "Gateway_QueryUsageCosts",
-                "display_name": "Query Usage Costs",
+                "display_name": "Query usage costs",
                 "short_desc": "Query Usage Costs in Fireworks AI",
                 "desc": "Query Usage Costs. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -1161,7 +1161,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/billingSettings",
                 "operation_id": "Gateway_GetBillingSettings",
-                "display_name": "Get Billing Settings",
+                "display_name": "Get billing settings",
                 "short_desc": "Get Billing Settings in Fireworks AI",
                 "desc": "Get Billing Settings. Inspect billing information to track spending.",
                 "groups": (
@@ -1192,7 +1192,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/billingUsage",
                 "operation_id": "Gateway_GetAccountUsage",
-                "display_name": "Get Account Usage",
+                "display_name": "Get account usage",
                 "short_desc": "Get Account Usage in Fireworks AI",
                 "desc": "Get Account Usage. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -1260,7 +1260,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/datasets",
                 "operation_id": "Gateway_ListDatasets",
-                "display_name": "List Datasets",
+                "display_name": "List datasets",
                 "short_desc": "List Datasets in Fireworks AI",
                 "desc": "List Datasets. Prepare and manage the data used by batch inference and fine-tuning. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -1309,7 +1309,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/datasets",
                 "operation_id": "Gateway_CreateDataset",
-                "display_name": "Create Dataset",
+                "display_name": "Create dataset",
                 "short_desc": "Create Dataset in Fireworks AI",
                 "desc": "Create Dataset. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1394,7 +1394,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}",
                 "operation_id": "Gateway_GetDataset",
-                "display_name": "Get Dataset",
+                "display_name": "Get dataset",
                 "short_desc": "Get Dataset in Fireworks AI",
                 "desc": "Get Dataset. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1437,7 +1437,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}",
                 "operation_id": "Gateway_UpdateDataset",
-                "display_name": "Update Dataset",
+                "display_name": "Update dataset",
                 "short_desc": "Update Dataset in Fireworks AI",
                 "desc": "Update Dataset. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1533,7 +1533,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}",
                 "operation_id": "Gateway_DeleteDataset",
-                "display_name": "Delete Dataset",
+                "display_name": "Delete dataset",
                 "short_desc": "Delete Dataset in Fireworks AI",
                 "desc": "Delete Dataset. Prepare and manage the data used by batch inference and fine-tuning. **Deletion is permanent.**",
                 "groups": (
@@ -1573,7 +1573,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint",
                 "operation_id": "Gateway_GetDatasetDownloadEndpoint",
-                "display_name": "Get Dataset Download Endpoint",
+                "display_name": "Get dataset download endpoint",
                 "short_desc": "Get Dataset Download Endpoint in Fireworks AI",
                 "desc": "Get Dataset Download Endpoint. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1619,7 +1619,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint",
                 "operation_id": "Gateway_GetDatasetUploadEndpoint",
-                "display_name": "Get Dataset Upload Endpoint",
+                "display_name": "Get dataset upload endpoint",
                 "short_desc": "Get Dataset Upload Endpoint in Fireworks AI",
                 "desc": "Get Dataset Upload Endpoint. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1659,7 +1659,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}:splitDataset",
                 "operation_id": "Gateway_SplitDataset",
-                "display_name": "Split Dataset",
+                "display_name": "Split dataset",
                 "short_desc": "Split Dataset in Fireworks AI",
                 "desc": "Split Dataset. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1699,7 +1699,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload",
                 "operation_id": "Gateway_ValidateDatasetUpload",
-                "display_name": "Validate Dataset Upload",
+                "display_name": "Validate dataset upload",
                 "short_desc": "Validate Dataset Upload in Fireworks AI",
                 "desc": "Validate Dataset Upload. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -1739,7 +1739,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployedModels",
                 "operation_id": "Gateway_ListDeployedModels",
-                "display_name": "List Deployed Models",
+                "display_name": "List deployed models",
                 "short_desc": "List Deployed Models in Fireworks AI",
                 "desc": "List Deployed Models. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -1788,7 +1788,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/deployedModels",
                 "operation_id": "Gateway_CreateDeployedModel",
-                "display_name": "Create Deployed Model",
+                "display_name": "Create deployed model",
                 "short_desc": "Create Deployed Model in Fireworks AI",
                 "desc": "Create Deployed Model. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -1840,7 +1840,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
                 "operation_id": "Gateway_GetDeployedModel",
-                "display_name": "Get Deployed Model",
+                "display_name": "Get deployed model",
                 "short_desc": "Get Deployed Model in Fireworks AI",
                 "desc": "Get Deployed Model. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -1883,7 +1883,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
                 "operation_id": "Gateway_UpdateDeployedModel",
-                "display_name": "Update Deployed Model",
+                "display_name": "Update deployed model",
                 "short_desc": "Update Deployed Model in Fireworks AI",
                 "desc": "Update Deployed Model. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -1944,7 +1944,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
                 "operation_id": "Gateway_DeleteDeployedModel",
-                "display_name": "Delete Deployed Model",
+                "display_name": "Delete deployed model",
                 "short_desc": "Delete Deployed Model in Fireworks AI",
                 "desc": "Delete Deployed Model. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** **Deletion is permanent.**",
                 "groups": (
@@ -1984,7 +1984,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deploymentShapes",
                 "operation_id": "Gateway_ListDeploymentShapes",
-                "display_name": "List Deployment Shapes",
+                "display_name": "List deployment shapes",
                 "short_desc": "List Deployment Shapes in Fireworks AI",
                 "desc": "List Deployment Shapes. Inspect supported deployment configurations before provisioning capacity. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -2036,7 +2036,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}",
                 "operation_id": "Gateway_GetDeploymentShape",
-                "display_name": "Get Deployment Shape",
+                "display_name": "Get deployment shape",
                 "short_desc": "Get Deployment Shape in Fireworks AI",
                 "desc": "Get Deployment Shape. Inspect supported deployment configurations before provisioning capacity.",
                 "groups": (
@@ -2082,7 +2082,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions",
                 "operation_id": "Gateway_ListDeploymentShapeVersions",
-                "display_name": "List Deployment Shape Versions",
+                "display_name": "List deployment shape versions",
                 "short_desc": "List Deployment Shape Versions in Fireworks AI",
                 "desc": "List Deployment Shape Versions. Inspect supported deployment configurations before provisioning capacity. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -2143,7 +2143,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}",
                 "operation_id": "Gateway_GetDeploymentShapeVersion",
-                "display_name": "Get Deployment Shape Version",
+                "display_name": "Get deployment shape version",
                 "short_desc": "Get Deployment Shape Version in Fireworks AI",
                 "desc": "Get Deployment Shape Version. Inspect supported deployment configurations before provisioning capacity.",
                 "groups": (
@@ -2199,7 +2199,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments",
                 "operation_id": "Gateway_ListDeployments",
-                "display_name": "List Deployments",
+                "display_name": "List deployments",
                 "short_desc": "List Deployments in Fireworks AI",
                 "desc": "List Deployments. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -2251,7 +2251,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/deployments",
                 "operation_id": "Gateway_CreateDeployment",
-                "display_name": "Create Deployment",
+                "display_name": "Create deployment",
                 "short_desc": "Create Deployment in Fireworks AI",
                 "desc": "Create Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -2701,7 +2701,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}",
                 "operation_id": "Gateway_GetDeployment",
-                "display_name": "Get Deployment",
+                "display_name": "Get deployment",
                 "short_desc": "Get Deployment in Fireworks AI",
                 "desc": "Get Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -2744,7 +2744,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}",
                 "operation_id": "Gateway_UpdateDeployment",
-                "display_name": "Update Deployment",
+                "display_name": "Update deployment",
                 "short_desc": "Update Deployment in Fireworks AI",
                 "desc": "Update Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3191,7 +3191,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}",
                 "operation_id": "Gateway_DeleteDeployment",
-                "display_name": "Delete Deployment",
+                "display_name": "Delete deployment",
                 "short_desc": "Delete Deployment in Fireworks AI",
                 "desc": "Delete Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** **Deletion is permanent.**",
                 "groups": (
@@ -3237,7 +3237,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}/ledger",
                 "operation_id": "Gateway_GetLedger",
-                "display_name": "Get Ledger",
+                "display_name": "Get ledger",
                 "short_desc": "Get Ledger in Fireworks AI",
                 "desc": "Get Ledger. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3277,7 +3277,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}/ledger",
                 "operation_id": "Gateway_ResetLedger",
-                "display_name": "Reset Ledger",
+                "display_name": "Reset ledger",
                 "short_desc": "Reset Ledger in Fireworks AI",
                 "desc": "Reset Ledger. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** **Deletion is permanent.**",
                 "groups": (
@@ -3317,7 +3317,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}/shards",
                 "operation_id": "Gateway_ListDeploymentShards",
-                "display_name": "List Deployment Shards",
+                "display_name": "List deployment shards",
                 "short_desc": "List Deployment Shards in Fireworks AI",
                 "desc": "List Deployment Shards. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -3378,7 +3378,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}/terminationMessage",
                 "operation_id": "Gateway_GetTerminationMessage",
-                "display_name": "Get Termination Message",
+                "display_name": "Get termination message",
                 "short_desc": "Get Termination Message in Fireworks AI",
                 "desc": "Get Termination Message. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3418,7 +3418,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}:metrics",
                 "operation_id": "Gateway_GetDeploymentMetrics",
-                "display_name": "Get Deployment Metrics",
+                "display_name": "Get deployment metrics",
                 "short_desc": "Get Deployment Metrics in Fireworks AI",
                 "desc": "Get Deployment Metrics. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3464,7 +3464,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
                 "operation_id": "Gateway_ScaleDeployment",
-                "display_name": "Scale Deployment",
+                "display_name": "Scale deployment",
                 "short_desc": "Scale Deployment in Fireworks AI",
                 "desc": "Scale Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3504,7 +3504,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/deployments/{deployment_id}:undelete",
                 "operation_id": "Gateway_UndeleteDeployment",
-                "display_name": "Undelete Deployment",
+                "display_name": "Undelete deployment",
                 "short_desc": "Undelete Deployment in Fireworks AI",
                 "desc": "Undelete Deployment. Manage the capacity serving your models. **Creating, scaling, or restoring capacity can incur charges.**",
                 "groups": (
@@ -3544,7 +3544,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/dpoJobs",
                 "operation_id": "Gateway_ListDpoJobs",
-                "display_name": "List DPO Jobs",
+                "display_name": "List DPO jobs",
                 "short_desc": "List DPO Jobs in Fireworks AI",
                 "desc": "List DPO Jobs. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -3596,7 +3596,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/dpoJobs",
                 "operation_id": "Gateway_CreateDpoJob",
-                "display_name": "Create DPO Job",
+                "display_name": "Create DPO job",
                 "short_desc": "Create DPO Job in Fireworks AI",
                 "desc": "Create DPO Job. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -3716,7 +3716,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
                 "operation_id": "Gateway_GetDpoJob",
-                "display_name": "Get DPO Job",
+                "display_name": "Get DPO job",
                 "short_desc": "Get DPO Job in Fireworks AI",
                 "desc": "Get DPO Job. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -3759,7 +3759,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
                 "operation_id": "Gateway_DeleteDpoJob",
-                "display_name": "Delete DPO Job",
+                "display_name": "Delete DPO job",
                 "short_desc": "Delete DPO Job in Fireworks AI",
                 "desc": "Delete DPO Job. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.** **Deletion is permanent.**",
                 "groups": (
@@ -3799,7 +3799,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:cancel",
                 "operation_id": "Gateway_CancelDpoJob",
-                "display_name": "Cancel DPO Job",
+                "display_name": "Cancel DPO job",
                 "short_desc": "Cancel DPO Job in Fireworks AI",
                 "desc": "Cancel DPO Job. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -3839,7 +3839,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint",
                 "operation_id": "Gateway_GetDpoJobMetricsFileEndpoint",
-                "display_name": "Get DPO Job Metrics File Endpoint",
+                "display_name": "Get DPO job metrics file endpoint",
                 "short_desc": "Get DPO Job Metrics File Endpoint in Fireworks AI",
                 "desc": "Get DPO Job Metrics File Endpoint. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -3879,7 +3879,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume",
                 "operation_id": "Gateway_ResumeDpoJob",
-                "display_name": "Resume DPO Job",
+                "display_name": "Resume DPO job",
                 "short_desc": "Resume DPO Job in Fireworks AI",
                 "desc": "Resume DPO Job. Train on preferred responses and manage preference optimization jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -3919,7 +3919,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluationJobs",
                 "operation_id": "Gateway_ListEvaluationJobs",
-                "display_name": "List Evaluation Jobs",
+                "display_name": "List evaluation jobs",
                 "short_desc": "List Evaluation Jobs in Fireworks AI",
                 "desc": "List Evaluation Jobs. Run and inspect model quality evaluations. **Creating jobs can incur inference charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -3968,7 +3968,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluationJobs",
                 "operation_id": "Gateway_CreateEvaluationJob",
-                "display_name": "Create Evaluation Job",
+                "display_name": "Create evaluation job",
                 "short_desc": "Create Evaluation Job in Fireworks AI",
                 "desc": "Create Evaluation Job. Run and inspect model quality evaluations. **Creating jobs can incur inference charges.**",
                 "groups": (
@@ -4020,7 +4020,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
                 "operation_id": "Gateway_GetEvaluationJob",
-                "display_name": "Get Evaluation Job",
+                "display_name": "Get evaluation job",
                 "short_desc": "Get Evaluation Job in Fireworks AI",
                 "desc": "Get Evaluation Job. Run and inspect model quality evaluations. **Creating jobs can incur inference charges.**",
                 "groups": (
@@ -4063,7 +4063,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
                 "operation_id": "Gateway_DeleteEvaluationJob",
-                "display_name": "Delete Evaluation Job",
+                "display_name": "Delete evaluation job",
                 "short_desc": "Delete Evaluation Job in Fireworks AI",
                 "desc": "Delete Evaluation Job. Run and inspect model quality evaluations. **Creating jobs can incur inference charges.** **Deletion is permanent.**",
                 "groups": (
@@ -4103,7 +4103,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
                 "operation_id": "Gateway_GetEvaluationJobExecutionLogEndpoint",
-                "display_name": "Get Evaluation Job Execution Log Endpoint",
+                "display_name": "Get evaluation job execution log endpoint",
                 "short_desc": "Get Evaluation Job Execution Log Endpoint in Fireworks AI",
                 "desc": "Get Evaluation Job Execution Log Endpoint. Run and inspect model quality evaluations. **Creating jobs can incur inference charges.**",
                 "groups": (
@@ -4143,7 +4143,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluations",
                 "operation_id": "Gateway_ListEvaluations",
-                "display_name": "List Evaluations",
+                "display_name": "List evaluations",
                 "short_desc": "List Evaluations in Fireworks AI",
                 "desc": "List Evaluations. Define and inspect model quality checks. **Running evaluations can incur inference charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -4192,7 +4192,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluations",
                 "operation_id": "Gateway_CreateEvaluation",
-                "display_name": "Create Evaluation",
+                "display_name": "Create evaluation",
                 "short_desc": "Create Evaluation in Fireworks AI",
                 "desc": "Create Evaluation. Define and inspect model quality checks. **Running evaluations can incur inference charges.**",
                 "groups": (
@@ -4247,7 +4247,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluations/{evaluation_id}",
                 "operation_id": "Gateway_GetEvaluation",
-                "display_name": "Get Evaluation",
+                "display_name": "Get evaluation",
                 "short_desc": "Get Evaluation in Fireworks AI",
                 "desc": "Get Evaluation. Define and inspect model quality checks. **Running evaluations can incur inference charges.**",
                 "groups": (
@@ -4290,7 +4290,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/evaluations/{evaluation_id}",
                 "operation_id": "Gateway_DeleteEvaluation",
-                "display_name": "Delete Evaluation",
+                "display_name": "Delete evaluation",
                 "short_desc": "Delete Evaluation in Fireworks AI",
                 "desc": "Delete Evaluation. Define and inspect model quality checks. **Running evaluations can incur inference charges.** **Deletion is permanent.**",
                 "groups": (
@@ -4331,7 +4331,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluations/{evaluation_id}:preview",
                 "operation_id": "Gateway_PreviewEvaluation",
-                "display_name": "Preview Evaluation",
+                "display_name": "Preview evaluation",
                 "short_desc": "Preview Evaluation in Fireworks AI",
                 "desc": "Preview Evaluation. Define and inspect model quality checks. **Running evaluations can incur inference charges.**",
                 "groups": (
@@ -4372,7 +4372,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluations:validateAssertions",
                 "operation_id": "Gateway_ValidateAssertions",
-                "display_name": "Validate Assertions",
+                "display_name": "Validate assertions",
                 "short_desc": "Validate Assertions in Fireworks AI",
                 "desc": "Validate Assertions. Define and inspect model quality checks. **Running evaluations can incur inference charges.**",
                 "groups": (
@@ -4420,7 +4420,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators",
                 "operation_id": "Gateway_ListEvaluators",
-                "display_name": "List Evaluators",
+                "display_name": "List evaluators",
                 "short_desc": "List Evaluators in Fireworks AI",
                 "desc": "List Evaluators. Manage the scoring logic used to evaluate model responses. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -4469,7 +4469,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}",
                 "operation_id": "Gateway_GetEvaluator",
-                "display_name": "Get Evaluator",
+                "display_name": "Get evaluator",
                 "short_desc": "Get Evaluator in Fireworks AI",
                 "desc": "Get Evaluator. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4512,7 +4512,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}",
                 "operation_id": "Gateway_UpdateEvaluator",
-                "display_name": "Update Evaluator",
+                "display_name": "Update evaluator",
                 "short_desc": "Update Evaluator in Fireworks AI",
                 "desc": "Update Evaluator. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4607,7 +4607,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}",
                 "operation_id": "Gateway_DeleteEvaluator",
-                "display_name": "Delete Evaluator",
+                "display_name": "Delete evaluator",
                 "short_desc": "Delete Evaluator in Fireworks AI",
                 "desc": "Delete Evaluator. Manage the scoring logic used to evaluate model responses. **Deletion is permanent.**",
                 "groups": (
@@ -4647,7 +4647,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}/versions",
                 "operation_id": "Gateway_ListEvaluatorVersions",
-                "display_name": "List Evaluator Versions",
+                "display_name": "List evaluator versions",
                 "short_desc": "List Evaluator Versions in Fireworks AI",
                 "desc": "List Evaluator Versions. Manage the scoring logic used to evaluate model responses. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -4708,7 +4708,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}",
                 "operation_id": "Gateway_GetEvaluatorVersion",
-                "display_name": "Get Evaluator Version",
+                "display_name": "Get evaluator version",
                 "short_desc": "Get Evaluator Version in Fireworks AI",
                 "desc": "Get Evaluator Version. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4764,7 +4764,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}",
                 "operation_id": "Gateway_DeleteEvaluatorVersion",
-                "display_name": "Delete Evaluator Version",
+                "display_name": "Delete evaluator version",
                 "short_desc": "Delete Evaluator Version in Fireworks AI",
                 "desc": "Delete Evaluator Version. Manage the scoring logic used to evaluate model responses. **Deletion is permanent.**",
                 "groups": (
@@ -4817,7 +4817,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:alias",
                 "operation_id": "Gateway_AliasEvaluatorVersion",
-                "display_name": "Alias Evaluator Version",
+                "display_name": "Alias evaluator version",
                 "short_desc": "Alias Evaluator Version in Fireworks AI",
                 "desc": "Alias Evaluator Version. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4864,7 +4864,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:rollback",
                 "operation_id": "Gateway_RollbackEvaluator",
-                "display_name": "Rollback Evaluator",
+                "display_name": "Rollback evaluator",
                 "short_desc": "Rollback Evaluator in Fireworks AI",
                 "desc": "Rollback Evaluator. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4911,7 +4911,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
                 "operation_id": "Gateway_GetEvaluatorBuildLogEndpoint",
-                "display_name": "Get Evaluator Build Log Endpoint",
+                "display_name": "Get evaluator build log endpoint",
                 "short_desc": "Get Evaluator Build Log Endpoint in Fireworks AI",
                 "desc": "Get Evaluator Build Log Endpoint. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4954,7 +4954,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
                 "operation_id": "Gateway_GetEvaluatorSourceCodeEndpoint",
-                "display_name": "Get Evaluator Source Code Endpoint",
+                "display_name": "Get evaluator source code endpoint",
                 "short_desc": "Get Evaluator Source Code Endpoint in Fireworks AI",
                 "desc": "Get Evaluator Source Code Endpoint. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -4997,7 +4997,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
                 "operation_id": "Gateway_GetEvaluatorUploadEndpoint",
-                "display_name": "Get Evaluator Upload Endpoint",
+                "display_name": "Get evaluator upload endpoint",
                 "short_desc": "Get Evaluator Upload Endpoint in Fireworks AI",
                 "desc": "Get Evaluator Upload Endpoint. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -5037,7 +5037,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
                 "operation_id": "Gateway_ValidateEvaluatorUpload",
-                "display_name": "Validate Evaluator Upload",
+                "display_name": "Validate evaluator upload",
                 "short_desc": "Validate Evaluator Upload in Fireworks AI",
                 "desc": "Validate Evaluator Upload. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -5078,7 +5078,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluators:previewEvaluator",
                 "operation_id": "Gateway_PreviewEvaluator",
-                "display_name": "Preview Evaluator",
+                "display_name": "Preview evaluator",
                 "short_desc": "Preview Evaluator in Fireworks AI",
                 "desc": "Preview Evaluator. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -5159,7 +5159,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/evaluatorsV2",
                 "operation_id": "Gateway_CreateEvaluatorV2",
-                "display_name": "Create Evaluator",
+                "display_name": "Create evaluator",
                 "short_desc": "Create Evaluator in Fireworks AI",
                 "desc": "Create Evaluator. Manage the scoring logic used to evaluate model responses.",
                 "groups": (
@@ -5240,7 +5240,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/models",
                 "operation_id": "Gateway_ListModels",
-                "display_name": "List Models",
+                "display_name": "List models",
                 "short_desc": "List Models in Fireworks AI",
                 "desc": "List Models. Manage model artifacts and select models for inference or training. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -5289,7 +5289,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models",
                 "operation_id": "Gateway_CreateModel",
-                "display_name": "Create Model",
+                "display_name": "Create model",
                 "short_desc": "Create Model in Fireworks AI",
                 "desc": "Create Model. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5426,7 +5426,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/models/{model_id}",
                 "operation_id": "Gateway_GetModel",
-                "display_name": "Get Model",
+                "display_name": "Get model",
                 "short_desc": "Get Model in Fireworks AI",
                 "desc": "Get Model. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5469,7 +5469,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/models/{model_id}",
                 "operation_id": "Gateway_UpdateModel",
-                "display_name": "Update Model",
+                "display_name": "Update model",
                 "short_desc": "Update Model in Fireworks AI",
                 "desc": "Update Model. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5616,7 +5616,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/models/{model_id}",
                 "operation_id": "Gateway_DeleteModel",
-                "display_name": "Delete Model",
+                "display_name": "Delete model",
                 "short_desc": "Delete Model in Fireworks AI",
                 "desc": "Delete Model. Manage model artifacts and select models for inference or training. **Deletion is permanent.**",
                 "groups": (
@@ -5656,7 +5656,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models/{model_id}/versions",
                 "operation_id": "Gateway_CreateModelVersion",
-                "display_name": "Create Model Version",
+                "display_name": "Create model version",
                 "short_desc": "Create Model Version in Fireworks AI",
                 "desc": "Create Model Version. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5702,7 +5702,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models/{model_id}/versions/{version_id}:deploy",
                 "operation_id": "Gateway_DeployModelVersion",
-                "display_name": "Deploy Model Version",
+                "display_name": "Deploy model version",
                 "short_desc": "Deploy Model Version in Fireworks AI",
                 "desc": "Deploy Model Version. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5772,7 +5772,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/models/{model_id}/versions:count",
                 "operation_id": "Gateway_GetModelVersionCount",
-                "display_name": "Get Model Version Count",
+                "display_name": "Get model version count",
                 "short_desc": "Get Model Version Count in Fireworks AI",
                 "desc": "Get Model Version Count. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5812,7 +5812,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint",
                 "operation_id": "Gateway_GetModelDownloadEndpoint",
-                "display_name": "Get Model Download Endpoint",
+                "display_name": "Get model download endpoint",
                 "short_desc": "Get Model Download Endpoint in Fireworks AI",
                 "desc": "Get Model Download Endpoint. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5855,7 +5855,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint",
                 "operation_id": "Gateway_GetModelUploadEndpoint",
-                "display_name": "Get Model Upload Endpoint",
+                "display_name": "Get model upload endpoint",
                 "short_desc": "Get Model Upload Endpoint in Fireworks AI",
                 "desc": "Get Model Upload Endpoint. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5895,7 +5895,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models/{model_id}:import",
                 "operation_id": "Gateway_ImportModel",
-                "display_name": "Import Model",
+                "display_name": "Import model",
                 "short_desc": "Import Model in Fireworks AI",
                 "desc": "Import Model. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -5949,7 +5949,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/models/{model_id}:prepare",
                 "operation_id": "Gateway_PrepareModel",
-                "display_name": "Prepare Model",
+                "display_name": "Prepare model",
                 "short_desc": "Prepare Model in Fireworks AI",
                 "desc": "Prepare Model. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -6053,7 +6053,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/models/{model_id}:validateUpload",
                 "operation_id": "Gateway_ValidateModelUpload",
-                "display_name": "Validate Model Upload",
+                "display_name": "Validate model upload",
                 "short_desc": "Validate Model Upload in Fireworks AI",
                 "desc": "Validate Model Upload. Manage model artifacts and select models for inference or training.",
                 "groups": (
@@ -6102,7 +6102,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/pricingPlans",
                 "operation_id": "Gateway_ListPricingPlans",
-                "display_name": "List Pricing Plans",
+                "display_name": "List pricing plans",
                 "short_desc": "List Pricing Plans in Fireworks AI",
                 "desc": "List Pricing Plans. Inspect billing information to track spending. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -6151,7 +6151,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/pricingPlans/{pricing_plan_id}",
                 "operation_id": "Gateway_GetPricingPlan",
-                "display_name": "Get Pricing Plan",
+                "display_name": "Get pricing plan",
                 "short_desc": "Get Pricing Plan in Fireworks AI",
                 "desc": "Get Pricing Plan. Inspect billing information to track spending.",
                 "groups": (
@@ -6194,7 +6194,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/quotas",
                 "operation_id": "Gateway_ListQuotas",
-                "display_name": "List Quotas",
+                "display_name": "List quotas",
                 "short_desc": "List Quotas in Fireworks AI",
                 "desc": "List Quotas. Monitor usage, limits, and costs for your account. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -6243,7 +6243,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/quotas/{quota_id}",
                 "operation_id": "Gateway_GetQuota",
-                "display_name": "Get Quota",
+                "display_name": "Get quota",
                 "short_desc": "Get Quota in Fireworks AI",
                 "desc": "Get Quota. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -6286,7 +6286,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs",
                 "operation_id": "Gateway_ListReinforcementFineTuningJobs",
-                "display_name": "List Reinforcement Fine Tuning Jobs",
+                "display_name": "List reinforcement fine tuning jobs",
                 "short_desc": "List Reinforcement Fine Tuning Jobs in Fireworks AI",
                 "desc": "List Reinforcement Fine Tuning Jobs. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -6335,7 +6335,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs",
                 "operation_id": "Gateway_CreateReinforcementFineTuningJob",
-                "display_name": "Create Reinforcement Fine Tuning Job",
+                "display_name": "Create reinforcement fine tuning job",
                 "short_desc": "Create Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Create Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6475,7 +6475,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
                 "operation_id": "Gateway_GetReinforcementFineTuningJob",
-                "display_name": "Get Reinforcement Fine Tuning Job",
+                "display_name": "Get reinforcement fine tuning job",
                 "short_desc": "Get Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Get Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6518,7 +6518,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
                 "operation_id": "Gateway_UpdateReinforcementFineTuningJob",
-                "display_name": "Update Reinforcement Fine Tuning Job",
+                "display_name": "Update reinforcement fine tuning job",
                 "short_desc": "Update Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Update Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6667,7 +6667,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
                 "operation_id": "Gateway_DeleteReinforcementFineTuningJob",
-                "display_name": "Delete Reinforcement Fine Tuning Job",
+                "display_name": "Delete reinforcement fine tuning job",
                 "short_desc": "Delete Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Delete Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.** **Deletion is permanent.**",
                 "groups": (
@@ -6707,7 +6707,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
                 "operation_id": "Gateway_CancelReinforcementFineTuningJob",
-                "display_name": "Cancel Reinforcement Fine Tuning Job",
+                "display_name": "Cancel reinforcement fine tuning job",
                 "short_desc": "Cancel Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Cancel Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6747,7 +6747,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:getMetricsFileEndpoint",
                 "operation_id": "Gateway_GetReinforcementFineTuningJobMetricsFileEndpoint",
-                "display_name": "Get Reinforcement Fine Tuning Job Metrics File Endpoint",
+                "display_name": "Get reinforcement fine tuning job metrics file endpoint",
                 "short_desc": "Get Reinforcement Fine Tuning Job Metrics File Endpoint in Fireworks AI",
                 "desc": "Get Reinforcement Fine Tuning Job Metrics File Endpoint. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6787,7 +6787,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
                 "operation_id": "Gateway_ResumeReinforcementFineTuningJob",
-                "display_name": "Resume Reinforcement Fine Tuning Job",
+                "display_name": "Resume reinforcement fine tuning job",
                 "short_desc": "Resume Reinforcement Fine Tuning Job in Fireworks AI",
                 "desc": "Resume Reinforcement Fine Tuning Job. Manage reinforcement learning jobs for task-specific models. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -6827,7 +6827,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/routers",
                 "operation_id": "Gateway_ListRouters",
-                "display_name": "List Routers",
+                "display_name": "List routers",
                 "short_desc": "List Routers in Fireworks AI",
                 "desc": "List Routers. Distribute inference traffic across model deployments. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -6876,7 +6876,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/routers",
                 "operation_id": "Gateway_CreateRouter",
-                "display_name": "Create Router",
+                "display_name": "Create router",
                 "short_desc": "Create Router in Fireworks AI",
                 "desc": "Create Router. Distribute inference traffic across model deployments.",
                 "groups": (
@@ -6921,7 +6921,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/routers/{router_id}",
                 "operation_id": "Gateway_GetRouter",
-                "display_name": "Get Router",
+                "display_name": "Get router",
                 "short_desc": "Get Router in Fireworks AI",
                 "desc": "Get Router. Distribute inference traffic across model deployments.",
                 "groups": (
@@ -6964,7 +6964,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/routers/{router_id}",
                 "operation_id": "Gateway_UpdateRouter",
-                "display_name": "Update Router",
+                "display_name": "Update router",
                 "short_desc": "Update Router in Fireworks AI",
                 "desc": "Update Router. Distribute inference traffic across model deployments.",
                 "groups": (
@@ -7018,7 +7018,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/routers/{router_id}",
                 "operation_id": "Gateway_DeleteRouter",
-                "display_name": "Delete Router",
+                "display_name": "Delete router",
                 "short_desc": "Delete Router in Fireworks AI",
                 "desc": "Delete Router. Distribute inference traffic across model deployments. **Deletion is permanent.**",
                 "groups": (
@@ -7058,7 +7058,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/serverlessModels",
                 "operation_id": "Gateway_ListServerlessModels",
-                "display_name": "List Serverless Models",
+                "display_name": "List serverless models",
                 "short_desc": "List Serverless Models in Fireworks AI",
                 "desc": "List Serverless Models. Manage model artifacts and select models for inference or training. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7107,7 +7107,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/serverlessRateLimits",
                 "operation_id": "Gateway_ListAccountServerlessRateLimits",
-                "display_name": "List Account Serverless Rate Limits",
+                "display_name": "List account serverless rate limits",
                 "short_desc": "List Account Serverless Rate Limits in Fireworks AI",
                 "desc": "List Account Serverless Rate Limits. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -7149,7 +7149,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/serverlessTokenUsage",
                 "operation_id": "Gateway_GetAccountServerlessTokenUsage",
-                "display_name": "Get Account Serverless Token Usage",
+                "display_name": "Get account serverless token usage",
                 "short_desc": "Get Account Serverless Token Usage in Fireworks AI",
                 "desc": "Get Account Serverless Token Usage. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -7194,7 +7194,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs",
                 "operation_id": "Gateway_ListSupervisedFineTuningJobs",
-                "display_name": "List Supervised Fine Tuning Jobs",
+                "display_name": "List supervised fine tuning jobs",
                 "short_desc": "List Supervised Fine Tuning Jobs in Fireworks AI",
                 "desc": "List Supervised Fine Tuning Jobs. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.** Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7243,7 +7243,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs",
                 "operation_id": "Gateway_CreateSupervisedFineTuningJob",
-                "display_name": "Create Supervised Fine Tuning Job",
+                "display_name": "Create supervised fine tuning job",
                 "short_desc": "Create Supervised Fine Tuning Job in Fireworks AI",
                 "desc": "Create Supervised Fine Tuning Job. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -7343,7 +7343,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
                 "operation_id": "Gateway_GetSupervisedFineTuningJob",
-                "display_name": "Get Supervised Fine Tuning Job",
+                "display_name": "Get supervised fine tuning job",
                 "short_desc": "Get Supervised Fine Tuning Job in Fireworks AI",
                 "desc": "Get Supervised Fine Tuning Job. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -7386,7 +7386,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
                 "operation_id": "Gateway_DeleteSupervisedFineTuningJob",
-                "display_name": "Delete Supervised Fine Tuning Job",
+                "display_name": "Delete supervised fine tuning job",
                 "short_desc": "Delete Supervised Fine Tuning Job in Fireworks AI",
                 "desc": "Delete Supervised Fine Tuning Job. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.** **Deletion is permanent.**",
                 "groups": (
@@ -7426,7 +7426,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:cancel",
                 "operation_id": "Gateway_CancelSupervisedFineTuningJob",
-                "display_name": "Cancel Supervised Fine Tuning Job",
+                "display_name": "Cancel supervised fine tuning job",
                 "short_desc": "Cancel Supervised Fine Tuning Job in Fireworks AI",
                 "desc": "Cancel Supervised Fine Tuning Job. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -7466,7 +7466,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume",
                 "operation_id": "Gateway_ResumeSupervisedFineTuningJob",
-                "display_name": "Resume Supervised Fine Tuning Job",
+                "display_name": "Resume supervised fine tuning job",
                 "short_desc": "Resume Supervised Fine Tuning Job in Fireworks AI",
                 "desc": "Resume Supervised Fine Tuning Job. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -7507,7 +7507,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs:estimateCost",
                 "operation_id": "Gateway_EstimateSupervisedFineTuningJobCost",
-                "display_name": "Estimate Supervised Fine Tuning Job Cost",
+                "display_name": "Estimate supervised fine tuning job cost",
                 "short_desc": "Estimate Supervised Fine Tuning Job Cost in Fireworks AI",
                 "desc": "Estimate Supervised Fine Tuning Job Cost. Train models on business examples and manage the resulting jobs. **Creating or resuming training incurs charges.**",
                 "groups": (
@@ -7604,7 +7604,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/trainingShapes",
                 "operation_id": "Gateway_ListTrainingShapes",
-                "display_name": "List Training Shapes",
+                "display_name": "List training shapes",
                 "short_desc": "List Training Shapes in Fireworks AI",
                 "desc": "List Training Shapes. Inspect supported training configurations. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7653,7 +7653,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/trainingShapes/{training_shape_id}",
                 "operation_id": "Gateway_GetTrainingShape",
-                "display_name": "Get Training Shape",
+                "display_name": "Get training shape",
                 "short_desc": "Get Training Shape in Fireworks AI",
                 "desc": "Get Training Shape. Inspect supported training configurations.",
                 "groups": (
@@ -7696,7 +7696,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/trainingShapes/{training_shape_id}/versions",
                 "operation_id": "Gateway_ListTrainingShapeVersions",
-                "display_name": "List Training Shape Versions",
+                "display_name": "List training shape versions",
                 "short_desc": "List Training Shape Versions in Fireworks AI",
                 "desc": "List Training Shape Versions. Inspect supported training configurations. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7757,7 +7757,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/trainingShapes/{training_shape_id}/versions/{version_id}",
                 "operation_id": "Gateway_GetTrainingShapeVersion",
-                "display_name": "Get Training Shape Version",
+                "display_name": "Get training shape version",
                 "short_desc": "Get Training Shape Version in Fireworks AI",
                 "desc": "Get Training Shape Version. Inspect supported training configurations.",
                 "groups": (
@@ -7813,7 +7813,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/usageLimits",
                 "operation_id": "Gateway_GetAccountUsageLimits",
-                "display_name": "Get Account Usage Limits",
+                "display_name": "Get account usage limits",
                 "short_desc": "Get Account Usage Limits in Fireworks AI",
                 "desc": "Get Account Usage Limits. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -7841,7 +7841,7 @@ public class FireworksManifest {
                 "method": "PATCH",
                 "path": "/v1/accounts/{account_id}/usageLimits",
                 "operation_id": "Gateway_UpdateAccountUsageLimits",
-                "display_name": "Update Account Usage Limits",
+                "display_name": "Update account usage limits",
                 "short_desc": "Update Account Usage Limits in Fireworks AI",
                 "desc": "Update Account Usage Limits. Monitor usage, limits, and costs for your account.",
                 "groups": (
@@ -7892,7 +7892,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts/{account_id}/userUsageLimits",
                 "operation_id": "Gateway_ListUserUsageLimits",
-                "display_name": "List User Usage Limits",
+                "display_name": "List user usage limits",
                 "short_desc": "List User Usage Limits in Fireworks AI",
                 "desc": "List User Usage Limits. Monitor usage, limits, and costs for your account. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7932,7 +7932,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/accounts/{account_id}/datasets/{dataset_id}:upload",
                 "operation_id": "Gateway_UploadDatasetFile",
-                "display_name": "Upload Dataset File",
+                "display_name": "Upload dataset file",
                 "short_desc": "Upload Dataset File in Fireworks AI",
                 "desc": "Upload Dataset File. Prepare and manage the data used by batch inference and fine-tuning.",
                 "groups": (
@@ -7979,7 +7979,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/completions",
                 "operation_id": "create_completion_v1_completions_post",
-                "display_name": "Text Completion",
+                "display_name": "Text completion",
                 "short_desc": "Text Completion in Fireworks AI",
                 "desc": "Text Completion. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (
@@ -8048,7 +8048,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/chat/completions",
                 "operation_id": "create_chat_completion_v1_chat_completions_post",
-                "display_name": "Chat Completion",
+                "display_name": "Chat completion",
                 "short_desc": "Chat Completion in Fireworks AI",
                 "desc": "Chat Completion. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (
@@ -8150,7 +8150,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/responses",
                 "operation_id": "create_response_v1_responses_post",
-                "display_name": "Create Response",
+                "display_name": "Create response",
                 "short_desc": "Create Response in Fireworks AI",
                 "desc": "Create Response. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.**",
                 "groups": (
@@ -8179,7 +8179,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/responses",
                 "operation_id": "list_responses_v1_responses_get",
-                "display_name": "List Responses",
+                "display_name": "List responses",
                 "short_desc": "List Responses in Fireworks AI",
                 "desc": "List Responses. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.**",
                 "groups": (
@@ -8205,7 +8205,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/responses/{response_id}",
                 "operation_id": "get_response_v1_responses__response_id__get",
-                "display_name": "Get Response",
+                "display_name": "Get response",
                 "short_desc": "Get Response in Fireworks AI",
                 "desc": "Get Response. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.**",
                 "groups": (
@@ -8227,7 +8227,7 @@ public class FireworksManifest {
                 "method": "DELETE",
                 "path": "/v1/responses/{response_id}",
                 "operation_id": "delete_response_v1_responses__response_id__delete",
-                "display_name": "Delete Response",
+                "display_name": "Delete response",
                 "short_desc": "Delete Response in Fireworks AI",
                 "desc": "Delete Response. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.** **Deletion is permanent.**",
                 "groups": (
@@ -8253,7 +8253,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/messages",
                 "operation_id": "messages_post",
-                "display_name": "Create Message",
+                "display_name": "Create message",
                 "short_desc": "Create Message in Fireworks AI",
                 "desc": "Create Message. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (

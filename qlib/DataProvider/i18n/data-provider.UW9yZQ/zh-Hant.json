@@ -16,7 +16,7 @@
           "message": "用於在資料管線中篩選、轉換和操作記錄的內建 Qore 資料管線處理器"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
+          "source": "Filter records",
           "message": "篩選記錄"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
@@ -52,7 +52,7 @@
           "message": "用於篩選記錄的 DPQL 字串運算式；當直接以文字編寫述詞而非使用運算式建構器時，請使用此選項"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
+          "source": "Select fields",
           "message": "選取欄位"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
@@ -76,7 +76,7 @@
           "message": "欄位規格清單；使用 `name` 保留原始欄位，或使用 `new_name=old_name` 重命名欄位（例如 `name`、`email`、`customer_name=name`）"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
+          "source": "Set fields",
           "message": "設定欄位"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
@@ -100,7 +100,7 @@
           "message": "要在每筆記錄上設定的欄位名稱與值的雜湊表；現有欄位將被覆寫，新欄位將被新增"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "移除欄位"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "要從每筆記錄中移除的欄位名稱清單；支援巢狀欄位的點標記法（例如 `address.city`）"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "搜尋與取代"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
@@ -268,7 +268,7 @@
           "message": "比對所有相符項目，而不僅僅是第一個"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
+          "source": "Record limit",
           "message": "記錄限制"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
@@ -292,7 +292,7 @@
           "message": "通過管線的最大記錄數量；一旦達到限制，後續所有記錄將被丟棄"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
+          "source": "Running statistics",
           "message": "執行統計資料"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "每個分析視窗中要累積的記錄數量；對於視窗層級處理器，會在視窗填滿時發出事件；對於記錄層級處理器，這會控制滑動視窗的大小。\n\n**大小設定指引**：對於重視快速回應的即時警報，請使用 `20`–`50`；對於一般趨勢和統計分析，請使用 `100`–`500`；若為需要穩定長期統計的高頻資料，請使用 `1000`+；視窗必須夠大，以擷取您想要偵測的任何模式的至少一個完整週期"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
+          "source": "Moving average",
           "message": "移動平均"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
@@ -376,7 +376,7 @@
           "message": "控制在計算指數移動平均 (EMA) 時給予最新值與歷史值的權重比例；較高的值使平均值對最近的變化反應更快，但也會產生更多雜訊。\n\n**典型值**：`0.1`（平滑，反應慢）、`0.2`（平衡，良好預設值）、`0.5`（靈敏，快速追蹤變化）；必須介於 `0.0` 與 `1.0` 之間（不包含兩端）；預設值：`0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
+          "source": "Trend analysis",
           "message": "趨勢分析"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
@@ -424,7 +424,7 @@
           "message": "趨勢被歸類為 `rising` 或 `falling` 的最小斜率大小；低於此閾值的斜率將被歸類為 `flat`。\n\n**典型值**：`0.001`（敏感 — 偵測非常平緩的趨勢）、`0.01`（中等）、`0.1`（僅強烈趨勢）；當資料規模較大且有意義的趨勢斜率較小時，請使用較小的值；必須 >= `0`；預設值：`0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
+          "source": "Anomaly detection",
           "message": "異常偵測"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "一個數值必須與平均值相差多少個標準差才算作異常（這稱為 *Z 分數*）；例如，閥值 `3.0` 表示數值必須與平均值相差超過 3 個標準差才會被標記。\n\n**典型值**：`2.0`（靈敏 — 標記約 5% 的隨機資料）、`3.0`（標準 — 標記約 0.3%）、`4.0`（保守 — 僅極端極端值）；必須大於 `0`；預設值：`3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
+          "source": "Calculate data distribution",
           "message": "計算資料分布"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "以逗號分隔的要計算之百分位數值清單（`0`–`100`）；例如，`50` 為中位數，`25` 和 `75` 分別為下四分位數和上四分位數；預設值：`\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
+          "source": "Find related fields",
           "message": "尋找關聯欄位"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
@@ -556,7 +556,7 @@
           "message": "計算相關矩陣前要累積的記錄數量；每次計算後會清除視窗。\n\n**大小設定指引**：相關分析需要足夠的資料才能獲得穩定的結果；基本相關分析請至少使用 `30`，若要獲得可靠結果請使用 `100`+"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
+          "source": "Find delayed relationships",
           "message": "尋找延遲關聯"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
@@ -616,7 +616,7 @@
           "message": "一個欄位相對於另一個欄位平移的最大時間步數；設為 `0` 將自動使用 `window_size / 4`；預設值：`0`（自動）"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
+          "source": "Count value ranges",
           "message": "計算數值範圍次數"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
@@ -684,7 +684,7 @@
           "message": "分位數（等量區間）"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
+          "source": "Measure speed of change",
           "message": "衡量變化速度"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
@@ -732,7 +732,7 @@
           "message": "啟用時，在計算導數之前先對視窗套用簡單移動平均線，減少變化率中的雜訊；停用則使用原始點對點變化率；預設值：`True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
+          "source": "Monitor process stability",
           "message": "監控程序穩定性"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "程序的預期中心/目標值；未設定時，將自動使用滑動視窗歷史記錄的平均值；設定為任何值（包括 `0`）以使用固定中心線；預設值：自動（使用視窗平均值）"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
+          "source": "Detect repeating patterns",
           "message": "偵測重複模式"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
@@ -864,7 +864,7 @@
           "message": "要回報的重複模式最小強度（以自動相關度衡量，`0`–`1`）；自動相關度衡量資料序列與其自身平移複本的相似程度。\n\n**典型值**：`0.2`（偵測微弱/雜訊模式）、`0.3`（平衡預設值）、`0.5`（僅回報強烈、明顯的模式）；預設值：`0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
+          "source": "Group by and aggregate",
           "message": "分組與彙總"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {

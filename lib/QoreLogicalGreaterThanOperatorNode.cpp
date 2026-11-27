@@ -106,7 +106,7 @@ QoreValue QoreLogicalGreaterThanOperatorNode::evalImpl(bool& needs_deref, Except
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   QoreOperandEvalHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
    if (*xsink)
       return QoreValue();
    QoreOperandEvalHolder rh(right, xsink);
@@ -200,7 +200,7 @@ int QoreLogicalGreaterThanOperatorNode::parseInitIntern(const char* name, QoreVa
 }
 
 bool QoreLogicalGreaterThanOperatorNode::floatGreaterThan(ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
@@ -209,7 +209,7 @@ bool QoreLogicalGreaterThanOperatorNode::floatGreaterThan(ExceptionSink* xsink) 
 }
 
 bool QoreLogicalGreaterThanOperatorNode::bigIntGreaterThan(ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;

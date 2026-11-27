@@ -16,8 +16,8 @@
           "message": "Read and write UN/EDIFACT electronic data interchange messages"
         },
         "app.RWRpZmFjdA.action.cmVhZA.display_name": {
-          "source": "Read EDIFACT File",
-          "message": "Read EDIFACT File"
+          "source": "Read EDIFACT file",
+          "message": "Read EDIFACT file"
         },
         "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
           "source": "Read EDIFACT message data from a specific file location",
@@ -124,8 +124,8 @@
           "message": "If `True`, skip service segments (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) during iteration, returning only business data segments."
         },
         "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
-          "source": "Write EDIFACT Data",
-          "message": "Write EDIFACT Data"
+          "source": "Write EDIFACT data",
+          "message": "Write EDIFACT data"
         },
         "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
           "source": "Write EDIFACT message data to a specific file location",
@@ -300,8 +300,8 @@
           "message": "Syntax version 4"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
-          "source": "Load EDIFACT Schema",
-          "message": "Load EDIFACT Schema"
+          "source": "Load EDIFACT schema",
+          "message": "Load EDIFACT schema"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
           "source": "Load EDIFACT directory schema from cache or flat files",
@@ -420,8 +420,8 @@
           "message": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity)."
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "Schema Summary",
-          "message": "Schema Summary"
+          "source": "Schema summary",
+          "message": "Schema summary"
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
           "source": "Load EDIFACT schema summary only",

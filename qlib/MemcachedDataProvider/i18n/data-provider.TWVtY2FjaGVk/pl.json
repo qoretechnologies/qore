@@ -16,7 +16,7 @@
           "message": "Rozproszony system buforowania obiektów pamięci Memcached"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
+          "source": "Set value",
           "message": "Ustaw wartość"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Zapisz parę klucz-wartość w memcached, zastępując istniejącą wartość"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
+          "source": "Add value",
           "message": "Dodaj wartość"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Zapisz parę klucz-wartość w memcached tylko wtedy, gdy klucz jeszcze nie istnieje"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
+          "source": "Replace value",
           "message": "Zastąp wartość"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Zastąp wartość w memcached tylko wtedy, gdy klucz już istnieje"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
+          "source": "Compare and swap",
           "message": "Porównaj i zamień"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Zaktualizuj wartość tylko wtedy, gdy jej token CAS jest zgodny (blokowanie optymistyczne)"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
+          "source": "Get value",
           "message": "Pobierz wartość"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Pobierz buforowaną wartość wraz z jej tokenem CAS do blokowania optymistycznego"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
+          "source": "Multi-get",
           "message": "Pobierz wiele"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Pobierz wersję serwera memcached"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
+          "source": "Flush all",
           "message": "Wyczyść wszystko"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {

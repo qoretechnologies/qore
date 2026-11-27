@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
-          "source": "List Sources",
-          "message": "List Sources"
+          "source": "List sources",
+          "message": "List sources"
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
           "source": "List sources with cursor-based pagination",
@@ -364,8 +364,8 @@
           "message": "Number of results per page (`1`-`1000`, default: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source",
-          "message": "Get Source"
+          "source": "Get source",
+          "message": "Get source"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
           "source": "Get a source by ID",
@@ -388,8 +388,8 @@
           "message": "The unique identifier of the Segment source to retrieve"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
-          "source": "Create Source",
-          "message": "Create Source"
+          "source": "Create source",
+          "message": "Create source"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
           "source": "Create a new source",
@@ -460,8 +460,8 @@
           "message": "Set to `True` to disconnect all currently-connected warehouses from this source on creation; defaults to `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source",
-          "message": "Update Source"
+          "source": "Update source",
+          "message": "Update source"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
           "source": "Update an existing source",
@@ -532,8 +532,8 @@
           "message": "Updated configuration settings for the source; the available keys depend on the source type"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source",
-          "message": "Delete Source"
+          "source": "Delete source",
+          "message": "Delete source"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
           "source": "Delete a source",
@@ -556,8 +556,8 @@
           "message": "The unique identifier of the Segment source to delete"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
-          "source": "List Destinations",
-          "message": "List Destinations"
+          "source": "List destinations",
+          "message": "List destinations"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
           "source": "List destinations with cursor-based pagination",
@@ -580,8 +580,8 @@
           "message": "Number of results per page (`1`-`1000`, default: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination",
-          "message": "Get Destination"
+          "source": "Get destination",
+          "message": "Get destination"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
           "source": "Get a destination by ID",
@@ -604,8 +604,8 @@
           "message": "The unique identifier of the Segment destination to retrieve"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Create Destination",
-          "message": "Create Destination"
+          "source": "Create destination",
+          "message": "Create destination"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Create a new destination",
@@ -676,8 +676,8 @@
           "message": "Set to `True` to enable the destination or `False` to create it in a disabled state"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination",
-          "message": "Update Destination"
+          "source": "Update destination",
+          "message": "Update destination"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Update an existing destination",
@@ -736,8 +736,8 @@
           "message": "Updated configuration settings for the destination; the available keys depend on the destination type"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination",
-          "message": "Delete Destination"
+          "source": "Delete destination",
+          "message": "Delete destination"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Delete a destination",
@@ -760,8 +760,8 @@
           "message": "The unique identifier of the Segment destination to delete"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
-          "message": "List Warehouses"
+          "source": "List warehouses",
+          "message": "List warehouses"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
           "source": "List warehouses with cursor-based pagination",
@@ -784,8 +784,8 @@
           "message": "Number of results per page (`1`-`1000`, default: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
-          "message": "Get Warehouse"
+          "source": "Get warehouse",
+          "message": "Get warehouse"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
           "source": "Get a warehouse by ID",
@@ -808,8 +808,8 @@
           "message": "The unique identifier of the Segment warehouse to retrieve"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
-          "message": "Create Warehouse"
+          "source": "Create warehouse",
+          "message": "Create warehouse"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
           "source": "Create a new warehouse",
@@ -880,8 +880,8 @@
           "message": "Set to `True` to disconnect all currently-connected sources from this warehouse on creation; defaults to `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
-          "message": "Update Warehouse"
+          "source": "Update warehouse",
+          "message": "Update warehouse"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
           "source": "Update an existing warehouse",
@@ -940,8 +940,8 @@
           "message": "The new human-readable display name for the warehouse"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Delete Warehouse",
-          "message": "Delete Warehouse"
+          "source": "Delete warehouse",
+          "message": "Delete warehouse"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
           "source": "Delete a warehouse",
@@ -964,8 +964,8 @@
           "message": "The unique identifier of the Segment warehouse to delete"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
-          "source": "List Tracking Plans",
-          "message": "List Tracking Plans"
+          "source": "List tracking plans",
+          "message": "List tracking plans"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
           "source": "List tracking plans with cursor-based pagination",
@@ -1040,8 +1040,8 @@
           "message": "Template tracking plan"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Get Tracking Plan",
-          "message": "Get Tracking Plan"
+          "source": "Get tracking plan",
+          "message": "Get tracking plan"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
           "source": "Get a tracking plan by ID",
@@ -1064,8 +1064,8 @@
           "message": "The unique Segment tracking plan ID to retrieve"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Create Tracking Plan",
-          "message": "Create Tracking Plan"
+          "source": "Create tracking plan",
+          "message": "Create tracking plan"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
           "source": "Create a new tracking plan",
@@ -1152,8 +1152,8 @@
           "message": "A description of the tracking plan"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Update Tracking Plan",
-          "message": "Update Tracking Plan"
+          "source": "Update tracking plan",
+          "message": "Update tracking plan"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
           "source": "Update an existing tracking plan",
@@ -1200,8 +1200,8 @@
           "message": "The new description for the tracking plan"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Delete Tracking Plan",
-          "message": "Delete Tracking Plan"
+          "source": "Delete tracking plan",
+          "message": "Delete tracking plan"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
           "source": "Delete a tracking plan",
@@ -1224,8 +1224,8 @@
           "message": "The unique Segment tracking plan ID to delete"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
-          "message": "List Labels"
+          "source": "List labels",
+          "message": "List labels"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
           "source": "List labels with cursor-based pagination",
@@ -1248,8 +1248,8 @@
           "message": "Number of results per page (`1`-`1000`, default: `100`)"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
-          "message": "Create Label"
+          "source": "Create label",
+          "message": "Create label"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
           "source": "Create a new label",
@@ -1296,8 +1296,8 @@
           "message": "An optional human-readable description explaining the purpose of this label"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
-          "source": "Delete Label",
-          "message": "Delete Label"
+          "source": "Delete label",
+          "message": "Delete label"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {
           "source": "Delete a label",

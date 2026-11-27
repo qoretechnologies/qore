@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
+          "source": "Get drive info",
           "message": "드라이브 정보 가져오기"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -352,7 +352,7 @@
           "message": "저장 공간 할당량, 드라이브 유형 및 소유자 정보를 포함한 현재 사용자의 OneDrive 메타데이터를 검색합니다."
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "품목 검색"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -412,7 +412,7 @@
           "message": "결과 정렬 순서(예: `name asc`, `size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "품목 가져오기"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
@@ -448,7 +448,7 @@
           "message": "드라이브 루트 기준 항목 경로(예: `/Documents/file.txt`). `id` 또는 `path` 중 하나를 제공하세요."
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "폴더 생성"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "오류와 함께 요청 실패 처리"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "파일 업로드"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "상위 폴더의 ID입니다. 생략하면 파일이 드라이브 루트에 업로드됩니다."
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "업로드 세션 생성"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "오류와 함께 요청 실패 처리"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "파일 다운로드"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -784,7 +784,7 @@
           "message": "다운로드할 파일의 고유 식별자"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "항목 삭제"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -808,7 +808,7 @@
           "message": "삭제할 항목의 고유 식별자"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "항목 업데이트"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -868,7 +868,7 @@
           "message": "항목을 이동할 대상 폴더의 ID입니다. 항목을 다른 폴더로 이동하려면 이 값을 설정하세요."
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
+          "source": "Copy item",
           "message": "항목 복사"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
@@ -964,7 +964,7 @@
           "message": "오류와 함께 요청 실패 처리"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "공유 링크 생성"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "공유 링크가 만료되는 날짜 및 시간"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "파일 또는 폴더 변경됨"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

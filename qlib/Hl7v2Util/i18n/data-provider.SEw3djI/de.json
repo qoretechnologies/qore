@@ -16,7 +16,7 @@
           "message": "Getrennte [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185)-Nachrichten im Gesundheitswesen für Integrations- und Transformations-Workflows lesen und schreiben.\n\n**Funktionen**:\n- Beibehalten der Nachrichtenstruktur und benutzerdefinierter `Z`-Segmente ohne festes Schema\n- Benutzerdefinierte Trennzeichen aus `MSH` lesen und HL7-Escape-Sequenzen verarbeiten\n- Ein geparstes Segment pro Datensatz über die DataProvider-API bereitstellen\n- Geparste Nachrichten oder einfache Segmentdatensätze wieder in HL7-v2-Text serialisieren"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "HL7-v2-Nachricht lesen"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Den Text wie gelesen ohne Prüfung in der Eingabekodierung behalten"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "HL7-v2-Inline-Daten lesen"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Inline-HL7-v2-Nachrichtendaten. Verwenden Sie diese Option, wenn sich die Nachricht bereits im Speicher befindet."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "HL7-v2-Nachricht schreiben"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Pfad zum Schreiben der serialisierten HL7-v2-Nachricht."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "HL7-v2-Schema laden"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Wenn `True`, den In-Memory-Schema-Cache ignorieren und das Schema-Artefakt neu laden."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "HL7-v2-Schema-Zusammenfassung"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

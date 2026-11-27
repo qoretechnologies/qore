@@ -136,8 +136,9 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         }
 
         # A debug poll backend reports its wait. Re-arm for the data read so it actually has to wait for the writer.
-        # On other backends the writer can proceed as soon as the empty-pipe probe finishes.
-        if (ready.tryGet()) {
+        # On other backends the writer can proceed as soon as the empty-pipe probe finishes.  Only the hook reports a
+        # wait, so the queue has an entry only with it.
+        if (hook && ready.tryGet()) {
             call_function("dbg_fd_wait_notify", fis.getPollableDescriptor(), ready, True);
         } else {
             ready.push(True);

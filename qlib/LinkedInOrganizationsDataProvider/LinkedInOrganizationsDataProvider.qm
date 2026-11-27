@@ -102,7 +102,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-current-member",
             "action": "get-current-member",
-            "display_name": "Get Current Member",
+            "display_name": "Get current member",
             "short_desc": "Get the authenticated member's profile",
             "desc": "Retrieves the profile of the member whose authorization this connection "
                 "carries.\n\n"
@@ -120,7 +120,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-organizations",
             "action": "list-organizations",
-            "display_name": "List Organizations",
+            "display_name": "List organizations",
             "short_desc": "List the organizations the authenticated member administers",
             "desc": "Lists the organizations the authenticated member administers, with each one's "
                 "name, description, logo, size, industries and page URL.\n\n"
@@ -136,7 +136,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-organization",
             "action": "get-organization",
-            "display_name": "Get Organization",
+            "display_name": "Get organization",
             "short_desc": "Get one organization's profile",
             "desc": "Retrieves one organization's profile: its name, description, tagline, website, "
                 "logo, cover photo, size, industries, specialties and page URL.",
@@ -158,7 +158,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-posts",
             "action": "list-posts",
-            "display_name": "List Posts",
+            "display_name": "List posts",
             "short_desc": "List the posts an organization has published",
             "desc": "Lists the posts an organization has published, newest first.\n\n"
                 "Pass the `cursor` from a response back in the next call to continue the listing. "
@@ -188,7 +188,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-post",
             "action": "get-post",
-            "display_name": "Get Post",
+            "display_name": "Get post",
             "short_desc": "Get one of an organization's posts",
             "desc": "Retrieves one of an organization's posts by URN, with its text, visibility, "
                 "attached content, distribution and timestamps.\n\n"
@@ -214,7 +214,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-comments",
             "action": "list-comments",
-            "display_name": "List Comments",
+            "display_name": "List comments",
             "short_desc": "List the comments on a post or comment",
             "desc": "Lists the comments on a post, activity or comment, newest first, with each "
                 "one's text, author and timestamps.\n\n"
@@ -240,7 +240,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-reactions",
             "action": "list-reactions",
-            "display_name": "List Reactions",
+            "display_name": "List reactions",
             "short_desc": "List the reactions on a post or comment",
             "desc": "Lists the individual reactions on a post, activity or comment, newest first, "
                 "with which reaction was given and when.\n\n"
@@ -272,7 +272,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-social-metadata",
             "action": "get-social-metadata",
-            "display_name": "Get Engagement Summary",
+            "display_name": "Get engagement summary",
             "short_desc": "Get the reaction and comment counts of content",
             "desc": "Retrieves how much engagement one or more posts, activities or comments have "
                 "received: the total number of reactions, the count of each reaction type, the "
@@ -297,7 +297,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-followers",
             "action": "list-followers",
-            "display_name": "List Followers",
+            "display_name": "List followers",
             "short_desc": "List the members and pages following an organization",
             "desc": "Lists who follows an organization's page — members or other pages, chosen with "
                 "`edge_type` — and when each follow last changed.\n\n"
@@ -323,7 +323,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/list-following",
             "action": "list-following",
-            "display_name": "List Following",
+            "display_name": "List following",
             "short_desc": "List the pages an organization follows",
             "desc": "Lists the organizational pages that an organization's own page follows.",
             "action_code": DPAT_API,
@@ -348,7 +348,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-follower-statistics",
             "action": "get-follower-statistics",
-            "display_name": "Get Follower Statistics",
+            "display_name": "Get follower statistics",
             "short_desc": "Break an organization's followers down by demographic",
             "desc": "Breaks an organization's current followers down by one member attribute — "
                 "industry, seniority, job function, company size, country, region, or whether they "
@@ -376,7 +376,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/get-visitor-statistics",
             "action": "get-visitor-statistics",
-            "display_name": "Get Visitor Statistics",
+            "display_name": "Get visitor statistics",
             "short_desc": "Break an organization's page visitors down by demographic",
             "desc": "Breaks the members who visited an organization's page down by one member "
                 "attribute, and reports how many visits fall into each value.\n\n"
@@ -410,7 +410,7 @@ module LinkedInOrganizationsDataProvider {
             "app": LinkedInOrganizationsDataProvider::AppName,
             "path": "/events/" + LinkedInOrganizationsDataProvider::EVENT_NEW_POST,
             "action": LinkedInOrganizationsDataProvider::EVENT_NEW_POST,
-            "display_name": "New Post",
+            "display_name": "New post",
             "short_desc": "Fires when an organization publishes a post",
             "desc": "Fires when an organization publishes a post, delivering the post itself.\n\n"
                 "Turning the trigger on establishes a baseline without replaying the "

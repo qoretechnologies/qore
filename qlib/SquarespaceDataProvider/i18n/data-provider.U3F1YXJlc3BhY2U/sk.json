@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Vytvoriť objednávku"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Množstvo v peňažnej sume ako reťazec (napr. \"9.99\")"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
-          "source": "Fulfill an Order",
+          "source": "Fulfill an order",
           "message": "Vybaviť objednávku"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "URL pre sledovanie doručenia"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Zoznam objednávok"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Získať objednávku"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "ID objednávky"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "Vytvoriť produkt"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Či variant má neobmedzenú zásobu"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "Aktualizovať produkt"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Zoznam názvov atribútov variantu (napr. Size, Color)"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
+          "source": "Delete a product",
           "message": "Odstrániť produkt"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "ID produktu na odstránenie"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Zoznam produktov"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Získať produkt"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "ID produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Create a Product Variant",
+          "source": "Create a product variant",
           "message": "Vytvoriť variant produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Hodnota hmotnosti"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Update a Product Variant",
+          "source": "Update a product variant",
           "message": "Aktualizovať variant produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Hodnota hmotnosti"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Delete a Product Variant",
+          "source": "Delete a product variant",
           "message": "Odstrániť variant produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "ID variantu na odstránenie"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
-          "source": "List Product Variants",
+          "source": "List product variants",
           "message": "Zoznam variantov produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Upload a Product Image",
+          "source": "Upload a product image",
           "message": "Nahrať obrázok produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Alternatívny text pre obrázok"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Assign a Product Image",
+          "source": "Assign a product image",
           "message": "Priradiť obrázok produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "ID variantu, ku ktorému sa má priradiť obrázok"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Update a Product Image",
+          "source": "Update a product image",
           "message": "Aktualizovať obrázok produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Alternatívny text, ktorý sa má nastaviť pre obrázok produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Delete a Product Image",
+          "source": "Delete a product image",
           "message": "Odstrániť obrázok produktu"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "ID obrázka, ktorý sa má odstrániť"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
-          "source": "Update Stock Quantities",
+          "source": "Update stock quantities",
           "message": "Aktualizovať množstvá zásob"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Odobrať zásoby"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
+          "source": "List inventory",
           "message": "Zoznam zásob"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
-          "source": "Get Inventory",
+          "source": "Get inventory",
           "message": "Získať zásoby"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
@@ -2744,7 +2744,7 @@
           "message": "ID variantu"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "Zoznam transakcií"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get a Transaction",
+          "source": "Get a transaction",
           "message": "Získať transakciu"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "ID transakcie"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Objednávka vytvorená/aktualizovaná"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Created/Updated",
+          "source": "Product created/updated",
           "message": "Produkt vytvorený/aktualizovaný"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
-          "source": "Transaction Created/Updated",
+          "source": "Transaction created/updated",
           "message": "Transakcia vytvorená/aktualizovaná"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {

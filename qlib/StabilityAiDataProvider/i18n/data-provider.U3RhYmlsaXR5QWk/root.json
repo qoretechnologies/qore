@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.display_name": {
-          "source": "Generate Ultra Image",
-          "message": "Generate Ultra Image"
+          "source": "Generate Ultra image",
+          "message": "Generate Ultra image"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.short_desc": {
           "source": "Create detailed marketing images with Stable Image Ultra.",
@@ -704,8 +704,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.display_name": {
-          "source": "Generate Core Image",
-          "message": "Generate Core Image"
+          "source": "Generate Core image",
+          "message": "Generate Core image"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.short_desc": {
           "source": "Create affordable concept images with Stable Image Core.",
@@ -924,8 +924,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.display_name": {
-          "source": "Generate SD3.5 Image",
-          "message": "Generate SD3.5 Image"
+          "source": "Generate SD3.5 image",
+          "message": "Generate SD3.5 image"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.short_desc": {
           "source": "Create or transform images with a selected SD3.5 model.",
@@ -1348,8 +1348,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.display_name": {
-          "source": "Upscale Image Quickly",
-          "message": "Upscale Image Quickly"
+          "source": "Upscale image quickly",
+          "message": "Upscale image quickly"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.short_desc": {
           "source": "Increase image resolution for reuse in larger layouts.",
@@ -1536,8 +1536,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.display_name": {
-          "source": "Upscale Image Conservatively",
-          "message": "Upscale Image Conservatively"
+          "source": "Upscale image conservatively",
+          "message": "Upscale image conservatively"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.short_desc": {
           "source": "Enlarge an image while preserving its original appearance.",
@@ -1772,8 +1772,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.display_name": {
-          "source": "Start Creative Upscale",
-          "message": "Start Creative Upscale"
+          "source": "Start creative upscale",
+          "message": "Start creative upscale"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.short_desc": {
           "source": "Start a detailed upscale and retain its job ID for retrieval.",
@@ -2068,8 +2068,8 @@
           "message": "Tile Texture"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.display_name": {
-          "source": "Get Creative Upscale Result",
-          "message": "Get Creative Upscale Result"
+          "source": "Get creative upscale result",
+          "message": "Get creative upscale result"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.short_desc": {
           "source": "Retrieve a completed upscale or its pending status.",
@@ -2112,8 +2112,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.display_name": {
-          "source": "Erase Object",
-          "message": "Erase Object"
+          "source": "Erase object",
+          "message": "Erase object"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.short_desc": {
           "source": "Remove unwanted objects from a masked image area.",
@@ -2456,8 +2456,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.display_name": {
-          "source": "Inpaint Image",
-          "message": "Inpaint Image"
+          "source": "Inpaint image",
+          "message": "Inpaint image"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.short_desc": {
           "source": "Replace a masked image area using a descriptive prompt.",
@@ -2904,8 +2904,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.display_name": {
-          "source": "Extend Image",
-          "message": "Extend Image"
+          "source": "Extend image",
+          "message": "Extend image"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.short_desc": {
           "source": "Extend image borders to fit a new composition.",
@@ -3256,8 +3256,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.display_name": {
-          "source": "Search and Replace",
-          "message": "Search and Replace"
+          "source": "Search and replace",
+          "message": "Search and replace"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.short_desc": {
           "source": "Replace an object selected by a text description.",
@@ -3584,8 +3584,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.display_name": {
-          "source": "Search and Recolor",
-          "message": "Search and Recolor"
+          "source": "Search and recolor",
+          "message": "Search and recolor"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.short_desc": {
           "source": "Recolor an object selected by a text description.",
@@ -3912,8 +3912,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.display_name": {
-          "source": "Remove Background",
-          "message": "Remove Background"
+          "source": "Remove background",
+          "message": "Remove background"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.short_desc": {
           "source": "Isolate a product or subject on a transparent background.",
@@ -4096,8 +4096,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.display_name": {
-          "source": "Start Background and Lighting Edit",
-          "message": "Start Background and Lighting Edit"
+          "source": "Start background and lighting edit",
+          "message": "Start background and lighting edit"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.short_desc": {
           "source": "Replace a background and adjust lighting as an asynchronous job.",
@@ -4660,8 +4660,8 @@
           "message": "WebP"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.display_name": {
-          "source": "Get Image Job Result",
-          "message": "Get Image Job Result"
+          "source": "Get image job result",
+          "message": "Get image job result"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.short_desc": {
           "source": "Retrieve an asynchronous image or its pending status.",
@@ -4704,8 +4704,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.display_name": {
-          "source": "Generate from Sketch",
-          "message": "Generate from Sketch"
+          "source": "Generate from sketch",
+          "message": "Generate from sketch"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.short_desc": {
           "source": "Turn a sketch into a finished image guided by a prompt.",
@@ -5020,8 +5020,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.display_name": {
-          "source": "Generate with Image Structure",
-          "message": "Generate with Image Structure"
+          "source": "Generate with image structure",
+          "message": "Generate with image structure"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.short_desc": {
           "source": "Keep an input image's structure while creating new content.",
@@ -5336,8 +5336,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.display_name": {
-          "source": "Generate with Style Guide",
-          "message": "Generate with Style Guide"
+          "source": "Generate with style guide",
+          "message": "Generate with style guide"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.short_desc": {
           "source": "Create a new image using a reference image's visual style.",
@@ -5700,8 +5700,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.display_name": {
-          "source": "Transfer Image Style",
-          "message": "Transfer Image Style"
+          "source": "Transfer image style",
+          "message": "Transfer image style"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.short_desc": {
           "source": "Apply a reference style to an existing image composition.",
@@ -6092,8 +6092,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.display_name": {
-          "source": "Generate Fast 3D Model",
-          "message": "Generate Fast 3D Model"
+          "source": "Generate Fast 3D model",
+          "message": "Generate Fast 3D model"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.short_desc": {
           "source": "Create a textured 3D asset from an image.",
@@ -6308,8 +6308,8 @@
           "message": "If specified, the result will have approximately this many vertices (and consequently fewer faces) in the simplified mesh.\n\nSetting this value to -1 (the default value) means that a limit is not set."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.display_name": {
-          "source": "Generate Point Aware 3D Model",
-          "message": "Generate Point Aware 3D Model"
+          "source": "Generate Point Aware 3D model",
+          "message": "Generate Point Aware 3D model"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.short_desc": {
           "source": "Create a 3D asset with inferred details on unseen surfaces.",
@@ -7236,8 +7236,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.display_name": {
-          "source": "Start Audio 3 Generation",
-          "message": "Start Audio 3 Generation"
+          "source": "Start Audio 3 generation",
+          "message": "Start Audio 3 generation"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.short_desc": {
           "source": "Start generating a longer music track or sound effect.",
@@ -7364,8 +7364,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.display_name": {
-          "source": "Start Audio 3 Transformation",
-          "message": "Start Audio 3 Transformation"
+          "source": "Start Audio 3 transformation",
+          "message": "Start Audio 3 transformation"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.short_desc": {
           "source": "Start transforming an audio recording with Stable Audio 3.",
@@ -7636,8 +7636,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.display_name": {
-          "source": "Start Audio 3 Inpainting",
-          "message": "Start Audio 3 Inpainting"
+          "source": "Start Audio 3 inpainting",
+          "message": "Start Audio 3 inpainting"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.short_desc": {
           "source": "Start replacing a selected time range with Stable Audio 3.",
@@ -7920,8 +7920,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.display_name": {
-          "source": "Get Audio Job Result",
-          "message": "Get Audio Job Result"
+          "source": "Get audio job result",
+          "message": "Get audio job result"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.short_desc": {
           "source": "Retrieve completed audio or its pending status.",
@@ -7964,8 +7964,8 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
-          "message": "Get Account"
+          "source": "Get account",
+          "message": "Get account"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Read account details and available organizations.",
@@ -7976,8 +7976,8 @@
           "message": "Read account details and available organizations."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Credit Balance",
-          "message": "Get Credit Balance"
+          "source": "Get credit balance",
+          "message": "Get credit balance"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.short_desc": {
           "source": "Check the credit balance for the selected organization.",
@@ -7988,8 +7988,8 @@
           "message": "Check the credit balance for the selected organization."
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.display_name": {
-          "source": "List Legacy Engines",
-          "message": "List Legacy Engines"
+          "source": "List legacy engines",
+          "message": "List legacy engines"
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.short_desc": {
           "source": "List legacy image engines available to this account.",
@@ -8000,8 +8000,8 @@
           "message": "List legacy image engines available to this account."
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.display_name": {
-          "source": "Generate Legacy Image",
-          "message": "Generate Legacy Image"
+          "source": "Generate legacy image",
+          "message": "Generate legacy image"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.short_desc": {
           "source": "Create images with an available legacy engine.",
@@ -8336,8 +8336,8 @@
           "message": "Raw Media"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.display_name": {
-          "source": "Transform Legacy Image",
-          "message": "Transform Legacy Image"
+          "source": "Transform legacy image",
+          "message": "Transform legacy image"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.short_desc": {
           "source": "Transform an image with an available legacy engine.",
@@ -8716,8 +8716,8 @@
           "message": "Raw Media"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.display_name": {
-          "source": "Mask Legacy Image",
-          "message": "Mask Legacy Image"
+          "source": "Mask legacy image",
+          "message": "Mask legacy image"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.short_desc": {
           "source": "Replace a masked area with an available legacy engine.",
@@ -9076,8 +9076,8 @@
           "message": "Raw Media"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.display_name": {
-          "source": "Wait for Image Job",
-          "message": "Wait for Image Job"
+          "source": "Wait for image job",
+          "message": "Wait for image job"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.short_desc": {
           "source": "Wait for an asynchronous background or lighting edit.",
@@ -9124,8 +9124,8 @@
           "message": "Polling delay; at least ten seconds in production."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.display_name": {
-          "source": "Wait for Creative Upscale",
-          "message": "Wait for Creative Upscale"
+          "source": "Wait for creative upscale",
+          "message": "Wait for creative upscale"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.short_desc": {
           "source": "Wait for an existing creative upscale job.",
@@ -9172,8 +9172,8 @@
           "message": "Polling delay; at least ten seconds in production."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.display_name": {
-          "source": "Wait for Audio Job",
-          "message": "Wait for Audio Job"
+          "source": "Wait for audio job",
+          "message": "Wait for audio job"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.short_desc": {
           "source": "Wait for an existing Stable Audio 3 job.",
@@ -9220,8 +9220,8 @@
           "message": "Polling delay; at least ten seconds in production."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
-          "message": "Generate Image"
+          "source": "Generate image",
+          "message": "Generate image"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
           "source": "Generate an image from a text prompt",

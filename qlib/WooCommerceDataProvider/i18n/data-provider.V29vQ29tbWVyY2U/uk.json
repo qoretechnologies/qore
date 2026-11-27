@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Список замовлень"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Виключити замовлення, чий `parent_id` є в цьому списку"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Отримати замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Унікальний ідентифікатор замовлення для отримання"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Створити замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "Оновити замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Видалити замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Якщо `True`, видалити замовлення назавжди; інакше перемістити в кошик"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Update Order Status",
+          "source": "Update order status",
           "message": "Оновити статус замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "Статус замовлення: trash"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Create Order Note",
+          "source": "Create order note",
           "message": "Створити примітку до замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Якщо `True`, примітка видима для клієнта"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.display_name": {
-          "source": "List Order Notes",
+          "source": "List order notes",
           "message": "Список приміток до замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Лише внутрішні примітки"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Delete Order Note",
+          "source": "Delete order note",
           "message": "Видалити примітку до замовлення"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Якщо `True`, видалити примітку назавжди"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "Створити повернення коштів"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Якщо `True`, повернення коштів обробляється через платіжний шлюз"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Список повернень коштів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Поточна сторінка колекції (починаючи з 1)"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Список продуктів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Виключити товари, чий `parent_id` є в цьому списку"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Отримати товар"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Унікальний ідентифікатор товару для отримання"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Створити товар"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -4732,7 +4732,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Оновити продукт"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -5892,7 +5892,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Видалити товар"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Якщо `True`, назавжди видалити товар; інакше перемістити в кошик"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.display_name": {
-          "source": "Update Stock Quantity",
+          "source": "Update stock quantity",
           "message": "Оновити кількість на складі"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Якщо `True`, керування запасами увімкнено (за замовчуванням `True`)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Create Variation",
+          "source": "Create variation",
           "message": "Створити варіацію"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6228,7 +6228,7 @@
           "message": "URL зображення"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Update Variation",
+          "source": "Update variation",
           "message": "Оновити варіацію"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "URL зображення"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.display_name": {
-          "source": "List Variations",
+          "source": "List variations",
           "message": "Список варіацій"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.short_desc": {
@@ -6552,7 +6552,7 @@
           "message": "Обмежити результати тими, що відповідають пошуковому рядку"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Create Category",
+          "source": "Create category",
           "message": "Створити категорію"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.short_desc": {
@@ -6672,7 +6672,7 @@
           "message": "URL зображення"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Update Category",
+          "source": "Update category",
           "message": "Оновити категорію"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "Опис категорії"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.display_name": {
-          "source": "Delete Category",
+          "source": "Delete category",
           "message": "Видалити категорію"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "Має бути `True`, оскільки категорії не підтримують кошик"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Delete Variation",
+          "source": "Delete variation",
           "message": "Видалити варіацію"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6828,7 +6828,7 @@
           "message": "Якщо `True`, назавжди видалити варіацію; інакше перемістити в кошик"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.display_name": {
-          "source": "Get Variation",
+          "source": "Get variation",
           "message": "Отримати варіацію"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.short_desc": {
@@ -6864,7 +6864,7 @@
           "message": "Унікальний ідентифікатор для варіації"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.display_name": {
-          "source": "List Categories",
+          "source": "List categories",
           "message": "Список категорій"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.short_desc": {
@@ -6996,7 +6996,7 @@
           "message": "Кількість товарів"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Створити тег"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -7044,7 +7044,7 @@
           "message": "Опис тегу"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Оновити тег"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.short_desc": {
@@ -7104,7 +7104,7 @@
           "message": "Опис тегу"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Видалити тег"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -7140,7 +7140,7 @@
           "message": "Має бути `True`, оскільки теги не підтримують кошик"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.short_desc": {
@@ -7260,7 +7260,7 @@
           "message": "Кількість товарів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Список клієнтів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Слаг"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Отримати клієнта"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "Унікальний ідентифікатор клієнта для отримання"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Створити клієнта"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -7792,7 +7792,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Оновити клієнта"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Видалити клієнта"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -8236,7 +8236,7 @@
           "message": "ID користувача, якому потрібно перепризначити публікації та посилання"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.display_name": {
-          "source": "List Coupons",
+          "source": "List coupons",
           "message": "Список купонів"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.short_desc": {
@@ -8372,7 +8372,7 @@
           "message": "Слаг"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "Отримати купон"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -8396,7 +8396,7 @@
           "message": "Унікальний ідентифікатор купона для отримання"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "Створити купон"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -8696,7 +8696,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "Оновити купон"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "Значення метаданих (будь-який тип, серіалізований у JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "Видалити купон"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -9044,7 +9044,7 @@
           "message": "Якщо `True`, назавжди видалити купон; інакше перемістити в кошик"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Список вебхуків"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "Заголовок"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Створити вебхук"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9436,7 +9436,7 @@
           "message": "Статус вебхука: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Оновити вебхук"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9664,7 +9664,7 @@
           "message": "Статус вебхука: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Видалити вебхук"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9700,7 +9700,7 @@
           "message": "Якщо `True`, назавжди видалити вебхук"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.display_name": {
-          "source": "Sales Report",
+          "source": "Sales report",
           "message": "Звіт про продажі"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.short_desc": {
@@ -9764,7 +9764,7 @@
           "message": "Цей рік"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.display_name": {
-          "source": "Top Sellers Report",
+          "source": "Top sellers report",
           "message": "Звіт про лідери продажу"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "Цей рік"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.display_name": {
-          "source": "Orders Totals",
+          "source": "Orders totals",
           "message": "Підсумки замовлень"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.short_desc": {
@@ -9840,7 +9840,7 @@
           "message": "Отримати підсумкову кількість замовлень, згрупованих за статусом, з WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.display_name": {
-          "source": "Products Totals",
+          "source": "Products totals",
           "message": "Підсумки товарів"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.short_desc": {
@@ -9852,7 +9852,7 @@
           "message": "Отримати підсумкову кількість товарів, згрупованих за типом, з WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.display_name": {
-          "source": "Customers Totals",
+          "source": "Customers totals",
           "message": "Підсумки клієнтів"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "Отримати підсумкову кількість клієнтів, згрупованих за ролями, з WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.display_name": {
-          "source": "List Shipping Zones",
+          "source": "List shipping zones",
           "message": "Список зон доставки"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "Отримати всі зони доставки, налаштовані у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Отримати список способів доставки"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "Унікальний ідентифікатор зони доставки"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "Створити податкову ставку"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -10068,7 +10068,7 @@
           "message": "Податковий клас, до якого належить ця ставка"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.display_name": {
-          "source": "Get Tax Rate",
+          "source": "Get tax rate",
           "message": "Отримати податкову ставку"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.short_desc": {
@@ -10092,7 +10092,7 @@
           "message": "Унікальний ідентифікатор для податкової ставки"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.display_name": {
-          "source": "Update Tax Rate",
+          "source": "Update tax rate",
           "message": "Оновити податкову ставку"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.short_desc": {
@@ -10272,7 +10272,7 @@
           "message": "Податковий клас, до якого належить ця ставка"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.display_name": {
-          "source": "Delete Tax Rate",
+          "source": "Delete tax rate",
           "message": "Видалити податкову ставку"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "Має бути `True`, оскільки податкові ставки не підтримують кошик"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "Список податкових ставок"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Порядок відображення"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.display_name": {
-          "source": "Get Setting",
+          "source": "Get setting",
           "message": "Отримати налаштування"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.short_desc": {
@@ -10432,7 +10432,7 @@
           "message": "Ідентифікатор налаштування в межах групи"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.display_name": {
-          "source": "Update Setting",
+          "source": "Update setting",
           "message": "Оновити налаштування"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Нове значення налаштування"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.display_name": {
-          "source": "System Status",
+          "source": "System status",
           "message": "Стан системи"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.short_desc": {
@@ -10492,7 +10492,7 @@
           "message": "Отримати інформацію про стан системи WooCommerce, зокрема середовище, базу даних, активні плагіни, тему та налаштування."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Замовлення створено"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -10504,7 +10504,7 @@
           "message": "Спрацьовує при створенні нового замовлення у WooCommerce. Повні дані замовлення включено в корисне навантаження. **Примітка:** це також спрацьовує для замовлень із невдалою оплатою."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "Замовлення оновлено"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -10516,7 +10516,7 @@
           "message": "Спрацьовує, коли замовлення оновлюється у WooCommerce. **Примітка:** це може спрацьовувати кілька разів за одну дію користувача; дедуплікуйте на стороні отримувача."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Order Deleted",
+          "source": "Order deleted",
           "message": "Замовлення видалено"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Спрацьовує при видаленні замовлення у WooCommerce. **Примітка:** корисне навантаження може містити лише мінімальні дані (лише ID замовлення), оскільки дані замовлення було видалено."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.display_name": {
-          "source": "Order Restored",
+          "source": "Order restored",
           "message": "Замовлення відновлено"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Спрацьовує, коли замовлення відновлюється з кошика у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Товар створено"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Спрацьовує при створенні нового товару у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Товар оновлено"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Спрацьовує при оновленні товару у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.display_name": {
-          "source": "Product Deleted",
+          "source": "Product deleted",
           "message": "Товар видалено"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.short_desc": {
@@ -10576,7 +10576,7 @@
           "message": "Спрацьовує при видаленні товару у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.display_name": {
-          "source": "Product Restored",
+          "source": "Product restored",
           "message": "Товар відновлено"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.short_desc": {
@@ -10588,7 +10588,7 @@
           "message": "Спрацьовує при відновленні товару з кошика у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Клієнта створено"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -10600,7 +10600,7 @@
           "message": "Спрацьовує при створенні нового клієнта у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Клієнта оновлено"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -10612,7 +10612,7 @@
           "message": "Спрацьовує при оновленні клієнта у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.display_name": {
-          "source": "Customer Deleted",
+          "source": "Customer deleted",
           "message": "Клієнта видалено"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.short_desc": {
@@ -10624,7 +10624,7 @@
           "message": "Спрацьовує при видаленні клієнта у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.display_name": {
-          "source": "Coupon Created",
+          "source": "Coupon created",
           "message": "Купон створено"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.short_desc": {
@@ -10636,7 +10636,7 @@
           "message": "Спрацьовує при створенні нового купона у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.display_name": {
-          "source": "Coupon Updated",
+          "source": "Coupon updated",
           "message": "Купон оновлено"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.short_desc": {
@@ -10648,7 +10648,7 @@
           "message": "Спрацьовує при оновленні купона у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.display_name": {
-          "source": "Coupon Deleted",
+          "source": "Coupon deleted",
           "message": "Купон видалено"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "Спрацьовує при видаленні купона у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.display_name": {
-          "source": "Coupon Restored",
+          "source": "Coupon restored",
           "message": "Купон відновлено"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.short_desc": {
@@ -10672,7 +10672,7 @@
           "message": "Спрацьовує при відновленні купона з кошика у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.display_name": {
-          "source": "Payment Complete",
+          "source": "Payment complete",
           "message": "Оплату завершено"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.short_desc": {
@@ -10684,7 +10684,7 @@
           "message": "Спрацьовує після завершення оплати замовлення. Спрацьовує лише для замовлень, які раніше мали статус `pending`, `on-hold`, `failed` або `cancelled`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.display_name": {
-          "source": "Order Status: Pending",
+          "source": "Order status: pending",
           "message": "Статус замовлення: В очікуванні"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.short_desc": {
@@ -10696,7 +10696,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `pending` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.display_name": {
-          "source": "Order Status: Processing",
+          "source": "Order status: processing",
           "message": "Статус замовлення: В обробці"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.short_desc": {
@@ -10708,7 +10708,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `processing` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.display_name": {
-          "source": "Order Status: Completed",
+          "source": "Order status: completed",
           "message": "Статус замовлення: Виконано"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.short_desc": {
@@ -10720,7 +10720,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `completed` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.display_name": {
-          "source": "Order Status: On Hold",
+          "source": "Order status: on hold",
           "message": "Статус замовлення: На утриманні"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.short_desc": {
@@ -10732,7 +10732,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `on-hold` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.display_name": {
-          "source": "Order Status: Refunded",
+          "source": "Order status: refunded",
           "message": "Статус замовлення: Повернено кошти"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.short_desc": {
@@ -10744,7 +10744,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `refunded` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.display_name": {
-          "source": "Order Status: Failed",
+          "source": "Order status: failed",
           "message": "Статус замовлення: Не вдалося"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.short_desc": {
@@ -10756,7 +10756,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `failed` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.display_name": {
-          "source": "Order Status: Cancelled",
+          "source": "Order status: cancelled",
           "message": "Статус замовлення: Скасовано"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.short_desc": {
@@ -10768,7 +10768,7 @@
           "message": "Спрацьовує, коли статус замовлення змінюється на `cancelled` у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.display_name": {
-          "source": "Product Added to Cart",
+          "source": "Product added to cart",
           "message": "Товар додано до кошика"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.short_desc": {
@@ -10780,7 +10780,7 @@
           "message": "Спрацьовує при додаванні товару до кошика клієнта. Корисне навантаження містить лише `action` та `arg` (ключ елемента кошика)."
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.display_name": {
-          "source": "Product Low Stock",
+          "source": "Product low stock",
           "message": "Низький залишок товару"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.short_desc": {
@@ -10792,7 +10792,7 @@
           "message": "Спрацьовує, коли кількість товару на складі досягає порогу низького залишку, налаштованого у WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.display_name": {
-          "source": "Product Out of Stock",
+          "source": "Product out of stock",
           "message": "Товар закінчився на складі"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.short_desc": {

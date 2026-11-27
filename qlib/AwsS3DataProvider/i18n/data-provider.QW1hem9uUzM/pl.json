@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Wyświetl listę zasobników"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Wyświetla listę wszystkich zasobników należących do uwierzytelnionego konta wraz z datą utworzenia każdego z nich."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "Utwórz zasobnik"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Włącz blokadę obiektów (object lock) w nowym zasobniku; blokady obiektów nie można włączyć po utworzeniu i wymaga ona wersjonowania, które jest włączane automatycznie po ustawieniu tej opcji"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Wyświetl obiekty"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Wartość `next_continuation_token` zwrócona przez poprzednią skróconą listę; używana do pobrania następnej strony"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "Pobierz obiekt"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Określona wersja obiektu do zaadresowania; ma znaczenie tylko w zasobnikach z włączonym wersjonowaniem. Jeśli nie ustawiono, używana jest bieżąca wersja"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Pobierz plik"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Określona wersja obiektu do zaadresowania; ma znaczenie tylko w zasobnikach z włączonym wersjonowaniem. Jeśli nie ustawiono, używana jest bieżąca wersja"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Prześlij plik"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Klucz AWS KMS do zaszyfrowania obiektu, podany jako identyfikator klucza, alias lub ARN.\n\nUżywany tylko wtedy, gdy `server_side_encryption` wybiera schemat KMS; jeśli pozostanie nieustawiony, zostanie użyty domyślny klucz KMS zasobnika"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "Utwórz obiekt tekstowy"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Klucz AWS KMS do zaszyfrowania obiektu, podany jako identyfikator klucza, alias lub ARN.\n\nUżywany tylko wtedy, gdy `server_side_encryption` wybiera schemat KMS; jeśli pozostanie nieustawiony, zostanie użyty domyślny klucz KMS zasobnika"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Usuń obiekt"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Określona wersja obiektu do zaadresowania; ma znaczenie tylko w zasobnikach z włączonym wersjonowaniem. Jeśli nie ustawiono, używana jest bieżąca wersja"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Kopiuj obiekt"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Długoterminowe dane archiwalne pobierane w ciągu kilku godzin; klasa pamięci masowej o najniższym koszcie"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Utwórz wstępnie podpisany adres URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Wartość `Content-Disposition`, z którą usługa Amazon S3 powinna udostępnić pobieranie; użyj tego, aby przeglądarka zapisała obiekt pod wybraną nazwą zamiast go wyświetlać"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "Usuń obiekty"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Usuń obiekty objęte blokadą retencji w trybie zarządzania.\n\nPoświadczenia muszą mieć uprawnienie `s3:BypassGovernanceRetention`; obiekty z blokadą w trybie **compliance** nie mogą zostać usunięte przez nikogo, dopóki blokada nie wygaśnie"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "Przenieś obiekt"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Długoterminowe dane archiwalne pobierane w ciągu kilku godzin; klasa pamięci masowej o najniższym koszcie"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "Pobierz tagi obiektu"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Określona wersja obiektu do zaadresowania; ma znaczenie tylko w zasobnikach z włączonym wersjonowaniem. Jeśli nie ustawiono, używana jest bieżąca wersja"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "Ustaw tagi obiektu"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Określona wersja obiektu do zaadresowania; ma znaczenie tylko w zasobnikach z włączonym wersjonowaniem. Jeśli nie ustawiono, używana jest bieżąca wersja"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "Wyświetl wersje obiektów"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "Wartość `next_version_id_marker` zwrócona przez poprzednią skróconą listę; jest używana razem z `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "Usuń zasobnik"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Nazwa zasobnika do usunięcia; musi być już pusty"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "Znajdź obiekty"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Liczba kluczy do pobrania na żądanie; Amazon S3 ogranicza tę wartość do `1000`.\n\nWpływa to na sposób podziału przeglądania na żądania, a nie na liczbę zwracanych rekordów — iterator pobiera kolejne strony w miarę potrzeb"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "Nowy zasobnik"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Nie zgłaszaj niczego starszego niż ta data.\n\nJeśli nie jest ustawione, monitorowanie zgłasza tylko to, co pojawi się po jego uruchomieniu, dzięki czemu istniejący zasobnik nie generuje lawiny zdarzeń przy pierwszym uruchomieniu"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "Nowy lub zaktualizowany plik"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

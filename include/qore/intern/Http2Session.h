@@ -80,9 +80,19 @@ enum class Http2StreamType {
     Sse             //!< Server-Sent Events stream
 };
 
+//! The maximum number of HTTP/2 error messages logged for a connection (qore#7770)
+constexpr unsigned QORE_H2_MAX_ERROR_FRAME_LOGS = 16;
+
 //! HTTP/2 stream information
 struct Http2StreamInfo {
     int32_t stream_id = 0;
+    //! true once the dispatch of a server CONNECT stream has returned (cleanupStream()); the tunnel is still served
+    //! while the stream is open, so the stream's data is still received: its record is released once the stream has
+    //! closed and its received data has been taken (qore#7770)
+    bool tunnel_released = false;
+    //! true once the server's poll operation has ended the consumer of a CONNECT tunnel (its Queue or frame state):
+    //! the data received on the tunnel then is discarded, as nothing takes it (qore#7770)
+    bool tunnel_unconsumed = false;
     Http2StreamState state = Http2StreamState::Idle;
     Http2StreamType stream_type = Http2StreamType::Normal;
 
@@ -438,6 +448,18 @@ public:
     //! Returns true if a drain was started and the session has no open streams and nothing left to write
     DLLLOCAL bool isDrainComplete() const;
 
+    //! Returns true if the session wants to neither read nor write and has nothing left to send
+    /** nghttp2 wants neither once it has sent the GOAWAY of a connection error (RFC 9113 section 5.4.1), or once a
+        GOAWAY has been sent or received and no stream is active; the connection is closed then
+    */
+    DLLLOCAL bool isSessionDone() const;
+
+    //! Returns the error code of the GOAWAY frame of a connection error that the session sent, or -1 if it sent none
+    DLLLOCAL int64_t getGoawayErrorSent() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return goaway_error_sent;
+    }
+
     //! Returns true if startDrain() was called; lock-free, so that the paths that end a stream pay for the
     //! completion check only while draining
     DLLLOCAL bool isDraining() const {
@@ -570,7 +592,7 @@ public:
     DLLLOCAL WebSocketCloseRecordRef getWebSocketCloseRecord(int32_t stream_id, bool create = false);
 
     //! Takes the records of the close frames of the session's WebSocket streams, when the socket releases it
-    DLLLOCAL std::unordered_map<int32_t, WebSocketCloseRecordRef> takeWebSocketCloseRecords();
+    DLLLOCAL std::map<int32_t, WebSocketCloseRecordRef> takeWebSocketCloseRecords();
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -930,6 +952,12 @@ public:
     */
     DLLLOCAL void releaseStreamBodyConsumer(int32_t stream_id);
 
+    //! Called by the server's poll operation when it has ended the consumer of a CONNECT tunnel (qore#7770)
+    /** The data of the tunnel that no consumer takes is discarded, now and when it arrives later, and the record of
+        the tunnel is removed once its dispatch has returned and it is closed; a no-op for other streams
+    */
+    DLLLOCAL void releaseTunnelConsumer(int32_t stream_id);
+
     //! Marks a stream as streaming for subsequent data delivery
     /** Used by client multiplex to mark a CONNECT stream as streaming after
         the response headers are received, so that subsequent DATA frames are
@@ -1193,6 +1221,20 @@ private:
         size_t length, int flags, void* user_data);
     static int onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
+    //! Logs an HTTP/2 error frame that the session sent or received (RST_STREAM, GOAWAY) at warning level
+    /** Frames with the error codes NO_ERROR and CANCEL are not logged (qore#7770); called with the mutex held
+    */
+    DLLLOCAL void logErrorFrame(const nghttp2_frame* frame, bool sent) const;
+
+    //! Returns true if another HTTP/2 error message may be logged for the connection; called with the mutex held
+    /** At most @ref QORE_H2_MAX_ERROR_FRAME_LOGS messages are logged for a connection; when the limit is reached, a
+        last message says that further ones are not logged
+    */
+    DLLLOCAL bool takeErrorLogSlot() const;
+
+    //! Returns the address and port of the peer, for log messages
+    DLLLOCAL std::string getPeerDesc() const;
+
     static int onFrameSendCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
     static int onDataChunkRecvCallback(nghttp2_session* session, uint8_t flags,
@@ -1251,6 +1293,7 @@ private:
     std::string scheme;  //!< "https" for h2, "http" for h2c
 
     // Stream management (unordered_map: O(1) lookup by stream_id, no ordered iteration needed)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
 
@@ -1284,6 +1327,7 @@ private:
     };
 
     //! Watched responses by stream ID; accessed under m
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, ResponseSendWatch> response_send_watches;
 
     //! Watched streams whose END_STREAM frame was serialized in the current sendPendingData() collection pass
@@ -1310,6 +1354,13 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
+    //! the error code of the GOAWAY frame of a connection error that the session sent, or -1 if it sent none
+    int64_t goaway_error_sent = -1;
+    //! the number of HTTP/2 error messages logged for the connection (see takeErrorLogSlot()); changed with m held
+    mutable unsigned error_frames_logged = 0;
+    //! true once a GOAWAY frame was sent or received: before it, nghttp2 always wants to read, so isSessionDone()
+    //! reads only this flag
+    std::atomic<bool> goaway_exchanged{false};
     //! true once startDrain() was called; set under m, read without it by isDraining()
     std::atomic<bool> draining{false};
     int32_t last_stream_id = 0;
@@ -1326,31 +1377,40 @@ private:
                    reinterpret_cast<const uint8_t*>(src) + len),
               end_stream(end_stream) {}
     };
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, BodyData> pending_body_data;
 
     //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> stream_send_limits;
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> stream_refused_len;
     //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
     //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! the bytes that the connection has taken on all its streams, which never decreases (qore#7280)
     uint64_t conn_taken_total = 0;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
     //! The latest pong of a stream whose send buffer was full, buffered when the buffer falls under its limit;
     //! erased with the stream (issue #5900)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::vector<uint8_t>> pending_pongs;
 
     //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int32_t> close_frame_streams;
 
     //! The records of the close frames of the WebSocket streams (getWebSocketCloseRecord()), kept for the
     //! session's life, as a stream context can be created after its stream ended (#6077)
-    std::unordered_map<int32_t, WebSocketCloseRecordRef> ws_close_records;
+    // an ordered map: it keeps a record of each WebSocket stream of the session, whose stream IDs the peer chooses
+    // (qore#7750)
+    std::map<int32_t, WebSocketCloseRecordRef> ws_close_records;
 
     //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
     /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),
@@ -1370,12 +1430,14 @@ private:
         so a long-lived session does not keep one for every stream the peer
         reset.  Mirrors @ref QuicSession::peer_reset_streams_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
 
     //! the streams that the application has reset whose RST_STREAM nghttp2 has not sent yet: stream ID -> error code
     /** Their send state was released by releaseResetStream(); an entry is removed when nghttp2 closes the stream
         (onStreamCloseCallback()) (qore#7532)
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint32_t> app_reset_unsent_streams;
 
 #ifdef DEBUG
@@ -1417,6 +1479,7 @@ private:
         //! Error from nghttp2_submit_trailer() failure in data provider callback
         int trailer_submit_error = 0;
     };
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
 
     DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
@@ -1438,6 +1501,7 @@ private:
         uint64_t provided = 0;
     };
     //! The body rules of the streamed responses, by stream; erased when the stream closes
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamedResponseRule> streamed_response_rules;
 
     //! Checks a server response's header block against the body rules; returns -1 with an exception if it is refused
@@ -1517,6 +1581,7 @@ private:
     DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
         ExceptionSink* xsink);
 
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! the minimum send rate of the connection's pumped bodies, across its streams (qore#7280)

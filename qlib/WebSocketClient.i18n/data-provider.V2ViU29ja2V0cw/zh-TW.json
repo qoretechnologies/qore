@@ -16,7 +16,7 @@
           "message": "傳送與接收 WebSocket 訊息"
         },
         "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.display_name": {
-          "source": "WebSocket Message Received",
+          "source": "WebSocket message received",
           "message": "已接收 WebSocket 訊息"
         },
         "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.short_desc": {
@@ -28,7 +28,7 @@
           "message": "從 WebSocket 伺服器接收 WebSocket 訊息；對 WebSocket 訊息做出反應"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.display_name": {
-          "source": "Send WebSocket Message",
+          "source": "Send WebSocket message",
           "message": "傳送 WebSocket 訊息"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "要傳送的資料；將根據序列化選項進行序列化"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.display_name": {
-          "source": "Send Raw WebSocket Message",
+          "source": "Send raw WebSocket message",
           "message": "傳送原始 WebSocket 訊息"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
-          "source": "List Addresses",
+          "source": "List addresses",
           "message": "Lister les adresses"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Récupérer une liste paginée d'adresses ou obtenir une adresse spécifique par ID."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
-          "source": "Create Address",
+          "source": "Create address",
           "message": "Créer une adresse"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Vérification ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "Obtenir l'adresse"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Adresse à récupérer"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
-          "source": "Verify Address",
+          "source": "Verify address",
           "message": "Vérifier l'adresse"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
@@ -640,7 +640,7 @@
           "message": "ID d'adresse EasyPost existant à vérifier"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
-          "source": "Create and Verify Address",
+          "source": "Create and verify address",
           "message": "Créer et vérifier une adresse"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Vérification ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Obtenir le colis"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "ID de colis EasyPost existant à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "Créer un colis"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Small Package"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "Lister les expéditions"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Récupérer une liste paginée d'expéditions. Optionnellement, récupérer par ID ou filtrer par statut d'achat."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "Créer une expédition"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Nom du transporteur (par ex. `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Obtenir l'expédition"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3724,7 +3724,7 @@
           "message": "Expédition à récupérer"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
-          "source": "Buy Shipment",
+          "source": "Buy shipment",
           "message": "Acheter l'expédition"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
@@ -3808,7 +3808,7 @@
           "message": "ID de l'expéditeur final pour l'achat"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
-          "source": "Refund Shipment",
+          "source": "Refund shipment",
           "message": "Rembourser une expédition"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "ID d'une expédition précédemment achetée à rembourser"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "Obtenir l'étiquette d'expédition"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -3884,7 +3884,7 @@
           "message": "Image PNG"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
-          "source": "Get Shipment SmartRates",
+          "source": "Get shipment SmartRates",
           "message": "Obtenir les SmartRates de l'expédition"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Expédition pour laquelle récupérer les SmartRates"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
-          "source": "Rerate Shipment",
+          "source": "Rerate shipment",
           "message": "Recalculer les tarifs d'une expédition"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
@@ -3932,7 +3932,7 @@
           "message": "Expédition dont recalculer les tarifs"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
-          "source": "Insure Shipment",
+          "source": "Insure shipment",
           "message": "Assurer l'expédition"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Montant pour lequel assurer l'expédition, sous forme de chaîne (par ex. `\"100.00\"`)"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
-          "source": "List Trackers",
+          "source": "List trackers",
           "message": "Lister les suivis"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "Récupérer une liste paginée de suivis. Filtrer éventuellement par code de suivi ou transporteur."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
-          "source": "Create Tracker",
+          "source": "Create tracker",
           "message": "Créer un suivi"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "Nom du transporteur (par ex. `USPS`, `FedEx`) ; EasyPost le détecte automatiquement s'il est omis"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "Obtenir le suivi"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "Suivi à récupérer"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
-          "source": "Delete Tracker",
+          "source": "Delete tracker",
           "message": "Supprimer le suivi"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "Suivi à supprimer"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
-          "source": "Bulk Create Trackers",
+          "source": "Bulk create trackers",
           "message": "Créer des trackers en masse"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
@@ -4112,7 +4112,7 @@
           "message": "Numéro de suivi à surveiller"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
-          "source": "List Insurance Records",
+          "source": "List insurance records",
           "message": "Lister les enregistrements d'assurance"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "Récupérer une liste paginée d'enregistrements d'assurance."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
-          "source": "Create Insurance",
+          "source": "Create insurance",
           "message": "Créer une assurance"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
@@ -4568,7 +4568,7 @@
           "message": "Référence fournie par l'appelant"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
-          "source": "Get Insurance",
+          "source": "Get insurance",
           "message": "Obtenir l'assurance"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "Enregistrement d'assurance à récupérer"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
-          "source": "Refund Insurance",
+          "source": "Refund insurance",
           "message": "Rembourser une assurance"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
@@ -4616,7 +4616,7 @@
           "message": "ID de l'assurance à rembourser"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
-          "source": "List Pickups",
+          "source": "List pickups",
           "message": "Lister les enlèvements"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
@@ -4628,7 +4628,7 @@
           "message": "Récupérer une liste paginée d'enlèvements."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
-          "source": "Create Pickup",
+          "source": "Create pickup",
           "message": "Créer un ramassage"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Identifiants de compte de transporteur à utiliser pour l'évaluation tarifaire du ramassage"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
-          "source": "Get Pickup",
+          "source": "Get pickup",
           "message": "Obtenir le ramassage"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Ramassage à récupérer"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
-          "source": "Buy Pickup",
+          "source": "Buy pickup",
           "message": "Acheter le ramassage"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "Code de service de ramassage renvoyé dans `pickup_rates`"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
-          "source": "Cancel Pickup",
+          "source": "Cancel pickup",
           "message": "Annuler l'enlèvement"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "Enlèvement à annuler"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Obtenir la commande"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "Commande à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Créer une commande"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -7568,7 +7568,7 @@
           "message": "Nom du transporteur"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
-          "source": "Buy Order",
+          "source": "Buy order",
           "message": "Acheter la commande"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Code de service du transporteur"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Get Customs Info",
+          "source": "Get customs info",
           "message": "Obtenir les informations douanières"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7640,7 +7640,7 @@
           "message": "ID des informations douanières à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Create Customs Info",
+          "source": "Create customs info",
           "message": "Créer des informations douanières"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "Texte libre de déclaration en douane"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Get Customs Item",
+          "source": "Get customs item",
           "message": "Obtenir l'article de douane"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "Article de douane à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Create Customs Item",
+          "source": "Create customs item",
           "message": "Créer un article douanier"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -8140,7 +8140,7 @@
           "message": "Identifiant optionnel imprimé sur les formulaires douaniers"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Lister les remboursements"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -8152,7 +8152,7 @@
           "message": "Récupérer une liste paginée de remboursements."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "Créer un remboursement"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "Liste des numéros de suivi à rembourser"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get Refund",
+          "source": "Get refund",
           "message": "Obtenir le remboursement"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -8212,7 +8212,7 @@
           "message": "Remboursement à récupérer"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Lister les lots"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -8224,7 +8224,7 @@
           "message": "Récupérer une liste paginée de lots."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Créer un lot"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -8272,7 +8272,7 @@
           "message": "Référence fournie par l'appelant"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Obtenir le lot"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "Lot à récupérer"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
-          "source": "Add Shipments to Batch",
+          "source": "Add shipments to batch",
           "message": "Ajouter des expéditions au lot"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "ID de l'objet référencé"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
-          "source": "Remove Shipments from Batch",
+          "source": "Remove shipments from batch",
           "message": "Supprimer des expéditions du lot"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "ID de l'objet référencé"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
-          "source": "Buy Batch",
+          "source": "Buy batch",
           "message": "Acheter le lot"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
@@ -8416,7 +8416,7 @@
           "message": "Lot à acheter (acheter les étiquettes pour toutes les expéditions)"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
-          "source": "Get Batch Label",
+          "source": "Get batch label",
           "message": "Obtenir l'étiquette de lot"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
@@ -8464,7 +8464,7 @@
           "message": "Eltron EPL2"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
-          "source": "Generate Batch Scan Form",
+          "source": "Generate batch scan form",
           "message": "Générer le formulaire de numérisation de lot"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "Lot pour lequel générer un formulaire de numérisation"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Lister les webhooks"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -8500,7 +8500,7 @@
           "message": "Récupérer tous les webhooks configurés."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Obtenir le webhook"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "Webhook à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Créer un webhook"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -8596,7 +8596,7 @@
           "message": "Valeur de l'en-tête"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Mettre à jour le webhook"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "Valeur de l'en-tête"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Supprimer le webhook"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Webhook à supprimer"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Lister les événements"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
@@ -8704,7 +8704,7 @@
           "message": "Récupérer une liste paginée d'événements de remise de webhook."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Obtenir un événement"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "Événement à récupérer"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
-          "source": "List Event Payloads",
+          "source": "List event payloads",
           "message": "Lister les charges utiles d'événement"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "Événement pour lequel lister les charges utiles"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
-          "source": "Get Event Payload",
+          "source": "Get event payload",
           "message": "Obtenir la charge utile de l'événement"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
@@ -8788,7 +8788,7 @@
           "message": "Charge utile à récupérer"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Carrier Accounts",
+          "source": "List carrier accounts",
           "message": "Lister les comptes de transporteur"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
@@ -8800,7 +8800,7 @@
           "message": "Récupérer tous les comptes de transporteur configurés sur le compte EasyPost."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Get Carrier Account",
+          "source": "Get carrier account",
           "message": "Obtenir le compte de transporteur"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8824,7 +8824,7 @@
           "message": "Compte de transporteur à récupérer"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Create Carrier Account",
+          "source": "Create carrier account",
           "message": "Créer un compte de transporteur"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8896,7 +8896,7 @@
           "message": "Hachage des identifiants spécifiques au transporteur pour l'environnement de test. Même structure que `credentials` - sélectionnez un `type` pour remplir ce champ avec le schéma spécifique du transporteur."
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Update Carrier Account",
+          "source": "Update carrier account",
           "message": "Mettre à jour le compte de transporteur"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8968,7 +8968,7 @@
           "message": "Nouveaux identifiants de test. Même schéma que `credentials`."
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Delete Carrier Account",
+          "source": "Delete carrier account",
           "message": "Supprimer le compte de transporteur"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8992,7 +8992,7 @@
           "message": "Compte de transporteur à supprimer"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
-          "source": "On Tracker Created",
+          "source": "On tracker created",
           "message": "Suivi créé"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
@@ -9004,7 +9004,7 @@
           "message": "Se déclenche lorsqu'un nouveau suivi est créé (événement de webhook `tracker.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
-          "source": "On Tracker Updated",
+          "source": "On tracker updated",
           "message": "Suivi mis à jour"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
@@ -9016,7 +9016,7 @@
           "message": "Se déclenche lorsque le statut d'un suivi change (événement de webhook `tracker.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
-          "source": "On Batch Created",
+          "source": "On batch created",
           "message": "Lorsqu'un lot est créé"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
@@ -9028,7 +9028,7 @@
           "message": "Se déclenche lorsqu'un nouveau lot est créé (événement de webhook `batch.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
-          "source": "On Batch Updated",
+          "source": "On batch updated",
           "message": "Lorsqu'un lot est mis à jour"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "Se déclenche lorsqu'un lot est mis à jour (événement de webhook `batch.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
-          "source": "On Insurance Purchased",
+          "source": "On insurance purchased",
           "message": "Lorsqu'une assurance est achetée"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "Se déclenche lorsqu'une assurance est achetée (événement de webhook `insurance.purchased`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
-          "source": "On Refund Successful",
+          "source": "On refund successful",
           "message": "Remboursement réussi"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
@@ -9064,7 +9064,7 @@
           "message": "Se déclenche lorsqu'un remboursement est réussi (événement de webhook `refund.successful`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "On Shipment Invoice Created",
+          "source": "On shipment invoice created",
           "message": "Facture d'expédition créée"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "Se déclenche lorsqu'une facture d'expédition est créée (événement de webhook `shipment.invoice.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
-          "source": "On Payment Completed",
+          "source": "On payment completed",
           "message": "Paiement effectué"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
@@ -9088,7 +9088,7 @@
           "message": "Se déclenche lorsqu'un paiement est effectué (événement de webhook `payment.completed`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "On Payment Failed",
+          "source": "On payment failed",
           "message": "Échec du paiement"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "Se déclenche lorsqu'un paiement échoue (événement de webhook `payment.failed`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "On Payment Created",
+          "source": "On payment created",
           "message": "Paiement créé"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -9112,7 +9112,7 @@
           "message": "Se déclenche lorsqu'un compte bancaire ou une carte de crédit est débité avec succès (événement de webhook `payment.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
-          "source": "On Insurance Cancelled",
+          "source": "On insurance cancelled",
           "message": "Lorsqu'une assurance est annulée"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "Se déclenche lorsqu'une assurance autonome est annulée ou que son achat échoue (événement de webhook `insurance.cancelled`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
-          "source": "On Shipment Invoice Updated",
+          "source": "On shipment invoice updated",
           "message": "Lorsqu'une facture d'expédition est mise à jour"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
@@ -9136,7 +9136,7 @@
           "message": "Se déclenche lorsqu'une facture d'expédition est ajustée et mise à jour (événement de webhook `shipment.invoice.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
-          "source": "On Scan Form Created",
+          "source": "On scan form created",
           "message": "Lorsqu'un formulaire de scan est créé"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "Se déclenche lorsque la création initiale d'un objet ScanForm est terminée (événement de webhook `scan_form.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
-          "source": "On Scan Form Updated",
+          "source": "On scan form updated",
           "message": "Lorsqu'un formulaire de scan est mis à jour"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
-          "source": "Find Customers",
+          "source": "Find customers",
           "message": "Rechercher des clients"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
@@ -404,7 +404,7 @@
           "message": "Filtrer les clients par leur nom de famille"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtenir le client"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -424,7 +424,7 @@
           "message": "L'ID du client"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Créer un client"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Nom de famille du client"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Mettre à jour le client"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Prénom du client"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Supprimer le client"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Le client à supprimer"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "Find Subscriptions",
+          "source": "Find subscriptions",
           "message": "Rechercher des abonnements"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Filtrer les abonnements par le client auquel ils appartiennent"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Obtenir l'abonnement"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
@@ -600,7 +600,7 @@
           "message": "L'ID de l'abonnement"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Subscription",
+          "source": "Create subscription",
           "message": "Créer un abonnement"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -620,7 +620,7 @@
           "message": "Le client pour l'abonnement"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Update Subscription",
+          "source": "Update subscription",
           "message": "Mettre à jour l'abonnement"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -640,7 +640,7 @@
           "message": "L'abonnement à mettre à jour"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Delete Subscription",
+          "source": "Delete subscription",
           "message": "Supprimer l'abonnement"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -660,7 +660,7 @@
           "message": "L'abonnement à supprimer"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
-          "source": "Find Invoices",
+          "source": "Find invoices",
           "message": "Rechercher des factures"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
@@ -708,7 +708,7 @@
           "message": "En attente"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Obtenir la facture"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -728,7 +728,7 @@
           "message": "L'ID de la facture"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Créer une facture"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Le client pour la facture"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Mettre à jour la facture"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "La facture à mettre à jour"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Supprimer la facture"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -788,7 +788,7 @@
           "message": "La facture à supprimer"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
-          "source": "Collect Invoice Payment",
+          "source": "Collect invoice payment",
           "message": "Prélever le paiement de la facture"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "Montant du paiement en centimes"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
-          "source": "Record Invoice Payment",
+          "source": "Record invoice payment",
           "message": "Enregistrer le paiement d'une facture"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "Montant du paiement en centimes"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
-          "source": "Refund Invoice",
+          "source": "Refund invoice",
           "message": "Rembourser la facture"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Montant du remboursement en centimes"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
-          "source": "Get Invoice Link",
+          "source": "Get invoice link",
           "message": "Obtenir le lien de la facture"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
@@ -892,7 +892,7 @@
           "message": "La facture pour laquelle obtenir le lien PDF"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
-          "source": "Find Coupons",
+          "source": "Find coupons",
           "message": "Rechercher des coupons"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Quantité offerte"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "Obtenir le coupon"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "L'ID du coupon"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "Créer un coupon"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Période limitée"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "Mettre à jour le coupon"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Nom d'affichage du coupon"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "Supprimer le coupon"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Le coupon à supprimer"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
-          "source": "Find Promotional Credits",
+          "source": "Find promotional credits",
           "message": "Rechercher des crédits promotionnels"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Définir"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Get Promotional Credit",
+          "source": "Get promotional credit",
           "message": "Obtenir le crédit promotionnel"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "L'ID du crédit promotionnel"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Add Promotional Credit",
+          "source": "Add promotional credit",
           "message": "Ajouter un crédit promotionnel"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Devise des crédits"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Deduct Promotional Credit",
+          "source": "Deduct promotional credit",
           "message": "Déduire un crédit promotionnel"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Devise des crédits"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Set Promotional Credit",
+          "source": "Set promotional credit",
           "message": "Définir le crédit promotionnel"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Devise des crédits"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Obtenir la transaction"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "La transaction à récupérer"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Client créé"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Se déclenche lorsqu'un nouveau client est créé dans Chargebee. Fournit les détails de l'événement client."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
-          "source": "Any Event (Instant)",
+          "source": "Any event (instant)",
           "message": "Tout événement (instantané)"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Se déclenche lors de tout événement dans Chargebee. Fournit les détails complets de l'événement pour tous les types d'événements."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
-          "source": "Invoice Generated",
+          "source": "Invoice generated",
           "message": "Facture générée"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Se déclenche lorsqu'une nouvelle facture est générée dans Chargebee. Fournit les détails de l'événement de facture."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Abonnement créé"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {

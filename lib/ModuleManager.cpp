@@ -2633,13 +2633,13 @@ thread_local const QoreModuleLoadFrame* untrusted_aot_init_frame = nullptr;
 //! Marks the initialization of a compiled module whose own load is not library code while it runs, also when it raises
 class QoreUntrustedAOTInitHelper {
 public:
-    DLLLOCAL QoreUntrustedAOTInitHelper(bool active) : prev(untrusted_aot_init_frame) {
+    QoreUntrustedAOTInitHelper(bool active) : prev(untrusted_aot_init_frame) {
         if (active) {
             untrusted_aot_init_frame = module_load_frame;
         }
     }
 
-    DLLLOCAL ~QoreUntrustedAOTInitHelper() {
+    ~QoreUntrustedAOTInitHelper() {
         untrusted_aot_init_frame = prev;
     }
 

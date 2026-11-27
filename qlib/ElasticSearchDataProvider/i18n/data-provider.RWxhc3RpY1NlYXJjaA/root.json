@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
-          "message": "Search Index"
+          "source": "Search index",
+          "message": "Search index"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
           "source": "Search for data in an ElasticSearch index",
@@ -352,8 +352,8 @@
           "message": "Search for data in an ElasticSearch index"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
-          "message": "Add Document"
+          "source": "Add document",
+          "message": "Add document"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
           "source": "Add a document to ElasticSearch",
@@ -364,8 +364,8 @@
           "message": "Add a document to / ingest data in ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
-          "message": "Bulk Operations"
+          "source": "Bulk operations",
+          "message": "Bulk operations"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
           "source": "Perform bulk document operations",
@@ -376,8 +376,8 @@
           "message": "Perform bulk index, create, update, and delete operations on ElasticSearch documents"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
-          "message": "Scroll Search"
+          "source": "Scroll search",
+          "message": "Scroll search"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {
           "source": "Search with scroll API for large result sets",

@@ -3065,15 +3065,34 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
 void QoreCallDispatcher::waitForIdle() {
     // the callback that the calling thread runs as a worker of this dispatcher, if any, is not waited for: it ends
-    // only when this call has returned (qore#6508)
-    int own = counted_callback_dispatcher == this ? 1 : 0;
+    // only when this call has returned (qore#6508); nor, by a callback, are the callbacks of the other workers that
+    // wait here, for the same reason: two callbacks that flush at the same time (as the destructors of two servers
+    // that run in callbacks) waited for each other forever (qore#7509).  A caller that is not a callback (a program's
+    // thread) waits for all of them: a callback that flushes goes on running once its flush has returned
+    bool own = counted_callback_dispatcher == this;
     AutoLocker al(m);
+    if (own) {
+        ++callback_idle_waiters;
+        // the callbacks that wait here no longer wait for this one
+        idle_cond.broadcast();
+    }
+    // the count is restored on every exit, with the lock held (the guard is destroyed before the AutoLocker)
+    struct CallbackIdleWaiterGuard {
+        int& count;
+        bool own;
+        ~CallbackIdleWaiterGuard() {
+            if (own) {
+                --count;
+            }
+        }
+    } waiter_guard{callback_idle_waiters, own};
     while (true) {
         // A callback (non-continuePoll) still being processed by a worker?
         // active_continue_poll is a subset of active_processing; subtract it
         // so a blocked continuePoll() (OAuth2 refresh / happy-eyeballs) does
         // not wedge this barrier — see active_continue_poll in the header.
-        if ((active_processing - active_continue_poll - own) > 0) {
+        // A callback does not wait for the callbacks that wait here (itself included), which are a subset of the rest.
+        if ((active_processing - active_continue_poll - (own ? callback_idle_waiters : 0)) > 0) {
             idleWait();
             continue;
         }
@@ -3091,9 +3110,40 @@ void QoreCallDispatcher::waitForIdle() {
         }
         idleWait();
     }
+#ifdef DEBUG
+    // test hook: a flush in a callback that may return is held while it still counts as a callback that waits here
+    // (see dbgHoldCallbackFlush())
+    if (own) {
+        while (dbg_hold_callback_flush) {
+            ++dbg_callback_flushes_held;
+            dbg_callback_flush_cond.broadcast();
+            dbg_callback_flush_cond.wait(m);
+            --dbg_callback_flushes_held;
+        }
+    }
+#endif
 }
 
 #ifdef DEBUG
+void QoreCallDispatcher::dbgHoldCallbackFlush(bool hold) {
+    AutoLocker al(m);
+    dbg_hold_callback_flush = hold;
+    dbg_callback_flush_cond.broadcast();
+}
+
+bool QoreCallDispatcher::dbgWaitCallbackFlushHeld(int timeout_ms) {
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    AutoLocker al(m);
+    while (!dbg_callback_flushes_held) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        dbg_callback_flush_cond.wait(m, static_cast<int>(remaining_ms));
+    }
+    return true;
+}
+
 bool QoreCallDispatcher::dbgWaitAllIdle(int timeout_ms) {
     int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
     AutoLocker al(m);
@@ -12655,6 +12705,29 @@ void AsyncIoControllerPriv::dbgSetOwnerShuttingDown(const std::string& owner, bo
     } else {
         cd->clearOwnerShuttingDown(owner);
     }
+}
+
+void AsyncIoControllerPriv::dbgHoldCallbackFlush(bool hold) {
+    ensureCallDispatcher();
+    // as in flushCallbacks(): the dispatcher's lock is not taken with the controller's held
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    if (cd) {
+        cd->dbgHoldCallbackFlush(hold);
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitCallbackFlushHeld(int timeout_ms) {
+    ensureCallDispatcher();
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    return cd ? cd->dbgWaitCallbackFlushHeld(timeout_ms) : false;
 }
 
 bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
