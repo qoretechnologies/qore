@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakStoreDestructorExceptionTest
+
+#! The exception of the destructor of a value that a weak or opaque store replaces is caught by the store's handler (qore#7629)
+/** A store with the weak (\c :=) or opaque (\c \@=) assignment operator through a reference released the value that
+    it replaced after the IR interpreter's exception check of the store, so an exception that the value's destructor
+    raised escaped the store's \c try block and was raised from a later instruction.  The worker
+    (\c weak-store-destructor-exception/weak-store-destructor-exception.q) stores through references with \c :=,
+    \c \@= and \c = (for comparison) in functions, a closure and a loop, and prints the exception caught by each
+    store's own handler and the target after the store; every mode, the IR tier and qcc executables must print the
+    output of the AST interpreter (\c weak-store-destructor-exception.expected).
+*/
+class WeakStoreDestructorExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-store-destructor-exception";
+        string worker = dir + "/weak-store-destructor-exception.q";
+    }
+
+    constructor() : QUnit::Test("WeakStoreDestructorExceptionTest", "1.0", \ARGV) {
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/weak-store-destructor-exception.expected");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), ExecModeHarness::run(sprintf("%s -b --enable-debug --exec-mode=%s %s",
+                quote(qore_bin), mode, quote(worker))), mode);
+        }
+    }
+
+    testIrTier() {
+        assertEq(expected(), ExecModeHarness::run_ir_tier(sprintf("%s -b --enable-debug --exec-mode=tiered %s",
+            quote(qore_bin), quote(worker))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string found = backquote("command -v qcc 2>/dev/null");
+            trim found;
+            if (!found) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = found;
+        }
+        TmpDir tmp("weakstoredtor");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/worker-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", quote(qcc_bin), opt, quote(exe), quote(worker)),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the worker: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", quote(exe)), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

@@ -119,7 +119,9 @@ Krb5Context::constructor() {
 }
 
 //! Returns the default Kerberos realm from the local configuration
-/** @throw KRB5-REALM-ERROR if no default realm is configured on this host
+/** @throw KRB5-REALM-ERROR if no default realm is configured on this host, or the calling code is restricted from
+    external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"; qore#6844)
 */
 string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
     return ctx->getDefaultRealm(xsink);
@@ -129,7 +131,9 @@ string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
 /** For code that a sandbox governs, \c "MEMORY:default", a cache of its isolation domain (see
     @ref krb5sec_cache_isolation)
 
-    @throw KRB5-CACHE-ERROR if no default credential cache name is available
+    @throw KRB5-CACHE-ERROR if no default credential cache name is available (also, for code that a sandbox
+    does not govern, if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
     @throw KRB5-SANDBOX-ERROR the code belongs to more than one isolation domain or is not known
 */
 string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
@@ -140,7 +144,9 @@ string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
 /** For code that a sandbox governs, \c "MEMORY:default", a keytab of its isolation domain (see
     @ref krb5sec_cache_isolation)
 
-    @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+    @throw KRB5-KEYTAB-ERROR if no default keytab name is available (also, for code that a sandbox
+    does not govern, if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
     @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
     not known, or the keytab belongs to other code
 */
@@ -153,7 +159,9 @@ string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
     @ref krb5sec_cache_isolation)
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
-    @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened
+    @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened (also, for code that a sandbox
+    does not govern, if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
     @throw KRB5-SANDBOX-ERROR the code belongs to more than one isolation domain or is not known
 */
 Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
@@ -198,7 +206,9 @@ Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
     @ref krb5sec_cache_isolation)
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
-    @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened
+    @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened (also, for code that a sandbox
+    does not govern, if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
     @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
     not known, or the keytab belongs to other code
 */
@@ -394,9 +404,9 @@ Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreK
 //! Lists all credential caches known to the Kerberos credential cache collection
 /** Enumerates credential caches using the MIT krb5 credential cache
     collection API. This discovers caches across all configured backends
-    (FILE, MEMORY, KCM, KEYRING, etc.).  For code that a sandbox governs, the
-    caches that are not file based of other code are not listed (see
-    @ref krb5sec_cache_isolation).
+    (FILE, MEMORY, KCM, KEYRING, etc.).  The collection is the host's: it is
+    not listed for code that may not receive the host's secrets, also not for
+    code that a sandbox governs (qore#6844).
 
     Caches whose principal cannot be read are included with
     \c has_principal set to \c False and \c principal set to \c NOTHING.
@@ -404,7 +414,8 @@ Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreK
     @return a list of @ref Qore::Krb5::Krb5CredentialCacheInfo entries
 
     @throw KRB5-CACHE-ERROR if the collection cursor cannot be opened
-    or enumeration fails
+    or enumeration fails (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 list<hash<Krb5CredentialCacheInfo>> Krb5Context::listCredentialCaches() {
     return ctx->listCredentialCaches(xsink);

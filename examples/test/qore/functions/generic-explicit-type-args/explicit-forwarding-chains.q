@@ -35,3 +35,15 @@ printf("%s\n", q.gm(5).fullType());
 printf("%s\n", q.gm<float>(5.0).fullType());
 # the same generic function called with different types in turn
 printf("%s %s %s\n", a(1).fullType(), a("s").fullType(), a(1).fullType());
+
+# A partially explicit call still infers the other arguments, including their defaults.
+string sub pair<A, B = string>(*A a, *B b) {
+    return sprintf("%s %s", (new list<A>()).fullType(), (new list<B>()).fullType());
+}
+string sub observed(auto first, auto second) { return pair(first, second); }
+string sub partial(auto first, auto second) { return pair<int>(first, second); }
+printf("%s\n", observed(1, 2.5));
+printf("%s\n", observed("x", 1));
+printf("%s\n", observed(1, NOTHING));
+printf("%s\n", partial(5, "y"));
+printf("%s\n", partial(6, NOTHING));

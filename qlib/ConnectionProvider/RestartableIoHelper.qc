@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore RestartableIoHelper class definition
 
-/*  RestartableIoHelper.qc Copyright 2016 - 2025 Qore Technologies, s.r.o.
+/*  RestartableIoHelper.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -111,8 +111,8 @@ public class RestartableIoHelper inherits LoggerWrapper {
 
     #! Returns the logger interface for logging
     private *LoggerInterface getLogger() {
-        # no logger for sandboxed callers, which do not get the process-wide logger (qore#6746): their recovery
-        # messages are not logged
+        # no logger for sandboxed callers (qore#6746) and callers restricted from external information (qore#7597),
+        # which do not get the process-wide logger: their recovery messages are not logged
         return DataProvider::getGlobalLogger();
     }
 }

@@ -104,6 +104,10 @@ public class MemcachedConnection inherits ConnectionProvider::AbstractConnection
         @return a MemcachedDataProvider object
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the data provider is created from the connection's members and its constructor options: for restricted code
+        # that was lent the connection, from its creator's members, and with options that cannot change the target
+        # (qore#7327)
+        getLentDataProviderSource(constructor_options);
         return new MemcachedDataProvider({"memcached": get()} + constructor_options);
     }
 

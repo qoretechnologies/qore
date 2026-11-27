@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads and object destruction in another thread
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReadCollectedSetMemberTest
+
+#! Tests values of a recursive set read through a weak reference after the collection of the set was decided
+/** The child script (weak-read-collected-set-member/weak-read-collected-set-member.q) holds the thread whose
+    dereference has decided to collect a recursive set with debug hooks, and reads another object of the set, or a
+    closure of the set, through a weak reference meanwhile; the value keeps the whole set (issue #7556): a method of
+    the object calls the object whose dereference decided, and a closure reads the variable that it captured, once the
+    collecting thread has completed, and the set is collected when the value is released.  The collecting
+    dereference is that of an object and that of a closure-bound variable.  It runs in every execution mode and on
+    the IR tier, against the same expected output; with a release build, which has no debug hooks, the script reports
+    that it has nothing to test.
+*/
+class WeakReadCollectedSetMemberTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        #! the seconds after which a run of the child script is killed
+        const ChildTimeout = 240;
+
+        #! the output of the child script with a release build
+        const ReleaseOutput = "the debug hooks are only in debug builds\n";
+
+        #! the output of the child script with a debug build
+        const Expected = "member object: destroyed while held: 0
+member object: call returned \"T\"
+member object: destroyed: 2
+member closure: destroyed while held: 0
+member closure: call returned \"T\"
+member closure: destroyed: 1
+closure var object: destroyed while held: 0
+closure var object: call returned \"TC\"
+closure var object: destroyed: 1
+closure var closure: destroyed while held: 0
+closure var closure: call returned \"H\"
+closure var closure: destroyed: 1
+";
+    }
+
+    constructor() : QUnit::Test("WeakReadCollectedSetMember", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/weak-read-collected-set-member/weak-read-collected-set-member.q";
+
+        addTestCase("values of a set read after its collection was decided, in every mode", \testModes());
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s%s -b --enable-debug --exec-mode=%s %s",
+            libqore_dir, libqore_dir, libqore_dir, bound(), qore_bin, mode, script);
+    }
+
+    #! returns a command prefix that kills the child script if it has not ended in ChildTimeout seconds
+    /** The child script bounds its own waits; this ends it, and every thread it started, also if a thread of it does
+        not end
+    */
+    private string bound() {
+        foreach string t in (("timeout", "gtimeout")) {
+            if (!system(sprintf("command -v %s > /dev/null 2>&1", t))) {
+                return sprintf("%s -s KILL %d ", t, ChildTimeout);
+            }
+        }
+        return "";
+    }
+
+    private string expected() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? Expected : ReleaseOutput;
+    }
+
+    testModes() {
+        string exp = expected();
+        # with a release build, the script calls no function, which tiered execution would compile
+        ExecModeHarness::NativeCheck check = Option::HAVE_LIBRARY_DEBUGGING
+            ? ExecModeHarness::NativeCheck::JitAndTiered
+            : ExecModeHarness::NativeCheck::Jit;
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+            ExecModeHarness::check_loader_warnings(r);
+            ExecModeHarness::check_native(r, check);
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command("tiered"), NOTHING,
+            ExecModeHarness::IRTierEnv);
+        ExecModeHarness::check_loader_warnings(r);
+        ExecModeHarness::check_ir_tier(r);
+        assertEq(0, r.rc, sprintf("%s: exit code: %s", ExecModeHarness::IRTierName, r.out));
+        assertEq(exp, r.out, ExecModeHarness::IRTierName);
+    }
+}

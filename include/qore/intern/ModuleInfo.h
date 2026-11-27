@@ -160,6 +160,12 @@ struct ChildModuleInfo {
     std::string err;
     //! the description of the child's own load exception with CMS_FAILED, the reason with CMS_SKIPPED
     std::string desc;
+    //! true if \a desc can be given to code restricted from external information (qore#7507)
+    /** The description of a failure is that of the child's load exception, built for the code that requested the load
+        (see QoreRestrictedMessageScopeHelper): it names files of the host unless that code was restricted from external
+        information, and it is then not given to code with this restriction, which reads the module hash later
+    */
+    bool desc_restricted_safe = true;
 
     DLLLOCAL ChildModuleInfo(const char* spec, const char* name) : spec(spec), name(name) {
     }
@@ -531,6 +537,15 @@ public:
 //! Returns true if the innermost module load in progress in this thread is library code (see
 //! QoreModuleManager::isTrustedModulePath())
 DLLLOCAL bool qore_module_load_is_trusted();
+
+//! returns true if a module that is not library code is being loaded on this thread: one that code which is not
+//! trusted chose outside of the module path (its own files are read with the file-system policy of that code)
+DLLLOCAL bool qore_module_load_is_untrusted();
+
+//! returns the canonical directory of library code of a library module that is being loaded into a container of
+//! code that is not trusted on this thread, or nullptr (qore#7518)
+DLLLOCAL const char* qore_module_load_library_root();
+
 
 class QoreModuleDefContextHelper : public QoreModuleDefContext {
 protected:
@@ -1273,6 +1288,17 @@ public:
         modules a module requires, directly or not, in the depfile of an AOT module (see qore_aot_deps.h).
     */
     DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
+
+    //! Orders the given modules so that each comes before the modules that it requires (qore#7432, qore#7445)
+    /** The order of the teardown of the data of the module Programs (delUser()): a module requires the modules that it
+        requires directly or through other modules, user modules (loaded from source or AOT modules) and binary
+        modules alike, also those recorded at run time (getTeardownModuleDependencies()).  A cycle is broken at one of
+        its own modules, never at a module that it requires, preferring one that no module left requires statically
+        (qore#7451); other ties are resolved in the given order.  Takes the mutex.
+
+        @param names the names of the modules, reordered
+    */
+    DLLLOCAL void orderModulesDependentsFirst(std::vector<std::string>& names);
 
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge

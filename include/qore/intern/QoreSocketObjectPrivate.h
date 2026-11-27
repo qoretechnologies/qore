@@ -340,6 +340,9 @@ public:
     */
     DLLLOCAL void releaseHttp2StreamBodyConsumer(int32_t stream_id);
 
+    //! Tells the HTTP/2 session that the consumer of a CONNECT tunnel has been ended (qore#7770)
+    DLLLOCAL void releaseHttp2TunnelConsumer(int32_t stream_id);
+
     //! Releases the records that a QUIC session of the socket keeps for a stream that the caller is done with
     /** See QuicSession::releaseStream(); a no-op if the socket has no such session.  Not for an I/O thread that
         holds the lock of the socket.
@@ -377,6 +380,12 @@ public:
 
     //! Returns true if a drain of the socket's HTTP/2 session was started and it has no open stream and nothing to write
     DLLLOCAL bool isHttp2DrainComplete() const;
+
+    //! Returns true if the HTTP/2 session wants to neither read nor write and has nothing left to send (qore#7770)
+    DLLLOCAL bool isHttp2SessionDone() const;
+
+    //! Returns the error code of the GOAWAY frame of a connection error that the HTTP/2 session sent, or -1
+    DLLLOCAL int64_t getHttp2GoawayErrorSent() const;
 
     //! Returns true if the server drains the socket's connection (see Socket::drainHttpConnection())
     DLLLOCAL bool isHttpDraining() const;

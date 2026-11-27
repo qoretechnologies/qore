@@ -50,7 +50,7 @@ freed hash push: PUSH-ERROR
 freed hash pop: POP-ERROR
 freed hash shift: SHIFT-ERROR
 freed hash splice: EXTRACT-ERROR
-shared copy: a [1, 2, 3] b [1, 2, 3]
+shared copy: a [1, 2, 3] b [1, 2]
 self entry shift: the list 2
 self entry pop: the list [1, 2]
 cycle destroyed: ["o", "typed", "cycle"]

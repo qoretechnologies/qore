@@ -1,0 +1,394 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH2StreamLimit.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/2 connections over TLS sockets, their stream limit and the server's closing of them
+#
+# qoretechnologies/qore#7770: the server ends its half of an HTTP/2 WebSocket stream (RFC 8441) after its WebSocket
+# connection has closed; a client that then closes its WebSocket without ending its half of the stream (Chromium)
+# left the stream half-closed for the life of the connection, where it counted against the server's
+# SETTINGS_MAX_CONCURRENT_STREAMS, until the client opened a stream over the limit and the server ended the whole
+# connection with GOAWAY(PROTOCOL_ERROR), with all its other requests and WebSocket connections.  The server now
+# resets such a stream with RST_STREAM(NO_ERROR) (RFC 9113 section 8.1), and logs every HTTP/2 error frame that it
+# sends or receives and every invalid frame that it receives.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+
+%exec-class HttpServerH2StreamLimitTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! HTTP/2 error codes (RFC 9113 section 7)
+const NoError = 0;
+const ProtocolError = 1;
+
+#! Collects the messages that the server logs
+class LogCapture inherits LoggerAppenderWithLayout {
+    public {
+        #! every message logged
+        list<string> lines = ();
+        #! a lock for lines
+        Mutex m();
+        #! signalled with each message
+        Condition cond();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%p %m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(m);
+            lines += params;
+            cond.broadcast();
+        }
+    }
+
+    #! Forgets the messages logged before
+    clear() {
+        AutoLock al(m);
+        lines = ();
+    }
+
+    #! Returns the number of messages that match the pattern
+    int count(string pattern) {
+        AutoLock al(m);
+        return (select lines, $1.regex(pattern)).size();
+    }
+
+    #! Returns the first message that matches the pattern, waiting for it at most the hang guard
+    *string waitFor(string pattern) {
+        date deadline = now_us() + HangGuard;
+        AutoLock al(m);
+        while (True) {
+            foreach string line in (lines) {
+                if (line.regex(pattern)) {
+                    return line;
+                }
+            }
+            date left = deadline - now_us();
+            if (left <= 0s || cond.wait(m, left)) {
+                return;
+            }
+        }
+    }
+}
+
+#! Echoes each message
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! The WebSocket handler of the test's server
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+#! Answers each request; a request for /block waits until the test releases it
+class PlainHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! counts down each blocked request that arrived
+        Counter arrived();
+        #! releases the blocked requests
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block") {
+            arrived.dec();
+            release.waitForZero(HangGuard);
+        }
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerH2StreamLimitTest inherits QUnit::Test {
+    private {
+        LogCapture capture();
+        Logger logger;
+    }
+
+    constructor() : QUnit::Test("HttpServerH2StreamLimit", "1.0") {
+        addTestCase("HTTP/2: a WebSocket stream that the client does not end does not use up the stream limit",
+            \testWebSocketStreamsFreed());
+        addTestCase("HTTP/2: a stream over the limit ends the connection, which the server closes and logs",
+            \testStreamOverLimit());
+        addTestCase("HTTP/2: the server logs the stream errors it sends and the invalid frames it receives",
+            \testStreamErrorLogged());
+        addTestCase("HTTP/2: the error messages of a connection are bounded", \testErrorLogBound());
+        addTestCase("HTTP/2: after the client's GOAWAY, a connection that carried WebSocket streams is closed",
+            \testClientGoawayAfterWebSockets());
+        addTestCase("HTTP/2: an open WebSocket connection receives messages after its dispatch has returned",
+            \testOpenWebSocketMessages());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("h2-limit", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Starts a TLS server with the WebSocket handler on /ws and the plain handler on every other path
+    private int startServer(HttpServer hs, PlainHandler plain) {
+        # each case matches only its own messages
+        capture.clear();
+        hs.setHandler("ws", "/ws", NOTHING, new EchoHandler({"logger": logger}));
+        hs.setDefaultHandler("plain", plain);
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        hs.waitForAsyncIo();
+        return port;
+    }
+
+    #! Reads the server's settings: a PING is acknowledged after the server's SETTINGS frame
+    private int readStreamLimit(RawHttp2Client c) {
+        assertTrue(c.ping(HangGuard), "the server answers a PING");
+        assertEq(Type::Int, c.max_concurrent_streams.type(), "the server limits the concurrent streams");
+        return c.max_concurrent_streams;
+    }
+
+    #! Opens a WebSocket stream and closes the WebSocket as Chromium does: the stream is not ended by the client
+    /** @return the stream ID, or NOTHING if the server ended the connection
+    */
+    private *int openAndCloseWebSocket(RawHttp2Client c) {
+        int stream_id = c.connectWebSocket("/ws");
+        *hash<auto> resp = c.readUntil(bool sub (hash<auto> f) {
+            return f.type == FrameGoaway
+                || (f.stream_id == stream_id && (f.type == FrameHeaders || f.type == FrameRstStream));
+        }, HangGuard);
+        if (!resp || resp.type == FrameGoaway) {
+            return;
+        }
+        assertEq(FrameHeaders, resp.type, "the server answers the extended CONNECT request");
+        assertEq(0, resp.flags & FlagEndStream, "the WebSocket connection is open");
+        # a masked close frame, without END_STREAM
+        c.sendData(stream_id, ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, HangGuard);
+        assertTrue(r.ended || exists r.reset_code, "the server ends the stream after answering the close frame");
+        return stream_id;
+    }
+
+    #! More WebSocket connections than the stream limit, each closed without ending the client's half of its stream
+    testWebSocketStreamsFreed() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        int limit = readStreamLimit(c);
+        list<int> ws_streams = ();
+        for (int i = 0; i < limit + 5; ++i) {
+            *int stream_id = openAndCloseWebSocket(c);
+            if (!exists stream_id) {
+                break;
+            }
+            ws_streams += stream_id;
+        }
+        assertNothing(c.goaway_code, sprintf("the server did not end the connection (GOAWAY: %y %y)",
+            c.goaway_code, c.goaway_debug));
+        assertEq(limit + 5, ws_streams.size(), "every WebSocket connection was opened and closed");
+
+        # the stream limit is not used up
+        int get_id = c.get("/plain");
+        hash<RawHttp2StreamResult> r = c.readStream(get_id, HangGuard);
+        assertTrue(r.ended, "a request after the WebSocket connections is answered");
+        assertNothing(r.goaway_code, "the connection was not ended");
+
+        # every frame that the server sent before it acknowledges the PING has been read then
+        assertTrue(c.ping(HangGuard), "the connection is open");
+        foreach int stream_id in (ws_streams) {
+            assertEq(NoError, c.resets{stream_id}, sprintf("the server reset WebSocket stream %d with NO_ERROR "
+                "(RFC 9113 section 8.1)", stream_id));
+        }
+    }
+
+    #! A client that opens more streams than the limit gets GOAWAY(PROTOCOL_ERROR); the server closes and logs it
+    testStreamOverLimit() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        int limit = readStreamLimit(c);
+        on_exit plain.release.dec();
+        for (int i = 0; i < limit; ++i) {
+            plain.arrived.inc();
+            c.get("/block");
+        }
+        assertEq(0, plain.arrived.waitForZero(HangGuard), "the streams up to the limit are served");
+        int over_id = c.get("/block");
+
+        # the server ends the connection and closes it: SOCKET-TIMEOUT here means that it left it open
+        c.waitClosed(HangGuard);
+        assertEq(ProtocolError, c.goaway_code, "the server ends the connection with GOAWAY(PROTOCOL_ERROR)");
+        assertEq(over_id - 2, c.goaway_last_stream_id, "the last stream processed is the one before");
+
+        *string line = capture.waitFor(sprintf("^WARN .*GOAWAY sent to 127\\.0\\.0\\.1:[0-9]+: PROTOCOL_ERROR "
+            "\\(1\\), last stream %d: request HEADERS: max concurrent streams exceeded", over_id - 2));
+        assertEq(Type::String, line.type(), "the server logs the GOAWAY frame it sends");
+        line = capture.waitFor(sprintf("^WARN .*invalid HEADERS frame received from 127\\.0\\.0\\.1:[0-9]+ on stream "
+            "%d", over_id));
+        assertEq(Type::String, line.type(), "the server logs the frame that caused it");
+    }
+
+    #! A request with an invalid header is reset with RST_STREAM(PROTOCOL_ERROR), which the server logs
+    testStreamErrorLogged() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        readStreamLimit(c);
+        # a field name with an upper-case letter is malformed (RFC 9113 section 8.2.1): a stream error
+        int stream_id = c.getWithHeader("/plain", "X-Bad", "1");
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, HangGuard);
+        assertEq(ProtocolError, r.reset_code, "the stream is reset with PROTOCOL_ERROR");
+        assertNothing(r.goaway_code, "the connection is not ended");
+
+        *string line = capture.waitFor(sprintf("^WARN .*RST_STREAM sent to 127\\.0\\.0\\.1:[0-9]+ on stream %d: "
+            "PROTOCOL_ERROR \\(1\\)", stream_id));
+        assertEq(Type::String, line.type(), "the server logs the RST_STREAM frame it sends");
+        line = capture.waitFor(sprintf("^WARN .*invalid HEADERS frame received from 127\\.0\\.0\\.1:[0-9]+ on stream "
+            "%d", stream_id));
+        assertEq(Type::String, line.type(), "the server logs the frame that caused it");
+
+        # the connection still serves requests
+        int get_id = c.get("/plain");
+        r = c.readStream(get_id, HangGuard);
+        assertTrue(r.ended, "a request after the reset is answered");
+    }
+    #! A client that keeps sending malformed requests gets them reset, and makes the server log a bounded number of
+    #! messages
+    testErrorLogBound() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        readStreamLimit(c);
+        list<int> ids = ();
+        for (int i = 0; i < 20; ++i) {
+            int stream_id = c.getWithHeader("/plain", "X-Bad", "1");
+            assertEq(ProtocolError, c.readStream(stream_id, HangGuard).reset_code, "each malformed request is reset");
+            ids += stream_id;
+        }
+        *string last_line = capture.waitFor("^WARN .*16 HTTP/2 error frames logged for the connection with "
+            "127\\.0\\.0\\.1:[0-9]+; further ones are not logged");
+        assertEq(Type::String, last_line.type(), "the server says that it logs no more");
+        # every frame that the server sent and every message it logged for them are done when it answers the PING
+        assertTrue(c.ping(HangGuard), "the connection is open");
+        assertEq(16, capture.count("^WARN .*HTTP/2 server: (RST_STREAM sent|invalid HEADERS frame received)"),
+            "16 error messages are logged for the connection");
+        assertEq(1, capture.count("further ones are not logged"), "the last message is logged once");
+        int get_id = c.get("/plain");
+        assertTrue(c.readStream(get_id, HangGuard).ended, "the connection still serves requests");
+    }
+    #! A client that sends GOAWAY after WebSocket connections gets its connection closed by the server
+    /** The server closes the connection once its session keeps no record of a stream: the record of each WebSocket
+        stream was kept for the life of the session before, so the connection was never closed
+    */
+    testClientGoawayAfterWebSockets() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        readStreamLimit(c);
+        for (int i = 0; i < 10; ++i) {
+            assertEq(Type::Int, openAndCloseWebSocket(c).type(), "the WebSocket connection was opened and closed");
+        }
+        assertTrue(c.ping(HangGuard), "the connection is open");
+        c.sendGoaway();
+        # SOCKET-TIMEOUT here means that the server left the connection open
+        c.waitClosed(HangGuard);
+        assertNothing(c.goaway_code ?? NOTHING, "the server did not end the connection with an error");
+    }
+    #! Returns the text of the next unfragmented WebSocket text frame that the server sends on the stream
+    private *string readTextFrame(RawHttp2Client c, int stream_id) {
+        binary p;
+        while (True) {
+            *hash<auto> f = c.readUntil(bool sub (hash<auto> f) {
+                return f.stream_id == stream_id && (f.type == FrameData || f.type == FrameRstStream);
+            }, HangGuard);
+            if (!f || f.type != FrameData) {
+                return;
+            }
+            p = f.payload;
+            # a heartbeat PING of the server (0x89) is not a message
+            if (p.size() && p[0] != 0x89) {
+                break;
+            }
+        }
+        # the server's frames are not masked; the messages of this test are shorter than 126 bytes
+        assertEq(0x81, p[0], "the server sends a final text frame");
+        assertEq(p.size() - 2, p[1], "the frame is the whole DATA frame");
+        return p.substr(2).toString();
+    }
+
+    #! A WebSocket connection that stays open: its messages are received while its handler serves it
+    /** The dispatch of the extended CONNECT request returns while the WebSocket connection is still open; the
+        session must keep receiving the data of the tunnel after that
+    */
+    testOpenWebSocketMessages() {
+        PlainHandler plain();
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, plain);
+
+        RawHttp2Client c(port);
+        on_exit c.close();
+        readStreamLimit(c);
+        int stream_id = c.connectWebSocket("/ws");
+        *hash<auto> resp = c.readUntil(bool sub (hash<auto> f) {
+            return f.stream_id == stream_id && (f.type == FrameHeaders || f.type == FrameRstStream);
+        }, HangGuard);
+        assertEq(FrameHeaders, resp.type, "the server accepts the WebSocket connection");
+        for (int i = 0; i < 50; ++i) {
+            string msg = sprintf("message %d", i);
+            c.sendData(stream_id, ws_encode_message(msg, WSOP_Text, True));
+            assertEq(msg, readTextFrame(c, stream_id), sprintf("message %d is echoed", i));
+        }
+        c.sendData(stream_id, ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, HangGuard);
+        assertTrue(r.ended || exists r.reset_code, "the server ends the stream after answering the close frame");
+    }
+}

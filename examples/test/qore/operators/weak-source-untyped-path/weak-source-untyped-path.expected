@@ -1,0 +1,26 @@
+member, run 1: the literal as assigned: {z: {v: {t: {}}, v2: {}}}
+member, run 1: through the path: {run: 1}
+member, run 2: the literal as assigned: {z: {v: {t: {}}, v2: {}}}
+member, run 2: through the path: {run: 2}
+local, run 1: the literal as assigned: {z: {v: {}}}
+local, run 1: through the path: {run: 1}
+local, run 2: the literal as assigned: {z: {v: {}}}
+local, run 2: through the path: {run: 2}
+ancestor then container: through the path: {marker: 1}, through w2: {marker: 1}
+slice: {}
+memberGate: {}
+string index: b
+missing: null
+untyped object root: through the path: 1
+reads once: "anything", key evaluations: 2, memberGate calls: 1
+reads once after a slice: 1, key evaluations: 1
+private member in the class, run 1: as assigned: {q: {}}
+private member in the class, run 1: through the path: 1
+private member in the class, run 2: as assigned: {q: {}}
+private member in the class, run 2: through the path: 1
+private member outside the class: PRIVATE-MEMBER: 'p' is a private member of class 'Priv'
+deleted weak object: OBJECT-ALREADY-DELETED
+string index -1: c
+binary index 1: 11
+member of a string index: null
+done

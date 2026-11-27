@@ -36,7 +36,9 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <new>
 #include <vector>
 #include <pthread.h>
@@ -447,3 +449,65 @@ void QoreForkCounter::child() noexcept {
     // held by this thread since prepare(): released, as QoreForkThreadLock::child() releases its lock
     qore_counter_ops(c).releaseAfterFork();
 }
+
+namespace {
+//! One lock per cache line, so that objects hashed to different stripes do not share one
+struct alignas(64) CacheStripe {
+    std::mutex m;
+};
+
+//! the number of stripes of the locks of the per-object caches of generics; a power of two
+constexpr size_t CacheStripeCount = 64;
+
+//! the locks of the caches of generics that belong to one object each; see qore_cache_stripe_lock()
+CacheStripe cache_stripes[CacheStripeCount];
+
+//! the fork handler of the cache stripes, which are leaf locks never held together (see QoreForkHandlers.h)
+class CacheStripesForkHandler : public QoreForkHandler {
+public:
+    CacheStripesForkHandler() : QoreForkHandler(QFLR_CACHE_STRIPES, "cache_stripes") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (CacheStripe& s : cache_stripes) {
+                s.m.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (size_t i = CacheStripeCount; i; --i) {
+                cache_stripes[i - 1].m.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        // a stripe that this thread acquired in prepare() is released first, so that the release is seen (by
+        // ThreadSanitizer); then every stripe is created again, as one that another thread held is held forever
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (size_t i = CacheStripeCount; i; --i) {
+                cache_stripes[i - 1].m.unlock();
+            }
+        }
+        for (CacheStripe& s : cache_stripes) {
+            new (&s.m) std::mutex();
+        }
+    }
+};
+
+CacheStripesForkHandler cache_stripes_fork_handler;
+}
+
+std::mutex& qore_cache_stripe_lock(const void* obj) {
+    // the low bits only reflect the allocation granularity
+    return cache_stripes[(reinterpret_cast<uintptr_t>(obj) >> 6) % CacheStripeCount].m;
+}
+
+#ifdef DEBUG
+std::mutex* qore_cache_stripe_dbg_lock(size_t i) {
+    return i < CacheStripeCount ? &cache_stripes[i].m : nullptr;
+}
+#endif
