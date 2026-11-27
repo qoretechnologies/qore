@@ -6447,6 +6447,25 @@ bool qore_socket_object_private::isHttp2StreamRemoteClosedForAsyncPoll(int32_t s
     return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
 
+qore_socket_object_private::Http2StreamEnd qore_socket_object_private::getHttp2StreamEndForAsyncPoll(
+        int32_t stream_id) const {
+    if (!qore_on_async_io_thread()) {
+        return so->isHttp2StreamRemoteClosed(stream_id) || so->isHttp2StreamClosed(stream_id)
+            ? Http2StreamEnd::Ended
+            : Http2StreamEnd::Open;
+    }
+
+    // the session is taken once: the reference keeps the session, and the state of its streams, when the socket is
+    // closed on another thread meanwhile (issue #7699)
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    if (!h2) {
+        return Http2StreamEnd::ConnectionClosed;
+    }
+    return h2->isStreamRemoteClosed(stream_id) || h2->isStreamClosed(stream_id)
+        ? Http2StreamEnd::Ended
+        : Http2StreamEnd::Open;
+}
+
 bool qore_socket_object_private::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamBodyTooLarge(stream_id);

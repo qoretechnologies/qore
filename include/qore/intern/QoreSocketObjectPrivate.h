@@ -280,6 +280,27 @@ public:
     //! Internal async-poll helper for HTTP/2 remote stream closed checks.
     DLLLOCAL bool isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const;
 
+    //! How an HTTP/2 stream stands for the drain of its stream queue (see getHttp2StreamEndForAsyncPoll())
+    enum class Http2StreamEnd {
+        //! the stream is open
+        Open,
+        //! the peer ended the stream (END_STREAM), or the stream was closed (reset, GOAWAY, or its record released)
+        Ended,
+        //! the socket has no HTTP/2 session: its connection was closed (aborted or failed); how the stream would have
+        //! ended is not known
+        ConnectionClosed,
+    };
+
+    //! Async-poll helper: how an HTTP/2 stream stands, from one look at the socket's HTTP/2 session
+    /** The session is taken once, so a connection closed meanwhile on another thread (an abort) is reported either
+        as ConnectionClosed or with the state of the stream in the session taken; a stream is never reported as
+        ended because the session was gone when it was looked at (issue #7699).
+
+        Off the async I/O thread, the state of the stream is read as with isHttp2StreamRemoteClosedForAsyncPoll() and
+        isHttp2StreamClosedForAsyncPoll(), which do not tell a closed connection from an ended stream.
+    */
+    DLLLOCAL Http2StreamEnd getHttp2StreamEndForAsyncPoll(int32_t stream_id) const;
+
     //! Internal async-poll helper: True if the request body of an HTTP/2 server stream exceeded the maximum size
     DLLLOCAL bool isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const;
 

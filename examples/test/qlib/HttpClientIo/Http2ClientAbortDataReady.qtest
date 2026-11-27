@@ -35,6 +35,13 @@
     thread notified it first.  The streams now fail with the error that the connection recorded first.  Each round
     checks that the stream's listener is told of the abort and that the request fails with it while the server
     sends data.
+
+    The drain of the stream queues on the I/O thread, when the abort closed the connection after it took a stream's
+    data and before it checked whether the stream had ended, found no HTTP/2 session and took the stream for one that
+    the server had ended: it pushed the end of the stream (NOTHING) to the listener's queue and removed the
+    registration, and the abort then had no registration left to push the failure of the connection to.  A stream
+    of a closed connection now ends with the failure of the connection in the drain as well; the last test case
+    holds the drain there with a debug hook (dbg_h2_client_hold_drain_stream_end()) while the abort runs.
 */
 
 %modern
@@ -86,6 +93,8 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("Http2ClientAbortDataReady", "1.0") {
         addTestCase("abort() from Qore code while the I/O thread reads the connection", \testAbortWhileReading());
+        addTestCase("abort() while the I/O thread checks the end of a stream with a listener",
+            \testAbortAtDrainStreamEnd());
         set_return_value(main());
     }
 
@@ -115,8 +124,24 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
         }
     }
 
+    #! Aborts a connection while the I/O thread checks the end of a stream with a listener, deterministically
+    /** The drain of the stream queues is held, after it took the stream's data, before it checks whether the stream
+        has ended, and goes on when the abort has closed the connection: the stream's listener is told of the failure
+        of the connection, not of an end of the stream, which the server never sent.
+    */
+    testAbortAtDrainStreamEnd() {
+        # the debug hook is registered only in debug builds
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("debug build required for dbg_h2_client_hold_drain_stream_end()");
+        }
+        abortRound(sprintf("https://127.0.0.1:%d/", port), "drain held at the end check", True);
+    }
+
     #! Aborts a connection from this thread while the server sends data on a stream with a listener
-    private abortRound(string url, string label) {
+    /** @param hold_drain_at_end hold the I/O thread's drain of the stream queues at the check of the stream's end
+        until the abort has closed the connection (a debug build's hook)
+    */
+    private abortRound(string url, string label, *bool hold_drain_at_end) {
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h2",
             "accept_all_certs": True,
@@ -160,6 +185,19 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
         # the listener's queue has data: the I/O thread reads the stream for it
         auto v = q.get(HangGuard);
         assertEq(Type::Binary, v.type(), label + ": the listener gets the stream's data");
+
+        # the hook is disarmed in every case, which also lets a drain that it holds go on (the hook is registered only
+        # in debug builds, and the test case that holds the drain is skipped in other builds)
+        on_exit if (hold_drain_at_end && Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_h2_client_hold_drain_stream_end", False);
+        }
+        if (hold_drain_at_end && Option::HAVE_LIBRARY_DEBUGGING) {
+            # the next drain takes the stream's data and waits before it checks whether the stream has ended; the
+            # server sends data until the connection is gone, so a drain follows
+            call_function("dbg_h2_client_hold_drain_stream_end", True);
+            assertTrue(call_function("dbg_h2_client_wait_drain_stream_end_held", HangGuard.durationMilliseconds()),
+                label + ": the drain is held at the check of the stream's end");
+        }
 
         # the abort runs here, not on the I/O thread
         conn.getPollOperation().abort();
