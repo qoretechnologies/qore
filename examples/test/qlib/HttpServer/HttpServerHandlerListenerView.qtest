@@ -302,6 +302,25 @@ AbstractHttpRequestHandler sub get_helper_handler(code h) {
     return new TenantHelperProbe();
 }
 
+# runs the helper of another tenant in a thread of this tenant: the sandboxes of both tenants govern the helper's code
+class TenantThreadHelperProbe inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string key = hdr.\"x-key\";
+        Queue q();
+        background sub () {
+            q.push(try_it(sub () { helper(listener, \"close\", key); }) + \"/\"
+                + try_it(sub () { helper(listener, \"remove\", \"1000000\"); }));
+        }();
+        return makeResponse(200, q.get(30s));
+    }
+}
+
+AbstractHttpRequestHandler sub get_thread_helper_handler(code h) {
+    helper = h;
+    return new TenantThreadHelperProbe();
+}
+
 class TenantRemoveProbe inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
@@ -571,6 +590,8 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
             \anyOwnerTest());
         addTestCase("a tenant cannot use the variants without a handler through a trusted Program's code",
             \anyOwnerHelperTest());
+        addTestCase("code of two tenants together cannot use the variants without a handler",
+            \anyOwnerMixedTenantTest());
         addTestCase("HTTP/1.1: a handler cannot take over the requests of its own connection", \ownKeyTest(), "1.1");
         addTestCase("HTTP/2: a handler cannot take over the requests of its own connection", \ownKeyTest(), "2.0");
         addTestCase("HTTP/3: a handler cannot take over the requests of its own connection", \ownKeyTest(), "3.0");
@@ -982,6 +1003,57 @@ code sub get_helper() {
                 assertTrue(owner.closed.get(HangGuard), kind[0] + ": the owner closes its own session");
             }
         }
+    }
+
+    #! Code that the sandboxes of two tenants govern together belongs to no tenant: the variants are refused (qore#7816)
+    /** A closure of tenant B's Program runs in a thread that tenant A's code starts, so that
+        SandboxManager::getCallerIsolationDomain() raises SANDBOX-ISOLATION-ERROR; both tenants' sandboxes trust their
+        code, so only the check of the isolation domain refuses it
+    */
+    anyOwnerMixedTenantTest() {
+        Program b(PO_NO_CHILD_PO_RESTRICTIONS);
+        b.parse("%modern
+%requires HttpServerUtil
+code sub get_helper() {
+    return sub (HttpListenerInterface l, string op, string arg) {
+        if (op == \"close\") {
+            l.signalPersistentSessionClose(arg);
+        } else {
+            l.removeExternalDedicatedSocket(arg);
+        }
+    };
+}
+", "tenant-b");
+        SandboxManager bsm();
+        bsm.setNetworkDefaultPolicy(True);
+        bsm.setUncontrolledApiPolicy(True);
+        bsm.setIsolationDomain("tenant-b");
+        b.setSandboxManager(bsm);
+
+        Program tenant = getTenantProgram(TenantPersistSource, True, "tenant-a");
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_thread_helper_handler",
+            b.callFunction("get_helper"));
+        PersistHandler owner();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("p", "/p", NOTHING, owner);
+        server.setHandler("t", "/t", NOTHING, probe);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string url = "http://127.0.0.1:" + port;
+
+        HTTPClient oc({"url": url, "timeout": 10s});
+        oc.connect();
+        on_exit oc.disconnect();
+        string key = oc.send(NOTHING, "GET", "/p/start")."x-key";
+
+        HTTPClient tc({"url": url, "timeout": 10s});
+        assertEq("HTTPLISTENER-ACCESS-ERROR/HTTPLISTENER-ACCESS-ERROR",
+            tc.send(NOTHING, "GET", "/t/x", {"x-key": key}).body, "the variants without a handler");
+        assertEq("continued", oc.send(NOTHING, "GET", "/p/continue").body, "the owner's session goes on");
+        assertEq(0, owner.closed.size(), "the session was not closed");
+        owner.kept.signalPersistentSessionClose(key, owner);
+        assertTrue(owner.closed.get(HangGuard), "the owner closes its own session");
     }
 
     #! The variants without a handler follow the owner rule (qore#7816)
