@@ -109,6 +109,10 @@ class CallRefNonCallableSideEffectArgsTest inherits QUnit::Test {
         string exe = tmp.path + "/side-effect-args";
         string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, probe));
         assertTrue(is_file(exe), out);
-        assertEq(getAst(), backquote(sprintf("%s %s -b 2>&1", env, exe)));
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", opt, res.out));
+        # the output on stdout followed by the output on stderr, as of the execution modes (ExecModeHarness::run()):
+        # the module loader's warnings and the native compilation trace are not output of the program
+        assertEq(getAst(), res.out, opt);
     }
 }

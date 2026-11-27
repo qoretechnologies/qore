@@ -616,7 +616,20 @@ class AOTSmokeBase inherits QUnit::Test {
         };
     }
 
-    #! Run a script with the interpreter and return stdout
+    #! runs a qcc executable and checks its exit status (0) and its output
+    /** @param cmd the command that runs the executable; it must not redirect stderr
+        @param expected the output expected on stdout; stderr must be empty apart from the module loader's warnings and
+        the native compilation trace, which are not output of the program (see ExecModeHarness::run_command())
+        @param label the label of the assertions
+    */
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(cmd);
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", label, res.out));
+        assertEq(expected, res.stdout, label);
+        assertEq("", res.stderr, label + ": stderr");
+    }
+
+    #! runs a script with the interpreter and returns its output on stdout and stderr together
     private string runInterpreted(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -4440,8 +4453,8 @@ c.run();
         backquote(compile_cmd);
 
         assertTrue(is_file(paths.out), "AOT default output file was created");
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out));
-        assertEq("default\n", out, "default output binary runs correctly");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out), "default\n",
+            "default output binary runs correctly");
     }
 
     # ---- Phase 7b: Pointer Indirection Tests ----
@@ -5523,10 +5536,9 @@ printf(\"sum: %d\\n\", sum);
             jsig =~ s/\n$//;
             extra_ld = ":" + dirname(jsig);
         }
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s%s %s -b 2>&1",
-            libqore_dir, extra_ld, paths.out));
         string interp_out = runInterpreted(code);
-        assertEq(interp_out, run_out, "static binary output matches interpreter");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s%s %s -b", libqore_dir, extra_ld, paths.out), interp_out,
+            "static binary output matches interpreter");
 
         # Verify the binary does not dynamically link libqore.so
         string ldd_out = backquote(sprintf("ldd %s 2>&1", paths.out));
@@ -9810,8 +9822,8 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertFalse(info =~ /source-size:/, "AOT build info records no source size: " + info);
         assertFalse(info =~ /source-mtime-ns:/, "AOT build info records no source mtime: " + info);
 
-        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out);
-        assertEq("hello\n", backquote(run_cmd), "The binary runs");
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+        checkExecutable(run_cmd, "hello\n", "The binary runs");
 
         # Changing or removing the source does not change what the binary runs
         {
@@ -9819,9 +9831,9 @@ printf(\"%d %d\\n\", h.x, h.y);
             f.open(paths.src, O_WRONLY | O_TRUNC);
             f.write("printf(\"modified\\n\");\n");
         }
-        assertEq("hello\n", backquote(run_cmd), "The binary runs after its source changed");
+        checkExecutable(run_cmd, "hello\n", "The binary runs after its source changed");
         unlink(paths.src);
-        assertEq("hello\n", backquote(run_cmd), "The binary runs without its source");
+        checkExecutable(run_cmd, "hello\n", "The binary runs without its source");
     }
 
     testModuleBytesIndependentOfSourceMtime() {
