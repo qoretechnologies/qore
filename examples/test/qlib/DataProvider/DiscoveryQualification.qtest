@@ -25,6 +25,8 @@ public class DiscoveryQualificationTest inherits QUnit::Test {
         addTestCase("inventory providers follow module transaction rollback",
             \inventoryProviderRollbackTest());
         addTestCase("inventory provider failures are structured", \inventoryProviderFailureTest());
+        addTestCase("inventory provider failures are returned without a discovery session",
+            \inventoryProviderFailuresWithoutSessionTest());
         addTestCase("invalid inventory provider output is structured",
             \invalidInventoryProviderTest());
         addTestCase("inventory mutations invalidate collected snapshots", \inventoryMutationTest());
@@ -442,6 +444,57 @@ public class DiscoveryQualificationTest inherits QUnit::Test {
             assertEq("inventory", failures[0].phase);
             assertEq("TEST-INVENTORY-ERROR", failures[0].error);
         }
+    }
+
+    #! getDiscoveryInventoryFailures() returns the failure of each provider that raises an exception (qore#7788)
+    /** That a provider registered while a module loads belongs to the module is checked by
+        I18nSourceTreeRegistration.qtest, which loads the module in a process of its own
+    */
+    private inventoryProviderFailuresWithoutSessionTest() {
+        string suffix = get_random_string(8);
+        string broken = "test-broken-inventory-" + suffix;
+        string invalid = "test-invalid-inventory-" + suffix;
+        string healthy = "test-healthy-inventory-" + suffix;
+        int healthy_calls = 0;
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider(broken,
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                throw "TEST-INVENTORY-ERROR", "the provider source cannot be read", {"source": "missing.js"};
+            });
+        on_exit DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(broken);
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider(invalid,
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return (<DataProviderDiscoveryExpectedIdentityInfo>{"app": ""},);
+            });
+        on_exit DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(invalid);
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider(healthy,
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                ++healthy_calls;
+                return (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "test-healthy-app-" + suffix},);
+            });
+        on_exit DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(healthy);
+
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        list<hash<DataProviderDiscoveryFailureInfo>> failures = map $1,
+            DataProviderActionCatalog::getDiscoveryInventoryFailures(), $1.identity.find(suffix) >= 0;
+        assertEq(1, healthy_calls, "every provider is called");
+        assertEq(revision, DataProviderActionCatalog::getCatalogRevision(), "reading the failures changes nothing");
+        assertEq((broken, invalid), (map $1.identity, failures), "a failure for each failing provider, by name");
+        assertEq(<DataProviderDiscoveryFailureInfo>{
+            "generation": 0,
+            "kind": "source",
+            "phase": "inventory",
+            "identity": broken,
+            "error": "TEST-INVENTORY-ERROR",
+            "description": "the provider source cannot be read",
+            "argument": {"source": "missing.js"},
+        }, failures[0], "a provider registered outside a module load belongs to no module");
+        assertEq("INVALID-ARGUMENT-ERROR", failures[1].error, "invalid output is a failure of its provider");
+
+        # a provider that no longer fails has no failure
+        DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(broken);
+        DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(invalid);
+        assertEq((), (map $1, DataProviderActionCatalog::getDiscoveryInventoryFailures(),
+            $1.identity.find(suffix) >= 0));
     }
 
     private invalidInventoryProviderTest() {
