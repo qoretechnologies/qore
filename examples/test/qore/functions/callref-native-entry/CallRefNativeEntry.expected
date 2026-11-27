@@ -15,9 +15,9 @@ mixed native kinds: 18
 boxed and native: x:4:True
 int as auto: 248
 float as auto: 65528.0
-exception: CALLREF-ERROR: x=3 (arg 3) at thrower:211 <- call_int:347
-nested exception: CALLREF-ERROR: x=4 (arg 4) at thrower:136 <- deep:211 <- call_int:355
-native exception: DIVISION-BY-ZERO at divide:211 <- call_int:363
+exception: CALLREF-ERROR: x=3 (arg 3) at thrower:211 <- call_int:349
+nested exception: CALLREF-ERROR: x=4 (arg 4) at thrower:136 <- deep:211 <- call_int:357
+native exception: DIVISION-BY-ZERO at divide:211 <- call_int:365
 native exception in a loop: 67
 native exceptions in a try block: -49
 recursion in the callee: 1000 STACK-LIMIT-EXCEEDED

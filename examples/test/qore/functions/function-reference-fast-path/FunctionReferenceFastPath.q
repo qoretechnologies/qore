@@ -229,14 +229,16 @@ int fast_calls_before = 0;
 int native_calls_before = 0;
 
 sub case_start() {
-    if (report) {
+    # the report reads the counts of a debug build of the library
+    if (report && Option::HAVE_LIBRARY_DEBUGGING) {
         fast_calls_before = call_function("dbg_function_reference_fast_calls");
         native_calls_before = call_function("dbg_function_reference_native_calls");
     }
 }
 
 sub case_end(string name, string result) {
-    if (report) {
+    # the report reads the counts of a debug build of the library
+    if (report && Option::HAVE_LIBRARY_DEBUGGING) {
         int calls = call_function("dbg_function_reference_fast_calls") - fast_calls_before;
         # a call through the call-reference entry of an AOT function (qore#5578) takes the fast path of AOT code
         int native = call_function("dbg_function_reference_native_calls") - native_calls_before;

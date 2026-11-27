@@ -63,9 +63,13 @@ int sub run_loop(code f, int n, int k, *Queue ready, *Queue go) {
 }
 
 int sub fast_calls() {
-    # the calls through call-reference entries of AOT code (qore#5578) skip the generic call path too
-    return report ? call_function("dbg_function_reference_fast_calls")
-        + call_function("dbg_function_reference_native_calls") : 0;
+    # the calls through call-reference entries of AOT code (qore#5578) skip the generic call path too; the report
+    # reads the counts of a debug build of the library
+    if (report && Option::HAVE_LIBRARY_DEBUGGING) {
+        return call_function("dbg_function_reference_fast_calls")
+            + call_function("dbg_function_reference_native_calls");
+    }
+    return 0;
 }
 
 # the warm-up compiles the code in the compiled execution modes and takes the facts of the fast path
