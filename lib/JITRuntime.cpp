@@ -784,6 +784,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_call_ref_value_float_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_float_v1) },
     { "qore_rt_call_ref_value_bool_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_bool_v1) },
     { "qore_rt_call_ref_boxed_v1", reinterpret_cast<void*>(&qore_rt_call_ref_boxed_v1) },
+    { "qore_rt_call_ref_boxed_given_v1", reinterpret_cast<void*>(&qore_rt_call_ref_boxed_given_v1) },
     { "qore_rt_leave_cross_module_call", reinterpret_cast<void*>(&qore_rt_leave_cross_module_call) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
     { "qore_rt_date_kind_matches", reinterpret_cast<void*>(&qore_rt_date_kind_matches) },
@@ -16556,10 +16557,16 @@ enum class QoreCallRefOutcome {
     entry
     @param raw_result set to the raw value that the entry returned, if it was called
     @param ret_kind set to the return kind of the entry, if it was called
+    @param arg_cleanups the cleanup slots of the temporaries among the (NaN-boxed) arguments that the call gives to the
+    callee, or nullptr: the entry borrows them, and they are released in the frame of the call once the entry returns,
+    unless an exception is pending (the caller releases them then, after the value of the call), as a direct call of
+    a native fast entry releases them (QoreIRToLLVM::endAotInlineCallFrame()); a refused call releases them as the
+    runtime's fast call through a reference does; a miss leaves them to the generic call path
 */
 template <typename KindsOk, typename Fill>
 static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_bits, int nargs,
-        KindsOk&& kinds_ok, Fill&& fill, uint64_t& raw_result, uint8_t& ret_kind, ExceptionSink* xsink) {
+        KindsOk&& kinds_ok, Fill&& fill, uint64_t& raw_result, uint8_t& ret_kind, ExceptionSink* xsink,
+        uint64_t** arg_cleanups = nullptr) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRIES");
     // the switch of every call through a reference without the generic call path disables these calls too
     static constinit QoreEnvFlag fast_calls_disabled_env("QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS");
@@ -16616,6 +16623,9 @@ static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t 
         case QoreFunctionReferenceAdmission::Miss:
             return QoreCallRefOutcome::Miss;
         case QoreFunctionReferenceAdmission::Refused:
+            if (arg_cleanups) {
+                clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+            }
             return QoreCallRefOutcome::Refused;
         case QoreFunctionReferenceAdmission::Admitted:
             break;
@@ -16653,6 +16663,10 @@ static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t 
         // the value of a call that raised is not used
         fromBits(raw_result).discard(xsink);
         raw_result = 0;
+    }
+    // the temporaries given to the call are released in its frame
+    if (arg_cleanups) {
+        qore_rt_clear_given_arg_cleanups(arg_cleanups, nargs, xsink);
     }
     return QoreCallRefOutcome::Called;
 }
@@ -16850,7 +16864,7 @@ extern "C" DLLEXPORT int qore_rt_call_ref_value_bool_v1(uint64_t ref_bits, int64
 
 //! qore_rt_call_ref_boxed_v1() for a function reference
 static QORE_INTERN_NOINLINE int qore_rt_call_ref_boxed_impl(uint64_t ref_bits, const uint64_t* args, int nargs,
-        uint64_t* result, ExceptionSink* xsink) {
+        uint64_t* result, ExceptionSink* xsink, uint64_t** arg_cleanups) {
     uint64_t raw;
     uint8_t ret_kind;
     QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, nargs,
@@ -16904,7 +16918,7 @@ static QORE_INTERN_NOINLINE int qore_rt_call_ref_boxed_impl(uint64_t ref_bits, c
                         break;
                 }
             }
-        }, raw, ret_kind, xsink);
+        }, raw, ret_kind, xsink, arg_cleanups);
     switch (rc) {
         case QoreCallRefOutcome::Miss:
             return 0;
@@ -16921,7 +16935,15 @@ static QORE_INTERN_NOINLINE int qore_rt_call_ref_boxed_impl(uint64_t ref_bits, c
 extern "C" DLLEXPORT int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs,
         uint64_t* result, ExceptionSink* xsink) {
     // any other value than a function reference takes the generic call path at once
-    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink)
+    return qore_rt_call_ref_candidate(ref_bits)
+        ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink, nullptr) : QORE_RT_CALL_REF_NOT_FUNCREF;
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_boxed_given_v1(uint64_t ref_bits, const uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, uint64_t* result, ExceptionSink* xsink) {
+    // any other value than a function reference takes the generic call path at once
+    return qore_rt_call_ref_candidate(ref_bits)
+        ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink, arg_cleanups)
         : QORE_RT_CALL_REF_NOT_FUNCREF;
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
