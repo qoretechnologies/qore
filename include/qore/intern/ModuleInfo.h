@@ -1354,6 +1354,15 @@ public:
     //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
     //! that another thread runs; returns false on timeout (qore#7232)
     DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+
+    //! Test hook (dbg_module_load_hold()): reserves \a name in the module load map as a load in progress of this
+    //! thread, which stays reserved until dbgReleaseLoad() also after the thread has ended; returns false if the name
+    //! is in the map already (#7808)
+    DLLLOCAL bool dbgHoldLoad(const char* name);
+
+    //! Test hook (dbg_module_load_release()): releases the reservation of dbgHoldLoad(), from any thread, as a load
+    //! that registered no module; returns false if \a name is not reserved as a load in progress (#7808)
+    DLLLOCAL bool dbgReleaseLoad(const char* name);
 #endif
 
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
@@ -1950,7 +1959,9 @@ enum QoreModuleRecordLock : unsigned char {
     //! while the module is parsed, as the module loader reserves the name of a module that it loads: a request for
     //! the module in its own source, or in the source of a module that it requires (a require cycle), is then
     //! satisfied by the module being compiled instead of loading its source a second time, and a load of the name
-    //! in another thread waits for the compilation to end, as for a load in progress (#7808)
+    //! in another thread waits for the compilation to end, as for a load in progress; a compilation of a name that
+    //! another thread is loading fails: the context raises \c LOAD-MODULE-ERROR, and the compile functions parse
+    //! nothing (#7808)
     QMRL_LOCK,
     //! the context of a binary module: the source of an AOT module initialized with the legacy entry point
     //! qore_aot_module_init(), which runs without the mutex, locked as with QMRL_LOCK.  No user module dependency is

@@ -1428,6 +1428,13 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     are locked so that they cannot be made less restrictive.  This is to prevent user modules from circumventing
     functional restrictions imposed by parse options.
 
+    @subsection aot_module_compile_cycles Compiling Modules That Require Themselves
+    \c qcc compiles a module as the module loader loads it: the module's name is reserved while its source is
+    parsed, so a @ref requires "%requires" of the module in its own source, or in the source of a module that it
+    requires (a require cycle), loads nothing, as when the module is loaded from source.  A compilation of a module
+    whose name another thread of the process is loading at the time fails with \c LOAD-MODULE-ERROR without
+    parsing the module, and a load of the name in another thread during a compilation waits for it to end.
+
     @subsection aot_module_runtime_identity AOT Module Runtime Compatibility
 
     The native code of an AOT-compiled module (\c "*.qmod" built by @ref qcc_tool "qcc") calls into the %Qore

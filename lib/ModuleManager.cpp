@@ -9075,6 +9075,31 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
 }
 
 #ifdef DEBUG
+bool QoreModuleManager::dbgHoldLoad(const char* name) {
+    AutoLocker al(mutex);
+    if (module_load_map.find(name) != module_load_map.end()) {
+        return false;
+    }
+    module_load_map.insert(module_load_map_t::value_type(name, ModuleLoadEntry(q_gettid())));
+    return true;
+}
+
+bool QoreModuleManager::dbgReleaseLoad(const char* name) {
+    AutoLocker al(mutex);
+    module_load_map_t::iterator i = module_load_map.find(name);
+    if (i == module_load_map.end() || i->second.state != MLS_INITIALIZING) {
+        return false;
+    }
+    i->second.state = MLS_LOADED;
+    if (module_load_waiting) {
+        module_load_cond.broadcast();
+    }
+    if (!i->second.waiters) {
+        module_load_map.erase(i);
+    }
+    return true;
+}
+
 bool QoreModuleManager::dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms) {
     AutoLocker al(mutex);
     while (true) {
