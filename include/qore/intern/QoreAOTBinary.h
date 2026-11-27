@@ -735,6 +735,9 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //!        one operand, the request (an integer constant): the run decides; the maximum opcode in the AOT header is 447
 //!      - header flag QORE_AOT_FLAG_DEBUGGING (0x0008): the code was compiled with debugging (qcc -g; qore#7676);
 //!        readers before v54 ignore it, and qcc refuses to link objects with and without it
+//!      - no other format change, but the code that a v53 compiler wrote calls other runtime entry points: images
+//!        register call-reference entries from constructor/destructor functions (qore_aot_register_callref_entries_v1()
+//!        / qore_aot_unregister_callref_entries_v1(), weak) and call qore_rt_call_ref_*_v1() (qore#5578 A1b)
 //!      - no format change of the image, but a change of the native ABI (native code must be recompiled): the
 //!        runtime helper qore_rt_coerce_nothing_return_by_type_path_aot(), which the fast entry of code that ends
 //!        without a return statement calls to apply its declared return type to the missing value, takes the
