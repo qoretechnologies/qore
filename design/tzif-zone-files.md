@@ -42,7 +42,22 @@ parsed from memory (`QoreZoneInfo::init()`):
   restricted code, named as given for other code, so that host data round-trips. For restricted code, a name that
   is not canonical (a link, a spelling) is not added to `region_aliases`; `restricted_spellings` remembers the
   canonical names of up to `MaxRestrictedSpellings` (512) such spellings (emptied when full), so restricted code
-  reads the file of a spelling again only after that. On Windows, restricted code can use only
+  reads the file of a spelling again only after that. For other code (qore#7592), `open_region_file()` also
+  returns the name of the entry that the region reaches: the path of the region's last component with links to
+  directories resolved and, on macOS, each component's stored name (`getattrlistat(ATTR_CMN_NAME, FSOPT_NOFOLLOW)`;
+  the name as given if it cannot be read); a link that is the last component is not resolved, so `UTC` and
+  `US/Eastern` are their own entries. A region that is its entry's name keeps its name as before (bounded by the
+  entries of the zoneinfo directory). A spelling (any other name: a case variant, a name through a link to a
+  directory) goes to `loadSpelling()`: it gets a zone named as given while fewer than `max_spelling_zones`
+  (`MaxSpellingZones`, 512) spellings have zones (`spelling_zones`, checked and counted in `getZone()` under the
+  lock, so concurrent loads cannot pass the limit); after that, the zone of the entry's name (errors name the
+  spelling), and `spelling_names` remembers the entry names of up to `MaxSpellingNames` (512) such spellings
+  (emptied when full) for the lookup under the read lock. As for any load of a name, a spelling over the limit that
+  reaches a file whose identity changed (a tzdata update) replaces the zone of the entry's name. Restricted code is
+  unchanged (no entry name is computed for it). Debug builds have `dbg_tz_region_cache()` and
+  `dbg_tz_set_spelling_limits()` for tests. On file systems other than macOS's, an entry's name is taken as given
+  (case variants on a case-insensitive file system there count as entries); Windows registry names are not covered.
+  On Windows, restricted code can use only
   zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names
   are at most 255 bytes, and restricted code gets the unknown-region error for any registry failure (unverified: no
   Windows build). Limits per tenant, which would let

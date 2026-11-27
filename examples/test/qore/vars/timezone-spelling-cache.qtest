@@ -1,0 +1,384 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - time zones: zoneinfo region spellings on a file system that does not distinguish the case of names
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Spellings of a time zone region (names that reach a file in the zoneinfo directory but are not the name of the entry
+# they reach: case variants on a file system that does not distinguish the case of names, names through symbolic links
+# to directories) keep their names in code that is not restricted, but only for a bounded number of spellings; further
+# spellings get the zone of the name of the entry, and their entry names are remembered in a bounded cache, so that
+# data with many spellings cannot grow the cache of zones without bound (qore#7592).  The names of entries (such as
+# "UTC") always keep their names, and restricted code keeps the canonical names of qore#7442.
+#
+# Spellings are made from the case of the letters of a region on a file system that does not distinguish case (macOS),
+# from a symbolic link to a directory in the zoneinfo directory, or, in a zoneinfo directory that the test can write to
+# (a build configured with -DZONEINFO_LOCATION=<dir>, run with QORE_TEST_ZONEINFO_ROOT=<dir>), from links that the test
+# creates; otherwise the test is skipped.  It needs a debug build of the library (dbg_tz_region_cache()).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class TimeZoneSpellingCacheTest
+
+#! a spelling of a region and the name of the entry in the zoneinfo directory that it reaches
+hashdecl TzSpelling {
+    string spelling;
+    string entry;
+}
+
+class TimeZoneSpellingCacheTest inherits QUnit::Test {
+    public {
+        #! zoneinfo directories to look for
+        const ZoneinfoDirs = ("/usr/share/zoneinfo", "/usr/lib/zoneinfo", "/usr/share/lib/zoneinfo");
+
+        #! regions whose case variants are spellings
+        const CaseRegions = ("America/Argentina/Buenos_Aires", "Pacific/Port_Moresby", "America/Indiana/Indianapolis");
+
+        #! the number of spellings that may get zones of their own above the number at the start of a case
+        const ZoneLimit = 8;
+        #! the most spellings whose entry names are remembered in a case
+        const NameLimit = 4;
+
+        #! the number of threads of the concurrent case
+        const Threads = 4;
+        #! the number of spellings that each thread loads
+        const PerThread = 12;
+
+        #! the code of a restricted Program
+        const TenantCode = "
+string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(), t.UTCOffset()); }
+";
+    }
+
+    private {
+        #! the zoneinfo directory, if found
+        *string zroot;
+        #! spellings not used yet
+        list<hash<TzSpelling>> pool = ();
+        #! how the spellings are made, for skip messages
+        string source = "";
+        #! directories that the test created
+        list<string> created = ();
+    }
+
+    constructor() : QUnit::Test("time zone region spelling cache", "1.0", \ARGV) {
+        addTestCase("spellings beyond the limit get the zone of the entry name", \testBounded());
+        addTestCase("concurrent spellings stay within the limit", \testConcurrent());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        zroot = ENV.QORE_TEST_ZONEINFO_ROOT;
+        if (!zroot) {
+            foreach string zd in (ZoneinfoDirs) {
+                if (is_file(zd + "/UTC")) {
+                    zroot = zd;
+                    break;
+                }
+            }
+        }
+        if (!zroot || !Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        if (is_file(zroot + "/utc") && is_file(zroot + "/america/new_york")) {
+            source = "case variants";
+            foreach string region in (CaseRegions) {
+                if (!is_file(zroot + "/" + region)) {
+                    continue;
+                }
+                foreach string sp in (caseSpellings(region, 64)) {
+                    if (sp != region) {
+                        pool += <TzSpelling>{"spelling": sp, "entry": region};
+                    }
+                }
+            }
+        } else if (ENV.QORE_TEST_ZONEINFO_ROOT) {
+            source = "links in a writable zoneinfo directory";
+            makeLinkedTree();
+        } else {
+            source = "a link to a directory in the zoneinfo directory";
+            findSystemLinks();
+        }
+    }
+
+    globalTearDown() {
+        foreach string d in (created) {
+            try {
+                remove_tree(d);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+    }
+
+    #! creates a directory of zones in the writable zoneinfo directory, reached through links
+    private makeLinkedTree() {
+        string subname = "QoreSp" + get_random_string(8, 1);
+        string subdir = zroot + "/" + subname;
+        mkdir(subdir);
+        created += subdir;
+        mkdir(subdir + "/AA");
+        binary data = File::readBinaryFile(zroot + "/UTC");
+        for (int i = 0; i < 40; ++i) {
+            File f();
+            f.open2(sprintf("%s/AA/R%d", subdir, i), O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(data);
+            f.close();
+        }
+        # a link to the directory and a link to the directory that holds it
+        symlink("AA", subdir + "/BB");
+        symlink(".", subdir + "/L");
+        for (int i = 0; i < 40; ++i) {
+            string entry = sprintf("%s/AA/R%d", subname, i);
+            pool += <TzSpelling>{"spelling": sprintf("%s/BB/R%d", subname, i), "entry": entry};
+            pool += <TzSpelling>{"spelling": sprintf("%s/L/AA/R%d", subname, i), "entry": entry};
+        }
+    }
+
+    #! finds the spellings of regions through a symbolic link to a directory in the system zoneinfo directory
+    private findSystemLinks() {
+        string real_root = realpath(zroot);
+        Dir dir();
+        dir.chdir(zroot);
+        foreach string name in (dir.list()) {
+            if (name !~ /^[A-Za-z0-9_+-]+$/) {
+                continue;
+            }
+            *hash<StatInfo> l = hlstat(zroot + "/" + name);
+            *hash<StatInfo> t = hstat(zroot + "/" + name);
+            if (!l || !t || l.type != "SYMBOLIC-LINK" || t.type != "DIRECTORY") {
+                continue;
+            }
+            string target = realpath(zroot + "/" + name);
+            string prefix;
+            if (target == real_root) {
+                prefix = "";
+            } else if (target.substr(0, real_root.size() + 1) == real_root + "/") {
+                prefix = target.substr(real_root.size() + 1) + "/";
+            } else {
+                continue;
+            }
+            Dir td();
+            td.chdir(target);
+            foreach string f in (td.listFiles()) {
+                if (f !~ /^[A-Za-z0-9_+-]+$/) {
+                    continue;
+                }
+                string entry = prefix + f;
+                # only files that are zones
+                try {
+                    TimeZone tz(entry);
+                } catch (hash<ExceptionInfo> ex) {
+                    continue;
+                }
+                pool += <TzSpelling>{"spelling": name + "/" + f, "entry": entry};
+            }
+        }
+    }
+
+    #! returns the spellings of a name with the case of its letters given by the bits of the numbers from 0
+    static list<string> caseSpellings(string name, int n) {
+        list<string> rv = ();
+        list<int> letters = ();
+        for (int i = 0; i < name.size(); ++i) {
+            if (name[i] =~ /[A-Za-z]/) {
+                letters += i;
+            }
+        }
+        for (int v = 0; v < n; ++v) {
+            string sp = name;
+            for (int b = 0; b < letters.size(); ++b) {
+                int i = letters[b];
+                string c = name[i];
+                string nc = (v & (1 << b)) ? (c == c.upr() ? c.lwr() : c.upr()) : c;
+                sp = sp.substr(0, i) + nc + sp.substr(i + 1);
+            }
+            rv += sp;
+        }
+        return rv;
+    }
+
+    #! returns the sizes of the region caches
+    static hash<auto> stats() {
+        return call_function("dbg_tz_region_cache");
+    }
+
+    #! takes spellings from the pool; skips the case if there are not enough
+    list<hash<TzSpelling>> take(int n) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_tz_region_cache() is only in debug builds of the library");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("the region spelling cache is not used on Windows");
+        }
+        if (pool.size() < n) {
+            testSkip(sprintf("%d spellings of regions are needed, %d found (%s; %s)", n, pool.size(),
+                source ?? "no zoneinfo directory", zroot ?? "-"));
+        }
+        list<hash<TzSpelling>> rv = pool[0..n - 1];
+        splice pool, 0, n;
+        return rv;
+    }
+
+    #! returns the canonical name of an entry for restricted code: its path with the links resolved
+    string canonical(string entry) {
+        string real_root = realpath(zroot);
+        string real = realpath(zroot + "/" + entry);
+        if (real.substr(0, real_root.size() + 1) == real_root + "/") {
+            return real.substr(real_root.size() + 1);
+        }
+        return entry;
+    }
+
+    #! returns a serialized date in the given zone with its region name replaced by a spelling of the same length
+    static binary spelledDate(string entry, string spelling) {
+        @assert(entry.size() == spelling.size());
+        binary data = Serializable::serialize((new TimeZone(entry)).date("2026-01-15T10:00:00"));
+        return parse_hex_string(replace(make_hex_string(data), make_hex_string(binary(entry)),
+            make_hex_string(binary(spelling))));
+    }
+
+    testBounded() {
+        # the spellings of this case and two for restricted code
+        list<hash<TzSpelling>> sps = take(ZoneLimit + 3 * NameLimit + 4 + 2);
+        list<hash<TzSpelling>> rsps = sps[sps.size() - 2..];
+        splice sps, sps.size() - 2;
+        hash<auto> st0 = stats();
+        int zone_limit = st0.spelling_zones + ZoneLimit;
+        call_function("dbg_tz_set_spelling_limits", zone_limit, NameLimit);
+        on_exit call_function("dbg_tz_set_spelling_limits", 0, 0);
+
+        # the name of an entry keeps its name
+        assertEq("UTC", (new TimeZone("UTC")).region());
+
+        # spellings up to the limit keep their names, each with a zone of its own
+        list<hash<TzSpelling>> kept = sps[0..ZoneLimit - 1];
+        foreach hash<TzSpelling> sp in (kept) {
+            assertEq(sp.spelling, (new TimeZone(sp.spelling)).region(), "a spelling below the limit: " + sp.spelling);
+        }
+        hash<auto> st1 = stats();
+
+        # further spellings add no region names but the names of their entries
+        list<hash<TzSpelling>> over = sps[ZoneLimit..];
+        hash<string, bool> entries;
+        hash<string, string> names;
+        hash<string, int> offsets;
+        foreach hash<TzSpelling> sp in (over) {
+            TimeZone tz(sp.spelling);
+            names{sp.spelling} = tz.region();
+            offsets{sp.spelling} = tz.UTCOffset();
+            entries{sp.entry} = True;
+        }
+        hash<auto> st2 = stats();
+        assertLe(entries.size(), st2.region_names - st1.region_names, "region names only for entry names");
+        assertLe(ZoneLimit + entries.size() + 1, st2.region_names - st0.region_names, "the region names are bounded");
+        assertEq(zone_limit, st1.spelling_zones, "the spellings below the limit have zones");
+        assertEq(zone_limit, st2.spelling_zones, "no further zones of spellings");
+        assertLe(NameLimit, st2.spelling_names, "the remembered entry names are bounded");
+
+        # they get the zone of the entry name
+        foreach hash<TzSpelling> sp in (over) {
+            assertEq(sp.entry, names{sp.spelling}, "a spelling over the limit: " + sp.spelling);
+            assertEq((new TimeZone(sp.entry)).UTCOffset(), offsets{sp.spelling}, "the zone of the entry: "
+                + sp.spelling);
+        }
+
+        # a spelling over the limit that was used last is found again without reading its file
+        {
+            hash<TzSpelling> last = over.last();
+            int reads = stats().region_file_reads;
+            assertEq(last.entry, (new TimeZone(last.spelling)).region(), "the last spelling again");
+            assertEq(reads, stats().region_file_reads, "the last spelling is remembered");
+        }
+
+        # the spellings below the limit keep their zones and names, without reading files
+        {
+            int reads = stats().region_file_reads;
+            foreach hash<TzSpelling> sp in (kept) {
+                assertEq(sp.spelling, (new TimeZone(sp.spelling)).region(), "a kept spelling again: " + sp.spelling);
+            }
+            assertEq(reads, stats().region_file_reads, "kept spellings need no file reads");
+        }
+
+        # the names of entries loaded after the limit keep their names
+        foreach string region in ("Asia/Tokyo", "Europe/Prague", "UTC") {
+            assertEq(region, (new TimeZone(region)).region(), "an entry name after the limit: " + region);
+        }
+
+        # data: a kept spelling keeps its name, a spelling over the limit gets the entry name (with spellings of the
+        # length of their entries, whose region names can be replaced in serialized data: case variants)
+        if (kept[0].spelling.size() == kept[0].entry.size()) {
+            date d = Serializable::deserialize(spelledDate(kept[0].entry, kept[0].spelling));
+            assertEq(kept[0].spelling, d.info().zone.region(), "a kept spelling in data");
+        }
+        if (over[0].spelling.size() == over[0].entry.size()) {
+            date d = Serializable::deserialize(spelledDate(over[0].entry, over[0].spelling));
+            assertEq(over[0].entry, d.info().zone.region(), "a spelling over the limit in data");
+        }
+
+        # restricted code gets the canonical zone of its spellings (qore#7442) and adds no zones of spellings
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.setSandboxManager(new SandboxManager());
+            p.parse(TenantCode, "tenant-spellings");
+            hash<auto> before = stats();
+            foreach hash<TzSpelling> sp in (rsps) {
+                string expected = sprintf("%s|%d", canonical(sp.entry), (new TimeZone(sp.entry)).UTCOffset());
+                assertEq(expected, p.callFunction("tzinfo", sp.spelling), "a spelling in restricted code");
+                # the same spelling in trusted code over the limit: the entry name
+                assertEq(sp.entry, (new TimeZone(sp.spelling)).region(), "the spelling in trusted code");
+            }
+            hash<auto> after = stats();
+            assertEq(before.spelling_zones, after.spelling_zones, "restricted code adds no zones of spellings");
+            # restricted code remembers the canonical names of its spellings (qore#7442)
+            assertEq(before.restricted_spellings + rsps.size(), after.restricted_spellings,
+                "restricted spellings are remembered");
+        }
+    }
+
+    testConcurrent() {
+        list<hash<TzSpelling>> sps = take(Threads * PerThread);
+        hash<auto> st0 = stats();
+        int zone_limit = st0.spelling_zones + ZoneLimit;
+        call_function("dbg_tz_set_spelling_limits", zone_limit, NameLimit);
+        on_exit call_function("dbg_tz_set_spelling_limits", 0, 0);
+
+        Counter c(Threads);
+        Queue q();
+        for (int t = 0; t < Threads; ++t) {
+            list<hash<TzSpelling>> mine = sps[t * PerThread .. (t + 1) * PerThread - 1];
+            background sub () {
+                on_exit c.dec();
+                try {
+                    list<string> bad = ();
+                    # each spelling twice: from the zone cache or the cache of entry names the second time
+                    foreach hash<TzSpelling> sp in (mine + mine) {
+                        string name = (new TimeZone(sp.spelling)).region();
+                        if (name != sp.spelling && name != sp.entry) {
+                            bad += sprintf("%s: %s", sp.spelling, name);
+                        }
+                    }
+                    q.push(bad);
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push((sprintf("%s: %s", ex.err, ex.desc),));
+                }
+            }();
+        }
+        c.waitForZero();
+        list<string> bad = ();
+        for (int t = 0; t < Threads; ++t) {
+            bad += q.get();
+        }
+        assertEq((), bad, "each spelling gets its own name or the entry name");
+        hash<auto> st = stats();
+        int entries = (map {$1.entry: True}, sps).size();
+        assertLe(ZoneLimit + entries, st.region_names - st0.region_names, "the region names are bounded");
+        assertEq(zone_limit, st.spelling_zones, "the zones of spellings stay within the limit");
+        assertLe(NameLimit, st.spelling_names, "the remembered entry names stay within the limit");
+    }
+}

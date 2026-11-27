@@ -2999,6 +2999,9 @@
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
       running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
+      through links to directories), such as those in data, no longer add a time zone each without bound
+      (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue

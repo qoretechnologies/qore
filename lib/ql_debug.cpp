@@ -58,6 +58,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QoreDatagramDispatcher.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include <qore/QoreSSLPrivateKey.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -25262,6 +25263,44 @@ static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+//! Debug-only: returns the sizes of the time zone region name caches (qore#7592)
+/** Keys: \c region_names (region names with zones), \c spelling_zones (zones of region spellings that are not the
+    name of the entry in the zoneinfo directory that they reach), \c spelling_names (spellings beyond the limit whose
+    entry names are remembered), \c restricted_spellings (spellings whose canonical names are remembered for
+    restricted code), \c region_file_reads (zoneinfo files of regions opened).  Not on Windows.
+*/
+static QoreValue f_dbg_tz_region_cache(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_region_cache() is not available on Windows");
+    return QoreValue();
+#else
+    QoreTimeZoneManager::DbgRegionCacheStats st = QTZM.dbgGetRegionCacheStats();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    rv->setKeyValue("region_names", static_cast<int64>(st.region_names), xsink);
+    rv->setKeyValue("spelling_zones", static_cast<int64>(st.spelling_zones), xsink);
+    rv->setKeyValue("spelling_names", static_cast<int64>(st.spelling_names), xsink);
+    rv->setKeyValue("restricted_spellings", static_cast<int64>(st.restricted_spellings), xsink);
+    rv->setKeyValue("region_file_reads", static_cast<int64>(st.region_file_reads), xsink);
+    return rv.release();
+#endif
+}
+
+//! Debug-only: sets the limits of the time zone region spelling caches; 0 restores a default (qore#7592)
+static QoreValue f_dbg_tz_set_spelling_limits(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 zones = get_param_value(params, 0).getAsBigInt();
+    int64 names = get_param_value(params, 1).getAsBigInt();
+    if (zones < 0 || names < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tz_set_spelling_limits() requires limits >= 0");
+        return QoreValue();
+    }
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_spelling_limits() is not available on Windows");
+#else
+    QTZM.dbgSetSpellingLimits(static_cast<size_t>(zones), static_cast<size_t>(names));
+#endif
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -39374,6 +39413,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
+    qns.addBuiltinVariant("dbg_tz_region_cache", f_dbg_tz_region_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
+    qns.addBuiltinVariant("dbg_tz_set_spelling_limits", f_dbg_tz_set_spelling_limits, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "zones", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "names");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,

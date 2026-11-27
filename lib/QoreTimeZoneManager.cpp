@@ -56,6 +56,9 @@
 #include <vector>
 #include <sys/param.h>
 #include <openssl/evp.h>
+#ifdef __APPLE__
+#include <sys/attr.h>
+#endif
 #else
 #include <direct.h>
 #endif
@@ -2350,6 +2353,47 @@ static bool has_component(const std::string& todo, size_t pos) {
 //! the maximum number of symbolic links followed in the zoneinfo directory for one region
 static constexpr unsigned QORE_TZ_MAX_SYMLINKS = 40;
 
+//! sets the name of a directory entry as it is stored (qore#7592)
+/** On macOS, whose file systems do not distinguish the case of names by default, the name is the stored name, which
+    can differ from \a comp in case; on other systems, whose file systems distinguish case, and if the stored name
+    cannot be read (a missing entry, which the walk then does not open, or a file system without the attribute), it
+    is \a comp
+*/
+static void get_entry_name(int dirfd, const std::string& comp, std::string& name) {
+#ifdef __APPLE__
+    struct attrlist al;
+    memset(&al, 0, sizeof al);
+    al.bitmapcount = ATTR_BIT_MAP_COUNT;
+    al.commonattr = ATTR_CMN_NAME;
+    // the length of the returned attributes, the reference to the name, and the name (at most NAME_MAX bytes and a
+    // NUL character in UTF-8 on the file systems of macOS)
+    struct NameBuf {
+        uint32_t len;
+        attrreference_t ref;
+        char buf[NAME_MAX * 3 + 1];
+    } __attribute__((aligned(4), packed));
+    NameBuf nb;
+    if (!getattrlistat(dirfd, comp.c_str(), &al, &nb, sizeof nb, FSOPT_NOFOLLOW)) {
+        // the name must be within the returned data and end with a NUL character; the offset is relative to the
+        // reference
+        size_t avail = std::min(static_cast<size_t>(nb.len), sizeof nb);
+        size_t ref_pos = offsetof(NameBuf, ref);
+        int32_t off = nb.ref.attr_dataoffset;
+        size_t len = nb.ref.attr_length;
+        if (off >= static_cast<int32_t>(sizeof nb.ref) && len && ref_pos + static_cast<size_t>(off) + len <= avail) {
+            const char* start = reinterpret_cast<const char*>(&nb) + ref_pos + off;
+            if (!start[len - 1]) {
+                name.assign(start, len - 1);
+                return;
+            }
+        }
+    }
+#else
+    (void)dirfd;
+#endif
+    name = comp;
+}
+
 //! opens the zoneinfo file of a canonical region name if it is reached inside of the zoneinfo directory
 /** This is the runtime's own read of its time zone database, so the file-system policy of the calling code does not
     apply.  The file is reached from a descriptor of the resolved zoneinfo directory one component at a time with
@@ -2362,12 +2406,17 @@ static constexpr unsigned QORE_TZ_MAX_SYMLINKS = 40;
     @param root the zoneinfo directory
     @param region a canonical region name (QoreTimeZoneManager::isRegionName())
     @param rel the path of the file reached relative to the zoneinfo directory
+    @param entry if not nullptr, the name of the entry in the zoneinfo directory that the region reaches (qore#7592):
+    the path of the last component of the region relative to the zoneinfo directory, with the links to directories
+    on the way resolved and, on macOS, the names of its components as they are stored; a symbolic link that is the
+    last component is not resolved.  The region is the name of its entry if and only if it reaches the entry through
+    directories, with the case of their names
 
     @return the descriptor of the file, which the caller closes and checks, or -1 if it cannot be opened: missing,
     outside of the directory, too many symbolic links, a path too long or an I/O error, which the caller does not
     distinguish
 */
-static int open_region_file(const QoreString& root, const char* region, std::string& rel) {
+static int open_region_file(const QoreString& root, const char* region, std::string& rel, std::string* entry) {
     assert(QoreTimeZoneManager::isRegionName(region, strlen(region)));
 #ifdef HAVE_REALPATH
     // the directory is resolved for each load, as the operating system can replace the zoneinfo directory that a
@@ -2398,6 +2447,14 @@ static int open_region_file(const QoreString& root, const char* region, std::str
     size_t pos = 0;
     std::string comp;
     unsigned links = 0;
+    // for the name of the entry: the stored names of the directories reached and their lengths (as rel and rel_len),
+    // and the length of the end of the path still to be walked that is the region as given (the components of link
+    // targets come before it); entry_rel is no longer kept after the last component of the region was reached
+    bool want_entry = entry != nullptr;
+    std::string entry_rel;
+    std::vector<size_t> entry_rel_len;
+    size_t region_tail = todo.size();
+    std::string entry_name;
     while (next_component(todo, pos, comp)) {
         if (comp == "..") {
             // the walk cannot go above the zoneinfo directory
@@ -2407,9 +2464,20 @@ static int open_region_file(const QoreString& root, const char* region, std::str
             dirs.pop();
             rel.resize(rel_len.back());
             rel_len.pop_back();
+            if (want_entry) {
+                entry_rel.resize(entry_rel_len.back());
+                entry_rel_len.pop_back();
+            }
             continue;
         }
         bool last = !has_component(todo, pos);
+        // the component is the last of the region as given if it is the last one and in the region's part of the path
+        bool region_last = false;
+        if (want_entry) {
+            get_entry_name(dirs.top(), comp, entry_name);
+            size_t start = pos - 1 - comp.size();
+            region_last = last && start >= todo.size() - region_tail;
+        }
         // a FIFO does not block the open of the last component
         int flags = O_RDONLY | O_CLOEXEC | O_NOFOLLOW | (last ? O_NONBLOCK : O_DIRECTORY);
         int fd;
@@ -2429,12 +2497,25 @@ static int open_region_file(const QoreString& root, const char* region, std::str
                 if (!last) {
                     rel_len.push_back(rel.size());
                 }
+                if (want_entry) {
+                    if (region_last) {
+                        *entry = entry_rel.empty() ? entry_name : entry_rel + "/" + entry_name;
+                    } else if (!last) {
+                        entry_rel_len.push_back(entry_rel.size());
+                        if (!entry_rel.empty()) {
+                            entry_rel += '/';
+                        }
+                        entry_rel += entry_name;
+                    }
+                }
             } catch (...) {
                 ::close(fd);
                 throw;
             }
             rel.swap(new_rel);
             if (last) {
+                // the region's part of the path is at its end until its last component is reached
+                assert(!want_entry || region_last);
                 return fd;
             }
             // closes the descriptor if it cannot be stored
@@ -2450,6 +2531,11 @@ static int open_region_file(const QoreString& root, const char* region, std::str
         if (++links > QORE_TZ_MAX_SYMLINKS) {
             return -1;
         }
+        // a symbolic link that is the last component of the region is its entry
+        if (region_last) {
+            *entry = entry_rel.empty() ? entry_name : entry_rel + "/" + entry_name;
+            want_entry = false;
+        }
         std::string target(buf, static_cast<size_t>(len));
         if (target[0] == '/') {
             // an absolute target must be in the zoneinfo directory; it is walked from the directory
@@ -2460,6 +2546,8 @@ static int open_region_file(const QoreString& root, const char* region, std::str
             dirs.popToRoot();
             rel.clear();
             rel_len.clear();
+            entry_rel.clear();
+            entry_rel_len.clear();
             target = std::move(rest);
         }
         // the target replaces the component; the path still to be walked stays at most PATH_MAX bytes long
@@ -2469,6 +2557,8 @@ static int open_region_file(const QoreString& root, const char* region, std::str
         }
         todo = rest.empty() ? target : target + "/" + rest;
         pos = 0;
+        // the region's part of the path is still at the end of it
+        region_tail = std::min(region_tail, rest.size());
     }
     // the walk ended in a directory (a symbolic link to "." or to a directory above)
     return -1;
@@ -2533,7 +2623,7 @@ int QoreAliasZoneInfo::getUTCOffsetImpl(int64 epoch_offset, bool& is_dst, const 
 //! the governing restrictions of the code that loads a zone, resolved before the lock is taken
 const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name, const std::string& data,
         const struct stat& sbuf, const std::string& primary_name, bool region, alias_map_t& aliases,
-        const char* label, ExceptionSink* xsink, const SandboxTzCharge* charge) {
+        const char* label, ExceptionSink* xsink, const SandboxTzCharge* charge, bool* over_limit) {
     // the data identifies the zone together with the file it was read from
     ZoneIdentity id;
     id.dev = sbuf.st_dev;
@@ -2554,6 +2644,11 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
         alias_map_t::iterator i = aliases.find(name);
         if (i != aliases.end() && i->second.id == id) {
             return i->second.zone;
+        }
+        // a spelling gets a new entry only below the limit; the data is not parsed otherwise
+        if (over_limit && i == aliases.end() && spelling_zones >= max_spelling_zones) {
+            *over_limit = true;
+            return nullptr;
         }
         known = identity_map.find(id) != identity_map.end();
     }
@@ -2580,6 +2675,11 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
     alias_map_t::iterator i = aliases.find(name);
     if (i != aliases.end() && i->second.id == id) {
         return i->second.zone;
+    }
+    // other threads can have given zones to other spellings in the meantime
+    if (over_limit && i == aliases.end() && spelling_zones >= max_spelling_zones) {
+        *over_limit = true;
+        return nullptr;
     }
     identity_map_t::iterator pi = identity_map.find(id);
     // another thread can have created the zone of this file and data in the meantime
@@ -2620,6 +2720,9 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
         // the entry is inserted last, with its zone; the zone stays owned by alias if the insertion fails
         aliases.emplace(name, AliasZone{alias.get(), id});
         alias.release();
+        if (over_limit) {
+            ++spelling_zones;
+        }
     }
     // the charge is committed with the entry: nothing below can fail
     if (charge) {
@@ -2755,26 +2858,30 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
         if (i != region_aliases.end()) {
             return i->second.zone;
         }
-        // a spelling that restricted code used before maps to the canonical name of its file
-        if (restricted) {
-            spelling_map_t::iterator si = restricted_spellings.find(region);
-            if (si != restricted_spellings.end()) {
-                i = region_aliases.find(si->second);
-                if (i != region_aliases.end()) {
-                    return i->second.zone;
-                }
+        // a spelling that restricted code used before maps to the canonical name of its file, and one that other
+        // code used after the limit of spellings with zones of their own to the name of its entry (qore#7592)
+        spelling_map_t& spellings = restricted ? restricted_spellings : spelling_names;
+        spelling_map_t::iterator si = spellings.find(region);
+        if (si != spellings.end()) {
+            i = region_aliases.find(si->second);
+            if (i != region_aliases.end()) {
+                return i->second.zone;
             }
         }
     }
 
-    // the file is read without the lock
+    // the file is read without the lock; for code that is not restricted, with the name of the entry reached
     std::string rel;
-    int fd = open_region_file(root, region, rel);
+    std::string entry;
+    int fd = open_region_file(root, region, rel, restricted ? nullptr : &entry);
     if (fd < 0) {
         raiseUnknownRegion(region, xsink);
         return nullptr;
     }
     ON_BLOCK_EXIT(close, fd);
+#ifdef DEBUG
+    dbg_region_file_reads.fetch_add(1, std::memory_order_relaxed);
+#endif
     std::string data;
     struct stat sbuf;
     if (read_zone_fd(fd, data, sbuf)) {
@@ -2800,7 +2907,12 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
     QoreStringMaker label("time zone region \"%s\"", region);
     // restricted code gets the zone of the file's canonical name, so the names that it can add are bounded by the
     // files of the zoneinfo directory, whatever names it uses (spellings, links to "."); other code gets a zone with
-    // the name as given
+    // the name as given, but a spelling (a name that is not the name of its entry: a case variant, a name through a
+    // link to a directory) only while fewer than max_spelling_zones spellings have zones, so that the names that
+    // other code adds are bounded by the entries of the zoneinfo directory and that limit (qore#7592)
+    if (!restricted && entry != region) {
+        return loadSpelling(region, entry, data, sbuf, canonical, label.c_str(), xsink);
+    }
     const AbstractQoreZoneInfo* rv = getZone(restricted ? canonical : std::string(region), data, sbuf, canonical,
         true, region_aliases, label.c_str(), xsink);
     if (rv && restricted && canonical != region) {
@@ -2817,6 +2929,61 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
     }
     return rv;
 }
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::loadSpelling(const char* region, const std::string& entry,
+        const std::string& data, const struct stat& sbuf, const std::string& primary_name, const char* label,
+        ExceptionSink* xsink) {
+    // a zone of its own while the limit allows it
+    bool over_limit = false;
+    const AbstractQoreZoneInfo* rv = getZone(std::string(region), data, sbuf, primary_name, true, region_aliases,
+        label, xsink, nullptr, &over_limit);
+    if (!over_limit) {
+        return rv;
+    }
+    assert(!rv);
+    // otherwise the zone of the entry name, which is a region name like any other entry's name (a zoneinfo directory
+    // whose entries have other names has no region of that name)
+    if (!isRegionName(entry.c_str(), entry.size())) {
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
+    // an error in the data names the region as given
+    ExceptionSink entry_xsink;
+    rv = getZone(entry, data, sbuf, primary_name, true, region_aliases, label, &entry_xsink);
+    if (entry_xsink) {
+        assert(!rv);
+        entry_xsink.clear();
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
+    if (rv) {
+        // the spelling is remembered, so that it is not walked for each use; the map is bounded (it is emptied when it
+        // is full), and it is only a cache, so a failure to remember is ignored
+        QoreAutoRWWriteLocker al(rwl);
+        try {
+            if (spelling_names.size() >= max_spelling_names) {
+                spelling_names.clear();
+            }
+            spelling_names.emplace(region, entry);
+        } catch (std::bad_alloc&) {
+        }
+    }
+    return rv;
+}
+
+#ifdef DEBUG
+QoreTimeZoneManager::DbgRegionCacheStats QoreTimeZoneManager::dbgGetRegionCacheStats() {
+    QoreAutoRWReadLocker al(rwl);
+    return DbgRegionCacheStats{region_aliases.size(), spelling_zones, spelling_names.size(),
+        restricted_spellings.size(), dbg_region_file_reads.load(std::memory_order_relaxed)};
+}
+
+void QoreTimeZoneManager::dbgSetSpellingLimits(size_t zones, size_t names) {
+    QoreAutoRWWriteLocker al(rwl);
+    max_spelling_zones = zones ? zones : MaxSpellingZones;
+    max_spelling_names = names ? names : MaxSpellingNames;
+}
+#endif
 
 //! returns the canonical path of an open file, verified to name that file now
 /** @param fd the descriptor of the open file
