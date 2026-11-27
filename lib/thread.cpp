@@ -10188,6 +10188,26 @@ void qore_mark_serializing_receiver_frame(const QoreSandboxProvenanceHelper& fra
     }
 }
 
+bool qore_clear_serializing_receiver_frame(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && !td->receiver_provenance.empty()) {
+        ThreadData::ReceiverProvenance& rp = td->receiver_provenance.back();
+        if (rp.serializing && rp.receiver == receiver && rp.frame == td->sandbox_provenance) {
+            rp.serializing = false;
+            return true;
+        }
+    }
+    return false;
+}
+
+void qore_restore_serializing_receiver_frame(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    // the frames of the code that the serialization ran were removed when their calls returned
+    if (td && !td->receiver_provenance.empty() && td->receiver_provenance.back().receiver == receiver) {
+        td->receiver_provenance.back().serializing = true;
+    }
+}
+
 bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver) {
     ThreadData* td = thread_data.get();
     if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {

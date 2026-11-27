@@ -92,6 +92,42 @@ class SspSelf inherits Serializable {
 
 #! objects that the host's code creates while sandboxed code calls it carry the sandbox of their creation; when the
 #! host itself later serializes them, no sandboxed code calls it, and it gets their non-public state (qore#7146)
+#! a class declared by trusted code with private:internal state, which its subclasses have no access to
+class SspInternalBase inherits Serializable {
+    private:internal {
+        string pi = "PI-STATE";
+    }
+}
+
+#! a class declared by trusted code whose serialization hook serializes its own object again (qore#7146)
+class SspHook inherits SspInternalBase {
+    public {
+        static *string nested_method;
+        static *string nested_static;
+        static bool busy = False;
+    }
+
+    private:internal *hash<auto> serializeMembers(*hash<auto> members) {
+        if (!busy) {
+            busy = True;
+            on_exit busy = False;
+            try {
+                hash<SerializationInfo> h = self.serializeToData();
+                nested_method = h ? "OK" : "EMPTY";
+            } catch (hash<ExceptionInfo> ex) {
+                nested_method = ex.err;
+            }
+            try {
+                hash<SerializationInfo> h = Serializable::serializeToData(self);
+                nested_static = h ? "OK" : "EMPTY";
+            } catch (hash<ExceptionInfo> ex) {
+                nested_static = ex.err;
+            }
+        }
+        return members;
+    }
+}
+
 public class SandboxSerializationProvenanceTest inherits QUnit::Test {
     private {
         SandboxManager manager();
@@ -108,7 +144,19 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
             "code sub sb_method_ref(Serializable v) { return \\v.serialize(); }\n"
             "class SbSub inherits SspTrusted {}\n"
             "object sub sb_sub() { return new SbSub(); }\n"
-            "object sub sb_trusted() { return new SspTrusted(); }\n", "sandboxed");
+            "object sub sb_trusted() { return new SspTrusted(); }\n"
+            "code sub sb_call_method(object o) { return auto sub () { return call_object_method(o, \"serializeToData\"); }; "
+            "}\n"
+            "nothing sub sb_background(object o, Queue q) {\n"
+            "    background sub () {\n"
+            "        try {\n"
+            "            hash<SerializationInfo> h = o.serializeToData();\n"
+            "            q.push(h ? \"OK\" : \"EMPTY\");\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            q.push(ex.err);\n"
+            "        }\n"
+            "    }();\n"
+            "}\n", "sandboxed");
 
         addTestCase("host class", \hostClassTest());
         addTestCase("qlib class", \qlibClassTest());
@@ -116,6 +164,8 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         addTestCase("own code of the object", \ownCodeTest());
         addTestCase("sandbox subclass", \sandboxSubclassTest());
         addTestCase("shared object", \sharedObjectTest());
+        addTestCase("nested serialization of the same object", \nestedTest());
+        addTestCase("calls that sandboxed code sets up", \sandboxSetupTest());
         set_return_value(main());
     }
 
@@ -236,5 +286,27 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         assertEq("PRIV-STATE", Serializable::deserialize(o.serialize()).getPriv());
         assertEq("PRIV-STATE", Serializable::deserialize(Serializable::serialize(o)).getPriv());
         assertThrows("SHARED-OBJECT-ERROR", \p.callFunction(), ("ser_method", o));
+    }
+
+    #! the serialization hook of the object's own trusted class, which runs during the host's call of the method form,
+    #! is decided for its own code: the receiver's exemption is decided once at the start of the host's call, so the
+    #! hook gets what the static form gets there, the private:internal state of its base class withheld
+    nestedTest() {
+        SspHook o = createUnderSandbox(object sub () { return new SspHook(); });
+        # the host's own call gets the state
+        assertRegex("PI-STATE", sprintf("%N", o.serializeToData()));
+        assertEq("SERIALIZATION-ERROR", SspHook::nested_static);
+        assertEq("SERIALIZATION-ERROR", SspHook::nested_method);
+    }
+
+    #! calls that sandboxed code sets up and the host or a background thread makes: a closure of the sandboxed
+    #! Program that calls the method by name, and a background call that sandboxed code starts
+    sandboxSetupTest() {
+        object o = createUnderSandbox(object sub () { return new SspTrusted(); });
+        code c = p.callFunction("sb_call_method", o);
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", c);
+        Queue q();
+        p.callFunction("sb_background", o, q);
+        assertEq("SERIALIZATION-ERROR", q.get(30s));
     }
 }

@@ -215,6 +215,10 @@ public:
         return receiver;
     }
 
+    //! returns true if sandboxed code is in the chain of callers (qore_receiver_caller_is_sandboxed()), decided once
+    //! for the serialization: also for a trusted API, for the rule of shared objects
+    DLLLOCAL bool chainSandboxed();
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;

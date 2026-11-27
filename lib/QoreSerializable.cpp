@@ -287,6 +287,10 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
         return false;
     }
     // any other code: withheld if sandboxed code is in the chain of callers
+    return chainSandboxed();
+}
+
+bool QoreSerializationCaller::chainSandboxed() {
     if (chain_sandboxed < 0) {
         chain_sandboxed = qore_receiver_caller_is_sandboxed(receiver) ? 1 : 0;
     }
@@ -560,6 +564,11 @@ QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int6
 QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags);
     context.caller.setReceiver(&self);
+    // the exemption of the receiver's provenance frame is decided once, at the start of the call; the code that the
+    // serialization runs (the serialization hooks of the object's classes) sees the frame unmarked, so that it counts
+    // for that code, as for the static form (qore#7146)
+    context.caller.chainSandboxed();
+    QoreSerializingReceiverClearHelper clear_mark(&self);
     return serializeToDataIntern(&self, context, xsink);
 }
 
@@ -629,7 +638,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {
-            if (opriv->checkSharedSerialize(xsink, context.caller.getReceiver())) {
+            if (opriv->checkSharedSerialize(xsink, context.caller.chainSandboxed())) {
                 return context.imap.end();
             }
         }

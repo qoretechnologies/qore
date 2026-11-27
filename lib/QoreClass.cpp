@@ -14290,8 +14290,6 @@ public:
         qore_dbg_runtime_chosen_variant = false;
 #endif
         provenance.set(self);
-        // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
-        qore_mark_serializing_receiver_call(provenance, func);
         // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
         if (provenance.getContext() && qore_sandbox_check_isolation(td, xsink, "calling a method")) {
             return -1;
@@ -14418,8 +14416,6 @@ public:
         qore_dbg_runtime_chosen_variant = false;
 #endif
         provenance.set(self);
-        // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
-        qore_mark_serializing_receiver_call(provenance, func);
         // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
         if (provenance.getContext() && qore_sandbox_check_isolation(td, xsink, "calling a method")) {
             return -1;
