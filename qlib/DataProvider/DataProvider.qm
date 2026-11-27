@@ -1831,6 +1831,14 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       from records that do not all have the same fields with columns of different lengths, misaligning the values
       of later records; a field that a record lacks is now @ref nothing in that record's row
       (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
+    - fixed a bug where a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in a global variable kept
+      the program from ending, as its queue threads waited for data until its destructor ran, which only happens
+      after the program has waited for its threads; the queue threads now run only while the pipeline processes data
+      (<a href="https://github.com/qoretechnologies/qore/issues/7771">issue 7771</a>)
+    - fixed a deadlock of a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" whose
+      @ref DataProvider::PipelineOptionInfo::thread_callback "thread_callback" raised an error; the error is now
+      raised by the call that starts the run
+      (<a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and

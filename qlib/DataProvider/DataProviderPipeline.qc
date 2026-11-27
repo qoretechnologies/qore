@@ -249,7 +249,13 @@ public hashdecl PipelineOptionInfo {
     *code<nothing(string, ...)> info_log;
 
     #! a closure or call reference for setting thread-local data in new pipeline queue threads
-    /* it is called in the new pipeline queue thread with no arguments
+    /** it is called in each new pipeline queue thread with no arguments; the queue threads are started when the
+        pipeline starts processing data, and end when the run ends (see
+        @ref DataProvider::DataProviderPipeline "DataProviderPipeline")
+
+        An exception that it raises is raised by the call that starts the run (such as
+        @ref DataProvider::DataProviderPipeline::submit() "DataProviderPipeline::submit()"), and the run does not
+        start
     */
     *code<nothing()> thread_callback;
 
@@ -324,8 +330,19 @@ class PipelineQueue {
         #! Maximum queue size
         int size;
 
-        #! TID of the background thread
+        #! TID of the background thread, or 0 if the queue has no thread
+        /** The thread runs while the pipeline processes data (see DataProviderPipeline::stopThreadsIntern())
+        */
         int tid;
+
+        #! Signaled when the background thread ends its processing (see waitThreadExit())
+        Condition thread_cond();
+
+        #! Number of threads waiting on thread_cond
+        int thread_waiting = 0;
+
+        #! The exception raised by the pipeline's thread callback in a new thread (see startThreadIfNeeded())
+        *hash<ExceptionInfo> thread_start_error;
 
         #! Pipeline elements
         /** elements are either:
@@ -397,7 +414,9 @@ class PipelineQueue {
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size, bool start_thread = True) {
+    /** The queue's thread is started when the pipeline starts processing data (see startThreadIfNeeded())
+    */
+    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size) {
         self.size = size;
         self.parent := parent;
         self.lck = lck;
@@ -405,12 +424,15 @@ class PipelineQueue {
 
         self.id = id;
         self.id_str = id.toString();
-        if (start_thread) {
-            startThreadIfNeeded();
-        }
     }
 
     #! Starts the worker thread if it has not already been started
+    /** @note Called with the pipeline lock held
+
+        @throw any exception raised by the pipeline's thread callback in the new thread, which then ends without
+        processing data; the error is raised here, as the thread cannot report it to the pipeline, whose lock this
+        thread holds (qore#7777)
+    */
     startThreadIfNeeded() {
         if (tid) {
             return;
@@ -424,6 +446,22 @@ class PipelineQueue {
         tid = background run(run_cnt);
         # do not return until the background thread is running
         run_cnt.wait();
+        if (*hash<ExceptionInfo> ex = remove thread_start_error) {
+            # the thread has ended its work without taking the lock
+            tid = 0;
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+
+    #! Waits for the worker thread to end its processing once the queue has been stopped
+    /** @note Called with the pipeline lock held
+    */
+    waitThreadExit() {
+        while (tid) {
+            ++thread_waiting;
+            thread_cond.wait(lck);
+            --thread_waiting;
+        }
     }
 
     #! Returns the pipeline ID
@@ -572,11 +610,25 @@ class PipelineQueue {
         # this thread holds the outstanding cnt entry.
         {
             on_exit run_cnt.done();
-            parent.registerThread(self);
+            # an error of the thread callback is raised by the thread that starts this one, which holds the pipeline's
+            # lock while it waits for this thread, so this thread cannot report it to the pipeline (qore#7777)
+            try {
+                parent.registerThread(self);
+            } catch (hash<ExceptionInfo> ex) {
+                thread_start_error = ex;
+                return;
+            }
         }
 
         lck.lock();
         on_exit lck.unlock();
+        # the thread ends its processing with the lock held (see waitThreadExit())
+        on_exit {
+            tid = 0;
+            if (thread_waiting) {
+                thread_cond.broadcast();
+            }
+        }
 
         runIntern();
     }
@@ -1871,6 +1923,11 @@ public class PipelineMetricsCollector {
 /** Record processing pipelines run in background threads.  Each queue has an integer queue ID; a queue with
     ID 0 is created by default as the initial queue.
 
+    The queue threads run only while the pipeline processes data: they are started when data is first submitted, and
+    end when waitDone() or abort() ends the run, so that a pipeline that is not processing data, also one in a global
+    variable, does not keep the program from ending, which waits for its threads before it releases its global
+    variables.  A run that is not ended keeps its threads until the pipeline is destroyed.
+
     @note Pipeline data can be of any type
 */
 public class DataProviderPipeline {
@@ -1975,7 +2032,7 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1, !synchronous);
+        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1);
     }
 
     #! Copy constructor; creates an empty pipeline with the same configuration as the original
@@ -2035,13 +2092,14 @@ public class DataProviderPipeline {
     }
 
     #! Registers a new thread
+    /** Called in a new pipeline queue thread; calls the thread callback, if any
+
+        @throw any exception raised by the thread callback, which the pipeline raises in the call that starts the
+        thread (see @ref PipelineOptionInfo::thread_callback)
+    */
     registerThread(PipelineQueue queue) {
         if (thread_callback) {
-            try {
-                thread_callback();
-            } catch (hash<ExceptionInfo> ex) {
-                reportError(queue, ex);
-            }
+            thread_callback();
         }
     }
 
@@ -2223,8 +2281,9 @@ public class DataProviderPipeline {
         if (!locked) {
             return;
         }
-        # unlock on exit
+        # the queue threads end with the run; unlock on exit
         on_exit {
+            stopThreadsIntern();
             locked = False;
         }
 
@@ -2297,6 +2356,8 @@ public class DataProviderPipeline {
             metrics_collector.shutdown();
         }
 
+        # the queue threads end with the run
+        stopThreadsIntern();
         locked = False;
 
         if (ignore_exceptions) {
@@ -2441,7 +2502,7 @@ public class DataProviderPipeline {
     private:internal PipelineQueue copyPipeline(PipelineQueue old_queue) {
         *PipelineQueue queue = pmap{old_queue.id};
         if (!queue) {
-            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size, !synchronous);
+            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size);
             pmap{old_queue.id} = queue;
         }
 
@@ -2595,8 +2656,17 @@ public class DataProviderPipeline {
             }
 
             if (!canProcessSynchronouslyIntern()) {
-                foreach PipelineQueue q in (pmap.iterator()) {
-                    q.startThreadIfNeeded();
+                try {
+                    foreach PipelineQueue q in (pmap.iterator()) {
+                        q.startThreadIfNeeded();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # a thread callback raised an error: the run does not start, and the error is raised to the
+                    # caller (qore#7777)
+                    logError("pipeline %y: cannot start a queue thread: %s", name, get_exception_string(ex));
+                    stopThreadsIntern();
+                    locked = False;
+                    rethrow;
                 }
             }
 
@@ -2635,6 +2705,31 @@ public class DataProviderPipeline {
         if (!pmap{id}) {
             throw "PIPELINE-ERROR", sprintf("pileine %y: queue ID %d does not exist; known pipelines: %y", name, id,
                 (map $1.toInt(), keys pmap));
+        }
+    }
+
+    #! Ends the queue threads at the end of a run; the lock must be held
+    /** The queue threads run only while the pipeline processes data, so that a pipeline that does not process data
+        does not keep the program from ending, which waits for its threads before it releases its global variables
+        (qore#7771); they are started again when data is submitted (see checkSubmitIntern())
+    */
+    private:internal stopThreadsIntern() {
+        bool stop;
+        foreach PipelineQueue q in (pmap.iterator()) {
+            if (q.tid) {
+                q.queue_stop = True;
+                q.cond.broadcast();
+                stop = True;
+            }
+        }
+        if (!stop) {
+            return;
+        }
+        foreach PipelineQueue q in (pmap.iterator()) {
+            q.waitThreadExit();
+            if (!stop_flag) {
+                q.queue_stop = False;
+            }
         }
     }
 
