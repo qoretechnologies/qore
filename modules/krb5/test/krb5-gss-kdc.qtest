@@ -179,6 +179,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         addTestCase("gss channel binding mismatch rejected", \testGssChannelBindingMismatchRejected());
         addTestCase("keytab credential acquisition with kdc", \testKeytabCredentialAcquisition());
         addTestCase("sandboxed acceptor replay cache", \testSandboxedAcceptorReplayCache());
+        addTestCase("sandboxed keytab file replaced after use", \testSandboxedKeytabFileReplaced());
         addTestCase("gss context reset and renegotiate", \testGssContextResetAndRenegotiate());
         addTestCase("gss integrity only wrap unwrap", \testGssIntegrityOnlyWrapUnwrap());
         addTestCase("gss wrap empty message", \testGssWrapEmptyMessage());
@@ -830,6 +831,104 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         host_acceptor.step(host_initiator.step().token);
         assertTrue(host_acceptor.isComplete());
         assertTrue(is_file(host_rcache), "the replay cache of the process is written by its acceptor");
+    }
+
+    #! the library reads a file keytab by name at every use: the acceptor credential of sandboxed code keeps the keys
+    #! of the file that the module checked when the file is replaced with a link to another keytab, and the keytab
+    #! operations of sandboxed code read the file that the module opened (qore#7767)
+    private testSandboxedKeytabFileReplaced() {
+        hash<auto> setup = setupGssCredentials("sandbox-keytab-file");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        # the replay caches in a temporary directory that the policy does not allow
+        TmpDir tmp("module-krb5-kdc-kt-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        # a copy of the service keytab in a directory whose entries the sandbox may change, and a keytab with other
+        # keys of the service in another directory that it may read
+        TmpDir kt_dir("module-krb5-kdc-kt-dir-");
+        TmpDir other_dir("module-krb5-kdc-kt-other-");
+        string dir = realpath(kt_dir.path);
+        string other = realpath(other_dir.path);
+        string keytab = dir + "/service.keytab";
+        string other_keytab = other + "/other.keytab";
+        File f();
+        f.open2(keytab, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(ReadOnlyFile::readBinaryFile(serviceKeytab));
+        f.close();
+        Qore::Krb5::Krb5Keytab okt = setup.ctx.openKeytab("FILE:" + other_keytab);
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> e in (setup.ctx.openKeytab("FILE:" + keytab).listEntries()) {
+            okt.addEntry(new Qore::Krb5::Krb5Principal(e.principal), make_hex_string(get_random_bytes(e.key_size)),
+                e.enctype, e.kvno);
+        }
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            Qore::Krb5::GssCredential sub cred(string keytab, string principal) {
+                Qore::Krb5::Krb5Context ctx();
+                return Qore::Krb5::GssCredential::fromKeytab(ctx.openKeytab(\"FILE:\" + keytab),
+                    new Qore::Krb5::Krb5Principal(principal));
+            }
+            hash<auto> sub accept_with(Qore::Krb5::GssCredential cred, string token) {
+                try {
+                    Qore::Krb5::GssAcceptorContext acceptor(cred);
+                    acceptor.step(token);
+                    return {\"complete\": acceptor.isComplete()};
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+            hash<auto> sub kinit(string keytab, string principal) {
+                try {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::Krb5Principal p(principal);
+                    Qore::Krb5::Krb5Credentials c = ctx.acquireCredentialsWithKeytab(p,
+                        ctx.openKeytab(\"FILE:\" + keytab));
+                    return {\"client\": c.getClientPrincipal().toString()};
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+            nothing sub replace_with_link(string path, string target) {
+                unlink(path);
+                symlink(target, path);
+            }
+        ", "sandboxed_keytab_file");
+        SandboxManager sm();
+        sm.setIsolationDomain("kdc-keytab-file-" + getpid());
+        sm.addFilesystemAllowedPath(dir, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        sm.addFilesystemAllowedPath(other, QSEC_READ);
+        # the KDC requests of the library
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.mechanism = "kerberos";
+        opts.name_type = "krb5-principal";
+
+        # initial credentials with the keys of the file
+        assertEq({"client": setup.servicePrincipal}, p.callFunction("kinit", keytab, setup.servicePrincipal));
+
+        Qore::Krb5::GssCredential cred = p.callFunction("cred", keytab, setup.servicePrincipal);
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred, opts);
+        assertEq({"complete": True}, p.callFunction("accept_with", cred, initiator.step().token));
+
+        # the file replaced with a link to the keytab with the other keys: the credential keeps the keys of the file
+        # that the module checked
+        p.callFunction("replace_with_link", keytab, other_keytab);
+        Qore::Krb5::GssClientContext initiator2(setup.servicePrincipal, setup.initiatorCred, opts);
+        assertEq({"complete": True}, p.callFunction("accept_with", cred, initiator2.step().token));
+
+        # a credential acquired now has the keys of the file that the link names, which do not decrypt the ticket
+        Qore::Krb5::GssCredential cred2 = p.callFunction("cred", keytab, setup.servicePrincipal);
+        Qore::Krb5::GssClientContext initiator3(setup.servicePrincipal, setup.initiatorCred, opts);
+        hash<auto> r = p.callFunction("accept_with", cred2, initiator3.step().token);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        r = p.callFunction("kinit", keytab, setup.servicePrincipal);
+        assertEq("KRB5-INIT-CREDS-ERROR", r.err, r.desc);
     }
 
     private testKeytabCredentialAcquisition() {

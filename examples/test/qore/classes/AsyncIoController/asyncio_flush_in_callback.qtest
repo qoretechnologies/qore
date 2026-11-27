@@ -39,6 +39,8 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
         addTestCase("a callback flushes the callbacks", \flushInCallbackTest());
         addTestCase("a destructor that a callback runs flushes the callbacks", \flushInDestructorTest());
         addTestCase("a flush in a callback waits for the callbacks of other workers", \flushWaitsForOthersTest());
+        addTestCase("two callbacks flush the callbacks at the same time", \flushInTwoCallbacksTest());
+        addTestCase("a flush in a program thread waits for a callback that flushes", \flushWaitsForFlushingCallbackTest());
         set_return_value(main());
     }
 
@@ -94,5 +96,74 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
             "the flush in the callback waits for the callback of the other worker");
         release_other.dec();
         assertTrue(result.get(HangTimeout), "the flush returns after the callback of the other worker has ended");
+    }
+
+    #! Two callbacks flush the callbacks at the same time, on two workers (qore#7509)
+    /** As the destructors of two servers that the last requests of two servers destroy in callbacks: each flush waited
+        for the callback of the other, which ended only when its own flush had returned, and both waited forever
+    */
+    flushInTwoCallbacksTest() {
+        Counter entered(2);
+        Queue flushed();
+        code flush = sub () {
+            entered.dec();
+            # both callbacks run, each on its own worker, before either of them flushes
+            if (entered.waitForZero(HangTimeout)) {
+                flushed.push("the other callback did not run");
+                return;
+            }
+            AsyncIoController::flushCallbacks();
+            flushed.push(gettid());
+        };
+        AsyncIoController::addTimerDelay(0s, flush);
+        AsyncIoController::addTimerDelay(0s, flush);
+        auto first = flushed.get(HangTimeout);
+        auto second = flushed.get(HangTimeout);
+        assertEq(Type::Int, first.type(), "the flush of the first callback returns");
+        assertEq(Type::Int, second.type(), "the flush of the second callback returns");
+        assertNeq(first, second, "the callbacks run on two workers");
+    }
+
+    #! A flush in a program's thread waits for a callback that flushes the callbacks itself (qore#7509)
+    /** The callback goes on running once its flush has returned: the flush of the program's thread waits for the
+        callback to end.  Only callbacks skip the callbacks that flush (see flushInTwoCallbacksTest()); a flush in a
+        program's thread did too, and returned while the callback still ran.  The callback's flush is held once it
+        may return (dbg_async_io_hold_callback_flush()), while it still counts as a callback that flushes
+    */
+    flushWaitsForFlushingCallbackTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_hold_callback_flush()");
+        }
+        Queue events();
+        # the thread that flushes is joined last, also when an assertion fails, after the callback's flush has been
+        # released (on_exit blocks run in reverse order)
+        Counter flusher_done();
+        on_exit flusher_done.waitForZero(HangTimeout);
+        # called by name: the functions exist only in a debug build of the library
+        call_function("dbg_async_io_hold_callback_flush", True);
+        on_exit call_function("dbg_async_io_hold_callback_flush", False);
+
+        AsyncIoController::addTimerDelay(0s, sub () {
+            AsyncIoController::flushCallbacks();
+            events.push("callback flushed");
+        });
+        assertTrue(call_function("dbg_async_io_wait_callback_flush_held", HangTimeout),
+            "the flush of the callback is held");
+
+        flusher_done.inc();
+        background sub () {
+            on_exit flusher_done.dec();
+            AsyncIoController::flushCallbacks();
+            events.push("program flushed");
+        }();
+        # the flush of the program's thread waits for the callback, which runs: it blocks
+        assertTrue(call_function("dbg_async_io_wait_flush_blocked", HangTimeout),
+            "the flush of the program's thread waits for the callback that flushes");
+        assertEq(0, events.size(), "nothing has returned while the callback runs");
+
+        call_function("dbg_async_io_hold_callback_flush", False);
+        assertEq("callback flushed", events.get(HangTimeout), "the callback's flush returns first");
+        assertEq("program flushed", events.get(HangTimeout),
+            "the flush of the program's thread returns once the callback has ended");
     }
 }

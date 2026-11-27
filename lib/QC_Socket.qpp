@@ -8946,6 +8946,8 @@ AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, 
 
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
     @throw SOCKET-NOT-OPEN if the socket is not open
+    @throw HASH-SECRET-KEY-ERROR no random source works to create the secret key of the keyed hashes of the process
+    (see @ref keyed_internal_tables)
 
     @param options optional options hash:
     - \c "headers_only": if @ref True, dispatches requests as soon as headers are received
@@ -9034,6 +9036,9 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
 
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
+
+    The operation fails with a \c HASH-SECRET-KEY-ERROR exception if no random source works to create the secret
+    key of the keyed hashes of the process (see @ref keyed_internal_tables)
 
     @since %Qore 3.0
 */
@@ -9363,7 +9368,8 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
 
     The bounds of a connection are set once, with its first body; later calls are ignored.  Set on a socket that has
     no HTTP/2 session yet, they apply to the session that it gets; the bodies submitted before the bounds are set are
-    not bounded.
+    not bounded.  Without bounds, the minimum rate of a connection is set by the first check of a send that a handler
+    thread makes (see @ref checkHttp2StreamSendRate()); its stall time only by the bounds.
 
     @param min_rate the minimum rate in bytes per second; 0 disables the check
     @param window the window of the minimum rate
@@ -9387,6 +9393,68 @@ nothing Socket::setHttp2InputStreamSendBound(int min_rate, timeout window, timeo
     }
     qore_socket_object_h2_set_input_stream_send_bound(s, min_rate, window, stall_timeout, xsink);
     return QoreValue();
+}
+
+//! Checks the minimum rate of the HTTP/2 connection for a send that waits for the client
+/**
+    The minimum rate of a connection applies to all its streams together, while one of them waits for the client:
+    the buffered response bodies and those that the I/O thread sends from InputStreams, until the client has taken
+    them (see @ref setHttp2InputStreamSendBound() and @ref setQuicInputStreamSendBound()), and the sends of handler
+    threads alike, so that many streams that share a fast connection are not ended because each of them takes only a
+    share of it.  A sender calls this method each
+    time it checks a wait for the client (\a waiting = @ref True), at least every check interval of the rate, and
+    once more when its send is done (\a waiting = @ref False), which ends its wait; the wait of a stream that is not
+    open is not counted, and that of a stream that closes or is reset ends with it.  When the connection is found
+    below the rate, every stream that waits for the client then is ended: the waiting bodies that the bounds charge
+    are ended as the bounds end them (on HTTP/2, a body whose end is already in the connection's send buffer ends
+    the connection), and each waiting sender is told so by its next call.
+
+    The rate of a connection is its bounds' (set when it is accepted, or a listener's default on HTTP/3); on a
+    connection without bounds, the first call of this method sets it, and the bounds replace it once they are set.
+    The \a min_rate and \a window arguments are ignored otherwise.
+
+    @par Example:
+    @code{.py}
+    if (sock.checkHttp2StreamSendRate(stream_id, True, 1024, 60s)) {
+        throw "STREAM-SEND-TIMEOUT", "the client took less than the minimum rate";
+    }
+    @endcode
+
+    @param stream_id the stream ID of the send
+    @param waiting @ref True while the send waits for the client, @ref False once it is done
+    @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet; 0 for none
+    @param window the window of the minimum rate, if the connection's rate is not set yet
+
+    @return @ref True if the connection was found below the minimum rate while the send waited, so that the send
+    must end; @ref False if not
+
+    @throw HTTP2-ERROR no HTTP/2 session is active, or \a stream_id is negative
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+bool Socket::checkHttp2StreamSendRate(int stream_id, bool waiting, int min_rate, timeout window)
+        [flags=NAMED_ARGS; dom=NETWORK] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "checkHttp2StreamSendRate", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of the minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    int rv = qore_socket_object_h2_check_stream_send_rate(s, stream_id, waiting, min_rate, window, xsink);
+    return rv < 0 ? QoreValue() : QoreValue(rv > 0);
 }
 
 //! Returns the number of bytes of an HTTP/2 stream's buffered data that the connection has taken so far
@@ -9829,6 +9897,9 @@ bool Socket::isQuicGoawayReceived(int session_id) [guard=none; flags=NAMED_ARGS]
     ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
 
+    The operation fails with a \c HASH-SECRET-KEY-ERROR exception if no random source works to create the secret
+    key of the keyed hashes of the process (see @ref keyed_internal_tables)
+
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
@@ -10060,7 +10131,9 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     The bounds of a connection are set once, with its first body; later calls are ignored.  They replace the default
     of the listener that the connection was accepted on
     (@ref Qore::Http3ServerPollOperation::setStreamSendBound() "Http3ServerPollOperation::setStreamSendBound()"); the
-    bodies submitted before the bounds are set are not bounded.
+    bodies submitted before the bounds are set are not bounded.  Without bounds, the minimum rate of a connection is
+    set by the first check of a send that a handler thread makes (see @ref checkQuicStreamSendRate()); its stall time
+    only by the bounds.
 
     @param session_id the QUIC session ID of the connection
     @param min_rate the minimum rate in bytes per second; 0 disables the check
@@ -10190,6 +10263,66 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
         return -1;
     }
     return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
+}
+
+//! Checks the minimum rate of a QUIC connection for a send on one of its HTTP/3 streams that waits for the client
+/**
+    The minimum rate of a connection applies to all its streams together, while one of them waits for the client:
+    the buffered response bodies and those that the I/O thread sends from InputStreams, until the client has taken
+    them (see @ref setHttp2InputStreamSendBound() and @ref setQuicInputStreamSendBound()), and the sends of handler
+    threads alike, so that many streams that share a fast connection are not ended because each of them takes only a
+    share of it.  A sender calls this method each
+    time it checks a wait for the client (\a waiting = @ref True), at least every check interval of the rate, and
+    once more when its send is done (\a waiting = @ref False), which ends its wait; the wait of a stream that is not
+    open is not counted, and that of a stream that closes or is reset ends with it.  When the connection is found
+    below the rate, every stream that waits for the client then is ended: the waiting bodies that the bounds charge
+    are ended as the bounds end them (on HTTP/2, a body whose end is already in the connection's send buffer ends
+    the connection), and each waiting sender is told so by its next call.
+
+    The rate of a connection is its bounds' (set when it is accepted, or a listener's default on HTTP/3); on a
+    connection without bounds, the first call of this method sets it, and the bounds replace it once they are set.
+    The \a min_rate and \a window arguments are ignored otherwise.
+
+    @par Example:
+    @code{.py}
+    if (sock.checkQuicStreamSendRate(session_id, stream_id, True, 1024, 60s)) {
+        throw "STREAM-SEND-TIMEOUT", "the client took less than the minimum rate";
+    }
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the stream ID of the send
+    @param waiting @ref True while the send waits for the client, @ref False once it is done
+    @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet; 0 for none
+    @param window the window of the minimum rate, if the connection's rate is not set yet
+
+    @return @ref True if the connection was found below the minimum rate while the send waited, so that the send
+    must end; @ref False if not
+
+    @throw QUIC-SESSION-ERROR there is no such QUIC session
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+bool Socket::checkQuicStreamSendRate(int session_id, int stream_id, bool waiting, int min_rate, timeout window)
+        [flags=NAMED_ARGS; dom=NETWORK] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "checkQuicStreamSendRate", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of the minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    int rv = qore_socket_object_quic_check_stream_send_rate(s, session_id, stream_id, waiting, min_rate, window,
+        xsink);
+    return rv < 0 ? QoreValue() : QoreValue(rv > 0);
 }
 
 //! Returns the number of bytes of an HTTP/3 stream's data that the peer has acknowledged

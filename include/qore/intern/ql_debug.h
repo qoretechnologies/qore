@@ -39,6 +39,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <map>
 #include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
@@ -132,6 +133,13 @@ DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_
 //! dbg_hold_container_free() (qore#7198)
 typedef void (*qore_dbg_container_free_hook_t)(const char* type_name);
 DLLLOCAL extern std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook;
+
+class qore_hash_private;
+//! called by qore_hash_private::dbgReleaseStep() at each step of the release of a hash (at the start of
+//! qore_hash_private::freeMembers() and of each qore_hash_private::freeNextMember() call), while the hash is marked as
+//! being released; set by dbg_hash_access_during_release() (qore#7569)
+typedef void (*qore_dbg_hash_release_step_hook_t)(qore_hash_private* h);
+DLLLOCAL extern std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook;
 
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
@@ -353,6 +361,10 @@ DLLLOCAL bool qore_dbg_hash_harden_alloc_must_fail();
 //! returns true while dbg_hash_insert_with_hash_of() inserts a member whose stored hash is not the hash of its key
 //! (qore#7557), so that qore_hash_private::addMemberKnownAbsent() does not assert that it is
 DLLLOCAL bool qore_dbg_hash_foreign_member_hash();
+
+//! returns the sites of keyed containers recorded by QORE_KEYED_HASH_SITE(): site -> the hash of the probe of its
+//! hasher (qore#7750)
+DLLLOCAL std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites();
 
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);

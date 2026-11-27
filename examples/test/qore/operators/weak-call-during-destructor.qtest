@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, object destruction in another thread and AOT code generation and linking
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakCallDuringDestructorTest
+
+#! Tests method calls that another thread makes on an object while its destructor runs
+/** The child script (weak-call-during-destructor/weak-call-during-destructor.q) releases the last reference to an
+    object in another thread (or collects it with a cycle, or deletes it explicitly) and calls methods of the object
+    while the destructor runs: through a weak reference, a value read from one, an argument, and setter and compound
+    assignment methods called with a receiver of the object's exact class.  Once the last reference has been released,
+    the calls are refused with \c OBJECT-ALREADY-DELETED, so they never run while the object's members are deleted;
+    the destructor's own calls are made, and so are the calls made while an explicit delete runs the destructor
+    (qore#7509).  It also runs the two reproductions of the issue.  It runs in every execution mode, and compiled with
+    AOT at optimization levels 0 and 3, against the same expected output.
+*/
+class WeakCallDuringDestructorTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-weak-call-during-destructor-");
+    }
+
+    constructor() : QUnit::Test("WeakCallDuringDestructor", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/weak-call-during-destructor/weak-call-during-destructor.q";
+
+        addTestCase("calls while another thread runs the destructor, in every mode", \testModes());
+        addTestCase("calls while another thread runs the destructor, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    #! returns the output of the child script
+    private string expected() {
+        string rv;
+        # after the last reference was released (also from outside a cycle), calls are refused
+        foreach string how in ("last", "cycle") {
+            rv += sprintf("%s: weak call: OBJECT-ALREADY-DELETED: cannot call T::work() on an object that has "
+                "already been deleted\n", how);
+            rv += sprintf("%s: call through a value: OBJECT-ALREADY-DELETED\n", how);
+            rv += sprintf("%s: call with an argument: OBJECT-ALREADY-DELETED\n", how);
+            rv += sprintf("%s: setter call: OBJECT-ALREADY-DELETED\n", how);
+            rv += sprintf("%s: compound call: OBJECT-ALREADY-DELETED\n", how);
+            rv += sprintf("%s: %s: destructor calls: %s %s\n", how, how, how, how);
+            rv += sprintf("%s: call after the deletion: OBJECT-ALREADY-DELETED\n", how);
+        }
+        # while an explicit delete runs the destructor, the holders of strong references can call the object
+        rv += "delete: weak call: \"delete\"
+delete: call through a value: \"delete\"
+delete: call with an argument: \"delete\"
+delete: setter call: \"changed\"
+delete: compound call: 1
+delete: delete: destructor calls: delete delete
+delete: call after the deletion: OBJECT-ALREADY-DELETED
+repro: weak call: OBJECT-ALREADY-DELETED: cannot call T::work() on an object that has already been deleted
+value: the weak reference gives an object while it is destroyed: True
+value: call during the destructor: OBJECT-ALREADY-DELETED: cannot call Doc::name() on an object that has already been deleted
+value: call after the destructor: OBJECT-ALREADY-DELETED: cannot call Doc::name() on an object that has already been deleted
+";
+        return rv;
+    }
+
+    testModes() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        string exp = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/weak-call-during-destructor-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

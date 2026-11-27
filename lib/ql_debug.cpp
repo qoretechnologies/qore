@@ -58,6 +58,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QoreDatagramDispatcher.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include <qore/QoreSSLPrivateKey.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -9238,6 +9239,11 @@ public:
         UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
     }
 
+    //! Describes a failed call of a silent target for an assertion message: the call and its errno (qore#7732)
+    static std::string silentTargetError(const char* call, int err) {
+        return std::string("; ") + call + "() failed with errno " + std::to_string(err) + " (" + strerror(err) + ")";
+    }
+
     //! Makes a target that gets no answer for the connection tests; returns false if it cannot be made
     /** On Linux a listener whose accept queue is full, which drops the connection requests that it cannot queue;
         elsewhere a port that is bound and does not listen, which macOS does not answer.  The descriptors made are
@@ -9246,7 +9252,9 @@ public:
     static bool makeSilentTarget(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
             const std::string& when) {
         int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -9255,16 +9263,26 @@ public:
         sa.sin_family = AF_INET;
         sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         socklen_t salen = sizeof(sa);
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
-            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen);
-        UT_ASSERT(c, ok, ("connect close target is bound" + when).c_str());
-        if (!ok) {
+        const char* failed = nullptr;
+        if (::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)) {
+            failed = "bind";
+        } else if (::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen)) {
+            failed = "getsockname";
+        }
+        err = errno;
+        UT_ASSERT(c, !failed, ("connect close target is bound" + when
+            + (failed ? silentTargetError(failed, err) : std::string())).c_str());
+        if (failed) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds);
-        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
@@ -9932,34 +9950,187 @@ public:
     }
 
 #ifdef __linux__
+    //! The number of interrupted calls (EINTR) of the silent target helpers that were restarted (qore#7732)
+    static inline std::atomic<int> silent_target_restarts{0};
+
+    //! The number of signals that the handler of runSilentTargetInterrupted() received
+    static inline std::atomic<int> silent_target_signals{0};
+
+    static void silentTargetSignalHandler(int) {
+        silent_target_signals.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! The silent targets are made correctly when signals interrupt the calls of their helpers (qore#7732)
+    /** The tests run with signal handling on, so every interruptible call of a helper must be correct under EINTR: a
+        poll() is restarted with the time that is left, and the connect() of a connection that a signal interrupted goes
+        on in the background (it is not repeated): the socket is polled for writability and its SO_ERROR is read.  A
+        second thread sends a signal to the test thread without pause, whose handler is installed without SA_RESTART,
+        until the helpers have restarted a number of interrupted calls; every target made must still be silent.
+    */
+    static void runSilentTargetInterrupted(UnitTestCounters& c) {
+        const std::string when = " (interrupted by signals)";
+        struct sigaction act = {};
+        act.sa_handler = silentTargetSignalHandler;
+        sigemptyset(&act.sa_mask);
+        act.sa_flags = 0;
+        struct sigaction old_act = {};
+        bool installed = !::sigaction(SIGUSR2, &act, &old_act);
+        UT_ASSERT(c, installed, ("the handler of the signal is installed" + when).c_str());
+        if (!installed) {
+            return;
+        }
+        // the test thread takes the signal
+        sigset_t set, old_set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR2);
+        pthread_sigmask(SIG_UNBLOCK, &set, &old_set);
+        const int before = silent_target_restarts.load();
+        const int signals_before = silent_target_signals.load();
+        pthread_t target = pthread_self();
+        std::atomic<bool> stop{false};
+        std::thread storm([&stop, target]() {
+            while (!stop.load(std::memory_order_relaxed)) {
+                pthread_kill(target, SIGUSR2);
+                std::this_thread::yield();
+            }
+        });
+        int made = 0;
+        bool all_made = true;
+        auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (silent_target_restarts.load() - before < 10 && std::chrono::steady_clock::now() < limit) {
+            std::vector<int> fds;
+            struct sockaddr_in sa = {};
+            bool ok = makeSilentTarget(c, fds, sa, when) && makeSilentTarget6(c, fds, sa.sin_port, when);
+            for (int fd : fds) {
+                ::close(fd);
+            }
+            if (!ok) {
+                all_made = false;
+                break;
+            }
+            ++made;
+        }
+        stop.store(true);
+        storm.join();
+        pthread_sigmask(SIG_SETMASK, &old_set, nullptr);
+        ::sigaction(SIGUSR2, &old_act, nullptr);
+        UT_ASSERT(c, all_made, ("every silent target is made while signals interrupt the calls of its helpers" + when
+            + " (" + std::to_string(made) + " made)").c_str());
+        UT_ASSERT(c, silent_target_signals.load() > signals_before, ("the signals were delivered to the test thread"
+            + when).c_str());
+        UT_ASSERT(c, silent_target_restarts.load() - before >= 10, ("signals interrupted calls of the helpers, which "
+            "restarted them" + when + " (" + std::to_string(silent_target_restarts.load() - before) + " restarts)")
+            .c_str());
+    }
+
+    //! Waits for an event of a descriptor; a signal that interrupts the wait does not end it or lengthen it (qore#7732)
+    /** The wait is restarted with the time that is left of the limit given at the start, so that the limit does not grow
+        with the interruptions
+
+        @return the result of poll(): 1 if the event came, 0 if the limit passed, -1 with errno set on an error
+    */
+    static int silentTargetPoll(int fd, short events, int limit_ms) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(limit_ms);
+        struct pollfd pfd = {fd, events, 0};
+        int left_ms = limit_ms;
+        while (true) {
+            int rc = ::poll(&pfd, 1, left_ms);
+            if (rc >= 0 || errno != EINTR) {
+                return rc;
+            }
+            silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+            auto left = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now());
+            if (left.count() <= 0) {
+                return 0;
+            }
+            left_ms = static_cast<int>(left.count());
+        }
+    }
+
+    //! Connects a blocking socket, also when a signal interrupts the connect() (qore#7732)
+    /** The handshake of a connect() that a signal interrupts goes on in the background, and the call must not be made
+        again (it would fail with EALREADY, or with EISCONN once the handshake is done): the socket is polled for
+        writability, and the result of the connect is its SO_ERROR
+
+        @return 0 if the socket is connected, -1 with errno set otherwise
+    */
+    static int silentTargetConnect(int fd, const struct sockaddr* sa, socklen_t salen) {
+        if (!::connect(fd, sa, salen)) {
+            return 0;
+        }
+        if (errno != EINTR) {
+            return -1;
+        }
+        silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+        int rc = silentTargetPoll(fd, POLLOUT, 10000);
+        if (rc <= 0) {
+            if (!rc) {
+                errno = ETIMEDOUT;
+            }
+            return -1;
+        }
+        int so_err = 0;
+        socklen_t len = sizeof(so_err);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_err, &len)) {
+            return -1;
+        }
+        if (so_err) {
+            errno = so_err;
+            return -1;
+        }
+        return 0;
+    }
+
     //! Fills the accept queue of a listener whose backlog is 0, so that it drops the connection requests that follow
     /** A connection is made with a blocking connect(), which returns once the handshake is done; the listener is
         readable once the connection is in its accept queue, and the queue is full when its length (tcpi_unacked
         of a listener) exceeds its backlog (tcpi_sacked), where Linux drops a connection request (no timing is
         involved; the poll's limit only guards against a hang)
     */
-    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds) {
+    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds,
+            std::string* why = nullptr) {
+        auto fail = [why](const char* call) {
+            if (why) {
+                *why = silentTargetError(call, errno);
+            }
+            return false;
+        };
+        unsigned unacked = 0;
+        unsigned sacked = 0;
         for (int i = 0; i < 4; ++i) {
             struct tcp_info ti = {};
             socklen_t len = sizeof(ti);
             if (getsockopt(lfd, IPPROTO_TCP, TCP_INFO, &ti, &len)) {
-                return false;
+                return fail("getsockopt(TCP_INFO)");
             }
             if (ti.tcpi_unacked > ti.tcpi_sacked) {
                 return true;
             }
+            unacked = ti.tcpi_unacked;
+            sacked = ti.tcpi_sacked;
             int cfd = ::socket(sa->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0);
             if (cfd < 0) {
-                return false;
+                return fail("socket");
             }
             fds.push_back(cfd);
-            if (::connect(cfd, sa, salen)) {
+            if (silentTargetConnect(cfd, sa, salen)) {
+                return fail("connect");
+            }
+            int prc = silentTargetPoll(lfd, POLLIN, 10000);
+            if (prc != 1) {
+                if (prc < 0) {
+                    return fail("poll");
+                }
+                if (why) {
+                    *why = "; poll() timed out: the listener did not become readable within 10 s (attempt "
+                        + std::to_string(i + 1) + ")";
+                }
                 return false;
             }
-            struct pollfd pfd = {lfd, POLLIN, 0};
-            if (::poll(&pfd, 1, 10000) != 1) {
-                return false;
-            }
+        }
+        if (why) {
+            *why = "; the accept queue did not fill in 4 attempts (tcpi_unacked " + std::to_string(unacked)
+                + ", tcpi_sacked " + std::to_string(sacked) + ")";
         }
         return false;
     }
@@ -9968,7 +10139,9 @@ public:
     //! Makes a target on ::1 with the given port that gets no answer, as makeSilentTarget() does on 127.0.0.1
     static bool makeSilentTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when) {
         int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -9980,14 +10153,20 @@ public:
         sa6.sin6_addr = in6addr_loopback;
         sa6.sin6_port = port;
         bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
-        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when).c_str());
+        err = errno;
+        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when
+            + (ok ? std::string() : silentTargetError("bind", err))).c_str());
         if (!ok) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("the IPv6 connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds);
-        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("the IPv6 connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
@@ -16866,6 +17045,12 @@ class Http3ServerPollStateTest {
 public:
     DLLLOCAL static void run(UnitTestCounters& c) {
         ExceptionSink xsink;
+        // the operation's maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "HTTP/3 server poll state: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         ReferenceHolder<Http3ServerPollOperationPriv> op(new Http3ServerPollOperationPriv(nullptr, nullptr,
             std::chrono::microseconds(0), false), &xsink);
         // the I/O thread made a request ready for the dispatcher
@@ -25084,6 +25269,63 @@ static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+//! Debug-only: returns the sizes of the time zone region name caches (qore#7592)
+/** Keys: \c region_names (region names with zones), \c spelling_zones (zones of region spellings that are not the
+    name of the entry in the zoneinfo directory that they reach), \c spelling_names (spellings beyond the limit whose
+    entry names are remembered), \c restricted_spellings (spellings whose canonical names are remembered for
+    restricted code), \c region_file_reads (zoneinfo files of regions opened).  Not on Windows.
+*/
+static QoreValue f_dbg_tz_region_cache(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_region_cache() is not available on Windows");
+    return QoreValue();
+#else
+    QoreTimeZoneManager::DbgRegionCacheStats st = QTZM.dbgGetRegionCacheStats();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    rv->setKeyValue("region_names", static_cast<int64>(st.region_names), xsink);
+    rv->setKeyValue("spelling_zones", static_cast<int64>(st.spelling_zones), xsink);
+    rv->setKeyValue("spelling_names", static_cast<int64>(st.spelling_names), xsink);
+    rv->setKeyValue("restricted_spellings", static_cast<int64>(st.restricted_spellings), xsink);
+    rv->setKeyValue("region_file_reads", static_cast<int64>(st.region_file_reads), xsink);
+    return rv.release();
+#endif
+}
+
+//! Debug-only: sets the limits of the time zone region spelling caches; 0 restores a default (qore#7592)
+static QoreValue f_dbg_tz_set_spelling_limits(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 zones = get_param_value(params, 0).getAsBigInt();
+    int64 names = get_param_value(params, 1).getAsBigInt();
+    if (zones < 0 || names < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tz_set_spelling_limits() requires limits >= 0");
+        return QoreValue();
+    }
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_spelling_limits() is not available on Windows");
+#else
+    QTZM.dbgSetSpellingLimits(static_cast<size_t>(zones), static_cast<size_t>(names));
+#endif
+    return QoreValue();
+}
+
+//! Debug-only: sets the zoneinfo directory from which time zone regions that are not cached are read (qore#7592)
+/** NOTHING restores the directory of the build.  Refused for restricted code.  Not on Windows.
+*/
+static QoreValue f_dbg_tz_set_zoneinfo_root(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_zoneinfo_root() is not available on Windows");
+#else
+    // the directory can be an inline short string (issue #7038), which get<const QoreStringNode>() reads as an absent
+    // argument, and the root would be reset
+    QoreStringDataHelper dir(get_param_value(params, 0));
+    if (dir && strlen(dir.c_str()) != dir.size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the zoneinfo directory has a NUL character");
+        return QoreValue();
+    }
+    QTZM.dbgSetZoneinfoRoot(dir ? dir.c_str() : nullptr, xsink);
+#endif
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -25482,6 +25724,44 @@ static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, R
         return QoreValue();
     }
     return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: holds or releases the flushes of the callbacks of the global async I/O controller made in callbacks
+/** A held flush may return, and still counts as a callback that waits in the flush, so that a test can check what a
+    flush made by another thread does then (qore#7509)
+*/
+static QoreValue f_dbg_async_io_hold_callback_flush(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    bool hold = get_param_value(params, 0).getAsBool();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgHoldCallbackFlush(hold);
+    return QoreValue();
+}
+
+//! Debug-only: waits until a flush of the callbacks of the global async I/O controller made in a callback is held
+/** @return True if a flush is held, False if none was when the timeout elapsed
+*/
+static QoreValue f_dbg_async_io_wait_callback_flush_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitCallbackFlushHeld(static_cast<int>(timeout_ms));
 }
 
 //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner of the global async I/O controller
@@ -30467,6 +30747,12 @@ public:
             xsink.clear();
             return;
         }
+        // the dispatchers' maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "stateless reset: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         Disp d1, d1b, d2, none;
         UT_ASSERT(c, d1.ensureStatelessResetKey(*k1) && d1b.ensureStatelessResetKey(*k1)
             && d2.ensureStatelessResetKey(*k2), "stateless reset: the keys are derived");
@@ -31442,6 +31728,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runConnectClosedSocketAttempt(c);
 #ifdef __linux__
+    AsyncIoDescriptorHoldTest::runSilentTargetInterrupted(c);
     AsyncIoDescriptorHoldTest::runConnectUnixClosedSocket(c);
 #endif
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
@@ -33042,6 +33329,21 @@ static QoreValue f_dbg_hash_harden_alloc_failed(const QoreListNode* params, Runt
     return dbg_hash_harden_alloc_failed.exchange(false);
 }
 
+//! Debug-only: returns the sites of the containers with keyed hashes that were constructed in this process
+//! (QORE_KEYED_HASH_SITE(), qore#7750)
+/** @return a hash of the site names to the hash of the probe of the site's hasher, as 16 hexadecimal digits; the
+    hash depends on the secret key of the process (\c QORE_DBG_HASH_KEY in debug builds)
+*/
+static QoreValue f_dbg_keyed_hash_sites(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(stringTypeInfo), xsink);
+    for (const auto& i : qore_dbg_get_keyed_hash_sites()) {
+        QoreStringNode* str = new QoreStringNode;
+        str->sprintf("%016llx", static_cast<unsigned long long>(i.second));
+        rv->setKeyValue(i.first.c_str(), str, xsink);
+    }
+    return rv.release();
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -34161,6 +34463,117 @@ static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeC
     return rv.release();
 #else
     xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
+#ifdef DEBUG
+namespace {
+//! the access to the members of a hash during its release that dbg_hash_access_during_release() makes
+enum class HashReleaseAccess {
+    LOOKUP,
+    LVALUE,
+    ITERATE,
+};
+
+//! the hash of the current dbg_hash_access_during_release() call in this thread, if any
+thread_local QoreHashNode* hash_release_access_target = nullptr;
+//! the access that the current dbg_hash_access_during_release() call in this thread makes
+thread_local HashReleaseAccess hash_release_access = HashReleaseAccess::LOOKUP;
+
+//! runs at each step of the release of each hash while dbg_hash_access_during_release() is armed; accesses the
+//! members of the hash of the call in this thread once
+void dbg_hash_release_access_hook(qore_hash_private* p) {
+    QoreHashNode* h = hash_release_access_target;
+    if (!h || qore_hash_private::get(*h) != p) {
+        return;
+    }
+    hash_release_access_target = nullptr;
+    // each access asserts in a debug build that the hash is not being released; "b" is a member that is not freed
+    // yet at the first step of the release on both paths
+    switch (hash_release_access) {
+        case HashReleaseAccess::LOOKUP:
+            p->findMember("b");
+            break;
+        case HashReleaseAccess::LVALUE: {
+            // the lvalue of an assignment, which can create the member (findCreateMember())
+            hash_assignment_priv ha(*p, "b");
+            break;
+        }
+        case HashReleaseAccess::ITERATE: {
+            ConstHashIterator hi(h);
+            hi.next();
+            break;
+        }
+    }
+}
+}
+#endif
+
+//! accesses the members of a hash during its release, which a debug build asserts never happens (qore#7569)
+/** Makes a hash with the members \c "a", \c "b" and \c "c" and releases it; at the first step of its release, a hook
+    looks up a member (\c "lookup"), takes a member as an lvalue (\c "lvalue") or iterates the members
+    (\c "iterate").  Each access trips an assertion that ends the process: a test runs it in a child process.
+
+    @param access \c "lookup", \c "lvalue" or \c "iterate"
+    @param deep if true, the hash is nested in lists deeply enough for its release to be made by the iterative
+    release of nested containers (qore_hash_private::freeNextMember()), else by qore_hash_private::freeMembers()
+
+    @throw DBG-ARGUMENT-ERROR an unknown access, the hook is armed by another call, or the build is not a debug build
+*/
+static QoreValue f_dbg_hash_access_during_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef DEBUG
+    HARD_QORE_VALUE_PARAM(access, const QoreStringNode, params, 0);
+    bool deep = HARD_QORE_VALUE_BOOL(params, 1);
+    HashReleaseAccess a;
+    if (!strcmp(access->c_str(), "lookup")) {
+        a = HashReleaseAccess::LOOKUP;
+    } else if (!strcmp(access->c_str(), "lvalue")) {
+        a = HashReleaseAccess::LVALUE;
+    } else if (!strcmp(access->c_str(), "iterate")) {
+        a = HashReleaseAccess::ITERATE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown access '%s'; expecting \"lookup\", \"lvalue\" or "
+            "\"iterate\"", access->c_str());
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("a", 1, xsink);
+    h->setKeyValue("b", 2, xsink);
+    h->setKeyValue("c", 3, xsink);
+    QoreHashNode* target = *h;
+    ValueHolder v(h.release(), xsink);
+    if (deep) {
+        // nested more deeply than the recursive release goes (see qore_container_free_helper)
+        for (unsigned i = 0; i < QORE_CONTAINER_FREE_RECURSION_DEPTH + 4; ++i) {
+            ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+            l->push(v.release(), xsink);
+            v = l.release();
+        }
+    }
+
+    qore_dbg_hash_release_step_hook_t expected = nullptr;
+    if (!qore_dbg_hash_release_step_hook.compare_exchange_strong(expected, dbg_hash_release_access_hook)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() is armed by another call");
+        return QoreValue();
+    }
+    // disarms the hook when the release ends
+    struct HookHelper {
+        HookHelper(QoreHashNode* target, HashReleaseAccess a) {
+            hash_release_access_target = target;
+            hash_release_access = a;
+        }
+        ~HookHelper() {
+            hash_release_access_target = nullptr;
+            qore_dbg_hash_release_step_hook.store(nullptr);
+        }
+    } hook_helper(target, a);
+    v = QoreValue();
+    return QoreValue();
+#else
+    xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() requires a debug build");
     return QoreValue();
 #endif
 }
@@ -35459,8 +35872,12 @@ static bool dbg_quic_wait_until(const std::function<bool()>& pred, int timeout_m
 }
 
 bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
-    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
-        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+    if (dbg_quic_hold_session.load(std::memory_order_acquire) != session_id) {
+        return false;
+    }
+    int64_t held = dbg_quic_hold_stream.load(std::memory_order_acquire);
+    // -2: every stream of the session
+    return held == stream_id || held == -2;
 }
 
 bool qore_dbg_quic_stream_end_held() {
@@ -35470,10 +35887,11 @@ bool qore_dbg_quic_stream_end_held() {
 //! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
 //! flow-control credit
 /** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
-    stream's send buffer deterministically.  Only one stream is held at a time.
+    stream's send buffer deterministically.  Only one stream, or all the streams of one session, are held at a time.
 
     @param session_id the QUIC session ID
-    @param stream_id the HTTP/3 stream ID of a streaming response
+    @param stream_id the HTTP/3 stream ID of a streaming response, or -1 for all the streams of the session, as when
+    its client grants no credit to any of them (qore#7280)
     @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
     thread of its socket before it writes, so that the flush writes the data held (qore#7414)
     @param with_end if True, the data of a streamed body is held also after the body has ended (qore#7653)
@@ -35482,14 +35900,15 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
     bool until_flush = get_param_value(params, 2).getAsBool();
-    if (session_id <= 0 || stream_id < 0) {
+    if (session_id <= 0 || stream_id < -1) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
         return QoreValue();
     }
-    // the stream is set first, so that no other stream of the session matches meanwhile
+    // the stream is set first, so that no other stream of the session matches meanwhile; -1 (all) is kept as -2, as
+    // -1 means no stream
     dbg_quic_hold_session.store(0, std::memory_order_release);
-    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id == -1 ? -2 : stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
     dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
@@ -38953,6 +39372,10 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_callback_flush", f_dbg_async_io_hold_callback_flush,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_callback_flush_held", f_dbg_async_io_wait_callback_flush_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_hold_io_commands", f_dbg_async_io_hold_io_commands,
@@ -39078,6 +39501,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
+    qns.addBuiltinVariant("dbg_tz_region_cache", f_dbg_tz_region_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
+    qns.addBuiltinVariant("dbg_tz_set_zoneinfo_root", f_dbg_tz_set_zoneinfo_root, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "dir");
+    qns.addBuiltinVariant("dbg_tz_set_spelling_limits", f_dbg_tz_set_spelling_limits, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "zones", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "names");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
@@ -39280,6 +39710,8 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 0);
     qns.addBuiltinVariant("dbg_hash_harden_alloc_failed", f_dbg_hash_harden_alloc_failed, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_keyed_hash_sites", f_dbg_keyed_hash_sites, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -39380,6 +39812,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "release");
     qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
+    qns.addBuiltinVariant("dbg_hash_access_during_release", f_dbg_hash_access_during_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "access", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "deep");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

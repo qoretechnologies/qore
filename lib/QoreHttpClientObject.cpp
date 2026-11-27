@@ -1369,7 +1369,8 @@ struct qore_httpclient_priv {
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
     // Thread safety: protected by alt_svc_lock, a leaf lock: the requests of the connection manager path read and
     // update it without msock->m, from all the threads that send requests on the client at once (qore#7720)
-    std::unordered_map<std::string, AltSvcEntry> alt_svc_cache;
+    // (an ordered map: its keys need no hash, qore#7750)
+    std::map<std::string, AltSvcEntry> alt_svc_cache;
     std::mutex alt_svc_lock;
 
     // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
@@ -3519,7 +3520,7 @@ struct qore_httpclient_priv {
     //! Parsed auth challenge from WWW-Authenticate / Proxy-Authenticate header
     struct AuthChallenge {
         std::string scheme;  //!< "Basic" or "Digest"
-        std::unordered_map<std::string, std::string> params;  //!< realm, nonce, qop, algorithm, etc.
+        std::map<std::string, std::string> params;  //!< realm, nonce, qop, algorithm, etc. (an ordered map, qore#7750)
     };
 
     //! Parse a WWW-Authenticate or Proxy-Authenticate header value

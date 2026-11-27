@@ -44,8 +44,8 @@ class PipeBodyHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         hash<auto> hi = cx."header-info";
-        # debug-builtin-guard: HTTP/3 only, whose case testPump() skips without library debugging
-        if (hi.http3) {
+        # the HTTP/3 test case skips without a debug build of the library
+        if (hi.http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             # the client's credit is withheld
             call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id);
         }
@@ -61,6 +61,11 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         addTestCase("HTTP/3: a pipe body on a stream without credit does not make the I/O thread run continuously",
             \testPump(), True);
         set_return_value(main());
+    }
+
+    #! True when this test runs under valgrind
+    private static bool underValgrind() {
+        return is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/;
     }
 
     #! reads a named pipe to its end, unless its writer has closed it
@@ -101,8 +106,7 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         hs.setDefaultHandler("pipe", h);
         hs.waitForAsyncIo();
         on_exit hs.stop();
-        # debug-builtin-guard: HTTP/3 only, which skips above without library debugging
-        if (http3) {
+        if (http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             on_exit call_function("dbg_quic_release_stream_data");
         }
         int port = hs.addListener(<HttpListenerOptionInfo>{
@@ -184,14 +188,17 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         hash<string, int> start = TestCpuTime::cpuSnapshot();
         usleep(WaitSecs * 1000000);
         float used = TestCpuTime::cpuTimeSince(start);
-        # an idle server uses a few milliseconds (under 0.05 s under valgrind); one that wakes again and again uses
-        # far more (a 1 ms timer: 0.15 to 0.3 s; continuous runs: the whole wait)
-        assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the stream waited %d s for "
-            "credit", used, WaitSecs));
+        # an idle server uses a few milliseconds; one that wakes again and again uses far more (a 1 ms timer: 0.15 to
+        # 0.3 s; continuous runs: the whole wait).  Under valgrind, which runs code many times slower, the few
+        # milliseconds of an idle server measure 0.14 to 0.16 s, as much as a server that wakes, so the bound is not
+        # checked there; the test still runs, and valgrind checks the memory of the wait
+        if (!underValgrind()) {
+            assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the stream waited %d s for "
+                "credit", used, WaitSecs));
+        }
 
         # the credit comes: the whole body arrives
-        # debug-builtin-guard: HTTP/3 only, which skips above without library debugging
-        if (http3) {
+        if (http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             call_function("dbg_quic_release_stream_data");
             hash<auto> r = h3_result.get(120s);
             assertEq(NOTHING, r.err);

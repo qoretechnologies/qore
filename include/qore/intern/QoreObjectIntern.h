@@ -1242,9 +1242,46 @@ public:
 
     //! starts a call of the method @a mname of the class @a cls on the object
     /** raises "cannot call <class>::<method>() on an object that has already been deleted" if the object has been
-        deleted (issue #5824), naming @a cls, or the object's class if there is none
+        deleted (issue #5824), naming @a cls, or the object's class if there is none; also for a method call that
+        another thread makes once the object's last reference has been released and its destructor runs, or its
+        members are deleted (qore#7509; see refusesCallLocked()): the destructor's own calls are made
+
+        @return 0 if the call was started, -1 if it was refused (an exception was raised)
     */
     DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
+
+    //! the part of startCall() for an object that is being destroyed or has been deleted: \a st is its status
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD int startCallSlow(int st, const qore_class_private* cls,
+            const char* mname, ExceptionSink* xsink);
+
+    //! returns true if a method call of the current thread on the object is refused (qore#7509)
+    /** The object has been deleted, or another thread destroys it after its last reference was released (its
+        destructor runs, or its members are deleted when the destructor has returned): a call that reached it through
+        a weak reference would use the members while they are deleted.  The destructor's own calls are not refused,
+        nor are calls while an explicit \c delete runs, which every holder of a strong reference can make (the status
+        is then the deleting thread's, but no last reference was released).  Reads the status with the object's lock
+        held, as a deletion abandoned because of a reference taken before it undoes its marking with the lock held.
+    */
+    DLLLOCAL bool refusesCallLocked() const;
+
+    //! Returns 0 if a fast call path may enter the object, -1 if it has been deleted, 1 if the call must take the
+    //! path of startCall() (the object is being destroyed by another thread, qore#7509)
+    /** For the call paths that enter an object without startCall() (the IR interpreter's inline calls, the runtime's
+        fast method calls, native method entries and AOT member method paths), which hold a reference to the object
+        while the call runs: the reference was taken before (customRefIntern(), whose increment acquires the marking of
+        a deletion that decided before it: see customDeref()), or another thread keeps the object for the call.  The
+        status is read once, and no atomic operation is added for an object that is not being destroyed.
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static int checkFastCallEntry(const QoreObject* obj) {
+        int st = obj->priv->status.load(std::memory_order_relaxed);
+        if (st == OS_OK) [[likely]] {
+            return 0;
+        }
+        return checkFastCallEntrySlow(st);
+    }
+
+    //! the part of checkFastCallEntry() for an object that is not OS_OK
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static int checkFastCallEntrySlow(int st);
 
     //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
     /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself
