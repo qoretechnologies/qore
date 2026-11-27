@@ -454,9 +454,12 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         && other->columns[right_key_indices[0]].data->type == ColumnType::INT64;
 
     // Build hash table from the right DataFrame: key → list of row indices
-    std::unordered_map<std::string, std::vector<int64_t>> right_hash;
-    std::unordered_map<int64_t, std::vector<int64_t>> right_int64_hash;
-    std::unordered_map<int64_t, int64_t> right_int64_unique_hash;
+    qore_keyed_string_map<std::vector<int64_t>> right_hash;
+    QORE_KEYED_HASH_SITE("dataframe-12", right_hash);
+    qore_keyed_fold_int_map<int64_t, std::vector<int64_t>> right_int64_hash;
+    QORE_KEYED_HASH_SITE("dataframe-13", right_int64_hash);
+    qore_keyed_fold_int_map<int64_t, int64_t> right_int64_unique_hash;
+    QORE_KEYED_HASH_SITE("dataframe-14", right_int64_unique_hash);
     std::vector<int64_t> right_null_rows;
     bool unique_right_keys = false;
     if (single_int64_key && how == "left") {
@@ -474,7 +477,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 }
                 right_null_rows.push_back(r);
             } else {
-                auto inserted = right_int64_unique_hash.emplace(rkey.int_data[r], r);
+                auto inserted = right_int64_unique_hash.try_emplace(rkey.int_data[r], r);
                 if (!inserted.second) {
                     unique_right_keys = false;
                     break;
@@ -794,8 +797,8 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     const ColumnData* left_int64_key = single_int64_key ? columns[left_key_indices[0]].data.get() : nullptr;
     for (int64_t l = 0; l < n_rows; ++l) {
         const std::vector<int64_t>* matched_rows = nullptr;
-        std::unordered_map<std::string, std::vector<int64_t>>::const_iterator string_it;
-        std::unordered_map<int64_t, std::vector<int64_t>>::const_iterator int_it;
+        qore_keyed_string_map<std::vector<int64_t>>::const_iterator string_it;
+        qore_keyed_fold_int_map<int64_t, std::vector<int64_t>>::const_iterator int_it;
 
         if (single_int64_key) {
             if (left_int64_key->isNull(l)) {
