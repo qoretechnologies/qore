@@ -4116,6 +4116,10 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @code{.py}
 *string str = get_script_path();
     @endcode
+
+    @note for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", this function returns the
+    path that the host set for the Program, unchanged, while the locations of code that such code is given name the
+    files without their directories (see @ref no-external-info "%no-external-info")
 */
 *string get_script_path() {
    return q_get_runtime_call_program(runtime_cfg)->getScriptPath();
@@ -4128,6 +4132,10 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @code{.py}
 *string str = get_script_dir();
     @endcode
+
+    @note for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", this function returns the
+    directory that the host set for the Program, unchanged, while the locations of code that such code is given name
+    the files without their directories (see @ref no-external-info "%no-external-info")
 */
 *string get_script_dir() {
    return q_get_runtime_call_program(runtime_cfg)->getScriptDir();
@@ -4251,10 +4259,9 @@ hash<auto> h = get_qore_library_info();
     host's installation of the library, so it is external information: code restricted with
     @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" cannot call it (since %Qore 3.0); the version and platform
     of the library are also available as @ref system_and_build_constants "system and build constants" such as
-    @ref Qore::VersionString "VersionString" and @ref Qore::PlatformOS "PlatformOS", but the constants
+    @ref Qore::VersionString "VersionString" and @ref Qore::PlatformOS "PlatformOS", and the build constants
     @ref Qore::BuildHost "BuildHost", @ref Qore::Compiler "Compiler", @ref Qore::CFLAGS "CFLAGS" and
-    @ref Qore::LDFLAGS "LDFLAGS" still give build details to code with this restriction, as constants have no
-    @ref function_domains "functional domain"
+    @ref Qore::LDFLAGS "LDFLAGS" require the same @ref function_domains "functional domain" as this function
 
     @note the \c init and \c del closures of a user module's declaration have the restrictions of the module header,
     which include @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", so a closure that calls this function needs

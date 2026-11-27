@@ -26,7 +26,8 @@ sub check() {
     printf("string: %y\n", b.v);
     try {
         Box<int> i();
-        i.v = "x";
+        auto wrong = "x";
+        i.v = wrong;
         printf("no error\n");
     } catch (hash<ExceptionInfo> ex) {
         printf("%s\n", ex.err);

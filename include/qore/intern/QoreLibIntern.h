@@ -564,6 +564,89 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+//! returns true if the list or hash \a n gives a new holder a copy (out of line; see qore_weak_shared())
+DLLLOCAL bool qore_weak_shared_container(const AbstractQoreNode* n);
+//! returns true if the list or hash \a n gives a local variable that it is stored in a copy (out of line; see
+//! qore_weak_shared_local())
+DLLLOCAL bool qore_weak_shared_local_container(const AbstractQoreNode* n);
+//! returns true if \a n is a list or hash that a weak reference designates, whatever holds it (qore#7342)
+DLLLOCAL bool qore_weak_designated_container(const AbstractQoreNode* n);
+//! the number of the weak references to lists and hashes in the process (qore#7419)
+/** A list or hash that a weak reference designates counts it (its weak holders), and this count is raised before and
+    released after each container's (qore_weak_holder()); while it is zero, no container is weakly designated, and the
+    share tests (qore_weak_shared(), qore_weak_shared_local()) are false without reading the container.  Relaxed
+    ordering is enough: a thread that gets a container from another gets it through something that orders the
+    creation of a weak reference to it before (a lock of an lvalue, a queue)
+*/
+DLLLOCAL extern std::atomic<unsigned> qore_weak_container_holders;
+
+//! returns true if \a v is a list or hash that a new holder other than a local variable takes as a copy of its own: a
+//! weak reference designates it (David, qore#7342: every share point copies it, also when nothing else holds it); the
+//! tag and the type are tested inline
+static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
+    // QoreValue::getType() is not inline
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.getPtr();
+    qore_type_t t = n->getType();
+    return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_container(n);
+}
+
+//! returns true if \a v is a list or hash that a local variable that it is stored in takes as a copy of its own: a
+//! weak reference designates it and another strong holder holds it; one that nothing else holds is moved, and the
+//! weak references follow it (David, qore#7342)
+static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared_local(const QoreValue& v) {
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.getPtr();
+    qore_type_t t = n->getType();
+    return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_local_container(n);
+}
+//! takes \a v, a list or hash that qore_weak_shared() is true for, and returns a copy of its own (qore#7342); the
+//! values in it are shared
+DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink);
+//! the value that a new holder stores: a list or hash that qore_weak_shared() is true for is replaced by a copy of its
+//! own (qore#7342); returns true if the value stored needs a scan
+/** A container that qore_weak_shared() is true for needs a scan (a weak reference pins it), so the test is made only
+    for such a value
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_store_needs_scan(QoreValue& v) {
+    // needs_scan() with the tags tested inline: only a node held as an ordinary reference, or an enum value, whose
+    // member's value can be a node, can need a scan; an opaque reference and every other inline value cannot
+    if (v.isPlainPointer()) {
+        if (!needs_scan(v.getPtr())) {
+            return false;
+        }
+    } else if (!v.isEnum() || !needs_scan(v)) {
+        return false;
+    }
+    if (qore_weak_shared(v)) [[unlikely]] {
+        v = qore_weak_share_copy(v, nullptr);
+        return needs_scan(v);
+    }
+    return true;
+}
+//! raises (\a dt = 1) or releases (\a dt = -1) the count of the weak references that designate the list or hash
+//! \a n (qore#7342)
+DLLLOCAL void qore_weak_holder(const AbstractQoreNode* n, int dt);
+//! pins a list or hash that a weak reference designates (qore#7318); another value is left as it is
+/** The caller makes sure that the holders of the container count it as needing a scan: the container is held by
+    nothing but a variable, or the lvalue helper whose path holds it writes the change up the path
+*/
+DLLLOCAL void qore_weak_target_pin(const QoreValue& v);
+//! returns the list or hash that a weak assignment of \a v designates (qore#7318), with a reference of its own
+/** \a v itself if a weak reference pins it (the source of the assignment was made unique through a path or in a
+    variable), otherwise a copy of \a v, which is pinned: the container of an expression can have holders that a
+    pin would not count right, and a weak reference made from an expression designates a value of its own.  A value
+    of another type is returned with a new reference.
+*/
+DLLLOCAL QoreValue qore_weak_source_container(const QoreValue& v);
+//! pins \a copy if \a orig, which it is a copy-on-write copy of, is pinned (qore#7318)
+DLLLOCAL void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy);
+//! Whether retaining a replaced return could postpone an object destructor (#5992, #7022).
+DLLLOCAL bool qore_return_release_observable(const QoreValue& value);
 
 //! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
 /** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
@@ -1130,6 +1213,27 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
     @return the value replaced, or NOTHING if the node was unique
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
+
+//! Returns the value that a weak assignment holds of its source while it resolves its target (qore#7405)
+/** A list or a hash, which an lvalue holds, is held through a weak reference: a strong reference of the assignment's
+    own would make the container shared, so that a copy-on-write step of the target's path, which can pass through it
+    (h.w := h), copied it, and the weak reference assigned, as every weak reference to the containers below it, would
+    designate the original, which nothing holds.  The store locks the weak reference after the path is resolved (see
+    LValueHelper::assign()).  A weak reference to an object is returned as its target, as the source is read in the
+    other execution modes; any other value is returned as it is.
+
+    @param v the value read from the source, with a reference that the call takes over
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink);
+
+//! qore_weak_assignment_source() for the value that a local with IR storage holds, which the caller keeps
+/** The value returned has a reference of its own.  A weak reference to a list or a hash is given as it is; a
+    reference, which the local holds in its slot, is resolved, and the lvalue that it designates is read as the unique
+    step of the source reads a variable: a shared list or hash is made unique first (qore#5756, qore#7405).
+
+    @return the operand of the weak assignment; NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source_borrowed(const QoreValue& v, ExceptionSink* xsink);
 
 #ifndef HAVE_ATOLL
 #ifdef HAVE_STRTOIMAX
@@ -2882,6 +2986,22 @@ DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const ch
     @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
 */
 DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+//! returns true if the file-system policy of a sandbox applies to the sources that the code on this thread reads by
+//! name (\c %include, modules loaded by path): a sandbox governs the code, and no library module is being loaded
+DLLLOCAL bool q_source_read_policy_applies();
+
+//! opens a source for reading with the file-system policy of the calling code (qore#7518)
+/** The file opened is the file that the policy checked; it must be a regular file
+
+    @return the stream, or nullptr: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink);
+
+//! reads a source with the file-system policy of the calling code into \a out (see q_open_policy_checked_source())
+/** @return 0 for OK, -1 for an error: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink);
 
 //! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
 /** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches

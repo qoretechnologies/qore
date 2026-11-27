@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in a child process whose process-wide module path holds the library modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Library modules that sandboxed code loads into a container of its own are read as library code: a separated module
+# lists and reads its sources, and a module reads the resources beside it when it is initialized, whatever the
+# file-system policy of the sandbox, while any other file is read with that policy (qore#7518).  The library
+# directory must be in the process-wide module path when the library is initialized, so the checks run in a child
+# process started with QORE_MODULE_DIR.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class SandboxModuleSourcePolicyLibraryTest
+
+class SandboxModuleSourcePolicyLibraryTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string env;
+        TmpDir tmp("q7518lib-");
+    }
+
+    const Host = '%new-style
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+sm.setNetworkDefaultPolicy(False);
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+p.parse("auto sub t(string m) { Program c(PO_NEW_STYLE); c.loadApplyToPrivateUserModule(m); return \"ok\"; }", "t");
+foreach string m in (("SbxLibSep", "SbxLibRes", "SbxLibUp", "SbxLibLink")) {
+    try {
+        printf("%s: %s\n", m, p.callFunction("t", m));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s: %s\n", m, ex.err, ex.desc =~ /outside(-link)?\.txt/ ? "outside" : ex.desc);
+    }
+}
+# a read of a resource of a library module by sandboxed code after the initialization is read with its policy
+Program p2(PO_NEW_STYLE);
+p2.setSandboxManager(sm);
+p2.parse("%requires SbxLibRun\nauto sub r() { return SbxLibRun::readAtRuntime(); }", "r");
+try {
+    printf("runtime: %s\n", p2.callFunction("r"));
+} catch (hash<ExceptionInfo> ex) {
+    printf("runtime: %s\n", ex.err);
+}
+';
+
+    constructor() : QUnit::Test("sandbox module source policy: library modules", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        addTestCase("library modules are loaded into a container under a deny-all policy", \containerTest());
+        set_return_value(main());
+    }
+
+    containerTest() {
+        string lib = tmp.path + DirSep + "lib";
+        mkdir(lib);
+        # a separated module with a source file: its directory is listed and its sources are read as library code
+        string sep = lib + DirSep + "SbxLibSep";
+        mkdir(sep);
+        writeFile(sep + DirSep + "SbxLibSep.qm", "%new-style\nmodule SbxLibSep { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\n");
+        writeFile(sep + DirSep + "Code.qc", "public namespace SbxLibSep { const Value = \"value\"; }\n");
+        # a single-file module that reads a resource beside it when it is initialized
+        writeFile(lib + DirSep + "SbxLibRes.qm", "%new-style\nmodule SbxLibRes { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\npublic namespace SbxLibRes { const Res = "
+            "ReadOnlyFile::readTextFile(get_script_dir() + \"/res2.txt\"); }\n");
+        writeFile(lib + DirSep + "res2.txt", "resource");
+        # a file outside of the directory of library code
+        writeFile(tmp.path + DirSep + "outside.txt", "outside");
+        # library modules whose initialization reads a file outside of their directory of library code: through '..'
+        # and through a link
+        writeFile(lib + DirSep + "SbxLibUp.qm", "%new-style\nmodule SbxLibUp { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\npublic namespace SbxLibUp { const Res = "
+            "ReadOnlyFile::readTextFile(get_script_dir() + \"/../outside.txt\"); }\n");
+        symlink(tmp.path + DirSep + "outside.txt", lib + DirSep + "outside-link.txt");
+        writeFile(lib + DirSep + "SbxLibLink.qm", "%new-style\nmodule SbxLibLink { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\npublic namespace SbxLibLink { const Res = "
+            "ReadOnlyFile::readTextFile(get_script_dir() + \"/outside-link.txt\"); }\n");
+        # a library module that reads its resource when it is called
+        writeFile(lib + DirSep + "SbxLibRun.qm", "%new-style\nmodule SbxLibRun { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\npublic namespace SbxLibRun { const Dir = get_script_dir(); "
+            "public string sub readAtRuntime() { return ReadOnlyFile::readTextFile(Dir + \"/res2.txt\"); } }\n");
+
+        string host = tmp.path + DirSep + "host.q";
+        writeFile(host, Host);
+        string out = backquote(sprintf("%s QORE_MODULE_DIR='%s' '%s' '%s' 2>&1", env, lib, qore_bin, host));
+        assertEq("SbxLibSep: ok\nSbxLibRes: ok\nSbxLibUp: FILESYSTEM-ACCESS-DENIED: outside\n"
+            "SbxLibLink: FILESYSTEM-ACCESS-DENIED: outside\nruntime: FILESYSTEM-ACCESS-DENIED\n", out);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

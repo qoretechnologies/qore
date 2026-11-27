@@ -510,7 +510,10 @@ enum class QoreIROpcode : uint16_t {
     SetImplicitArgv     = 275,  // Set list directly as implicit args (for foldl $1/$2)
     PopImplicitArg      = 276,  // Restore previous $1 context (operand = old context)
     PushImplicitElement = 277,  // Push index as $#, result = old element for restoration
-    PopImplicitElement  = 278,  // Restore previous $# context (operand = old element)
+    // Restore previous $# context (operand = old element); with a second operand, the result of the
+    // PushImplicitElement before a foreach statement's loop, it sets the index of the loop's next element
+    // (operands[0]) and leaves the push open: the loop saves the enclosing element once (qore#7379)
+    PopImplicitElement  = 278,
 
     // Direct access opcodes (279-282)
     HashKeyAccess       = 279,  // Load hash.key - direct hash member access
@@ -888,6 +891,8 @@ enum class QoreIROpcode : uint16_t {
     //! the end of the frame.  The instruction releases the reference only when the function holds it as a temporary
     //! that it owns, and only on the path that it is on: the slot of the temporary is cleared, so the release at the
     //! end of the frame finds nothing to release.  See design/temporary-lifetime.md.
+    //! With element_type == objectTypeInfo, release a replaced pending return if releasing it can run an object
+    //! destructor. Other data stays in the slot until the frame cleanup or a debugger path resumes that return.
     ReleaseOwnedTemp = 411,
 
     //! Fire the debugger's step event for the statement that follows (QoreIRDebugStatementInstruction).
@@ -1162,8 +1167,21 @@ enum class QoreIROpcode : uint16_t {
     ReleaseHandedOverReturn = 442,
     //! Release an operator source loaded from a local unless the load read through a reference.
     ReleasePlainLocalRead = 443,
+    //! Take an argument's own reference, copying a list or hash designated by a weak reference.
+    CopyCallArg = 444,
+    //! Release the owned source of CopyCallArg. With a second operand (the argument), keep the original call
+    //! temporary in the statement scope when the argument took a copy.
+    ReleaseCallArgSource = 445,
+    /** Reads the value of the lvalue that a reference names: the value of the typed assignment of a member or an
+        element that holds a reference (QoreReadReferenceOperatorNode, qore#6662)
+        One operand, the value of the member or element access; the result is the referenced value, with a reference of
+        its own, or the operand's value itself, with a reference of its own, when it is not a reference.  Raises an
+        exception if the referenced lvalue cannot be read (a member of a deleted object, for example).  See
+        qore_rt_read_reference_local().
+    */
+    ReadReferenceThrough = 446,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (447, 448, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1172,8 +1190,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
-static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReadReferenceThrough);
+static_assert(QORE_IR_MAX_OPCODE == 446, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1621,6 +1639,22 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! QoreIRInstruction::restore_on_exception_exit: whether and when the frame's exit on an exception restores an
+//! implicit context (or releases an operator's iterator) that the instruction set
+enum class QoreIRExceptionExitRestore : uint8_t {
+    None,           //!< not restored by the frame's exit
+    //! restored (or released) first, before the handlers and the temporaries of the frame: the implicit arguments and
+    //! element of an operator in an expression and its iterator, which the AST interpreter restores and releases when
+    //! the exception unwinds the operator (qore#5670)
+    BeforeHandlers,
+    //! restored after the handlers of the frame have run: the implicit element of a foreach statement, which the AST
+    //! interpreter restores when the exception unwinds the statement, after the blocks of its body, whose handlers run
+    //! with the loop's element (qore#7379).  The push is open at the frame's exit only on an exception that no handler
+    //! of the function around the loop takes (see QoreIRLowering::beginForeachElementExceptionRestore()), so no handler
+    //! of the frame outside of the loop's body runs before the restoration
+    AfterHandlers,
+};
+
 //! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
 /** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
     the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
@@ -1698,6 +1732,11 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool auto_local_string_append = false;  // Transient: paired auto-local load or generic +=, guarded by runtime type
+    // Transient: the StoreLocal of the result of a generic += of an "auto" local back to the local, paired with its load
+    // and operation (qore_ir_mark_auto_string_appends()); it stores nothing after an operation made through a
+    // reference that the local holds, and it gives a container that the operation changed in place back to the local
+    // without a share copy (qore#7421)
+    bool paired_auto_add_store = false;
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
     // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
@@ -1720,8 +1759,10 @@ public:
     // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
     // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
     // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
-    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
-    bool restore_on_exception_exit = false;
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670);
+    // see QoreIRExceptionExitRestore for when the exit restores a context.  One byte, as a bool: a second member here
+    // would change the layout of the instruction classes, whose members use the tail padding of this class
+    QoreIRExceptionExitRestore restore_on_exception_exit = QoreIRExceptionExitRestore::None;
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
@@ -2141,7 +2182,10 @@ struct TypeProfile {
     std::atomic<uint32_t> bool_count{0};
     std::atomic<uint32_t> nothing_count{0};
     std::atomic<uint32_t> other_count{0};
-    mutable std::mutex extended_mutex;
+    //! the lock of the extended counts: a stripe of a lock array that the fork handlers acquire before fork()
+    /** See qore_cache_stripe_lock() (qore#7554); it is held only around a read or a change of the counts themselves
+    */
+    DLLLOCAL std::mutex& extendedMutex() const;
     //! the counts of the types of the values that are not of a builtin type, by type identity
     std::unique_ptr<std::unordered_map<TypeProfileTypeKey, uint32_t, TypeProfileTypeKeyHash>> extended_type_counts;
     //! the cache that evicts the types of this profile when they are destroyed (owned by the function), if any
@@ -2173,7 +2217,7 @@ struct TypeProfile {
     DLLLOCAL void recordNewTypeInfo(const TypeProfileTypeKey& key);
 
     uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return 0;
         }
@@ -2183,7 +2227,7 @@ struct TypeProfile {
 
     //! removes the counts of the dead types; called by the function's cache with the registry locked
     void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead) {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return;
         }
@@ -2198,13 +2242,13 @@ struct TypeProfile {
 
     //! returns the number of types counted, for debug checks
     size_t getTypeCount() const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         return extended_type_counts ? extended_type_counts->size() : 0;
     }
 
     void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (!plugin_type_counts) {
                 plugin_type_counts = std::make_unique<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
                     QoreIRPluginTypeProfileIdHash>>();
@@ -2216,7 +2260,7 @@ struct TypeProfile {
     }
 
     uint32_t getPluginTypeCount(const std::string& module_name, uint16_t local_type_id) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!plugin_type_counts) {
             return 0;
         }
@@ -2250,7 +2294,7 @@ struct TypeProfile {
         const QoreTypeInfo* dominant_type_info = nullptr;
         uint32_t dominant_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (extended_type_counts) {
                 for (const auto& i : *extended_type_counts) {
                     if (i.second > dominant_count) {
@@ -2269,7 +2313,7 @@ struct TypeProfile {
         QoreIRPluginTypeProfileId dominant_plugin;
         uint32_t dominant_plugin_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (plugin_type_counts) {
                 uint32_t n = 0;
                 for (const auto& i : *plugin_type_counts) {
@@ -2675,11 +2719,18 @@ static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& c
         return value;
     }
     const AbstractQoreNode* node = value.getInternalNode();
-    if (!node || node->is_unique()) {
+    if (!node) {
+        return value;
+    }
+    if (node->is_unique()) {
+        // the weak reference designates it: it is pinned (qore#7318); the variable is its only holder
+        qore_weak_target_pin(value);
         return value;
     }
     copied = true;
-    return QoreValue(node->realCopy());
+    QoreValue rv(node->realCopy());
+    qore_weak_target_pin(rv);
+    return rv;
 }
 
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
@@ -3942,6 +3993,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -4007,6 +4060,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -4599,6 +4654,31 @@ inline P qore_ir_inst_cast(I* inst) {
     P rv = (inst && T::isInstClass(inst->inst_class)) ? static_cast<P>(inst) : nullptr;
     assert(rv == dynamic_cast<P>(inst));
     return rv;
+}
+
+//! returns the result of \a inst if it is a weak or opaque store, or UINT32_MAX
+/** The value of a weak or opaque assignment is held by the statement until its end, and a store that takes it does not
+    take its reference, so that the store copies the container that a weak reference designates as a share (qore#7342)
+*/
+inline uint32_t qore_ir_weak_store_result(const QoreIRInstruction* inst) {
+    if (!inst || !inst->result.isValid()) {
+        return UINT32_MAX;
+    }
+    AssignmentMode mode;
+    if (auto* l = qore_ir_inst_cast<const QoreIRLocalInstruction*>(inst)) {
+        mode = l->mode;
+    } else if (auto* v = qore_ir_inst_cast<const QoreIRVarInstruction*>(inst)) {
+        mode = v->mode;
+    } else if (auto* p = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(inst)) {
+        mode = p->mode;
+    } else if (auto* lv = qore_ir_inst_cast<const QoreIRLValueInstruction*>(inst)) {
+        mode = lv->mode;
+    } else if (auto* iv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
+        mode = iv->mode;
+    } else {
+        return UINT32_MAX;
+    }
+    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque ? inst->result.id : UINT32_MAX;
 }
 
 class QoreIRBasicBlock {
@@ -5367,7 +5447,7 @@ public:
 
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
-    void computeIROnlyLocals();
+    void computeIROnlyLocals(bool aot_method = false);
 
     //! Collects the locals that the on_exit, on_error and on_success handlers of the function reference
     /** as computeIROnlyLocals() does to keep them on the runtime stack: the handlers' statements and their IR
@@ -5559,6 +5639,9 @@ public:
     mutable std::mutex interpreter_analysis_mutex;
     mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
+    //! nonzero for the values that are the results of weak or opaque stores (qore_ir_weak_store_result()), which a
+    //! store does not take (qore#7342)
+    mutable std::vector<uint8_t> interpreter_weak_store_results;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
     //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
     //! cannot be needed again (a later execution of the block recomputes it first)
@@ -5615,7 +5698,8 @@ public:
         outside a loop and consumed inside it would be destroyed on the first
         iteration and read as NOTHING on every later one.  Slots marked here are
         excluded from that block-local kill and are released by the normal
-        end-of-function value cleanup instead. */
+        end-of-function value cleanup instead. A separate nonzero value identifies invoke results
+        that can move into a store in the unique normal continuation. */
     mutable std::vector<uint8_t> interpreter_cross_block_slots;
     //! Slots of native scalars (NativeInt or NativeFloat facts), which own their value in the interpreter.
     /** Native code keeps such values in registers, so the optimizer forwards them from one statement to the

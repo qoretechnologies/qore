@@ -137,7 +137,7 @@ bool QoreIRToLLVM::materializeOwnedFastEntries(llvm::Module& module, std::string
         {
             std::vector<llvm::ReturnInst*> early_exits;
             for (llvm::BasicBlock& bb : *owned) {
-                auto* ret = llvm::dyn_cast_or_null<llvm::ReturnInst>(bb.getTerminator());
+                auto* ret = llvm::dyn_cast_or_null<llvm::ReturnInst>(qoreGetTerminator(bb));
                 if (ret && ret->getMetadata(QORE_FAST_ENTRY_EARLY_EXIT_MD)) {
                     early_exits.push_back(ret);
                 }
@@ -294,7 +294,7 @@ llvm::CallInst* QoreIRToLLVM::emitOwnedFastEntryCall(llvm::Function* owned_fn, c
 void QoreIRToLLVM::emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb) {
     (void)module;
     for (llvm::BasicBlock* bb : {stack_overflow_bb, debug_fast_entry_end}) {
-        llvm::Instruction* exit = bb ? bb->getTerminator() : nullptr;
+        llvm::Instruction* exit = bb ? qoreGetTerminator(bb) : nullptr;
         if (!exit) {
             continue;
         }

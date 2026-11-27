@@ -2800,7 +2800,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
         "dbg_finish_hold", "type_wait_entry", "type_epoch_holds", "type_tombstones", "generic_cache_registry",
-        "type_owner_registry", "type_info_registry",
+        "type_owner_registry", "type_info_registry", "cache_stripes", "function_call_names", "ir_inline_sites",
+        "native_call_names", "class_member_add",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -17361,6 +17362,164 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
+//! for the update scopes of shared objects (also while it runs the code that it called and after the scope opened),
+//! the per-Program cache, the check of a builtin's caller and the Program of the calling code (qore#7202)
+/** The code is entered as a call of a user variant enters it (a context that does not switch the Program, the hold
+    of the Program that compiled the code and the override that records it), and as the options of a callback install
+    it (a hold and the override)
+*/
+static void ut_foreign_code_counts_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
+        return parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po)
+            : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po);
+    };
+    // the Program that the code runs in, the sandboxed Program that compiled it and a restricted one
+    QoreProgram* host = make_pgm(QoreParseOptions());
+    QoreProgram* tenant = make_pgm(QoreParseOptions());
+    QoreProgram* restricted = make_pgm(QoreParseOptions(PO_NO_FILESYSTEM));
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    tenant->setSandboxManager(sm);
+    UT_ASSERT(c, qore_program_is_sandboxed(tenant), "foreign code: the tenant is sandboxed");
+    UT_ASSERT(c, !qore_program_is_sandboxed(host), "foreign code: the host is not sandboxed");
+    UT_ASSERT(c, !qore_builtin_caller_is_sandboxed(), "foreign code: the caller of the builtin is not sandboxed");
+    // the override of a call of code compiled in another Program than the one it runs in
+    auto foreign_override = [](const QoreProgram* code_pgm) -> QoreCallParseOptionsOverride {
+        QoreCallParseOptionsOverride o;
+        o.code_pgm = code_pgm;
+        return o;
+    };
+    // true if the tenant's sandbox governs the policy of the code that runs
+    auto tenant_policy = [sm]() -> bool {
+        QoreSandboxManager* found = qore_find_thread_sandbox_policy_manager_ref();
+        if (!found) {
+            return false;
+        }
+        const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(found);
+        bool rv = found == sm || (members && std::find(members->begin(), members->end(), sm) != members->end());
+        found->deref(nullptr);
+        return rv;
+    };
+    UT_ASSERT(c, !qore_caller_is_sandboxed() && !tenant_policy(), "foreign code: the caller is not sandboxed at first");
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "foreign code: the host is entered");
+        // the point where trusted code of the host opens an update scope
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: nothing is entered at first");
+        UT_ASSERT(c, qore_get_calling_program() == host, "foreign code: the calling Program is the host at first");
+        {
+            // the tenant's code runs in the host, as a call of a user variant runs it (UserVariantExecHelper)
+            ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+            UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(tenant, &xsink), "foreign code: the tenant is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(tenant));
+            UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: the tenant's code is sandboxed");
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: the tenant's code is entered since the scope opened");
+            UT_ASSERT(c, qore_caller_cache_program() == tenant, "foreign code: the tenant's code uses its cache");
+            UT_ASSERT(c, qore_builtin_caller_is_sandboxed(),
+                "foreign code: the caller of the builtin is the tenant's code");
+            UT_ASSERT(c, qore_get_calling_program() == tenant, "foreign code: the calling Program is the tenant");
+            {
+                // code of the host that the tenant's code calls clears the override; the tenant's code stays on the
+                // stack below it
+                RuntimeParseOptionsOverrideHelper cleared;
+                cleared.setCleared();
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                    "foreign code: code that the tenant's code calls is entered since the scope opened");
+                // and it is called by sandboxed code, as code that a sandboxed Program's own code calls is
+                UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: code that the tenant's code calls is sandboxed");
+                UT_ASSERT(c, qore_scope_creator_is_sandboxed(),
+                    "foreign code: code that the tenant's code calls creates a scope as sandboxed code");
+                UT_ASSERT(c, !qore_caller_may_receive_host_secrets(),
+                    "foreign code: code that the tenant's code calls receives no host secrets");
+                UT_ASSERT(c, tenant_policy(), "foreign code: the tenant's sandbox governs the code that it calls");
+                UT_ASSERT(c, qore_caller_cache_program() == tenant,
+                    "foreign code: code that the tenant's code calls uses the tenant's cache");
+                // a host grant established by that code lends to the code inside it, as the walk of the Program
+                // contexts stops at the grant
+                UT_ASSERT(c, !qore_push_sandbox_policy_barrier(), "foreign code: the policy barrier is pushed");
+                UT_ASSERT(c, qore_caller_may_receive_host_secrets(),
+                    "foreign code: inside the grant, the tenant's code entered before it does not count");
+                UT_ASSERT(c, !tenant_policy(), "foreign code: inside the grant, the tenant's sandbox does not govern");
+                {
+                    // the tenant's code entered inside the grant
+                    ProgramThreadCountContextHelper granted_ctx(&xsink, host, true);
+                    UT_ASSERT(c, !granted_ctx.holdForeignCodeProgram(tenant, &xsink),
+                        "foreign code: the tenant is held inside the grant");
+                    RuntimeParseOptionsOverrideHelper granted_po(foreign_override(tenant));
+                    RuntimeParseOptionsOverrideHelper granted_cleared;
+                    granted_cleared.setCleared();
+                    UT_ASSERT(c, !qore_caller_may_receive_host_secrets(),
+                        "foreign code: inside the grant, the tenant's code entered there counts");
+                    UT_ASSERT(c, tenant_policy(), "foreign code: inside the grant, the tenant's code entered there is "
+                        "governed by its sandbox");
+                }
+                qore_pop_sandbox_policy_barrier();
+            }
+            // a scope that opens while the tenant's code runs (in module code that it calls) is not refused for the
+            // code that ran when it opened
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "foreign code: the code that runs when a scope opens is not entered since");
+            {
+                // the tenant's code entered again since then
+                ProgramThreadCountContextHelper again_ctx(&xsink, host, true);
+                UT_ASSERT(c, !again_ctx.holdForeignCodeProgram(tenant, &xsink),
+                    "foreign code: the tenant is held again");
+                RuntimeParseOptionsOverrideHelper again_po(foreign_override(tenant));
+                RuntimeParseOptionsOverrideHelper cleared;
+                cleared.setCleared();
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(inner),
+                    "foreign code: the tenant's code entered again counts");
+            }
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "foreign code: the tenant's code entered again has been left");
+        }
+        UT_ASSERT(c, !xsink, "foreign code: no exception");
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: the tenant's code has been left");
+        {
+            // the options of a callback that the tenant's code registered install it without a call
+            QoreForeignCodeProgramHold hold;
+            UT_ASSERT(c, !hold.hold(tenant, &xsink), "foreign code: the callback's Program is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(tenant));
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: the tenant's callback is entered since the scope opened");
+            RuntimeParseOptionsOverrideHelper cleared;
+            cleared.setCleared();
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: code that the tenant's callback calls is entered since the scope opened");
+            UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: code that the tenant's callback calls is sandboxed");
+        }
+        UT_ASSERT(c, !qore_caller_is_sandboxed() && !qore_scope_creator_is_sandboxed() && !tenant_policy(),
+            "foreign code: the caller is not sandboxed once the tenant's code has been left");
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: the tenant's callback has ended");
+        {
+            // the code of a Program that is restricted but not sandboxed
+            ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+            UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(restricted, &xsink),
+                "foreign code: the restricted Program is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(restricted));
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "foreign code: restricted code that is not sandboxed is not sandboxed code");
+            UT_ASSERT(c, qore_get_calling_program() == restricted,
+                "foreign code: the calling Program is the restricted Program");
+            RuntimeParseOptionsOverrideHelper cleared;
+            cleared.setCleared();
+            UT_ASSERT(c, !qore_caller_is_sandboxed() && !qore_scope_creator_is_sandboxed(),
+                "foreign code: code that restricted code that is not sandboxed calls is not sandboxed");
+        }
+        UT_ASSERT(c, qore_get_calling_program() == host, "foreign code: the calling Program is the host again");
+    }
+    UT_ASSERT(c, !xsink, "foreign code: no exception at the end");
+    sm->deref(nullptr);
+    restricted->waitForTerminationAndDeref(&xsink);
+    tenant->waitForTerminationAndDeref(&xsink);
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "foreign code: the Programs are destroyed");
+}
+
 //! the first user call in the scope of a QoreCallbackCallerHelper, while the Program that was running when it was
 //! created still runs, is made with the options of the helper's Program; later calls and calls made in another
 //! Program have the effective options of their own callers
@@ -27478,7 +27637,10 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
 
 //! Debug-only: creates a child process with fork() while another thread holds a process-wide lock of type retirement
 /** The other thread holds the lock named (see qore_type_dbg_fork_lock(): \c "type_wait_entry", \c "type_epoch_holds",
-    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" or \c "type_info_registry"), as a
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry", \c "type_info_registry", the name
+    of the fork handler of any other lock that is a std::mutex (\c "function_call_names", \c "ir_inline_sites",
+    \c "native_call_names" or \c "class_member_add", for example) or \c "cache_stripe:<n>", a stripe of the locks of
+    the caches of generics that belong to one object each (qore#7554)), as a
     thread does that enters a quiescent wait, arms an epoch hold, makes a tombstone, registers a generic cache entry or
     creates a type or a declaration at the moment of fork().  It holds the lock until the prepare handlers reach the
     fork handler of the same name, which then waits for it, or, if no such handler is registered, until fork() has
@@ -27501,7 +27663,8 @@ static QoreValue f_dbg_fork_while_type_lock_held(const QoreListNode* params, Run
         return QoreValue();
     }
     ForkHoldTest t;
-    t.target = name->c_str();
+    // the handler of a stripe of the locks of the per-object caches of generics is the one of all stripes
+    t.target = !strncmp(name->c_str(), "cache_stripe:", 13) ? "cache_stripes" : name->c_str();
     std::thread holder([&t, lock]() {
         std::unique_lock<std::mutex> held(*lock);
         std::unique_lock<std::mutex> ul(t.m);
@@ -30448,6 +30611,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_ir_fold_debug_statements_exception_target(c);
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_foreign_code_counts_for_scopes(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
@@ -31371,6 +31535,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_ir_fold_debug_statements_exception_target(c);
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_foreign_code_counts_for_scopes(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -31779,6 +31944,123 @@ static QoreValue f_dbg_continue_reference_lvalue(const QoreListNode* params, Run
     bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
     qore_dbg_reference_lvalue_hook.store(nullptr);
     return rv;
+}
+
+namespace {
+//! a rendezvous of the threads that bind reference elements (qore#7391)
+/** see qore_dbg_reference_bind_hook: each of the first \c parties binds made while the rendezvous is armed arrives at
+    it.  A bind made with an lvalue write lock held fails at once (it would lock the referenced lvalue under the lock
+    of the store, which deadlocks when two threads do it in the opposite order); a bind made with no lock held waits
+    until all parties have arrived, so that the binds of all parties are in progress at the same time.  The wait has a
+    bound only so that a test that is broken does not hang; no result depends on it.
+*/
+struct ReferenceBindRendezvous {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the number of binds that arrive at the rendezvous
+    int64 parties = 0;
+    //! the bound of the wait of a bind for the other parties, in milliseconds
+    int64 timeout_ms = 0;
+    //! the number of binds that have arrived
+    int64 arrived = 0;
+    //! the number of binds that arrived with an lvalue write lock held
+    int64 held = 0;
+    //! the highest number of lvalue write locks that a bind arrived with
+    int64 max_held = 0;
+    //! the number of binds whose wait for the other parties reached its bound
+    int64 timeouts = 0;
+    //! the rendezvous is armed
+    bool armed = false;
+};
+
+ReferenceBindRendezvous& reference_bind_rendezvous() {
+    // not destroyed, as references can be bound while static objects are destroyed
+    static ReferenceBindRendezvous* r = new ReferenceBindRendezvous;
+    return *r;
+}
+
+bool dbg_reference_bind_rendezvous_hook(int held) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::unique_lock<std::mutex> l(r.m);
+    if (!r.armed || r.arrived >= r.parties) {
+        return false;
+    }
+    ++r.arrived;
+    if (held > r.max_held) {
+        r.max_held = held;
+    }
+    if (held > 0) {
+        // the bind fails at once; a party that waits for it is let go
+        ++r.held;
+        r.cond.notify_all();
+        return true;
+    }
+    if (r.arrived == r.parties) {
+        r.cond.notify_all();
+        return false;
+    }
+    if (!r.cond.wait_for(l, std::chrono::milliseconds(r.timeout_ms), [&r]() { return r.arrived >= r.parties; })) {
+        ++r.timeouts;
+    }
+    return false;
+}
+}
+
+//! arms a rendezvous of the next binds of reference elements; see ReferenceBindRendezvous
+static QoreValue f_dbg_reference_bind_rendezvous(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 parties = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (parties < 1 || timeout_ms < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the number of parties and the timeout must be positive");
+        return QoreValue();
+    }
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::lock_guard<std::mutex> l(r.m);
+    if (r.armed) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a reference bind rendezvous is already armed");
+        return QoreValue();
+    }
+    r.parties = parties;
+    r.timeout_ms = timeout_ms;
+    r.arrived = 0;
+    r.held = 0;
+    r.max_held = 0;
+    r.timeouts = 0;
+    r.armed = true;
+    qore_dbg_reference_bind_hook.store(dbg_reference_bind_rendezvous_hook);
+    return QoreValue();
+}
+
+//! disarms the rendezvous and returns its result: the binds that arrived, that held a lock, and whose wait timed out
+static QoreValue f_dbg_reference_bind_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        std::lock_guard<std::mutex> l(r.m);
+        if (!r.armed) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no reference bind rendezvous is armed");
+            return QoreValue();
+        }
+        qore_dbg_reference_bind_hook.store(nullptr);
+        r.armed = false;
+        rv->setKeyValue("parties", r.parties, xsink);
+        rv->setKeyValue("arrived", r.arrived, xsink);
+        rv->setKeyValue("held", r.held, xsink);
+        rv->setKeyValue("max_held", r.max_held, xsink);
+        rv->setKeyValue("timeouts", r.timeouts, xsink);
+    }
+    return rv.release();
+}
+
+//! sets whether a bind of a reference element made with an lvalue write lock held raises DBG-REFERENCE-BIND-HELD
+/** see qore_dbg_reference_bind_strict (qore#7391): a test arms it so that a store path that still binds a reference
+    under an lvalue lock fails it with an exception instead of an assertion; returns the previous setting
+*/
+static QoreValue f_dbg_reference_bind_strict(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool strict = get_param_value(params, 0).getAsBool();
+    return qore_dbg_reference_bind_strict.exchange(strict);
 }
 
 namespace {
@@ -32489,6 +32771,75 @@ static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, Runt
     return (int64)qore_jit_dbg_pipeline_uninitialized_level();
 }
 
+//! loads a module in a foreign thread, which has no current Program, so that the module is loaded without a
+//! requesting Program (as C++ code can load one), and its Program has no parent Program
+/** For examples/test/ir/exec-mode-parentless-module.qtest: the Program of such a module takes the execution mode
+    requested for the process (qore#7495); an exception of the load is raised in the calling thread
+*/
+//! the module and the result of a load in a foreign thread (see f_dbg_load_module_in_foreign_thread())
+struct DbgForeignLoad {
+    std::string name;
+    //! the error of the load, as text
+    std::string error;
+};
+
+//! loads a module in a foreign thread: nothing may leave the thread
+static void* dbg_foreign_load_thread(void* arg) {
+    DbgForeignLoad& load = *static_cast<DbgForeignLoad*>(arg);
+    try {
+        QoreForeignThreadHelper foreign_thread;
+        ExceptionSink load_xsink;
+        if (ModuleManager::runTimeLoadModule(&load_xsink, load.name.c_str(), nullptr) || load_xsink) {
+            QoreValue err = load_xsink.getExceptionErr();
+            QoreValue desc = load_xsink.getExceptionDesc();
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
+            load.error = std::string(err_str->c_str()) + ": " + desc_str->c_str();
+            load_xsink.clear();
+        }
+    } catch (std::exception& e) {
+        load.error = e.what();
+    } catch (...) {
+        load.error = "unknown exception";
+    }
+    return nullptr;
+}
+
+static QoreValue f_dbg_load_module_in_foreign_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // the string value can be an inline short string (issue #7038)
+    QoreStringDataHelper name_arg(get_param_value(params, 0));
+    // the error of the load, as text: an exception of the foreign thread is cleared in it before it is deregistered,
+    // which requires that the thread holds no exception (q_deregister_foreign_thread())
+    DbgForeignLoad load;
+    load.name.assign(name_arg.c_str(), name_arg.size());
+    // the thread has the stack that Qore gives its own threads, not the platform's default for a new thread (128 KiB
+    // with musl, the stack limit with glibc), which is too small for a module's parse with the parse stack guard
+    // (qore#7495)
+    QorePThreadAttr attr;
+    size_t stack_size = q_thread_get_stack_size();
+    if (stack_size) {
+        int src = attr.setstacksize(stack_size);
+        if (src) {
+            xsink->raiseErrnoException("DBG-LOAD-MODULE-ERROR", src, "cannot set the stack size of a thread to %lld",
+                (long long)stack_size);
+            return QoreValue();
+        }
+    }
+    pthread_t tid;
+    int crc = pthread_create(&tid, attr.get_ptr(), dbg_foreign_load_thread, &load);
+    if (crc) {
+        xsink->raiseErrnoException("DBG-LOAD-MODULE-ERROR", crc, "cannot start a thread");
+        return QoreValue();
+    }
+    pthread_join(tid, nullptr);
+    if (!load.error.empty()) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "the load of module '%s' failed: %s", load.name.c_str(),
+            load.error.c_str());
+    }
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler has no queued or in-progress work, detached work included
 static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue();
@@ -32607,6 +32958,11 @@ static QoreValue f_dbg_class_hierarchy_walk_steps(const QoreListNode* params, Ru
     return qore_class_hierarchy_walk_steps.load(std::memory_order_relaxed);
 }
 
+//! returns the number of live sets of private:internal owners of inherited methods
+static QoreValue f_dbg_live_internal_owner_sets(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_live_internal_owner_sets.load(std::memory_order_relaxed);
+}
+
 //! returns the number of values visited by removal bookkeeping in the current thread
 static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -32651,12 +33007,22 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
-//! returns the object count of an object, a hash or a list: the number of its values that need a recursive-reference
-//! scan (needs_scan()), or -1 for a value of another type
+//! returns the object count of an object, a hash or a list, or of the one that a reference names: the number of its
+//! values that need a recursive-reference scan (needs_scan()), or -1 for a value of another type
 /** Tests use it to check that the counts follow the values that the lvalue operations store and remove (qore#7348).
 */
 static QoreValue f_dbg_get_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreValue v = get_param_value(params, 0);
+    // a reference is read through (qore#7342): a list or hash that a weak reference designates, or that holds one, is
+    // passed to the function as a copy of its own, whose count is not the count of the container that it was made from
+    std::unique_ptr<LValueHelper> lvh;
+    if (v.getType() == NT_REFERENCE) {
+        lvh.reset(new LValueHelper(*v.get<const ReferenceNode>(), rc, xsink, LValueHelper::ReadAccess()));
+        if (!*lvh) {
+            return QoreValue();
+        }
+        v = lvh->getValue();
+    }
     switch (v.getType()) {
         case NT_OBJECT:
             return static_cast<int64>(qore_object_private::get(*v.get<const QoreObject>())->getScanCount());
@@ -32877,6 +33243,41 @@ static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, Runtime
     }
     QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
     return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
+//! Debug-only: returns the strings that the signature hash of a class was computed from (qore#7397)
+/** The signature hash identifies a class across Programs and is stored in AOT images, so that a change in these
+    strings needs a new AOT binary format version; examples/test/qore/classes/class-signature-golden.qtest pins them.
+
+    @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c parts (the strings hashed in order: the hash is the XOR of their SHA1 digests; empty for a
+    hash loaded from an AOT image) and \c hash (the hash as a hex string, or \c NOTHING if the class has none)
+*/
+static QoreValue f_dbg_class_signature(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DbgStringNodeHelper path_param(get_param_value(params, 0));
+    const QoreStringNode* path = *path_param;
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const SignatureHash& sh = qore_class_private::get(*qc)->hash;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> parts(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& i : sh.dbgGetParts()) {
+        parts->push(new QoreStringNode(i), xsink);
+    }
+    rv->setKeyValue("parts", parts.release(), xsink);
+    if (sh) {
+        QoreStringNode* hex = new QoreStringNode;
+        sh.toString(*hex);
+        rv->setKeyValue("hash", hex, xsink);
+    }
+    return rv.release();
 }
 
 //! Debug-only: compares two byte strings with the comparison of hash keys and member names (qore#7194)
@@ -33852,6 +34253,12 @@ DerefPointHold deref_marked_hold;
 DerefPointHold deref_delete_hold;
 //! the hold of dbg_hold_deref_last()
 DerefPointHold deref_last_hold;
+//! the hold of dbg_hold_closure_var_collect()
+DerefPointHold closure_var_collect_hold;
+//! the hold of dbg_hold_closure_var_collected()
+DerefPointHold closure_var_collected_hold;
+//! the hold of dbg_hold_closure_call()
+DerefPointHold closure_call_hold;
 #ifdef DEBUG
 //! the hold of dbg_hold_container_free(); its class name is the type of the container ("list" or "hash")
 DerefPointHold container_free_hold;
@@ -33899,6 +34306,20 @@ void dbg_hold_deref_delete_hook(const char* class_name) {
 
 void dbg_hold_deref_last_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
+}
+
+void dbg_hold_closure_var_collect_hook(const char* name) {
+    dbg_run_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook, name,
+        "dbg_hold_closure_var_collect");
+}
+
+void dbg_hold_closure_var_collected_hook(const char* name) {
+    dbg_run_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook, name,
+        "dbg_hold_closure_var_collected");
+}
+
+void dbg_hold_closure_call_hook(const char* class_name) {
+    dbg_run_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, class_name, "dbg_hold_closure_call");
 }
 
 #ifdef DEBUG
@@ -34002,6 +34423,61 @@ static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
         xsink);
+}
+
+//! holds the next dereference that decides to collect a closure-bound variable of the given name with its recursive
+//! set
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has decided and claimed the collection,
+    with no lock held, and before it checks for references taken since and releases the variable's value; another
+    thread can take a reference to the variable meanwhile (a call of a closure that captured it), and tests use the
+    hold to make that deterministic (qore#7546).
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_collect(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook,
+        dbg_hold_closure_var_collect_hook, params, xsink);
+}
+
+//! holds the next dereference that collects a closure-bound variable of the given name with its recursive set once
+//! it has taken the variable's value
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has checked that nothing of the set has
+    been referenced since its decision and has taken the variable's value, with no lock held, and before the deletion
+    releases the value; another thread can read a closure that captured the variable meanwhile, through a weak
+    reference to the value, and call it once the value has been released, and tests use the hold to make that
+    deterministic (qore#7546, qore#7556).
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_collected(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook,
+        dbg_hold_closure_var_collected_hook, params, xsink);
+}
+
+//! holds the next call of a closure created in a method of an object of the given class
+/** The hold is taken once, in UserClosureVariant::evalClosure(), before the call takes a reference to the closure's
+    object; another thread can delete the object meanwhile, and tests use the hold to make that deterministic
+    (qore#7555).
+
+    @param class_name the name of the object's class
+    @param held decremented once the calling thread is held
+    @param release the calling thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_call(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, dbg_hold_closure_call_hook,
+        params, xsink);
 }
 
 //! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
@@ -38993,6 +39469,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_reference_lvalue", f_dbg_continue_reference_lvalue, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous", f_dbg_reference_bind_rendezvous, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "parties", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous_result", f_dbg_reference_bind_rendezvous_result,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_reference_bind_strict", f_dbg_reference_bind_strict, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "strict");
     qns.addBuiltinVariant("dbg_hold_program_teardown", f_dbg_hold_program_teardown, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_program_teardown_held", f_dbg_wait_program_teardown_held, QCF_NO_FLAGS,
@@ -39055,6 +39538,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_use_after_free", f_dbg_use_after_free, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_llvm_uninitialized_level", f_dbg_llvm_uninitialized_level, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_load_module_in_foreign_thread", f_dbg_load_module_in_foreign_thread, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
@@ -39085,6 +39570,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_generic_parent_check_steps", f_dbg_generic_parent_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_live_internal_owner_sets", f_dbg_live_internal_owner_sets, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_class_hierarchy_walk_steps", f_dbg_class_hierarchy_walk_steps, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
@@ -39133,6 +39620,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
         QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_class_signature", f_dbg_class_signature, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
     qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
@@ -39233,6 +39722,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_var_collect", f_dbg_hold_closure_var_collect,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_var_collected", f_dbg_hold_closure_var_collected,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_call", f_dbg_hold_closure_call,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");

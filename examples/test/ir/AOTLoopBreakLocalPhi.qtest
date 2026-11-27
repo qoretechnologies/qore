@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT code generation (qcc) and LLVM lowering of the debug IR of loops
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTLoopBreakLocalPhiTest
+
+#! A loop whose body assigns a local and then breaks unconditionally compiles with qcc (qore#7639)
+/** The debug IR of AOT code has the paths of a debugger's flow requests: after an unconditional break, the update
+    block of a loop is entered only through the path of a "continue" flow request, which native code does not have,
+    and the local's value on the loop's back edge is defined only there.  The LLVM lowering gives such an edge no
+    value; it failed with "missing LLVM value for IR value".  Every execution mode and qcc executables at -O0 and -O3
+    must print the output of the AST.
+*/
+class AOTLoopBreakLocalPhiTest inherits QUnit::Test {
+    public {
+        const Script = "%modern
+# the shape of the issue: an int local assigned before an unconditional break
+int sub for_break(int limit) { int r = 0; for (int i = 10; i < limit; ++i) { r = i; break; } return r; }
+# a loop that never runs its body
+int sub for_break_none(int limit) { int r = -1; for (int i = 10; i < limit; ++i) { r = i; break; } return r; }
+# two locals and a computed value
+int sub for_break_two(int limit) {
+    int r = 0; int s = 0;
+    for (int i = 1; i < limit; ++i) { r = i * 2; s = r + 1; break; }
+    return r + s;
+}
+# a string local, which is not a native value
+string sub for_break_str(int limit) {
+    string r = \"none\";
+    for (int i = 0; i < limit; ++i) { r = \"v\" + i; break; }
+    return r;
+}
+# a float local
+float sub for_break_float(int limit) {
+    float r = 0.5;
+    for (int i = 0; i < limit; ++i) { r = i + 1.25; break; }
+    return r;
+}
+# a while loop and a nested loop whose inner loop breaks
+int sub while_break(int v) { int r = 0; while (v > 0) { r = v; break; } return r; }
+int sub nested_break(int n) {
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        int r = 0;
+        for (int j = 5; j < 10; ++j) { r = j + i; break; }
+        t += r;
+    }
+    return t;
+}
+# a foreach loop
+int sub foreach_break(list<int> l) { int r = 0; foreach int v in (l) { r = v; break; } return r; }
+# a loop that leaves with a string accumulator and an int local, whose exit edge gets values of both
+string sub acc(int n) { string s = \"\"; int r = 0; for (int i = 0; i < n; ++i) { s += \"a\"; r = i; } return s + r; }
+printf(\"%d %d %d %s %n %d %d %d %s\\n\", for_break(11), for_break_none(5), for_break_two(5), for_break_str(3),
+    for_break_float(4), while_break(7), nested_break(3), foreach_break((4, 5, 6)), acc(3));
+";
+        const Expected = "10 -1 5 v0 1.25 7 18 4 aaa2\n";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin;
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AOTLoopBreakLocalPhiTest", "1.0", \ARGV) {
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        prefix = "LD_LIBRARY_PATH=" + quote(libqore_dir) + " DYLD_LIBRARY_PATH=" + quote(libqore_dir) + " ";
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string writeScript(TmpDir tmp) {
+        string path = tmp.path + DirSep + "loop-break.q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        return path;
+    }
+
+    testModes() {
+        TmpDir tmp("qore-aot-loop-break-");
+        string path = writeScript(tmp);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the functions are compiled at once (thresholds of 1, synchronous compilation)
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(prefix + quote(qore_bin)
+                + " -b --exec-mode=" + mode + " " + quote(path), False, ExecModeHarness::TraceEnv);
+            assertEq(0, res.rc, mode + ": exit status (output: " + res.out + ")");
+            assertEq(Expected, res.out, mode);
+        }
+    }
+
+    testCompiled() {
+        if (!is_executable(qcc_bin) && !trim(backquote("command -v " + quote(qcc_bin) + " 2>/dev/null || true"))) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-aot-loop-break-qcc-");
+        string path = writeScript(tmp);
+        foreach int opt in (0, 3) {
+            string exe = tmp.path + DirSep + sprintf("loop-break-O%d", opt);
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(prefix + quote(qcc_bin)
+                + sprintf(" -O%d -o ", opt) + quote(exe) + " " + quote(path), False);
+            assertEq(0, res.rc, sprintf("qcc -O%d: exit status (output: %s)", opt, res.out));
+            res = ExecModeHarness::run_command(prefix + quote(exe), False);
+            assertEq(0, res.rc, sprintf("qcc -O%d executable: exit status (output: %s)", opt, res.out));
+            assertEq(Expected, res.out, sprintf("qcc -O%d executable", opt));
+        }
+    }
+}

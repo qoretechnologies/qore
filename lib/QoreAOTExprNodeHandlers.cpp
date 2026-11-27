@@ -227,8 +227,16 @@ static QoreValue read_node_EN_DATE(AOTExprNodeReadCtx& ctx) {
         std::string zname = readStr(ctx.ptr, ctx.end);
         readU16(ctx.ptr, ctx.end);
         ExceptionSink tz_xsink;
-        const AbstractQoreZoneInfo* zone = QTZM.findLoadRegion(
-            zname.c_str(), &tz_xsink);
+        if (zname.find('\0') != std::string::npos) {
+            ctx.failed = true;
+            return QoreValue();
+        }
+        const AbstractQoreZoneInfo* zone = qore_aot_date_zone(zname.c_str(), ctx.pgm, &tz_xsink);
+        if (tz_xsink) {
+            tz_xsink.clear();
+            ctx.failed = true;
+            return QoreValue();
+        }
         return QoreValue(DateTimeNode::makeAbsolute(
             zone, epoch, us));
     }
@@ -1043,6 +1051,19 @@ static QoreValue read_node_EN_UNARY_PLUS(AOTExprNodeReadCtx& ctx) {
         ctx.recurse(ctx).discard(nullptr);
     }
     return QoreValue(new QoreUnaryPlusOperatorNode(&loc_builtin, operand));
+}
+
+//! Reads a read through a reference element (qore#6662)
+static QoreValue read_node_EN_READ_REFERENCE(AOTExprNodeReadCtx& ctx) {
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue operand;
+    if (num_children >= 1) {
+        operand = ctx.recurse(ctx);
+    }
+    for (uint16_t i = 1; i < num_children; ++i) {
+        ctx.recurse(ctx).discard(nullptr);
+    }
+    return QoreValue(new QoreReadReferenceOperatorNode(&loc_builtin, operand));
 }
 
 static QoreValue read_node_EN_LOG_NOT(AOTExprNodeReadCtx& ctx) {

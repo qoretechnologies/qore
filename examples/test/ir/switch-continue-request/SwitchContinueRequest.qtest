@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of the AST interpreter, the only mode that runs code with %broken-loop-statement
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SwitchContinueRequestTest
+
+#! with %broken-loop-statement, a switch statement takes a debugger's continue request as it takes a break (qore#7606)
+/** SwitchStatement::execImpl() takes a continue with %broken-loop-statement, but the parse-time targets of the blocks
+    of a case had only the break: a continue request in a handler that a return runs, in a case of a switch statement
+    with no loop around it, was taken to end the function, so the block kept the abandoned return, whose object the
+    switch statement released only after the handlers of the blocks of the case that the request passed had run with
+    it, instead of where the request left the block, as with a break.  switch-continue-request.q runs with the AST
+    interpreter, as code with %broken-loop-statement runs in no other execution mode (it cannot be %modern).
+*/
+class SwitchContinueRequestTest inherits QUnit::Test {
+    public {
+        #! the function and the request, with the result and the log that the run gives
+        const Cases = (
+            # the handler of the block of the case that the request passes ran with the return pending, before its
+            # object was released
+            ("passedHandler", "continue", "RESULT:-7 LOG:[\"released\", \"passed\", \"after\"] HITS:1"),
+            ("passedHandler", "break", "RESULT:-7 LOG:[\"released\", \"passed\", \"after\"] HITS:1"),
+            ("passedInHandler", "continue", "RESULT:-7 LOG:[\"released\", \"passed\", \"after\"] HITS:1"),
+            ("passedInHandler", "break", "RESULT:-7 LOG:[\"released\", \"passed\", \"after\"] HITS:1"),
+            ("noLoop", "continue", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("noLoop", "break", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("nestedBlock", "continue", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("nestedBlock", "break", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("inLoop", "continue", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("inLoop", "break", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("inHandler", "continue", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+            ("inHandler", "break", "RESULT:-7 LOG:[\"released\", \"after\"] HITS:1"),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+        #! the command that bounds the run of a child process, if any
+        string bound = "";
+    }
+
+    constructor() : QUnit::Test("SwitchContinueRequestTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/switch-continue-request.q";
+        if (is_executable("/usr/bin/timeout")) {
+            bound = "/usr/bin/timeout -k 10 120 ";
+        }
+        addTestCase("the switch statement takes the request", \testRequests());
+        set_return_value(main());
+    }
+
+    testRequests() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach list<string> c in (Cases) {
+            string out = ExecModeHarness::run(sprintf("%s %s%s -b --exec-mode=ast %s %s %s", env, bound, qore_bin,
+                script, c[0], c[1]));
+            assertEq(c[2], trim(out), sprintf("%s %s", c[0], c[1]));
+        }
+    }
+}

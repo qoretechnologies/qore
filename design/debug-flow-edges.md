@@ -238,7 +238,10 @@ Each path is lowered **exactly like the BreakStatement/ContinueStatement lowerin
 2. `emitBlockCleanups(target_cleanup_depth, error, false, CF_CATCH_SCOPES, target_temp_depth, loc)` (4746). This
    emits, innermost first, ScopeExit or the inline-lowered handlers, UninstantiateLocal for block locals,
    UnwindTemps, CatchCleanup for the catch scopes left, and RefForeach record/finalize.
-3. For break out of a foreach: `createPopImplicitElement(old_elem)`.
+3. For break out of a foreach whose flow target has a saved element (`ft.old_implicit_element`: a value foreach
+   that sets its element pops the element that it saved before the loop, a foreach over a reference the element of
+   its iteration): `createPopImplicitElement(old_elem)`; a foreach over a lazy pipeline restores the element at its
+   exit block, which the break branches to (qore#7379).
 4. `createBranch(target)`, with `exception_target = target_exception_target` when the target has
    `loop_cancel` (3484-3488).
 

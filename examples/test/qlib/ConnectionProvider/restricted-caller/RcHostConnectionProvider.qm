@@ -1,0 +1,98 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RcHostConnectionProvider.qm a connection provider module of the host: its connections are the host's
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ConnectionProvider
+
+module RcHostConnectionProvider {
+    version = "1.0";
+    desc = "a connection provider module of the host, for the restricted-caller tests";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the data provider of a test connection; its name is the connection's
+class RcHostDataProvider inherits AbstractDataProvider {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "RcHostDataProvider"};
+    }
+}
+
+#! a connection of the host, with the host's password in its URL; its clients use no functional domain
+class RcHostConnection inherits AbstractConnection {
+    constructor() : AbstractConnection({
+        "name": "rc-host",
+        "desc": "a connection of the host",
+        "url": "rchost://hostuser:host-secret@host.invalid",
+    }) {
+    }
+
+    string getType() {
+        return "rchost";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new RcHostDataProvider(name);
+    }
+
+    final private int getConnectionDomainsImpl() {
+        return 0;
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Mutex();
+    }
+}
+
+#! the functions of a connection provider module; there is no declaration that it resolves names for the caller
+public namespace RcHostConnectionProvider {
+    public ConnectionProvider::AbstractConnection sub get_mod_connection(string str) {
+        if (str != "rc-host") {
+            throw "RC-UNKNOWN", sprintf("unknown connection %y", str);
+        }
+        return new RcHostConnection();
+    }
+
+    public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
+        return {"rc-host": new RcHostConnection()};
+    }
+}

@@ -1833,6 +1833,13 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - code restricted from external information does not get the process-wide logger from
+      @ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" and cannot set it, as it
+      receives the messages of every caller (see @ref sandbox_ambient_host_data;
+      <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>)
+    - @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" returns @ref False for code
+      restricted from external information and for sandboxed code, so data providers take no options (which include
+      passwords and client secrets) from the host's environment for it (see @ref sandbox_ambient_host_data)
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
       @ref DataProvider::AbstractDataField::freeze() "AbstractDataField::freeze()" also mark the type or field as a
       @ref sandbox_shared_objects "shared object" when the calling code may share objects
