@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTBatchRefusedErrorOutputTest
@@ -41,13 +42,9 @@ class AOTBatchRefusedErrorOutputTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private hash<auto> run(string cmd) {
-        string out = backquote(sprintf("%s %s 2>&1; echo rc=$?", env, cmd));
-        *list<*string> m = out =~ x/rc=([0-9]+)\n$/;
-        return {
-            "rc": m ? m[0].toInt() : -1,
-            "out": m ? out.substr(0, out.size() - (m[0].size() + 4)) : out,
-        };
+    #! runs a command; its output on stdout, and on stderr apart from the module loader's warnings (qore#7805)
+    private hash<ExecModeHarness::ModeRunResult> run(string cmd) {
+        return ExecModeHarness::run_command(sprintf("%s %s", env, cmd), NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private write(string path, string body) {
@@ -69,7 +66,8 @@ class AOTBatchRefusedErrorOutputTest inherits QUnit::Test {
         write(tmp.path + "/b.qr", "class B {\n    string name() { return \"B\"; }\n}\n");
         write(tmp.path + "/a.qr", "class A inherits B {\n}\n"
             "sub main() {\n    A a();\n    printf(\"name: %s\\n\", a.name());\n}\n");
-        hash<auto> r = run(sprintf("%s -O%d -c -o %s/b.qo %s/b.qr", qcc_bin, opt, obj_dir, tmp.path));
+        hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s -O%d -c -o %s/b.qo %s/b.qr", qcc_bin, opt, obj_dir,
+            tmp.path));
         assertEq(0, r.rc, "b compiles: " + r.out);
         r = run(sprintf("%s -O%d -c -L %s -o %s/a.qo %s/a.qr", qcc_bin, opt, obj_dir, obj_dir, tmp.path));
         assertEq(0, r.rc, "a compiles: " + r.out);
@@ -79,16 +77,18 @@ class AOTBatchRefusedErrorOutputTest inherits QUnit::Test {
         assertEq(0, r.rc, "the objects link: " + r.out);
         r = run(sprintf("%s/app", tmp.path));
         assertEq(0, r.rc, r.out);
-        assertEq("name: B\n", r.out);
+        assertEq("name: B\n", r.stdout);
+        assertEq("", r.stderr, "stderr");
 
         # only the object of A: the batch is refused, and its error is reported once, with no null message
         r = run(sprintf("%s -O%d -o %s/app-missing %s/a.qo", qcc_bin, opt, tmp.path, obj_dir));
         assertEq(0, r.rc, "the object of A links alone: its base class is resolved when the batch loads: " + r.out);
         r = run(sprintf("%s/app-missing", tmp.path));
         assertEq(1, r.rc, "the refused batch ends the executable with exit status 1: " + r.out);
-        assertRegex("cannot resolve base class '::B' for class 'A'", r.out, "the error of the batch");
-        assertEq(1, (r.out =~ x/(cannot resolve base class)/g).size(), "the error is reported once: " + r.out);
-        assertFalse(r.out =~ /batch flush failed/, "no second line: " + r.out);
-        assertFalse(r.out =~ /\(null\)/, "no null message: " + r.out);
+        # the error of the batch is the whole output, on stderr: once, with no second line ("batch flush failed") and
+        # no null message
+        assertEq("", r.stdout, "stdout");
+        assertEq("qore_aot_script_end_batch: resolveAll failed: cannot resolve base class '::B' for class 'A'\n",
+            r.stderr, "the error of the batch");
     }
 }

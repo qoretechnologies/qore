@@ -95,9 +95,12 @@ class LentProgramInformationTest inherits QUnit::Test {
             }
             # -b must be the first argument of a compiled program
             TmpDir scratch("lentpgminfo");
-            string result = backquote(sprintf("%s%s -b%s jit 2>&1", env(), quote(exe), args(scratch)), \rc);
-            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
-            assertEq(expected(), result, sprintf("-O%s", opt));
+            # the module loader's warnings are not output of the program (qore#7805)
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b%s jit", env(),
+                quote(exe), args(scratch)), NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, sprintf("-O%s", opt));
+            assertEq("", r.stderr, sprintf("-O%s: stderr", opt));
         }
     }
 }

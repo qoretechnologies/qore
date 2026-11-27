@@ -118,11 +118,20 @@ class FunctionReferenceFastPathTest inherits QUnit::Test {
         string tmp = make_tmp_dir();
         on_exit remove_tree(tmp);
         string program = compile(tmp, opt);
-        assertEq(expected, backquote(sprintf("cd %s && %s 2>&1", shellQuote(dir), shellQuote(program))));
+        checkProgram(sprintf("cd %s && %s", shellQuote(dir), shellQuote(program)), expected, "output");
         if (can_report) {
-            assertEq(report_aot_expected, backquote(sprintf("cd %s && %s --enable-debug report 2>&1", shellQuote(dir),
-                shellQuote(program))), "fast path taken");
+            checkProgram(sprintf("cd %s && %s --enable-debug report", shellQuote(dir), shellQuote(program)),
+                report_aot_expected, "fast path taken");
         }
+    }
+
+    #! runs the compiled program: it ends normally and prints the output expected, and nothing on stderr apart from
+    #! the module loader's warnings (qore#7805)
+    private checkProgram(string cmd, string expected_output, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected_output, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     private checkReport() {

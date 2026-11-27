@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its sandbox cases run in Programs of the test's own process
 # test-platform: macos - member reads of JIT-compiled and qcc-compiled native code (an executable)
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
@@ -24,6 +25,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class SandboxPrivateMemberReadTest
 
@@ -613,9 +615,12 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         if (!is_file(exe)) {
             throw "COMPILE-ERROR", out;
         }
-        int status;
-        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir,
-            libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe, lib_src + " " + tenant_src), \status);
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s", libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe,
+            lib_src + " " + tenant_src), NOTHING, "QORE_JIT_TIMING=1");
+        int status = r.rc;
+        out = r.out;
         hash<string, string> results;
         foreach string line in (out.split("\n")) {
             *list<*string> m = (line =~ x/^([a-z.-]+)=(.*)$/);
