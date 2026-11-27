@@ -10,3 +10,4 @@ method given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got
 static: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:50; stack: C::staticChecked:147 <- call_static:187; exceptions: RUNTIME-TYPE-ERROR
 static given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FastCallReturnCheckPaths.q:55; stack: C::staticGiven:151 <- call_static_given:188; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
 missing destructor: DESTRUCTOR-ERROR: bad; at: FastCallReturnCheckPaths.q:27; stack: Tmp::destructor:80 <- missing:80 <- call_missing:189; exceptions: DESTRUCTOR-ERROR
+missing: RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: block missing return statement; at: FastCallReturnCheckPaths.q:72; stack: missing:80 <- call_missing:192; exceptions: RUNTIME-TYPE-ERROR
