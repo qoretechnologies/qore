@@ -1,0 +1,31 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires FcrProvider
+
+module FcrConsumer {
+    version = "1.0";
+    desc = "calls the functions of FcrProvider, for fast-call-return-check-paths.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public int sub fcr_call_checked(string s) {
+    return fcr_checked(s);
+}
+
+# the argument is a temporary, whose reference the call gives to the callee: the return value is checked before the
+# parameter, whose destructor raises, is released
+public int sub fcr_call_given(string s, bool raise) {
+    return fcr_given(new FcrTmp(s, raise));
+}
+
+public int sub fcr_call_value(string s, bool raise) {
+    return fcr_value(new FcrTmp(s, raise));
+}
+
+public int sub fcr_call_value_str(string s) {
+    return fcr_value_str(s);
+}

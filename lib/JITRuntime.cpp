@@ -13627,8 +13627,65 @@ DLLLOCAL bool qore_dbg_jit_force_deopt_enabled() {
 #endif
 #endif
 
+//! returns the declared return type of a function whose body a fast call ran (a method's resolved with the type
+//! arguments of its receiver), or nullptr if it has no type to check
+static QORE_INTERN_ALWAYS_INLINE const QoreTypeInfo* qore_rt_fast_call_return_type(const UserSignature* sig,
+        bool method, const QoreTypeInfo* receiver_type_info) {
+    const QoreTypeInfo* rt = method
+        ? qore_rt_get_effective_return_type(sig, receiver_type_info)
+        : qore_rt_get_effective_return_type(sig);
+    return rt && QoreTypeInfo::hasType(rt) ? rt : nullptr;
+}
+
+//! checks the value that the body of a function that a fast call ran returned against its declared return type, as
+//! ReturnStatement::execImpl() checks it (with softlist wrapping and the like), unless an exception is pending or the
+//! body returned no value
+/** Called by execJITWithDeopt() in the function's frame, with the function's runtime location, before its locals and
+    parameters are released, as the AST interpreter checks the value in the return statement (qore#7762): the
+    exception that the check raises has the location and the call stack of the return in the function.  A body that
+    returned no value is checked by qore_rt_check_function_missing_return() once its locals have been released
+*/
+static QORE_INTERN_ALWAYS_INLINE void qore_rt_check_function_return_value(const UserSignature* sig, QoreValue& val,
+        ExceptionSink* xsink, bool method = false, const QoreTypeInfo* receiver_type_info = nullptr) {
+    if (*xsink || val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_rt_fast_call_return_type(sig, method, receiver_type_info)) {
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+}
+
+//! checks a body of a function that a fast call ran and that returned no value against its declared return type (a
+//! missing return statement), unless an exception is pending
+/** Called by execJITWithDeopt() in the function's frame once the body's locals have been released, as the AST
+    interpreter checks it after the body has ended; the exception has the location of the function's declaration
+*/
+static QORE_INTERN_ALWAYS_INLINE void qore_rt_check_function_missing_return(const UserSignature* sig, QoreValue& val,
+        ExceptionSink* xsink, bool method = false, const QoreTypeInfo* receiver_type_info = nullptr) {
+    if (*xsink || !val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_rt_fast_call_return_type(sig, method, receiver_type_info)) {
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+        if (*xsink) {
+            qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    }
+}
+
+//! which return check execJITWithDeopt() makes of the value of a body (qore#7762)
+enum class QoreRtReturnCheck {
+    //! none: the caller checks the value itself
+    None,
+    //! the declared return type of a function or a closure
+    Function,
+    //! the declared return type of a method, resolved with the type arguments of its receiver
+    Method,
+};
+
 // The caller owns the frame storage so it can keep the frame through method return validation.
-template <bool IN_FRAME_RELEASE, typename ExecFn>
+template <bool IN_FRAME_RELEASE, QoreRtReturnCheck RETURN_CHECK = QoreRtReturnCheck::None, typename ExecFn>
 static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
@@ -13764,6 +13821,15 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         val = fromBits(result_bits);
     }
 
+    // the value is checked against the declared return type in the function's frame and with its runtime location,
+    // before its locals and parameters are released, as the AST interpreter checks it in the return statement: the
+    // exception has the location of the return in the function, not of the call (qore#7762)
+    if constexpr (RETURN_CHECK == QoreRtReturnCheck::Function) {
+        qore_rt_check_function_return_value(uvb->getUserSignature(), val, xsink);
+    } else if constexpr (RETURN_CHECK == QoreRtReturnCheck::Method) {
+        qore_rt_check_function_return_value(uvb->getUserSignature(), val, xsink, true, receiver_type_info);
+    }
+
     // Restore thread-local runtime parse options/location saved above.  The callers' code depends on it: native
     // code and the IR interpreter store their runtime location only when their statement changes
     // (QoreIRInstruction::stmt_loc, qore#6646), so the location must be the caller's again after the call.  It is
@@ -13800,6 +13866,14 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
             }
             body_locals[i]->uninstantiate(xsink);
         }
+    }
+
+    // a body that returned no value is checked once its locals have been released, as the AST interpreter checks a
+    // missing return statement after the body has ended (qore#7762)
+    if constexpr (RETURN_CHECK == QoreRtReturnCheck::Function) {
+        qore_rt_check_function_missing_return(uvb->getUserSignature(), val, xsink);
+    } else if constexpr (RETURN_CHECK == QoreRtReturnCheck::Method) {
+        qore_rt_check_function_missing_return(uvb->getUserSignature(), val, xsink, true, receiver_type_info);
     }
 
     // the parameters of a call that gives its arguments are released in the frame of the call, after the body locals
@@ -14425,29 +14499,6 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
     return qore_substitute_type_params_if_needed(sig->getReturnTypeInfo());
 }
 
-//! checks the return value of a user function's body that a fast call made against its declared return type, as
-//! ReturnStatement::execImpl() checks it (with softlist wrapping and the like), unless an exception is pending
-/** Called in the function's context and frame, before its parameters are released, as the AST interpreter checks the
-    value in the return statement: for a call that gives the references of its arguments (CONSUME), which releases
-    the parameters in the callee's frame (see execJITWithDeopt()), first thing in that release
-*/
-static void qore_rt_check_function_return_value(const UserSignature* sig, QoreValue& val, ExceptionSink* xsink) {
-    if (*xsink) {
-        return;
-    }
-    const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-    if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-        // Missing return statement: check type and set location to method definition
-        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-        if (*xsink) {
-            qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-            xsink->appendLastDescription(": block missing return statement");
-        }
-    } else {
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-    }
-}
-
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
 
 //! calls a user function through its IR or native code
@@ -14572,9 +14623,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
     // variable and the implicit arguments in the callee's frame (see execJITWithDeopt())
     [[maybe_unused]] CalleeContextHelper* argv_context = nullptr;
     [[maybe_unused]] auto release_given = [sig, num_params, use_direct_params, xsink, &argv_context, &val]() {
-        // the return value is checked before the parameters are released, as the AST interpreter checks it in the
-        // return statement
-        qore_rt_check_function_return_value(sig, val, xsink);
         // the implicit argument list (the arguments that the callee does not declare) first, then the argv
         // variable and the parameters, last first, as the AST interpreter releases them
         if (argv_context) {
@@ -14633,7 +14681,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
                     [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
@@ -14649,7 +14697,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
             body_call_ctx, function_context.getThreadData());
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
+                    [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
@@ -14657,7 +14706,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
                     [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
@@ -14673,11 +14722,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
             body_call_ctx, function_context.getThreadData());
         }
 
-        // the return value is checked in the function's context and frame too, as ReturnStatement::execImpl() checks
-        // it; a call that gives its arguments checked it before it released them (release_given)
-        if constexpr (!CONSUME) {
-            qore_rt_check_function_return_value(sig, val, xsink);
-        }
     }
     if constexpr (!CONSUME) {
         if (sig->argvid) {
@@ -15099,6 +15143,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
 
     // the name of the frame, as an AST call of a closure names it
     static const std::string call_name("<anonymous closure>");
+    // the closure is kept on the stack through the check of its return value, which can raise after its body ended,
+    // as the AST interpreter checks it in the call's frame (qore#7762, as for qore_rt_call_fast_t())
+    std::optional<QoreJITStackLocation> frame;
 
     // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
     // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -15111,45 +15158,28 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (use_direct_params) {
-            // Direct params path: pass args straight to IR slot cache, no TLS
-            IRDirectParams dp(args, nargs, arg_cleanups);
-            execJITWithDeopt<CONSUME>(uvb, call_name,
-                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
-                if (!ok && !*xs) {
-                    inv = true;
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else if (uvb->hasCachedFunction()) {
-            // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+        // the body runs natively (JIT/AOT), or in the IR interpreter with direct parameters (no TLS) or with the
+        // parameters instantiated above; one instantiation of execJITWithDeopt() for the three, so that the frame
+        // kept for the return check does not add to the stack of a recursive call
+        const bool use_native = !use_direct_params && uvb->hasCachedFunction();
+        const QoreIRFunction* body_ir = use_direct_params ? ir : uvb->getCachedIR();
+        execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
+                [&](ExceptionSink* xs, bool& inv) -> uint64_t {
+            if (use_native) {
                 return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else {
-            // IR fast path (standard TLS)
-            const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            execJITWithDeopt<CONSUME>(uvb, call_name,
-                    [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm);
-                if (!ok && !*xs) {
-                    inv = true;  // Request deopt to AST
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        }
+            }
+            IRDirectParams dp(args, nargs, arg_cleanups);
+            QoreValue ir_return_value;
+            bool ok = QoreIRInterpreter::execute(*body_ir, ir_return_value, xs, nullptr,
+                nullptr, nullptr, body_ir->cached_pre_instantiated, nullptr,
+                uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
+            if (!ok && !*xs) {
+                inv = true;  // Request deopt to AST
+                return 0;
+            }
+            return toBits(ir_return_value);
+        }, val, xsink, caller_pgm, nullptr, exec_pgm,
+        CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
         // Cleanup in reverse order
@@ -15170,20 +15200,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     }
     if (selfid_instantiated) {
         selfid->uninstantiateSelf();
-    }
-
-    // Apply return type coercion
-    if (!*xsink) {
-        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
-        } else {
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-        }
     }
 
     return toBits(qore_release_value_with_exception(val, xsink));
@@ -15411,9 +15427,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
     // variable and the implicit arguments in the callee's frame (see execJITWithDeopt())
     [[maybe_unused]] CalleeContextHelper* argv_context = nullptr;
     [[maybe_unused]] auto release_given = [sig, num_params, xsink, &argv_context, &val]() {
-        // the return value is checked before the parameters are released, as the AST interpreter checks it in the
-        // return statement
-        qore_rt_check_function_return_value(sig, val, xsink);
         // the implicit argument list (the arguments that the callee does not declare) first, then the argv
         // variable and the parameters, last first, as the AST interpreter releases them
         if (argv_context) {
@@ -15459,17 +15472,13 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
         // the body of a plain function that the call runs in another Program runs with that Program's call Program
         // context (qore#7394; see execJITWithDeopt())
         const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
-        execJITWithDeopt<CONSUME>(frame, uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
+        execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
+                [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
             body_call_ctx, function_context.getThreadData());
 
-        // the return value is checked in the function's context and frame too, as ReturnStatement::execImpl() checks
-        // it; a call that gives its arguments checked it before it released them (release_given)
-        if constexpr (!CONSUME) {
-            qore_rt_check_function_return_value(sig, val, xsink);
-        }
     }
     if constexpr (!CONSUME) {
         if (sig->argvid) {
@@ -15710,6 +15719,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+    // the function is kept on the stack through the check of its return value, which can raise after its body ended,
+    // as the AST interpreter checks it in the call's frame (qore#7762); execJITWithDeopt() without frame storage of
+    // the caller keeps the same storage itself, so the frame of a recursive call does not grow
+    std::optional<QoreJITStackLocation> frame;
 
     // Call through execJITWithDeopt which handles body locals, stack location, and deopt
     {
@@ -15719,7 +15732,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+        execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
+                [uvb](ExceptionSink* xs, bool& inv) {
             return uvb->execCachedFunction(xs, inv);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
@@ -15736,20 +15750,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         val = qore_release_value_with_exception(val, xsink);
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
-        }
-    }
-
-    // Apply return type coercion to match ReturnStatement::execImpl behavior
-    if (!*xsink) {
-        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
-        } else {
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
         }
     }
 
@@ -16123,6 +16123,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+    // the method is kept on the stack through the check of its return value, which can raise after its body ended,
+    // as the AST interpreter checks it in the call's frame (qore#7762, as for qore_rt_call_fast_t())
+    std::optional<QoreJITStackLocation> frame;
 
     // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
     // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -16135,39 +16138,27 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (use_direct_params) {
-            // Direct params path: pass args straight to IR slot cache, no TLS
-            IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
-            execJITWithDeopt<CONSUME>(uvb, call_name,
-                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
-                if (!ok && !*xs) {
-                    inv = true;
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else if (uvb->hasCachedFunction()) {
+        // the frame storage of the call keeps the method on the stack through the check of its return value; the native
+        // body keeps an instantiation of execJITWithDeopt() of its own, which keeps its call as fast as without the
+        // storage, and the IR bodies (direct parameters, or the parameters instantiated above) share another
+        if (!use_direct_params && uvb->hasCachedFunction()) {
             // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Method>(frame, uvb, call_name,
+                    [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
         } else {
-            // IR fast path (standard TLS): execute IR directly without QoreListNode.
-            const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            execJITWithDeopt<CONSUME>(uvb, call_name,
-                    [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
+            const QoreIRFunction* body_ir = use_direct_params ? ir : uvb->getCachedIR();
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Method>(frame, uvb, call_name,
+                    [&](ExceptionSink* xs, bool& inv) -> uint64_t {
+                IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
                 QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm);
+                bool ok = QoreIRInterpreter::execute(*body_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, body_ir->cached_pre_instantiated, nullptr,
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
                 if (!ok && !*xs) {
-                    inv = true;
+                    inv = true;  // Request deopt to AST
                     return 0;
                 }
                 return toBits(ir_return_value);
@@ -16212,22 +16203,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
     }
     if (selfid_instantiated) {
         selfid->uninstantiateSelf();
-    }
-
-    // Apply return type coercion (e.g. softlist wrapping) to match
-    // ReturnStatement::execImpl behavior
-    if (!*xsink) {
-        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
-        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-            // Missing return statement: set location to method definition
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
-        } else {
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-        }
     }
 
     return toBits(qore_release_value_with_exception(val, xsink));
@@ -20852,6 +20827,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
 
         // the name of the frame, as an AST call names it
         const std::string& call_name = uvb->getCallName();
+        // the function is kept on the stack through the check of its return value, which can raise after its body
+        // ended, as the AST interpreter checks it in the call's frame (qore#7762, as for qore_rt_call_fast_t())
+        std::optional<QoreJITStackLocation> frame;
 
         // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
         // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -20870,16 +20848,17 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
             // the body of a plain function that the call runs in another Program runs with that Program's call Program
             // context (qore#7394; see execJITWithDeopt())
             const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
-            if (uvb->hasCachedFunction()) {
-                execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            // the body runs natively, in the IR interpreter, or in the AST interpreter; one instantiation of
+            // execJITWithDeopt() for the three, so that the frame kept for the return check does not add to the stack
+            // of a recursive call
+            const bool use_native = uvb->hasCachedFunction();
+            const QoreIRFunction* callee_ir = use_native ? nullptr : uvb->getCachedIR();
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Function>(frame, uvb, call_name,
+                    [&](ExceptionSink* xs, bool& inv) -> uint64_t {
+                if (use_native) {
                     return uvb->execCachedFunction(xs, inv);
-                }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
-                body_call_ctx, function_context.getThreadData());
-            } else if (uvb->getCachedIR()) {
-                const QoreIRFunction* callee_ir = uvb->getCachedIR();
-                execJITWithDeopt<CONSUME>(uvb, call_name,
-                        [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
+                }
+                if (callee_ir) {
                     QoreValue ir_return_value;
                     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                         nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
@@ -20889,38 +20868,19 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                         return 0;
                     }
                     return toBits(ir_return_value);
-                }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
-                body_call_ctx, function_context.getThreadData());
-            } else {
-                execJITWithDeopt<CONSUME>(uvb, call_name, [uvb, sig](ExceptionSink* xs, bool& inv) -> uint64_t {
-                    QoreValue ast_return_value;
-                    StatementBlock* stmts = uvb->getStatementBlock();
-                    if (stmts) {
-                        const QoreTypeInfo* old_rti = saveReturnTypeInfo(qore_rt_get_effective_return_type(sig));
-                        ast_return_value = stmts->exec(xs);
-                        saveReturnTypeInfo(old_rti);
-                    }
-                    return toBits(ast_return_value);
-                }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
-                body_call_ctx, function_context.getThreadData());
-            }
-
-            // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
-            // (with softlist wrapping and the like)
-            if (!*xsink) {
-                const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-                if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
                 }
-            }
+                QoreValue ast_return_value;
+                StatementBlock* stmts = uvb->getStatementBlock();
+                if (stmts) {
+                    const QoreTypeInfo* old_rti = saveReturnTypeInfo(qore_rt_get_effective_return_type(sig));
+                    ast_return_value = stmts->exec(xs);
+                    saveReturnTypeInfo(old_rti);
+                }
+                return toBits(ast_return_value);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm,
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
+
         }
         if constexpr (!CONSUME) {
             if (sig->argvid) {
@@ -22874,7 +22834,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         const bool use_native = !use_direct_params && uvb->hasCachedFunction() && !use_specialized_ir;
         // Use one call frame for the three ways to run the body. Separate instantiations of execJITWithDeopt
         // made GCC reserve more stack in every recursive method call while the return check kept that frame alive.
-        execJITWithDeopt<CONSUME>(frame, uvb, call_name, [&](ExceptionSink* xs, bool& invalidated) -> uint64_t {
+        execJITWithDeopt<CONSUME, QoreRtReturnCheck::Method>(frame, uvb, call_name,
+                [&](ExceptionSink* xs, bool& invalidated) -> uint64_t {
             if (use_native) {
                 return uvb->execCachedFunction(xs, invalidated);
             }
@@ -22912,21 +22873,6 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     }
     if (selfid_instantiated) {
         selfid->uninstantiateSelf();
-    }
-
-    // Apply return type coercion (e.g. softlist wrapping) to match
-    // ReturnStatement::execImpl behavior
-    if (!*xsink) {
-        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
-        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
-        } else {
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-        }
     }
 
     result = toBits(qore_release_value_with_exception(val, xsink));
@@ -24846,6 +24792,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+    // the method is kept on the stack through the check of its return value, which can raise after its body ended,
+    // as the AST interpreter checks it in the call's frame (qore#7762, as for qore_rt_call_fast_t())
+    std::optional<QoreJITStackLocation> frame;
 
     // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
     // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -24862,16 +24811,20 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
             argv_context = &method_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        // the frame storage of the call keeps the method on the stack through the check of its return value; a static
+        // method is not on the path of a self-recursive call, and its native body keeps an instantiation of its own,
+        // which keeps its call as fast as without the storage
         if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Method>(frame, uvb, call_name,
+                    [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
         } else {
             // IR fast path: execute IR directly without QoreListNode construction.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            execJITWithDeopt<CONSUME>(uvb, call_name,
+            execJITWithDeopt<CONSUME, QoreRtReturnCheck::Method>(frame, uvb, call_name,
                     [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
@@ -24886,20 +24839,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
         }
 
-        // the return value is checked in the method's context too, as ReturnStatement::execImpl() checks it (with
-        // softlist wrapping and the like)
-        if (!*xsink) {
-            const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
-            if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
-        }
     }
     if constexpr (!CONSUME) {
         if (sig->argvid) {

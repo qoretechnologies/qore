@@ -9710,6 +9710,46 @@ QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink*
     completed = !es->isPending();
 }
 
+//! returns the declared return type of a tiered call's body, or nullptr if it has no type to check
+static const QoreTypeInfo* qore_tiered_return_type(const UserSignature& signature) {
+    const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+        ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+        : signature.getReturnTypeInfo();
+    return rt && QoreTypeInfo::hasType(rt) ? rt : nullptr;
+}
+
+//! checks the value that the body of a tiered call (native or in the IR interpreter) returned against its declared
+//! return type, as ReturnStatement::execImpl() checks it, unless an exception is pending or the body returned no value
+/** Called with the function's runtime location, before the caller's is restored and before the body's locals are
+    released, as the AST interpreter checks the value in the return statement: the exception has the location of the
+    return in the function (qore#7762).  A body that returned no value is checked by
+    qore_check_tiered_missing_return() once its locals have been released, as the AST interpreter checks it
+*/
+static void qore_check_tiered_return_value(const UserSignature& signature, QoreValue& val, ExceptionSink* xsink) {
+    if (*xsink || val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_tiered_return_type(signature)) {
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+}
+
+//! checks a body of a tiered call that returned no value against its declared return type (a missing return
+//! statement), as the AST interpreter checks it after the body has ended and its locals have been released, unless an
+//! exception is pending; the exception has the location of the function's declaration
+static void qore_check_tiered_missing_return(const UserSignature& signature, QoreValue& val, ExceptionSink* xsink) {
+    if (*xsink || !val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_tiered_return_type(signature)) {
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+        if (*xsink) {
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    }
+}
+
 template <typename Completion>
 QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
@@ -9800,6 +9840,11 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                     name ? name : "<fn>");
             }
 
+            // the value is checked against the declared return type with the function's runtime location, before
+            // it is restored: the exception has the location of the return in the function, as in the AST
+            // interpreter (qore#7762)
+            qore_check_tiered_return_value(signature, val, xsink);
+
             swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
             for (int i = static_cast<int>(ir->ast_visible_body_locals.size()) - 1; i >= 0; --i) {
@@ -9820,22 +9865,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
         signature.selfid->uninstantiateSelf();
     }
 
-    if (!*xsink) {
-        const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-            ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-            : signature.getReturnTypeInfo();
-        if (rt && QoreTypeInfo::hasType(rt)) {
-            if (val.isNothing()) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
-        }
-    }
+    qore_check_tiered_missing_return(signature, val, xsink);
     return val;
 }
 
@@ -10083,6 +10113,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = std::bit_cast<QoreValue>(result_bits);
                 }
 
+                // the value is checked against the declared return type with the function's runtime location, before
+                // it is restored: the exception has the location of the return in the function, as in the AST
+                // interpreter (qore#7762)
+                qore_check_tiered_return_value(signature, val, xsink);
+
                 // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
@@ -10128,22 +10163,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             }
         }
 
-        if (!*xsink) {
-            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-                : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
-        }
+        qore_check_tiered_missing_return(signature, val, xsink);
         return val;
     }
 
@@ -10235,6 +10255,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = QoreValue();
                 }
 
+                // the value is checked against the declared return type with the function's runtime location, before
+                // it is restored: the exception has the location of the return in the function, as in the AST
+                // interpreter (qore#7762)
+                qore_check_tiered_return_value(signature, val, xsink);
+
                 // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
@@ -10280,22 +10305,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             attemptJITCompilation();
         }
 
-        if (!*xsink) {
-            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-                : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
-        }
+        qore_check_tiered_missing_return(signature, val, xsink);
         return val;
     }
 
