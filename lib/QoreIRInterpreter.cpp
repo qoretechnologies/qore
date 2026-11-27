@@ -13727,6 +13727,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the per-instruction work that only some frames do is behind one test: the silent-failure trace and the reload of
     // a reflective frame (qore#7646)
     const bool per_instruction_hooks = trace_silent_fail_env.get() | func.reflective_frame;
+    // the cold work of the dispatch head in one branch: the per-instruction hooks and the instruction log (see the
+    // dispatch head)
+    const bool cold_head_work = per_instruction_hooks | ir_verbose_enabled;
 
     // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
     auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
@@ -13806,8 +13809,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
         // the per-instruction work of some frames is out of line, so that the dispatch of the others is unchanged
-        if (per_instruction_hooks && qore_ir_per_instruction_hooks(func, frame, inst)) {
-            invalidateExternalCaches();
+        // The per-instruction hooks (the silent-failure trace and the reload of a reflective frame, qore#7646) and the
+        // instruction log share one cold branch: a call of the hooks in a branch of its own made GCC keep a value of
+        // the dispatch in one more stack slot, 16 bytes in the frame of execute(), which each level of a recursion of
+        // interpreted code puts on the stack; in one branch with the log's calls, the frame is as without the hooks.
+        // This depends on the register allocation of the compiler: qore/stack/recursion-frame-budget.qtest (release
+        // build) and tools/stack-usage-budgets.txt guard it.  The log is written before the dispatch skips the step
+        // event of a statement without a debugger, so it shows those too
+        if (cold_head_work) [[unlikely]] {
+            if (per_instruction_hooks && qore_ir_per_instruction_hooks(func, frame, inst)) {
+                invalidateExternalCaches();
+            }
+            if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
+                fprintf(stderr, "[IR-INSTR-PRE-%zu] func='%s' op=%d(%s) ", ip, func.name.c_str(),
+                        (int)inst->opcode, inst->opcode == QoreIROpcode::GuardNotNothing ? "GuardNotNothing" : "");
+                fprintf(stderr, "result_slot=%d\n", inst->result.id);
+                fflush(stderr);
+            }
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
@@ -13855,13 +13873,6 @@ dispatch_folded_step:
                 *rl_cache.loc_ptr = inst->stmt_loc;
                 last_stmt_loc = inst->stmt_loc;
             }
-        }
-        // Log instruction execution for diagnostics (zero-cost path when disabled)
-        if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
-            fprintf(stderr, "[IR-INSTR-PRE-%zu] func='%s' op=%d(%s) ", ip, func.name.c_str(),
-                    (int)inst->opcode, inst->opcode == QoreIROpcode::GuardNotNothing ? "GuardNotNothing" : "");
-            fprintf(stderr, "result_slot=%d\n", inst->result.id);
-            fflush(stderr);
         }
 
         // the operation whose step event ran (qore_ir_folded_debug_step()), in the event's location
