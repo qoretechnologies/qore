@@ -172,7 +172,8 @@ checks the stack for its frame, is never inlined into it.  Each image (executabl
 table of `QoreAOTCallRefEntry` records (standard entry, adapter, signature code `ret | kind_i << (2 + 2i)`, parameter
 count and kinds) that a constructor function of the image registers when it is loaded
 (`qore_aot_register_callref_entries_v1()`) and a destructor function unregisters when it is unloaded, keyed by the
-standard entry (`QoreAOTRuntime.cpp`).  The first call through a reference to the function looks the entry up by the
+standard entry (`QoreAOTRuntime.cpp`); both reference the runtime functions weakly and call them only if present, so
+that an image loaded by an older library reaches its AOT runtime identity check.  The first call through a reference to the function looks the entry up by the
 standard entry that its variant holds and publishes it on the variant (`UserVariantBase::getAOTCallRefEntry()`: once,
 with a release store; a lookup that found nothing is made again only after more registrations), so the entry serves
 every reference to the function, whoever made it.
