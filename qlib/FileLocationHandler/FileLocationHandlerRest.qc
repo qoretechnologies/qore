@@ -188,11 +188,13 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         };
     }
 
-    #! The network for the code that calls it, unless the handler is bound to a client that it was given (qore#6959)
+    #! The network for the code that calls it, unless the handler is bound to a client that it was given (qore#6959),
+    #! and the domains of the local files and the schema location that the options name (qore#7806)
     private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
         # a client that restricted code bound is not a capability of the host (qore#6959); the certificate and key
-        # files that the options name are read with FileLocationHandler, which checks the caller
-        return (isBoundImpl() && !bound_by_restricted) ? 0 : DOM_NETWORK;
+        # files and the schema location that the options name are read for the caller (qore#7806)
+        return ((isBoundImpl() && !bound_by_restricted) ? 0 : DOM_NETWORK)
+            | AbstractFileLocationHandler::getOptionCallerDomains(opts);
     }
 
     #! Retrieves a text file from the given location

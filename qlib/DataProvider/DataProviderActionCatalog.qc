@@ -1732,6 +1732,11 @@ public class DataProviderActionCatalog {
         static hash<string, code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>>
             discovery_inventory_provider_map = {};
 
+        #! The module paths of the modules that registered the inventory providers, keyed by provider name
+        /** A provider registered outside a module load has no entry; see getDiscoveryInventoryFailures()
+        */
+        static hash<string, string> discovery_inventory_provider_module_map = {};
+
         #! Revision of registered inventory callbacks and their producer-owned identity content
         static int discovery_inventory_revision = 0;
 
@@ -2671,10 +2676,15 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
                 "a discovery inventory provider name cannot be empty";
         }
         *code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()> previous_provider;
+        *string previous_module_path;
+        # the module that registers the provider, if any, to which its failures belong
+        *string module_path = DataProviderActionCatalog::registrationModulePath();
         {
             DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
             previous_provider = discovery_inventory_provider_map{name};
+            previous_module_path = discovery_inventory_provider_module_map{name};
             discovery_inventory_provider_map{name} = provider;
+            DataProviderActionCatalog::setInventoryProviderModule(name, module_path);
             ++discovery_inventory_revision;
             ++catalog_revision;
         }
@@ -2689,8 +2699,10 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             }
             if (previous_provider) {
                 discovery_inventory_provider_map{name} = previous_provider;
+                DataProviderActionCatalog::setInventoryProviderModule(name, previous_module_path);
             } else {
                 remove discovery_inventory_provider_map{name};
+                remove discovery_inventory_provider_module_map{name};
             }
             ++discovery_inventory_revision;
             ++catalog_revision;
@@ -2733,8 +2745,18 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             return;
         }
         remove discovery_inventory_provider_map{name};
+        remove discovery_inventory_provider_module_map{name};
         ++discovery_inventory_revision;
         ++catalog_revision;
+    }
+
+    #! Records the module that registered an inventory provider; must be called with the catalog lock held
+    private:internal static setInventoryProviderModule(string name, *string module_path) {
+        if (module_path.val()) {
+            discovery_inventory_provider_module_map{name} = module_path;
+        } else {
+            remove discovery_inventory_provider_module_map{name};
+        }
     }
 
     #! Adds expected identities to an open discovery generation
@@ -2807,34 +2829,10 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             inventory_revision = discovery_inventory_revision;
             app_scope = state.app_scope;
         }
+        list<hash<DataProviderDiscoveryFailureInfo>> failures;
         list<hash<DataProviderDiscoveryExpectedIdentityInfo>> collected
-            = new list<hash<DataProviderDiscoveryExpectedIdentityInfo>>();
-        list<hash<DataProviderDiscoveryFailureInfo>> failures
-            = new list<hash<DataProviderDiscoveryFailureInfo>>();
-        foreach string name in (sort(keys providers)) {
-            try {
-                code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>
-                    provider = providers{name};
-                list<hash<DataProviderDiscoveryExpectedIdentityInfo>> inventory
-                    = DataProviderActionCatalog::normalizeDiscoveryExpectedInventory(
-                        provider());
-                if (app_scope) {
-                    inventory = map $1, inventory, app_scope{$1.app};
-                }
-                collected += inventory;
-            } catch (hash<ExceptionInfo> ex) {
-                failures += <DataProviderDiscoveryFailureInfo>{
-                    "generation": generation,
-                    "kind": "source",
-                    "phase": "inventory",
-                    "identity": name,
-                    "error": ex.err,
-                    "description": ex.desc,
-                    "argument": ex.arg,
-                    "module_context": name,
-                };
-            }
-        }
+            = DataProviderActionCatalog::runDiscoveryInventoryProviders(providers, generation, app_scope,
+                \failures);
         DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = generation.toString();
         *hash<DataProviderDiscoveryStateInfo> state
@@ -2862,6 +2860,95 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             state.inventory_revision = inventory_revision;
         }
         discovery_map{generation_key} = state;
+    }
+
+    #! Returns the failures of the registered discovery inventory providers
+    /** Calls each provider registered with @ref registerDiscoveryInventoryProvider(), without the catalog lock held,
+        as @ref collectDiscoveryExpectedInventory() does, and returns a failure for each one that raises an exception;
+        the inventories that the providers return are discarded.  A producer that could not register its applications
+        reports it this way, for example a module whose provider source could not be loaded when the module was
+        initialized: it can log the error and load without registering anything, and its inventory provider raises
+        the error then.
+
+        No discovery session is needed: a consumer that needs the complete catalog of the loaded modules, such as the
+        \c qore-data-provider-i18n tool, checks with it and with @ref getInitializationFailures() that no registration
+        failed, instead of taking a partial catalog for the complete one.
+
+        @return one failure for each provider that raised an exception, in the order of the provider names; each has
+        \c generation 0, \c kind \c "source", \c phase \c "inventory", the provider name in \c identity, and in
+        \c module_context the path of the module that registered the provider while it was loaded, or @ref nothing
+        if it was registered outside a module load; the exception's error, description and argument are kept
+
+        @par Example
+        @code{.py}
+foreach hash<DataProviderDiscoveryFailureInfo> failure in (DataProviderActionCatalog::getDiscoveryInventoryFailures()) {
+    stderr.printf("inventory source %y failed: %s: %s\n", failure.identity, failure.error, failure.description);
+}
+        @endcode
+
+        @since %DataProvider 3.13
+    */
+    static list<hash<DataProviderDiscoveryFailureInfo>> getDiscoveryInventoryFailures() {
+        hash<string, code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>> providers;
+        hash<string, string> module_paths;
+        {
+            DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
+            providers = discovery_inventory_provider_map;
+            module_paths = discovery_inventory_provider_module_map;
+        }
+        list<hash<DataProviderDiscoveryFailureInfo>> failures;
+        # a failure belongs to the module that registered its provider
+        DataProviderActionCatalog::runDiscoveryInventoryProviders(providers, 0, NOTHING, \failures, module_paths);
+        return failures;
+    }
+
+    #! Calls the given discovery inventory providers; must be called without the catalog lock held
+    /** @param providers the providers to call
+        @param generation the discovery generation of the failures
+        @param app_scope the applications whose identities are returned; all when missing
+        @param failures returns one failure for each provider that raised an exception
+        @param module_paths if given, the \c module_context of a failure is the module path of its provider here, and
+        missing if it has none; otherwise it is the provider name
+
+        @return the normalized identities that the providers returned
+    */
+    private:internal static list<hash<DataProviderDiscoveryExpectedIdentityInfo>> runDiscoveryInventoryProviders(
+            hash<string, code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>> providers, int generation,
+            *hash<string, bool> app_scope, reference<list<hash<DataProviderDiscoveryFailureInfo>>> failures,
+            *hash<string, string> module_paths) {
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> collected
+            = new list<hash<DataProviderDiscoveryExpectedIdentityInfo>>();
+        failures = new list<hash<DataProviderDiscoveryFailureInfo>>();
+        foreach string name in (sort(keys providers)) {
+            try {
+                code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>
+                    provider = providers{name};
+                list<hash<DataProviderDiscoveryExpectedIdentityInfo>> inventory
+                    = DataProviderActionCatalog::normalizeDiscoveryExpectedInventory(
+                        provider());
+                if (app_scope) {
+                    inventory = map $1, inventory, app_scope{$1.app};
+                }
+                collected += inventory;
+            } catch (hash<ExceptionInfo> ex) {
+                hash<DataProviderDiscoveryFailureInfo> failure = <DataProviderDiscoveryFailureInfo>{
+                    "generation": generation,
+                    "kind": "source",
+                    "phase": "inventory",
+                    "identity": name,
+                    "error": ex.err,
+                    "description": ex.desc,
+                    "argument": ex.arg,
+                };
+                if (!exists module_paths) {
+                    failure.module_context = name;
+                } else if (exists module_paths{name}) {
+                    failure.module_context = module_paths{name};
+                }
+                failures += failure;
+            }
+        }
+        return collected;
     }
 
     #! Starts one generation-scoped discovery qualification session

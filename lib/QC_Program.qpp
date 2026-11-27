@@ -3187,6 +3187,10 @@ auto val = pgm.getGlobalVariable("error_count", \existsv);
 
     @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
     returns \c EINVAL
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself, whatever name
+    it uses for them (since %Qore 3.0); see @ref sandbox_program_process_information
  */
 auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
@@ -4717,6 +4721,11 @@ hash<auto> h = pgm.getGlobalVars();
     @endcode
 
     @return a hash of global variables and their values
+
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself (since
+    %Qore 3.0); see @ref sandbox_program_process_information
 
     @see @ref Qore::get_global_vars()
 

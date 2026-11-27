@@ -10,11 +10,43 @@
 %requires QUnit
 %requires HttpServer
 %requires HttpServerUtil
+%requires Logger
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerHandlerAsyncCancelTest
 
-#! A trusted handler that answers with the key of the connection of the request
+#! Captures the keys of objects that the server's debug messages name, such as the internal keys of its connections
+/** The asynchronous I/O controller logs the key of a connection before it reads the connection's requests, so the
+    test knows the internal key of each connection once the response to its first request is received; the handlers
+    get only the opaque session token of their connection (qore#7251)
+*/
+class KeyCapture inherits LoggerAppenderWithLayout {
+    private {
+        Mutex m();
+        hash<string, bool> found_keys;
+    }
+
+    constructor() : LoggerAppenderWithLayout("key-capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        # the keys of objects: 40 hex digits, not in a session token (which has 64), with the QUIC session if any
+        list<string> found = (params =~ x/(?<![0-9a-f])([0-9a-f]{40}(?::quic:[0-9]+)?)(?![0-9a-f])/g) ?? ();
+        AutoLock al(m);
+        map found_keys{$1} = True, found;
+    }
+
+    list<string> getKeys() {
+        AutoLock al(m);
+        return keys found_keys;
+    }
+}
+
+#! A trusted handler that answers with the session token of the connection of the request
 class KeyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
@@ -43,23 +75,18 @@ class CancelProbe inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         list<string> r = ();
-        # its own connection: the key of its socket is the owner of the connection's operations
-        list<string> own = (cx.sock_key,);
-        # for HTTP/3, the key of the QUIC listener is the prefix of the connection's key
-        *string quic = (cx.sock_key =~ x/^(.+):quic:/)[0];
-        if (quic) {
-            push own, quic;
-        }
-        foreach string k in (own) {
+        # its own connection: what it has of it is its session token, which names no operation (qore#7251); the
+        # internal keys of the connection, which it does not get, are among the targets that the test gives it
+        foreach string k in ((cx.session_token, cx.sock_key)) {
             push r, sprintf(\"own owner %s: %d\", k, AsyncIoController::cancelByOwner(k));
             push r, sprintf(\"own key %s: %y\", k, AsyncIoController::cancelByKey(k));
         }
-        # the keys and owners of the listeners' accept operations
+        # the keys and owners of the listeners' accept operations and the internal keys of the connections
         foreach string k in (target_keys) {
-            push r, sprintf(\"listener key %s: %y\", k, AsyncIoController::cancelByKey(k));
+            push r, sprintf(\"target key %s: %y\", k, AsyncIoController::cancelByKey(k));
         }
         foreach string k in (target_owners) {
-            push r, sprintf(\"listener owner %s: %d\", k, AsyncIoController::cancelByOwner(k));
+            push r, sprintf(\"target owner %s: %d\", k, AsyncIoController::cancelByOwner(k));
         }
         # the keys of the controller's operations
         hash<auto> info = AsyncIoController::getInfo();
@@ -95,7 +122,10 @@ AbstractHttpRequestHandler sub get_handler() {
         tenant.setSandboxManager(sm);
         AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
 
-        HttpServer server(<HttpServerOptionInfo>{});
+        KeyCapture capture();
+        Logger logger("async-cancel-test", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
         on_exit delete server;
         server.setHandler("probe", "^probe", NOTHING, probe);
         server.setHandler("other", "^other", NOTHING, new KeyHandler());
@@ -119,6 +149,11 @@ AbstractHttpRequestHandler sub get_handler() {
         # a request of another handler opens the connection
         hash<auto> first = hc.send(NOTHING, "GET", "/other/first");
         string key = first."x-key";
+        # the tenant's handler gets the session token of its connection, not its internal key, so the test gives it
+        # the internal keys of the server's connections and listeners, which it cancels as keys and as owners too
+        list<string> internal = capture.getKeys();
+        assertGt(0, internal.size(), "the server logged the keys of its connections");
+        probe.setTargets(accept_keys + internal, accept_owners + internal);
 
         # the tenant's handler, on the same connection
         hash<auto> res = hc.send(NOTHING, "GET", "/probe/kill");

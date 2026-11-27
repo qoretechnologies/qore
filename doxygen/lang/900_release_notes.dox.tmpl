@@ -113,6 +113,12 @@
     that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
     @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
 
+    @par Data Provider Actions Refuse Local Paths of Code Restricted From the File System
+    Code restricted from the file system cannot give a local path or file location in the request of a qlib data
+    provider action, also with a provider that the host lent it, or create a provider with a path; a host gives such
+    code files with a sandbox or a confined provider (see @ref sandbox_caller_domains;
+    <a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @par Library Code Gives Restricted Code No Values of the Host's Environment
     For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
     URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
@@ -326,6 +332,12 @@
     process's current directory relative to it (ex: \c "./sub"), as it may not read that directory (see
     @ref sandbox_fs_dir_cwd;
     <a href="https://github.com/qoretechnologies/qore/issues/7662">issue 7662</a>).
+
+    @par Code Restricted From External Information Gets No Process Arguments or Environment
+    \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are empty in a %Program restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", also when it inherits the restriction or gets it later, and
+    code with this restriction reads them empty from other %Programs (see @ref sandbox_program_process_information;
+    <a href="https://github.com/qoretechnologies/qore/issues/7693">issue 7693</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -2377,6 +2389,12 @@
         @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "getActionProcessing()" and
         @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()"
         (<a href="https://github.com/qoretechnologies/qore/issues/7568">issue 7568</a>)
+      - a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in a global variable no longer keeps the
+        program from ending, and an error of its thread callback is raised instead of deadlocking it
+        (<a href="https://github.com/qoretechnologies/qore/issues/7771">issue 7771</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
+      - a synchronous @ref DataProvider::DataProviderPipeline "DataProviderPipeline" processes the records of an
+        iterator instead of hanging (<a href="https://github.com/qoretechnologies/qore/issues/7793">issue 7793</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -3504,6 +3522,10 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - qlib data provider actions refuse a local path or file location in a request from a caller restricted from the
+      file system, also with a lent provider, as do providers created with a path and the file options of locations;
+      see @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "checkCallerLocation()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)

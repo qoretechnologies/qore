@@ -1,0 +1,53 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# I18nFailingDeferredOwner.qm - provider fixture whose deferred action registration fails
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires DataProvider
+
+#! A provider fixture whose deferred action registration fails, as an action script that cannot be opened does
+/** The app is registered, but the registration of its actions raises an exception, which the data provider catalog
+    retains as an initialization failure of the app.  Used by I18nFailClosed.qtest (qore#7788).
+*/
+module I18nFailingDeferredOwner {
+    version = "1.0";
+    desc = "provider fixture whose deferred action registration fails";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestI18nFailingDeferred",
+            "display_name": "Failing Deferred Provider",
+            "short_desc": "Provider whose actions cannot be registered",
+            "desc": "Provider whose deferred action registration fails",
+            "presentation_source_locale": "en",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "failing-deferred-provider.svg",
+        });
+        DataProviderActionCatalog::registerLazyAppActions("QoreTestI18nFailingDeferred", sub () {
+            throw "FILE-OPEN2-ERROR", "cannot open 'index.js': the action script of the fixture does not exist";
+        });
+    };
+}

@@ -651,6 +651,56 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_program_process_information The Process Information of a Program
+
+    Each @ref Qore::Program "Program" gets a copy of the process information when it is created: the arguments
+    (\c Qore::ARGV, \c Qore::QORE_ARGV) and the environment (\c Qore::ENV) of the process.  They are external
+    information, so they are empty in a %Program restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO":
+    - <b>created with the restriction</b>: also when the %Program inherits it, as a child of restricted code does,
+      or takes it from the code that creates it (see @ref Qore::Program::constructor() "Program::constructor()")
+    - <b>restricted later</b>: a %Program whose own options get the restriction after it was created
+      (@ref Qore::Program::setParseOptions() "Program::setParseOptions()",
+      @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()", the
+      @ref no-external-info "%no-external-info" parse directive, or a restriction of a file with
+      @ref push-parse-options "%push-parse-options" that @ref lock-options "%lock-options" or
+      @ref Qore::Program::lockOptions() "Program::lockOptions()" keeps) loses their values: they are emptied then,
+      and are not restored if the restriction is removed again.  An exception of a destructor of an old value is
+      raised by the change of the options; where the change has no caller to raise it to (a lock of the options, the
+      end of a parse), the old values are released with the data of the %Program
+    - <b>created for a debugger</b>: a %Program created with
+      @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" has variables of its own,
+      empty if it is restricted, else with the values of the %Program that it is created for; restricting it later
+      empties only its own
+    - <b>read from another %Program</b>: code restricted from external information that reads them from a %Program
+      that is not restricted from it, with @ref Qore::Program::getGlobalVariable() "Program::getGlobalVariable()",
+      @ref Qore::Program::getGlobalVars() "Program::getGlobalVars()", the same methods of
+      @ref Qore::ProgramControl "ProgramControl", or the \c getValue() method of the \c GlobalVar class of the
+      \c reflection module, gets them empty, as they are in its own %Program, whatever name it uses for them; the
+      calling code decides, as for the functions of external information (see @ref sandbox_caller_domains).  The
+      variables of a %Program that is restricted from external information itself, once they were emptied, hold what
+      was assigned to them in it, and are read as they are; while a %Program is getting the restriction, they are
+      read empty
+
+    Only these variables are covered: a value that the code of a %Program stores elsewhere (in another variable, or
+    as the result of a call) is that %Program's own data, and code that runs in a %Program, also when restricted code
+    calls it (see @ref sandbox_program_capability), reads the %Program's own variables: this includes the builtin
+    functions that restricted code runs in another %Program through it, such as
+    @ref Qore::get_global_vars() "get_global_vars()" called with
+    @ref Qore::Program::callFunction() "Program::callFunction()" or through
+    @ref Qore::Program::getCallReference() "Program::getCallReference()", and
+    @ref Qore::Program::getExpression() "Program::getExpression()".  A file that restricts external information only
+    for its own code (with @ref push-parse-options "%push-parse-options", without locking it) does not change the
+    variables of its %Program.
+
+    @note @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" is not a strong boundary for code that may use the
+    debugger (@ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"): such code can reach any %Program of the process by
+    its ID (@ref Qore::ProgramControl::resolveProgramId() "ProgramControl::resolveProgramId()") and inspect its state
+    (its statements, breakpoints and the local variables of its top-level code); restrict code from external
+    information without allowing it the debugger
+
+    @since %Qore 3.0
+
     @subsection sandbox_thread_capabilities Thread Capability Scopes
 
     A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code
@@ -1400,7 +1450,10 @@ authenticate();
       makes of a lent object, or an object that trusted code creates for it under a host grant (a policy barrier or a
       system-policy capability): the grant does not outlive itself
     - a sandbox that governs the calling code still governs the method's code (its policy, limits and interrupts);
-      only the restrictions of the calling code's functional domains are lent
+      only the restrictions of the calling code's functional domains are lent: the file-system and network policy of
+      the sandbox also applies to the paths and locations that the host configured the object with, so that a host
+      whose sandboxed tenants use such an object (a connection, for example) allows those paths and targets in the
+      sandbox
 
     @warning Every public method of every module object that the host hands to restricted code (also an object that
     a host API creates from parameters of the restricted code, such as a data provider created by name) lends the
@@ -1426,6 +1479,18 @@ authenticate();
     \c DATABASE domain runs the module code with that restriction, so it cannot open a connection through them
     either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
     must therefore create them in the host's context, or before restricted code can look them up.
+
+    Library code that reads or writes a local path or file location that its caller gives checks the caller in the
+    same way, before it uses the path or makes any other call for it: a path given in a request (the field of a data
+    provider action's request, such as the \c file_path of a document upload) is the caller's input also when the
+    host lent the provider, so it is checked with @ref Util::check_caller_file_access() "check_caller_file_access()"
+    or, for a location, @ref FileLocationHandler::FileLocationHandler::checkCallerLocation()
+    "FileLocationHandler::checkCallerLocation()", which judge the code that a lent object was lent to (see
+    @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()"); a path given when an
+    object is created (a data provider's \c path option) is the creator's, and is checked with
+    @ref Util::check_creator_file_access() "check_creator_file_access()", so the objects that the host creates with
+    its paths, and the data providers of the file connections that it lends, keep working for the code that it lends
+    them to.  Both raise \c PERMISSION-DENIED; the file-system policy of a sandbox applies when the path is opened.
 
     @since %Qore 3.0
 
@@ -1516,6 +1581,11 @@ authenticate();
     and the clients of an HTTP-based connection use the creator's file options; a changed file option, or one given
     as a runtime or data provider option, raises \c PERMISSION-DENIED
     (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
+
+    A sandbox's file-system and network policy also applies to the connections that are lent to the code that it
+    governs, including the paths and locations that the lending host configured them with (there is no exemption for
+    the creator's paths): a host that wants its tenants to use such a connection allows those paths and targets in
+    the sandbox.
 
     @since %Qore 3.0
 

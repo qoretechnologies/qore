@@ -1960,6 +1960,9 @@ ArrayList l();
       @ref sandbox_filesystem "sandbox file-system policy" for them) and the results of @ref Qore::realpath() "realpath()"
       for relative paths, and for absolute paths whose canonical form shares more leading directories with it than
       the path given does (ex: \c "/proc/self/cwd"), are given relative to it; see @ref sandbox_fs_dir_cwd
+    - the values of the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV, which are
+      empty in the %Program and are read empty from other %Programs that are not restricted from external information
+      (see @ref sandbox_program_process_information)
 
     @par Known Limitation:
     The following still give paths of the host to code with this option:

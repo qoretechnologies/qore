@@ -135,6 +135,8 @@ public class FixedLengthWriteDataProvider inherits DataProvider::AbstractDataPro
         @throw FIXED-LENGTH-UTIL-PADDING-ERROR record padding error
     */
     constructor(string path, hash<auto> specs, *hash<auto> opts) {
+        # the path is the creator's input (qore#7806)
+        check_creator_file_access("the path of a fixed-length write data provider");
         writer = new FixedLengthFileWriter(path, specs, opts);
     }
 

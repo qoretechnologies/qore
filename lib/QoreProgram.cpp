@@ -1365,6 +1365,12 @@ void qore_program_private::registerProgram() {
 qore_program_private::~qore_program_private() {
     // each user variant of the Program's code holds a dependency reference to it until it unregisters
     assert(!user_variants);
+    // the old values of process-information variables emptied after the Program's data were released
+    {
+        ExceptionSink xsink;
+        releaseParkedProcessInfo(&xsink);
+        xsink.handleExceptions();
+    }
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
@@ -1917,6 +1923,7 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
         // a change for the whole Program, made while the module header's options are in effect
         SharedParseOptionsWrite spw;
         pwo.parse_options &= ~QoreParseOptions(removed);
+        noteOwnOptionsChanged();
     }
     // the module's %ifdef directives see the options it has
     for (auto& i : pomaps.pomap) {
@@ -1928,6 +1935,144 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
         }
     }
     return removed;
+}
+
+QoreValue qore_program_private_base::getRestrictedProcessInfoValue(const Var* v) const {
+    assert(isProcessInfoVar(v));
+    if (v == env_var) {
+        return new QoreHashNode(autoTypeInfo);
+    }
+    return new QoreListNode(stringTypeInfo);
+}
+
+bool qore_program_private_base::withholdProcessInfo() const {
+    // a Program counts as restricted only once its variables were emptied: every other Program fails closed
+    return !(processInfoCleared() && restrictsExternalInfo())
+        && qore_caller_restricts_domain(QDOM_EXTERNAL_INFO);
+}
+
+Var* qore_program_private_base::createProcessInfoVar(const char* name, const QoreTypeInfo* typeInfo, bool is_env,
+        bool no_external_info) {
+    // a Program created for a debugger (ProgramControl::createEvalProgram()) inherits the variables of the Program
+    // that it is created for as references; it gets variables of its own instead, with the values of those if it is
+    // not restricted from external information, so that its own options decide what they hold, and emptying them
+    // never changes the other Program's
+    Var* replaced = nullptr;
+    Var* v = qore_root_ns_private::runtimeCreateOwnVar(*RootNS, *QoreNS, name, typeInfo, true, replaced);
+    if (!v) {
+        return nullptr;
+    }
+    ExceptionSink xsink;
+    QoreValue inherited;
+    if (replaced) {
+        if (!no_external_info) {
+            inherited = replaced->eval();
+        }
+        // releasing a reference releases no value
+        replaced->deref(&xsink);
+    }
+    if (no_external_info) {
+        v->setInitial(is_env ? static_cast<AbstractQoreNode*>(new QoreHashNode(autoTypeInfo))
+            : static_cast<AbstractQoreNode*>(new QoreListNode(stringTypeInfo)));
+    } else if (replaced) {
+        if (inherited.hasNode()) {
+            v->setInitial(inherited.takeNode());
+        } else {
+            inherited.discard(&xsink);
+        }
+    } else if (is_env) {
+        v->setInitial(ENV->copy());
+    } else if (!strcmp(name, "ARGV") ? (bool)ARGV : (bool)QORE_ARGV) {
+        v->setInitial((!strcmp(name, "ARGV") ? ARGV : QORE_ARGV)->copy());
+    }
+    assert(!xsink);
+    return v;
+}
+
+void qore_program_private_base::initProcessInfoVars(bool no_external_info) {
+    argv_var = createProcessInfoVar("ARGV", listTypeInfo, false, no_external_info);
+    qore_argv_var = createProcessInfoVar("QORE_ARGV", listTypeInfo, false, no_external_info);
+    env_var = createProcessInfoVar("ENV", hashTypeInfo, true, no_external_info);
+    // the variables are empty from the start in a Program created with the restriction
+    if (no_external_info && argv_var && qore_argv_var && env_var) {
+        process_info_cleared.store(1, std::memory_order_release);
+    }
+}
+
+void qore_program_private_base::processInfoRestrictionChanged(ExceptionSink* xsink) {
+    if (!restrictsExternalInfo()) {
+        resetProcessInfoCleared();
+        return;
+    }
+    // the generation of the flag when the emptying starts: a reset meanwhile keeps it from being set below
+    uint64_t start = process_info_cleared.load(std::memory_order_acquire);
+    if (start & 1) {
+        return;
+    }
+    // the variables get the values that they have in a Program created with the restriction; until all of them are
+    // empty, code restricted from external information reads them empty (withholdProcessInfo())
+    bool cleared = true;
+    for (Var* v : {argv_var, qore_argv_var, env_var}) {
+        if (!v) {
+            cleared = false;
+            continue;
+        }
+        ExceptionSink sink;
+        QoreValue old;
+        {
+            LValueHelper lvh(&sink);
+            if (v->getLValue(lvh, false)) {
+                cleared = false;
+            } else {
+                // the old value is held here, so that the assignment releases none, under the variable's lock
+                old = lvh.getReferencedValue();
+                if (lvh.assign(getRestrictedProcessInfoValue(v), "<process information>")) {
+                    cleared = false;
+                }
+            }
+        }
+        // the old value is released without the variable's lock: its release can run the code of destructors
+        if (xsink) {
+            old.discard(&sink);
+            xsink->assimilate(sink);
+        } else {
+            parkProcessInfoValue(old);
+            if (sink) {
+                // no caller can take the exception: it is reported as an exception that nothing handles
+                sink.handleExceptions();
+            }
+        }
+    }
+    if (cleared) {
+        // set only in the generation in which the emptying started: if the restriction was removed meanwhile (and
+        // possibly added again by another change, which empties the variables itself), the flag stays reset
+        process_info_cleared.compare_exchange_strong(start, start | 1, std::memory_order_acq_rel);
+        // a change that removed the restriction after the flag was set here resets it
+        if (!restrictsExternalInfo()) {
+            resetProcessInfoCleared();
+        }
+    }
+}
+
+void qore_program_private_base::parkProcessInfoValue(QoreValue v) const {
+    // a value that holds no object runs no code when it is released
+    if (!needs_scan(v)) {
+        v.discard(nullptr);
+        return;
+    }
+    std::lock_guard<std::mutex> lg(process_info_parked_lock);
+    process_info_parked.push_back(v);
+}
+
+void qore_program_private_base::releaseParkedProcessInfo(ExceptionSink* xsink) {
+    std::vector<QoreValue> parked;
+    {
+        std::lock_guard<std::mutex> lg(process_info_parked_lock);
+        parked.swap(process_info_parked);
+    }
+    for (QoreValue& v : parked) {
+        v.discard(xsink);
+    }
 }
 
 void qore_program_private_base::setDefines() {
@@ -2909,6 +3054,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // instance's destructor may run user code that references globals or namespace data.
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
+
+        // the old values of emptied process-information variables (processInfoRestrictionChanged())
+        releaseParkedProcessInfo(xsink);
 
         // the del closures of the local modules that a compiled script embeds run while the data of the Program
         // exists, as the del closure of a source module that a script loads does (qore#6015)
@@ -5167,6 +5315,10 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
+    // empties the process-information variables if a restriction of external information that the lock keeps
+    // becomes the Program's own, after the locks; the old values are kept until the Program's data are released, as
+    // there is no exception sink for them
+    qore_program_private_base::ProcessInfoRestrictionGuard pirg(*priv);
     // atomic with the lock check of a change of the options (issue #6078); the write lock before po_mutex (see
     // qore_program_private_base::po_mutex); the restrictions that it has now are kept
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
@@ -6139,7 +6291,16 @@ QoreValue QoreProgram::getGlobalVariableVal(const char* var, bool& found) const 
         return QoreValue();
     }
     found = true;
+    // the process-information variables are external information (qore#7693)
+    QoreValue rv;
+    if (priv->withholdVarValue(v, rv)) {
+        return rv;
+    }
     return v->eval();
+}
+
+bool QoreProgram::withholdGlobalVarValue(const QoreExternalGlobalVar* var, QoreValue& rv) const {
+    return priv->withholdVarValue(reinterpret_cast<const Var*>(var), rv);
 }
 
 QoreValue QoreProgram::getGlobalVariableValue(const char* var, bool& found) const {
@@ -6333,7 +6494,28 @@ void QoreProgram::saveObject(QoreObject* obj) {
 }
 
 QoreHashNode* QoreProgram::getGlobalVars() const {
-   return priv->getGlobalVars();
+    QoreHashNode* h = priv->getGlobalVars();
+    // the process-information variables are external information (qore#7693)
+    if (priv->withholdProcessInfo()) {
+        for (const Var* v : {priv->argv_var, priv->qore_argv_var, priv->env_var}) {
+            if (!v) {
+                continue;
+            }
+            std::string key = std::string("Qore::") + v->getName();
+            if (h->existsKey(key.c_str())) {
+                // the value replaced is released here, where no lock is held: it is the last reference only if the
+                // variable was assigned meanwhile, and then the code of a destructor can run, whose exception is
+                // reported, as this function has no caller to raise it to
+                ExceptionSink xsink;
+                h->takeKeyValue(key.c_str()).discard(&xsink);
+                h->setKeyValue(key.c_str(), priv->getRestrictedProcessInfoValue(v), nullptr);
+                if (xsink) {
+                    xsink.handleExceptions();
+                }
+            }
+        }
+    }
+    return h;
 }
 
 int QoreProgram::setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink) {
