@@ -26216,6 +26216,168 @@ static QoreValue f_dbg_wait_again_poll_operation(const QoreListNode* params, Run
     return *xsink ? QoreValue() : QoreValue(op_obj.release());
 }
 
+namespace {
+//! Runs another C++ poll operation on the I/O thread and counts its steps
+/** Its steps, results and output are those of the operation that it runs; dbg_counting_poll_operation_steps()
+    returns the number of its continuePoll() calls.  It references the private data of the operation that it runs; the
+    caller keeps that operation's object, whose \c sock member the operation's poll info refers to.  Given a Queue
+    without a size limit, it pushes True to it when a step first returns a wait.
+
+    Only the step, the goal, the state, the output, the ready events and the dispatch are forwarded: the operation run
+    must not change its descriptor (fd generation), renew its timeout, handle its completion, push to queues or wake
+    the I/O thread itself, as for a send or a connect to one address
+*/
+class DbgCountingPollOperation : public SocketPollOperationBase {
+public:
+    //! @p inner and @p waiting (if not nullptr) are referenced by the caller for this object
+    DbgCountingPollOperation(SocketPollOperationBase* inner, Queue* waiting) : inner(inner), waiting(waiting) {
+        assert(inner);
+    }
+
+    virtual void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            inner->deref(xsink);
+            if (waiting) {
+                waiting->deref(xsink);
+            }
+            delete this;
+        }
+    }
+
+    virtual void deref() override {
+        ExceptionSink xsink;
+        deref(&xsink);
+    }
+
+    virtual bool goalReached() const override {
+        return inner->goalReached();
+    }
+
+    virtual void abort(ExceptionSink* xsink) override {
+        inner->abort(xsink);
+    }
+
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        steps.fetch_add(1, std::memory_order_relaxed);
+        QoreHashNode* rv = inner->continuePoll(xsink);
+        if (rv && waiting && !waiting_pushed) {
+            // steps of an operation do not run concurrently
+            waiting_pushed = true;
+            waiting->pushAndTakeRef(true);
+        }
+        return rv;
+    }
+
+    virtual bool needsWorkerDispatch() const override {
+        return inner->needsWorkerDispatch();
+    }
+
+    virtual void setReadyEvents(int events) override {
+        inner->setReadyEvents(events);
+    }
+
+    virtual QoreValue getOutput() const override {
+        return inner->getOutput();
+    }
+
+    virtual const char* getStateImpl() const override {
+        return inner->getStateImpl();
+    }
+
+    //! Returns the number of continuePoll() calls
+    int64 getSteps() const {
+        return steps.load(std::memory_order_relaxed);
+    }
+
+private:
+    //! the operation run (referenced)
+    SocketPollOperationBase* inner;
+    //! gets True when a step first returns a wait (referenced), or nullptr
+    Queue* waiting;
+    //! true once True was pushed to @ref waiting
+    bool waiting_pushed = false;
+    //! the number of continuePoll() calls (made on the I/O thread, read by the test's thread)
+    std::atomic<int64> steps{0};
+};
+}
+
+//! Debug-only: returns an operation that runs the given C++ poll operation and counts its steps
+/** See DbgCountingPollOperation; the caller keeps the object of the operation run
+*/
+static QoreValue f_dbg_counting_poll_operation(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* inner_obj = get_param_value(params, 0).get<QoreObject>();
+    SocketPollOperationBase* inner = static_cast<SocketPollOperationBase*>(
+        inner_obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!inner) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation(): the object of class '%s' is "
+                "not a C++ poll operation", inner_obj->getClassName());
+        }
+        return QoreValue();
+    }
+    Queue* waiting = nullptr;
+    if (QoreObject* queue_obj = get_param_value(params, 1).get<QoreObject>()) {
+        waiting = static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink));
+        if (!waiting) {
+            inner->deref(xsink);
+            return QoreValue();
+        }
+        if (waiting->getMax() != -1) {
+            // the I/O thread cannot wait for room in the queue: pushAndTakeRef() needs a queue without a size limit
+            waiting->deref(xsink);
+            inner->deref(xsink);
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation(): the queue must have no size "
+                "limit");
+            return QoreValue();
+        }
+    }
+    ExceptionSink sock_xsink;
+    ReferenceHolder<QoreObject> sock(inner->getReferencedSocketObject(&sock_xsink), xsink);
+    if (!sock) {
+        inner->deref(xsink);
+        if (waiting) {
+            waiting->deref(xsink);
+        }
+        if (sock_xsink) {
+            xsink->assimilate(sock_xsink);
+        } else {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation(): the operation has no socket");
+        }
+        return QoreValue();
+    }
+    DbgCountingPollOperation* op = new DbgCountingPollOperation(inner, waiting);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
+    op->setSelf(*op_obj);
+    qore_poll_op_set_member(op_obj, "sock", sock.release(), xsink);
+    qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("counting"), xsink);
+    return *xsink ? QoreValue() : QoreValue(op_obj.release());
+}
+
+//! Debug-only: returns the number of steps of an operation that dbg_counting_poll_operation() returned
+static QoreValue f_dbg_counting_poll_operation_steps(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    SocketPollOperationBase* op = static_cast<SocketPollOperationBase*>(
+        obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation_steps(): the object of class "
+                "'%s' is not a C++ poll operation", obj->getClassName());
+        }
+        return QoreValue();
+    }
+    DbgCountingPollOperation* cop = dynamic_cast<DbgCountingPollOperation*>(op);
+    int64 rv = cop ? cop->getSteps() : -1;
+    op->deref(xsink);
+    if (!cop) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation_steps(): the operation was not "
+            "returned by dbg_counting_poll_operation()");
+        return QoreValue();
+    }
+    return rv;
+}
+
 
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
@@ -33293,6 +33455,20 @@ static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, 
         b->size());
 }
 
+//! returns the hash given as the first argument of the debug functions of hash key maps, or raises an exception
+/** the parameter takes any value, so that a hash of another type (ex: <tt>hash<auto></tt>) is not converted for the
+    call: the conversion copies the hash, and the copy hashes its keys again
+*/
+static const QoreHashNode* dbg_hash_param(const QoreListNode* params, ExceptionSink* xsink) {
+    QoreValue hv = get_param_value(params, 0);
+    if (hv.getType() != NT_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first argument must be a hash; got type '%s'",
+            hv.getTypeName());
+        return nullptr;
+    }
+    return hv.get<const QoreHashNode>();
+}
+
 //! Debug-only: looks up a key of a hash with the hash value of another key, as a collision would (qore#7194)
 /** @param h the hash
     @param key the key to look up
@@ -33302,7 +33478,10 @@ static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, 
 */
 static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreHashNode* h = get_param_value(params, 0).get<const QoreHashNode>();
+    const QoreHashNode* h = dbg_hash_param(params, xsink);
+    if (!h) {
+        return QoreValue();
+    }
     DbgStringNodeHelper key_param(get_param_value(params, 1));
     DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
     const QoreStringNode* key = *key_param;
@@ -33319,6 +33498,127 @@ static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, Runt
     rv->setKeyValue("exists", exists, xsink);
     rv->setKeyValue("value", value.release(), xsink);
     return rv.release();
+}
+
+//! Debug-only: inserts a key into a hash with the hash value of another key, as keys that share their hash would be
+//! inserted (qore#7557)
+/** The member keeps the hash value of \c hash_key in a key map that is not hardened, so a normal search of it does not
+    find it until the map is hardened (dbg_hash_lookup_with_hash_of() does); a hardened map hashes the key itself.
+    The hash is changed in place, without the copy that a change of a shared hash makes: pass a hash made at run time
+    that no other code shares.  Do not copy the hash before it is hardened: a copy keeps the hashes of the members, which debug
+    builds assert to be the hashes of their keys.
+
+    @param h the hash
+    @param key the key to insert, which the hash must not have
+    @param hash_key the key whose hash value the member gets
+    @param value the value of the new member
+*/
+//! true while this thread's dbg_hash_insert_with_hash_of() inserts its member
+static thread_local bool dbg_hash_foreign_member_hash = false;
+
+bool qore_dbg_hash_foreign_member_hash() {
+    return dbg_hash_foreign_member_hash;
+}
+
+//! sets dbg_hash_foreign_member_hash for its scope, also when an exception leaves it
+class DbgForeignMemberHashHelper {
+public:
+    DLLLOCAL DbgForeignMemberHashHelper() {
+        assert(!dbg_hash_foreign_member_hash);
+        dbg_hash_foreign_member_hash = true;
+    }
+
+    DLLLOCAL ~DbgForeignMemberHashHelper() {
+        dbg_hash_foreign_member_hash = false;
+    }
+
+    DbgForeignMemberHashHelper(const DbgForeignMemberHashHelper&) = delete;
+    DbgForeignMemberHashHelper& operator=(const DbgForeignMemberHashHelper&) = delete;
+};
+
+static QoreValue f_dbg_hash_insert_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHashNode* h = const_cast<QoreHashNode*>(dbg_hash_param(params, xsink));
+    if (!h) {
+        return QoreValue();
+    }
+    DbgStringNodeHelper key_param(get_param_value(params, 1));
+    DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
+    const QoreStringNode* key = *key_param;
+    const QoreStringNode* hash_key = *hash_key_param;
+    if (strlen(key->c_str()) != key->size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the key has a NUL character");
+        return QoreValue();
+    }
+    qore_hash_private* hp = qore_hash_private::get(*h);
+    size_t hash = qore_hash_lookup_key::hashBytes(hash_key->c_str(), hash_key->size());
+    // the members of the hash may have been inserted with the hashes of other keys, so that a search by a hash
+    // could miss one; the keys are compared one by one
+    for (const HashMember* om : hp->member_list) {
+        if (om->key.size() == key->size() && !memcmp(om->key.data(), key->c_str(), key->size())) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the hash already has key '%s'", key->c_str());
+            return QoreValue();
+        }
+    }
+    HashMember* m;
+    {
+        // the member is inserted with the hash of another key, which addMemberKnownAbsent() asserts otherwise
+        DbgForeignMemberHashHelper foreign_hash;
+        m = hp->addMemberKnownAbsent(new HashMember(std::string(key->c_str(), key->size()), hash));
+    }
+    hp->setNewMemberValue(m, get_param_value(params, 3).refSelf());
+    return QoreValue();
+}
+
+//! Debug-only: describes the key map of a hash (qore#7557)
+/** @return a hash with \c hardened (True if the map hashes its keys with the keyed hash), \c buckets (the number of
+    buckets), \c max_chain (the length of the longest chain of a bucket) and \c member_buckets (the bucket of each
+    member, in the order of the hash)
+*/
+static QoreValue f_dbg_hash_key_map_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreHashNode* h = dbg_hash_param(params, xsink);
+    if (!h) {
+        return QoreValue();
+    }
+    const qore_hash_private* hp = qore_hash_private::get(*h);
+    ReferenceHolder<QoreListNode> member_buckets(new QoreListNode(bigIntTypeInfo), xsink);
+    for (const HashMember* m : hp->member_list) {
+        member_buckets->push(static_cast<int64>(hp->hm.bucketIndex(m)), xsink);
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("hardened", hp->hm.isHardened(), xsink);
+    rv->setKeyValue("buckets", static_cast<int64>(hp->hm.bucket_count()), xsink);
+    rv->setKeyValue("max_chain", static_cast<int64>(hp->hm.maxChain()), xsink);
+    rv->setKeyValue("member_buckets", member_buckets.release(), xsink);
+    return rv.release();
+}
+
+//! true while dbg_fail_hash_harden_alloc() has armed the failure of the next hardening of a key map
+static std::atomic<bool> dbg_hash_harden_alloc_fail{false};
+//! true once the armed failure happened
+static std::atomic<bool> dbg_hash_harden_alloc_failed{false};
+
+bool qore_dbg_hash_harden_alloc_must_fail() {
+    if (!dbg_hash_harden_alloc_fail.exchange(false)) {
+        return false;
+    }
+    dbg_hash_harden_alloc_failed.store(true);
+    return true;
+}
+
+//! Debug-only: the allocation of the bucket array of the next hardening of the key map of a hash fails (one-shot,
+//! qore#7557)
+static QoreValue f_dbg_fail_hash_harden_alloc(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_hash_harden_alloc_failed.store(false);
+    dbg_hash_harden_alloc_fail.store(true);
+    return QoreValue();
+}
+
+//! Debug-only: returns True if the failure armed by dbg_fail_hash_harden_alloc() happened, and disarms it
+static QoreValue f_dbg_hash_harden_alloc_failed(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_hash_harden_alloc_fail.store(false);
+    return dbg_hash_harden_alloc_failed.exchange(false);
 }
 
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -35813,8 +36113,12 @@ static bool dbg_quic_wait_until(const std::function<bool()>& pred, int timeout_m
 }
 
 bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
-    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
-        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+    if (dbg_quic_hold_session.load(std::memory_order_acquire) != session_id) {
+        return false;
+    }
+    int64_t held = dbg_quic_hold_stream.load(std::memory_order_acquire);
+    // -2: every stream of the session
+    return held == stream_id || held == -2;
 }
 
 bool qore_dbg_quic_stream_end_held() {
@@ -35824,10 +36128,11 @@ bool qore_dbg_quic_stream_end_held() {
 //! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
 //! flow-control credit
 /** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
-    stream's send buffer deterministically.  Only one stream is held at a time.
+    stream's send buffer deterministically.  Only one stream, or all the streams of one session, are held at a time.
 
     @param session_id the QUIC session ID
-    @param stream_id the HTTP/3 stream ID of a streaming response
+    @param stream_id the HTTP/3 stream ID of a streaming response, or -1 for all the streams of the session, as when
+    its client grants no credit to any of them (qore#7280)
     @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
     thread of its socket before it writes, so that the flush writes the data held (qore#7414)
     @param with_end if True, the data of a streamed body is held also after the body has ended (qore#7653)
@@ -35836,14 +36141,15 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
     bool until_flush = get_param_value(params, 2).getAsBool();
-    if (session_id <= 0 || stream_id < 0) {
+    if (session_id <= 0 || stream_id < -1) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
         return QoreValue();
     }
-    // the stream is set first, so that no other stream of the session matches meanwhile
+    // the stream is set first, so that no other stream of the session matches meanwhile; -1 (all) is kept as -2, as
+    // -1 means no stream
     dbg_quic_hold_session.store(0, std::memory_order_release);
-    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id == -1 ? -2 : stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
     dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
@@ -39379,6 +39685,13 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits",
         hashTypeInfo, QORE_PARAM_NO_ARG, "extra");
+    qns.addBuiltinVariant("dbg_counting_poll_operation", f_dbg_counting_poll_operation,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, QC_SOCKETPOLLOPERATION->getTypeInfo(), 2,
+        QC_ABSTRACTPOLLOPERATION->getTypeInfo(), QORE_PARAM_NO_ARG, "op",
+        QC_QUEUE->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_counting_poll_operation_steps", f_dbg_counting_poll_operation_steps,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        QC_ABSTRACTPOLLOPERATION->getTypeInfo(), QORE_PARAM_NO_ARG, "op");
     qns.addBuiltinVariant("dbg_lock_wait_arm", f_dbg_lock_wait_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
         QC_ABSTRACTSMARTLOCK->getTypeInfo(), QORE_PARAM_NO_ARG, "lock", bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_lock_wait_wait", f_dbg_lock_wait_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -39625,8 +39938,17 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
     qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, hashTypeInfo, 3, hashTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, anyTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
         "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key");
+    qns.addBuiltinVariant("dbg_hash_insert_with_hash_of", f_dbg_hash_insert_with_hash_of, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 4, anyTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key", anyTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_hash_key_map_info", f_dbg_hash_key_map_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
+    qns.addBuiltinVariant("dbg_fail_hash_harden_alloc", f_dbg_fail_hash_harden_alloc, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_hash_harden_alloc_failed", f_dbg_hash_harden_alloc_failed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

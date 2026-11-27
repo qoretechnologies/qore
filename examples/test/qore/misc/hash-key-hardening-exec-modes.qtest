@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in an executable
+# test-platform: macos - JIT and AOT code generation of constant hash key accesses with hashes computed in advance
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class HashKeyHardeningExecModesTest
+
+#! Constant keys of a hardened hash in every execution mode (qore#7557)
+/** The JIT and qcc compute the hash of a constant key in advance; a hardened key map hashes the key with its keyed
+    hash instead, so a constant key must find its member in a hardened hash in every execution mode.  A program
+    builds a hardened hash with the debug function dbg_hash_insert_with_hash_of() and reads, writes, tests and removes
+    constant keys of it in functions, which every execution mode and a qcc-compiled executable run; the output of each
+    must be that of the AST interpreter.  Debug builds only.
+*/
+class HashKeyHardeningExecModesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("hash key hardening exec modes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("constant keys of a hardened hash in every execution mode", \modesTest());
+        set_return_value(main());
+    }
+
+    modesTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug function dbg_hash_insert_with_hash_of() is only in debug builds");
+        }
+        TmpDir tmp("qore-hash-key-hardening-");
+        string file = tmp.path + DirSep + "hardened.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Program);
+        f.close();
+
+        list<string> expected = run(sprintf("--exec-mode=ast %s", file));
+        assertEq(ExpectedAst, expected);
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(expected, run(sprintf("--exec-mode=%s %s", mode, file)), mode);
+        }
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"),
+            ExecModeHarness::IRTierName);
+
+        string exe = tmp.path + DirSep + "hardened";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)).split("\n"), "executable");
+    }
+
+    private list<string> run(string args) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, args)).split("\n");
+    }
+
+    public {
+        #! the program: builds a hardened hash and accesses constant keys of it in functions
+        const Program = "%modern\n"
+            "hash<auto> sub make() {\n"
+            "    hash<auto> h = {};\n"
+            "    h._ = 0;\n"
+            "    remove h._;\n"
+            "    for (int i = 0; i < 2000; ++i) {\n"
+            "        call_function(\"dbg_hash_insert_with_hash_of\", h, \"k\" + i, \"shared\", i);\n"
+            "    }\n"
+            "    return h;\n"
+            "}\n"
+            "string sub reads(hash<auto> h) {\n"
+            "    return sprintf(\"%y %y %y %y %y %y\", h.k0, h.k17, h.\"k1999\", h{\"k500\"}, h.k2000, h.missing);\n"
+            "}\n"
+            "string sub tests(hash<auto> h) {\n"
+            "    return sprintf(\"%y %y %y %y\", exists h.k3, exists h.k2000, h.hasKey(\"k4\"), exists h.\"k1998\");\n"
+            "}\n"
+            "string sub writes(hash<auto> h) {\n"
+            "    h.k5 = \"five\";\n"
+            "    h.k6 += 100;\n"
+            "    h.\"k7\" *= 2;\n"
+            "    h.newkey = \"new\";\n"
+            "    ++h.k8;\n"
+            "    remove h.k9;\n"
+            "    delete h.k10;\n"
+            "    return sprintf(\"%y %y %y %y %y %y %y %d\", h.k5, h.k6, h.k7, h.newkey, h.k8, exists h.k9, "
+                "exists h.k10, h.size());\n"
+            "}\n"
+            "int sub loop(hash<auto> h) {\n"
+            "    int sum = 0;\n"
+            "    for (int i = 0; i < 50; ++i) {\n"
+            "        sum += h.k11 + h.k1500 + (h.k2001 ?? 0);\n"
+            "    }\n"
+            "    return sum;\n"
+            "}\n"
+            "hash<auto> h = make();\n"
+            "hash<auto> info = call_function(\"dbg_hash_key_map_info\", h);\n"
+            "printf(\"hardened %y max_chain_ok %y\\n\", info.hardened, info.max_chain <= 16);\n"
+            "printf(\"%s\\n\", reads(h));\n"
+            "printf(\"%s\\n\", tests(h));\n"
+            "printf(\"%s\\n\", writes(h));\n"
+            "printf(\"%d\\n\", loop(h));\n"
+            "hash<auto> c = h;\n"
+            "c.k12 = -12;\n"
+            "printf(\"%y %y %y\\n\", c.k12, h.k12, c.k13);\n";
+
+        #! the output of the program
+        const ExpectedAst = (
+            "hardened True max_chain_ok True",
+            "0 17 1999 500 null null",
+            "True False True True",
+            "\"five\" 106 14 \"new\" 9 False False 1999",
+            "75550",
+            "-12 12 13",
+        );
+    }
+}

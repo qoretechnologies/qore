@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Символ лапок полів (типово: `\"`); поля читаються з ним, а роздільники в полях у лапках не враховуються під час визначення роздільника"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Рядок заголовків"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Рядок із назвами стовпців або 0, якщо його немає"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "Рядок із назвами стовпців (нумерація з 1) або `0`, якщо в даних його немає; якщо не вказано, рядок заголовків визначається з даних. Використовуйте його, коли людина, яка знає файл, каже, де розташовані назви стовпців"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Максимальна кількість рядків"
