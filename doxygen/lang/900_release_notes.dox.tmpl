@@ -418,10 +418,9 @@
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
-    A class declared by code that its sandbox restricts cannot use the private declarations of a class declared by
-    trusted code, its private constructors included, but can override them and call an overridden method's base
-    version; library classes give their subclasses final public methods, so a subclass method with one of their
-    names and signatures must be renamed
+    A class declared by code that its sandbox restricts cannot use the private declarations, private constructors
+    included, of a class declared by trusted code but can override them and call an overridden method's base version;
+    library classes give their subclasses final public methods, so a subclass method with their signature is renamed
     (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
@@ -3125,13 +3124,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - a class injected with @ref Qore::Program::importClass() "Program::importClass()" keeps the class that it is
-      injected in place of, with the declarations that that class names, for as long as the injected class exists:
-      the type checks of the injected class's objects (\c instanceof, typed assignments and casts, for example) read
-      freed memory once the @ref Qore::Program "Program" that declared the replaced class was deleted, when that was
-      not the Program that the injected class came from; a compiled program or module in which a class is injected in
-      place of itself, or of a class that leads back to it through the classes that it is injected in place of or
-      inherits, including classes of the other objects linked into the same program, is no longer loaded
+    - fixed a memory-safety issue with a class injected with @ref Qore::Program::importClass() "Program::importClass()",
+      which now keeps the class that it replaces for as long as it exists; a compiled program or module in which a
+      class is injected in place of itself, directly or through other classes, is no longer loaded
       (<a href="https://github.com/qoretechnologies/qore/issues/7664">issue 7664</a>)
     - the code of a host @ref Qore::Program "Program" that code restricted from external information calls through the
       Program object answers the requests of information of the host as for that code
