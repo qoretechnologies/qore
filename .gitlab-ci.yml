@@ -56,6 +56,9 @@ variables:
   QORE_TEST_LIVE_PROVIDERS: mews
   QORE_TEST_OPTS: '-penable-debug'
   QORE_EXCLUDE_PERF_TESTS: "1"
+  # a test that leaves files in its temporary directory fails, unless it is listed in
+  # examples/test/runner/tmp-leak-known.txt (run_tests.sh gives each test a TMPDIR of its own; qore#7817, qore#7823)
+  QORE_TEST_TMP_LEAKS: fail
   # A test job fails when a native module of its image has no build for the module API of the qore under test, as its
   # tests would be skipped (pipeline 64250).  Only a batch that changes the module API, whose images cannot have the
   # modules of the new API yet, sets QORE_CI_NATIVE_MODULE_API_TRANSITION: "1" here; its jobs then name the modules

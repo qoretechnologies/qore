@@ -137,6 +137,11 @@
   `examples/test/docker_test/check-build-warnings.py`: it exits with 3, which the job allows, so a pipeline with
   warnings passes with a warning (an orange job) and the warnings are fixed in the next batch; keep the build free of
   them (qore#7757).
+- `run_tests.sh` gives each test a `TMPDIR` of its own and reports what the test leaves there (`QORE_TEST_TMP_LEAKS`:
+  `report` by default, `fail` in CI, `off` for the run's shared `TMPDIR`).  A test removes what it creates (use
+  `TmpDir`/`make_tmp_dir()`), and makes UNIX sockets under `TestSocketDir` (`examples/test/TestSocketDir.qm`), whose
+  short directory keeps socket paths within 104 bytes on macOS.  A test that still leaks is listed in
+  `examples/test/runner/tmp-leak-known.txt` until it is fixed (qore#7817, qore#7823).
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 - The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the
