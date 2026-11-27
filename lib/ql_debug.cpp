@@ -32960,9 +32960,11 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
         rv = QoreJIT::BgCompileHoldPoint::Commit;
     } else if (!strcmp(point->c_str(), "install")) {
         rv = QoreJIT::BgCompileHoldPoint::Install;
+    } else if (!strcmp(point->c_str(), "finish")) {
+        rv = QoreJIT::BgCompileHoldPoint::Finish;
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown background compile hold point '%s'; expecting "
-            "\"lowering\", \"llvm\", \"commit\" or \"install\"", point->c_str());
+            "\"lowering\", \"llvm\", \"commit\", \"install\" or \"finish\"", point->c_str());
         return false;
     }
     return true;
@@ -32994,7 +32996,8 @@ static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, Runtime
     return QoreValue();
 }
 
-//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
+//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit", \c "install" or
+//! \c "finish", at the end of the compile)
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
 
@@ -33042,6 +33045,11 @@ static QoreValue f_dbg_wait_sync_compile_waiting(const QoreListNode* params, Run
 //! returns True if the background JIT compiler is stopped at a hold point
 static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return QoreJIT::instance().dbgBgCompileHeld();
+}
+
+//! returns True if the background JIT compiler is idle as dbg_wait_bg_compile_idle() waits for it (qore#7831)
+static QoreValue f_dbg_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgBgCompileIdle();
 }
 
 //! lets the held background JIT compile continue and waits until it has left the hold point; False on timeout
@@ -40153,6 +40161,7 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_bg_compile_idle", f_dbg_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_wait_sync_compile_waiting", f_dbg_wait_sync_compile_waiting, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

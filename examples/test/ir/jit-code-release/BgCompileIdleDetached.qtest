@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT background compile thread, its detachment by a Program teardown, and the compile lock
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class BgCompileIdleDetachedTest
+
+#! issue #7831: the background JIT compiler is idle only once a detached compile that has ended has been cleared
+/** A compile that a Program teardown detached (its result is discarded) ends in finishBgCompileWork(), which released
+    the count of the compiler's active work before it cleared the detached compile in progress, holding the compile
+    lock until the end of the compile thread's iteration.  dbg_wait_bg_compile_idle() waits until no work is queued or
+    active, so it could return in between, while the compile lock was held and the detached compile was still in
+    progress: dbg_get_jit_debugger_entry_count(), which does not count while a detached compile holds the compile lock,
+    then gave 0 (ir/jit-code-release/JitCodeRelease.qtest failed so under load: "debugger entries: 0").
+
+    The script stops the detached compile at its end ("finish") with the debug hooks of the compiler, so that each run
+    takes the same steps: the compiler must not be idle there, and the count of the debugger entries after the compile
+    is the count before it.  It runs with background compiles in a child process for the JIT and tiered execution.
+*/
+class BgCompileIdleDetachedTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = "held_llvm=True continued_llvm=True held_finish=True idle=False entries_when_idle=null "
+            "continued_finish=True entries_restored=True\n";
+    }
+
+    private {
+        string qore_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("background compiler idle with a detached compile", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/BgCompileIdleDetached.qr";
+        foreach string mode in (("jit", "tiered")) {
+            addTestCase(mode + ": not idle while a detached compile ends", \idleTest(), (mode,));
+        }
+        set_return_value(main());
+    }
+
+    #! runs the script with background compiles, every function submitted at its first call
+    private idleTest(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the background compile holds require a debug build");
+        }
+        int rc;
+        string out = backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            "%s --exec-mode=%s %s %s 2>&1", env, qore_bin, mode, script, mode), \rc);
+        assertEq(0, rc, out);
+        assertEq(Expected, out, mode);
+    }
+}
