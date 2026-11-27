@@ -326,6 +326,15 @@ class QoreDataProviderI18nCmd {
                         continue;
                     }
                     root_messages{entry.key} = entry.value;
+                    # this mode loads no module, so it checks the source texts of the catalog itself
+                    if (entry.value.source.typeCode() == NT_STRING) {
+                        if (*string markup = DataProviderPresentation::findDocumentationMarkup(
+                                entry.value.source)) {
+                            ++stale;
+                            stderr.printf("%s %s: message %y contains the documentation command %y, which a user "
+                                "interface shows verbatim\n", color.error("STALE:"), root.path, entry.key, markup);
+                        }
+                    }
                 }
                 if (verbose) {
                     printf("verified %s\n", color.key(root.path));
@@ -1526,7 +1535,7 @@ class QoreDataProviderI18nCmd {
 
     private mergeCatalogs(reference<hash<string, hash<auto>>> target,
             hash<string, hash<auto>> source) {
-        # every generated source catalog is merged here, so every mode rejects markup in it
+        # every catalog generated from provider metadata is merged here
         requireNoDocumentationMarkup(source);
         foreach hash<auto> catalog_entry in (source.pairIterator()) {
             string domain = catalog_entry.key;

@@ -75,16 +75,17 @@ public class DataProviderPresentation {
 
             @since %DataProvider 3.13
         */
-        const DocumentationMarkupCommands = ("ref", "see", "sa", "c", "p", "b", "e", "em", "code", "endcode",
-            "verbatim", "endverbatim", "note", "since", "deprecated", "param", "return", "returns", "retval", "throw",
-            "throws", "exception", "link", "endlink", "brief", "par", "parblock", "endparblock", "warning", "li",
-            "todo", "attention", "anchor", "copydoc", "internal");
+        const DocumentationMarkupCommands = ("ref", "see", "sa", "a", "c", "p", "b", "e", "em", "arg", "li",
+            "code", "endcode", "verbatim", "endverbatim", "htmlonly", "endhtmlonly", "note", "since", "deprecated",
+            "param", "return", "returns", "retval", "throw", "throws", "exception", "link", "endlink", "brief",
+            "details", "par", "parblock", "endparblock", "warning", "remark", "remarks", "pre", "post", "todo",
+            "attention", "anchor", "copydoc", "internal", "section", "subsection", "image");
     }
 
     private {
-        #! A documentation command that is not part of a longer word
+        #! A documentation command: not after a word, and followed by a space or the end (or \c \@code by a brace)
         const DocumentationMarkupPattern = "(?<![\\w@\\\\])([@\\\\](?:" + DocumentationMarkupCommands.join("|")
-            + "))(?![\\w-])";
+            + ")(?=\\s|$)|@code(?=\\{))";
     }
 
     #! Returns the first documentation command in a presentation text, if any
@@ -94,10 +95,13 @@ public class DataProviderPresentation {
         <tt>"the `FileDataType` structure"</tt>, not <tt>"the \@ref DataProvider::FileDataType "FileDataType"
         structure"</tt>.
 
-        A command is found when it is written with \c \@ or with a backslash and is not part of a longer word, so an
-        e-mail address (<tt>"user\@example.com"</tt>), a field reference (<tt>"exists \@a.b"</tt>), a name such as
-        <tt>"\@type"</tt> and an escape such as <tt>"\\n"</tt> are not commands.  Text in a Markdown code span
-        (between backquotes) is literal and is not searched.
+        A command is found when it is written with \c \@ or with a backslash after a space, a punctuation character
+        or the start of the text and is followed by a space or the end of the text (\c \@code also by a brace, as in
+        <tt>\@code{.py}</tt>), as a documentation command is written.  So an e-mail address
+        (<tt>"user\@example.com"</tt>), a field reference (<tt>"exists \@a.b"</tt>, <tt>"\@b[0]"</tt>), a name such
+        as <tt>"\@type"</tt>, an escape such as <tt>"\\n"</tt> and a regular expression such as
+        <tt>"\\p{L}"</tt> are not commands.  Text in a Markdown code span (between backquotes) is literal and is
+        not searched.
 
         @param text the presentation text
 
@@ -108,7 +112,7 @@ public class DataProviderPresentation {
     */
     static *string findDocumentationMarkup(string text) {
         # Markdown code spans are literal text
-        text =~ s/`[^`]*`//g;
+        text =~ s/`[^`]*`/ /g;
         return regex_extract(text, DocumentationMarkupPattern)[0];
     }
 

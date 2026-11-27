@@ -2878,6 +2878,17 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 id: {"source": source, "message": source},
             }}},
         });
+        # catalog-tree verification loads no module and checks the source texts of the root catalogs; the message
+        # changed has no translation
+        string untranslated_id = (select keys catalogs{domain}.locales.root.messages, $1 != id)[0];
+        hash<auto> markup_root = catalogs{domain};
+        markup_root.locales.root.messages{untranslated_id}.source += " (@see Qore::Program)";
+        writeJson(output + DirSep + domain + DirSep + "root.json", markup_root);
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, output),
+            "catalog-tree verification rejects a documentation command in a root catalog");
+        writeJson(output + DirSep + domain + DirSep + "root.json", catalogs{domain});
+        assertEq(0, runCatalogTreeCheck(root, qore_bin, output),
+            "catalog-tree verification accepts the root catalog without the command");
         hash<auto> inspection =
             DataProviderPresentation::inspectTranslationCatalogs(domain,
                 catalogs{domain}.locales.root.messages,

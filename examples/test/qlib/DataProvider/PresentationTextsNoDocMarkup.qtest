@@ -30,7 +30,8 @@
 
     @ref DataProvider::DataProviderPresentation::findDocumentationMarkup()
     "DataProviderPresentation::findDocumentationMarkup()" decides what a documentation command is;
-    \c qore-data-provider-i18n rejects source texts and translations with one in every mode.
+    \c qore-data-provider-i18n rejects them in the source texts that it generates from the provider metadata, in
+    the root catalogs that \c --check-tree checks, and in translations.
 */
 class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
     public {
@@ -71,6 +72,9 @@ class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
         assertEq("@note", DataProviderPresentation::findDocumentationMarkup("x\n\n@note y"));
         assertEq("@code", DataProviderPresentation::findDocumentationMarkup("@code{.py} x @endcode"));
         assertEq("@since", DataProviderPresentation::findDocumentationMarkup("(@since 2.0)"));
+        assertEq("@code", DataProviderPresentation::findDocumentationMarkup("x\n@code\ny"));
+        assertEq("@a", DataProviderPresentation::findDocumentationMarkup("the @a text"));
+        assertEq("@ref", DataProviderPresentation::findDocumentationMarkup("x`y`@ref z"));
         assertEq("\\ref", DataProviderPresentation::findDocumentationMarkup("x\n\\ref y"));
         # the first command
         assertEq("@p", DataProviderPresentation::findDocumentationMarkup("@p a and @ref b"));
@@ -89,15 +93,18 @@ class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
         assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("@references and @c-suite"));
         assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("a separator such as \\n or \\t"));
         assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("@@ref and \\\\c"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("exists @code.x, @b[0] or @e{name}"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("matches \\p{L}+ and \\bword\\b"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("See @ref."));
         # text in a Markdown code span is literal
         assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("write `@ref X` or `\\c y` in a comment"));
         assertEq("@ref", DataProviderPresentation::findDocumentationMarkup("`@ref X` and @ref Y"));
         assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup(""));
 
         # the raw pattern finds every command in a JSON text, escaped or not
-        assertTrue(make_json({"x": "a \\c b"}) =~ RawCommandPattern, "a backslash command in JSON");
-        assertTrue(make_json({"x": "a @ref b"}) =~ RawCommandPattern, "an @ command in JSON");
-        assertFalse(make_json({"x": "a\nnote b"}) =~ RawCommandPattern, "a newline before a command name");
+        assertTrue(regex(make_json({"x": "a \\c b"}), RawCommandPattern), "a backslash command in JSON");
+        assertTrue(regex(make_json({"x": "a @ref b"}), RawCommandPattern), "an @ command in JSON");
+        assertFalse(regex(make_json({"x": "a\nnote b"}), RawCommandPattern), "a newline before a command name");
     }
 
     scanTest() {
@@ -110,10 +117,13 @@ class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
             "    \"name\": \"not a text key @ref V\",\n"
             "    \"fields\": {\"x\": {\"desc\": \"a field \\\\c x\"}},\n"
             "    \"validation_regex_desc\": \"two letters\",\n"
+            "    \"desc\": \"Lists items.\\n\\n@see other\",\n"
             "};\n";
         assertEq(({"line": 2, "text": "Get one"}, {"line": 3, "text": "Gets one @ref X"},
             {"line": 4, "text": "Gets one; see @ref Y \"Y\""}, {"line": 8, "text": "a field \\c x"},
-            {"line": 9, "text": "two letters"}), findTexts(src));
+            {"line": 9, "text": "two letters"}, {"line": 10, "text": "Lists items.  @see other"}), findTexts(src));
+        assertEq("@see", DataProviderPresentation::findDocumentationMarkup(findTexts(src).last().text),
+            "a command after an escaped newline");
     }
 
     catalogTest() {
@@ -126,7 +136,7 @@ class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
                 ++roots;
             }
             string raw = ReadOnlyFile::readTextFile(file);
-            if (raw !~ RawCommandPattern) {
+            if (!regex(raw, RawCommandPattern)) {
                 continue;
             }
             hash<auto> catalog = parse_json(raw);
@@ -207,6 +217,8 @@ class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
     #! The text of a double-quoted string token
     private static string unquote(string tok) {
         string rv = tok.substr(1, -1);
+        # an escaped newline or tab is whitespace before a command
+        rv =~ s/\\[nrt]/ /g;
         rv =~ s/\\(.)/$1/g;
         return rv;
     }
