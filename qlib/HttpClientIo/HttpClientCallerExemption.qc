@@ -71,6 +71,20 @@ class HttpClientIoSocketAccess {
         return stream.getConnectionFor(token);
     }
 
+    #! Acquires a connection step of a manager for the code of this module (qore#7813)
+    /** The public acquireConnectionAsync() refuses code that a sandbox restricts and that does not own the manager:
+        this module's code acquires the connection for the request that such code makes with the manager, and keeps it
+    */
+    static *EventNotifier acquireConnectionAsync(HttpClientConnectionManager mgr, string url,
+            reference<*HttpClientConnection> conn_out) {
+        return mgr.acquireConnectionAsyncFor(token, url, \conn_out);
+    }
+
+    #! Creates the status of a pooled connection for the code that waits for it (qore#7813)
+    static HttpClientConnectionStatus newStatus(HttpClientConnection conn) {
+        return new HttpClientConnectionStatus(token, conn);
+    }
+
     #! Returns @ref True if the calling code is restricted and does not own the connection (qore#7570)
     static bool callerIsRestrictedNonOwner(HttpClientConnection conn) {
         return conn.callerIsRestrictedNonOwnerFor(token);

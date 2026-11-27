@@ -307,7 +307,7 @@ class TestPingOp inherits RestClientIoPingPollOperation {
     }
 
     #! Returns the connection to the OAuth2 token endpoint whose failure the ping tracks, if any
-    *HttpClientIo::HttpClientConnection getTrackedOAuth2Connection() {
+    *HttpClientIo::HttpClientConnectionStatus getTrackedOAuth2Connection() {
         return oauth2_connection_ready_conn;
     }
 
@@ -379,11 +379,14 @@ public class RestClientIoPingOAuth2RaceTest inherits QUnit::Test {
         # ping tracks; it belongs to the race of the token endpoint's client, not of the ping target's client
         *RestClientIo token_client = op.getOAuth2Client();
         assertTrue(exists token_client, "the token request was started");
-        *HttpClientIo::HttpClientConnection h3 = op.getTrackedOAuth2Connection();
+        *HttpClientIo::HttpClientConnectionStatus h3 = op.getTrackedOAuth2Connection();
+        assertTrue(exists h3, "the ping tracks a connection of the race");
         assertEq("h3", h3.getProtocol(), "the ping tracks the HTTP/3 candidate of the race");
-        assertTrue(token_client.getConnectionManager().isUnresolvedRaceLeg(h3),
+        # the tracked connection is the HTTP/3 candidate of the race of the token endpoint's client: a leg of that
+        # race and of no race of the ping target's client
+        assertTrue(h3.isUnresolvedRaceLeg(token_client.getConnectionManager()),
             "the HTTP/3 candidate is a leg of the race of the token endpoint's client");
-        assertFalse(op.getClient().getConnectionManager().isUnresolvedRaceLeg(h3),
+        assertFalse(h3.isUnresolvedRaceLeg(op.getClient().getConnectionManager()),
             "the HTTP/3 candidate is not a leg of a race of the ping target's client");
 
         *hash<ExceptionInfo> ex = drive(op, h3, token_server);
@@ -395,7 +398,7 @@ public class RestClientIoPingOAuth2RaceTest inherits QUnit::Test {
 
         # the HTTP/3 candidate failed (it was refused) while the race was unresolved
         assertTrue(h3.isClosed(), "the HTTP/3 candidate is closed");
-        assertEq("QUIC-CONNECT-REFUSED", h3.getPollOperation().getError().err, "the HTTP/3 candidate was refused");
+        assertEq("QUIC-CONNECT-REFUSED", h3.getError().err, "the HTTP/3 candidate was refused");
         # HTTP/2 was refused via ALPN and HTTP/1.1 won: the token was requested once, on the HTTP/1.1 connection
         assertEq(2, token_server.getConnectionCount(), "the HTTP/2 candidate and the HTTP/1.1 candidate");
         assertEq(("/oauth/token",), token_server.getRequests());
@@ -409,7 +412,7 @@ public class RestClientIoPingOAuth2RaceTest inherits QUnit::Test {
 
         @return the exception that ended the ping, if any
     */
-    private *hash<ExceptionInfo> drive(TestPingOp op, HttpClientIo::HttpClientConnection h3, TokenServer server) {
+    private *hash<ExceptionInfo> drive(TestPingOp op, HttpClientIo::HttpClientConnectionStatus h3, TokenServer server) {
         bool released = False;
         try {
             while (True) {
