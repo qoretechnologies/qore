@@ -3361,14 +3361,16 @@ run_test() {
     # with QORE_TEST_TMP_LEAKS, the test's own temporary directory, given to it as TMPDIR (which tmp_location(),
     # TmpDir, TmpFile and mktemp use): it is in the directory of the test's events, which is the test's own in a
     # parallel run, so tests running beside each other do not share it, and what the test leaves in it is reported
-    # after it (see check_test_tmpdir()).  Not by default: tests share the AOT batch memory ledger in TMPDIR, and a
-    # deeper TMPDIR lengthens the UNIX socket paths of tests (at most 104 bytes on macOS)
+    # after it (see check_test_tmpdir()).  The AOT batch memory ledger stays in the runner's temporary directory
+    # (QORE_AOT_MEMORY_LEDGER_DIR), so that the batch compiles of tests running beside each other still share their
+    # memory admission (qore#7823).  Not by default: a deeper TMPDIR lengthens the UNIX socket paths of tests (at most
+    # 104 bytes on macOS)
     TEST_TMPDIR=""
     if [ -n "$QORE_TEST_TMP_LEAKS" ] && [ -n "$TEST_EVENT_DIR" ]; then
         remove_test_tmpdir "$TEST_EVENT_DIR/tmp"
         if mkdir "$TEST_EVENT_DIR/tmp"; then
             TEST_TMPDIR="$TEST_EVENT_DIR/tmp"
-            TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR"
+            TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR QORE_AOT_MEMORY_LEDGER_DIR=${QORE_AOT_MEMORY_LEDGER_DIR:-${TMPDIR:-/tmp}}"
         else
             echo "*** WARNING: no temporary directory of its own for the test: $TEST_EVENT_DIR/tmp ***"
         fi

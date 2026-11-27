@@ -54,6 +54,7 @@ class AotBatchMemoryTest inherits QUnit::Test {
         addTestCase("the reservations of a process that has gone are dropped", \testLedgerDeadProcess());
         addTestCase("a process removes its reservations when it ends", \testLedgerDestroy());
         addTestCase("an unsafe ledger file is not used", \testLedgerUnsafe());
+        addTestCase("the ledger is in QORE_AOT_MEMORY_LEDGER_DIR, TMPDIR or /tmp", \testLedgerDir());
         addTestCase("the largest units do not start together beyond the free memory", \testScheduleLargestFirst());
         addTestCase("a batch with too little memory still finishes", \testScheduleNoStall());
         addTestCase("the worker count still caps the units in work", \testScheduleJobsCap());
@@ -63,6 +64,59 @@ class AotBatchMemoryTest inherits QUnit::Test {
 
     globalTearDown() {
         unsetenv("QORE_AOT_BATCH_MEM_PER_JOB_MB");
+    }
+
+    #! the ledger of a domain is in the directory named by QORE_AOT_MEMORY_LEDGER_DIR, which test runners keep shared
+    #! when each test gets a TMPDIR of its own, or else in TMPDIR or /tmp (qore#7823)
+    testLedgerDir() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        *string old_dir = ENV.QORE_AOT_MEMORY_LEDGER_DIR;
+        *string old_tmp = ENV.TMPDIR;
+        on_exit {
+            if (old_dir) {
+                setenv("QORE_AOT_MEMORY_LEDGER_DIR", old_dir);
+            } else {
+                unsetenv("QORE_AOT_MEMORY_LEDGER_DIR");
+            }
+            if (old_tmp) {
+                setenv("TMPDIR", old_tmp);
+            } else {
+                unsetenv("TMPDIR");
+            }
+        }
+        TmpDir shared("qore-aot-ledger-shared-");
+        TmpDir own("qore-aot-ledger-own-");
+        string name_re = "/qore-aot-memory-[0-9]+-[0-9a-f]{16}\\.ledger$";
+
+        setenv("TMPDIR", own.path);
+        unsetenv("QORE_AOT_MEMORY_LEDGER_DIR");
+        string in_tmp = dbg_aot_batch_memory(Model, ({"op": "ledger_path", "domain": "host"},))[0];
+        assertEq(own.path, dirname(in_tmp), "without the variable, the ledger is in TMPDIR");
+        assertRegex(name_re, in_tmp, "the ledger's name");
+
+        # the variable wins over TMPDIR: tests with temporary directories of their own share one ledger
+        setenv("QORE_AOT_MEMORY_LEDGER_DIR", shared.path + "/");
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "ledger_path", "domain": "host"},
+            {"op": "ledger_path", "domain": "cgroup:/a"},
+        ));
+        assertEq(shared.path, dirname(r[0]), "with the variable, the ledger is in its directory");
+        assertEq(basename(in_tmp), basename(r[0]), "the ledger of the domain has the same name in either directory");
+        assertNeq(basename(r[0]), basename(r[1]), "each domain has a ledger of its own");
+
+        # an empty variable is not set
+        setenv("QORE_AOT_MEMORY_LEDGER_DIR", "");
+        assertEq(own.path, dirname(dbg_aot_batch_memory(Model, ({"op": "ledger_path"},))[0]),
+            "an empty variable is ignored");
+
+        unsetenv("QORE_AOT_MEMORY_LEDGER_DIR");
+        unsetenv("TMPDIR");
+        assertEq("/tmp", dirname(dbg_aot_batch_memory(Model, ({"op": "ledger_path"},))[0]),
+            "without either, the ledger is in /tmp");
+%endif
     }
 
     testEstimates() {
