@@ -1289,9 +1289,8 @@ authenticate();
       restricted from the file system, as @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()"
       resolves it, and a sandbox's file system policy allows it): the other backends (KCM, KEYRING, API, MSLSA) hold
       the host's credentials.  For code that a sandbox governs, the default credential cache and keytab are the
-      \c MEMORY:default stores of its isolation domain, which are its own, the listing of the credential caches gives
-      only those of its domain, and a context step without an explicit credential raises \c KRB5-SANDBOX-ERROR (see
-      the sandboxing section of the \c krb5 module's documentation)
+      \c MEMORY:default stores of its isolation domain, which are its own, and a context step without an explicit
+      credential raises \c KRB5-SANDBOX-ERROR (see the sandboxing section of the \c krb5 module's documentation)
     - \c SqlUtil restores no datasource with the credentials that the host's credential resolver
       (@ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()") gives
       (\c PERMISSION-DENIED), and @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()"

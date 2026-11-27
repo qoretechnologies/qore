@@ -404,9 +404,9 @@ Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreK
 //! Lists all credential caches known to the Kerberos credential cache collection
 /** Enumerates credential caches using the MIT krb5 credential cache
     collection API. This discovers caches across all configured backends
-    (FILE, MEMORY, KCM, KEYRING, etc.).  For code that a sandbox governs, the
-    caches that are not file based of other code are not listed (see
-    @ref krb5sec_cache_isolation).
+    (FILE, MEMORY, KCM, KEYRING, etc.).  The collection is the host's: it is
+    not listed for code that may not receive the host's secrets, also not for
+    code that a sandbox governs (qore#6844).
 
     Caches whose principal cannot be read are included with
     \c has_principal set to \c False and \c principal set to \c NOTHING.

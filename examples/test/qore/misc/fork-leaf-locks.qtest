@@ -53,6 +53,21 @@ class ForkLeafLocksTest inherits QUnit::Test {
 
         const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION;
 
+        #! the other process-wide leaf locks of design/fork-handlers.md (rank 1000) that have a fork handler of their
+        #! own, by its name; the locks of objects that are created on demand (aot_fast_entry_registry,
+        #! module_cleanup_work, module_program_pins, module_uncounted_entries) and the macOS-only fifo_end_read have no
+        #! handler until they exist
+        const OtherLeafLocks = (
+            "aot_deferred_types", "aot_method_dispatch_reclaim", "aot_pending_constants", "aot_regex_cache",
+            "app_registry", "async_io_logger", "breakpoints", "builtin_locations", "cipher_cache", "class_ids",
+            "complex_types", "constant_value_locks", "dbg_detached_async_io_sockets", "dbi_objects", "encodings",
+            "external_thread_reaper", "external_types", "jit_bg_queue", "jit_cache", "left_programs", "module_options",
+            "node_watches", "opaque_target_shards", "parse_options_values", "program_cleanup", "program_registry",
+            "program_thread_containers", "quic_test_settings", "quic_ticket_cache", "sandbox_binary_charges",
+            "sandbox_watchdog", "scan_wait_notify", "scan_waits", "thread_local_vars", "tpd_live_count", "u_tld_seq",
+            "utc_offset_zones"
+        );
+
         #! the source of the generic declaration whose caches the child uses
         const GenericSrc = "class ForkLeafC {} hashdecl ForkLeafH<T> { T v; } "
             "int sub f() { hash<ForkLeafH<ForkLeafC>> h(); return exists h.v ? 1 : 0; } "
@@ -77,6 +92,7 @@ class ForkLeafLocksTest inherits QUnit::Test {
             \testKeyedHashSites());
         addTestCase("a child constructs an object with the copied handle of a class whose data lock another thread "
             "held at fork()", \testClassCopyConstruction());
+        addTestCase("fork() while another thread holds each other leaf lock", \testOtherLeafLocks());
         addTestCase("the process-wide locks", \processLocksTest());
         addTestCase("the per-object cache locks", \stripesTest());
         addTestCase("an unknown stripe", \unknownStripeTest());
@@ -104,6 +120,29 @@ class ForkLeafLocksTest inherits QUnit::Test {
     testKeyedHashSites() {
         # the lock is held while a container with a keyed hash records its site (debug builds, qore#7750)
         forkWhileHeld("dbg_keyed_hash_sites");
+    }
+
+    testOtherLeafLocks() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        foreach string name in (OtherLeafLocks) {
+            # all of them are registered on Linux; another platform can lack the feature of one (QUIC, for example)
+            if (PlatformOS != "Linux") {
+                try {
+                    forkWhileHeld(name);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "DBG-FORK-ERROR" || ex.desc !~ /no fork handler named/) {
+                        rethrow;
+                    }
+                }
+                continue;
+            }
+            forkWhileHeld(name);
+        }
     }
 
     testThreadStartHold() {

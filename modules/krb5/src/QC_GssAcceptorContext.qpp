@@ -138,9 +138,9 @@ nothing GssAcceptorContext::reset() {
 
     @throw KRB5-TOKEN-ERROR if \a token_hex is empty or is not valid hexadecimal
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails, or the context has no explicit credential and the calling
-    code may not receive the host's secrets (see @ref Qore::SandboxManager::callerMayReceiveHostSecrets()
-    "SandboxManager::callerMayReceiveHostSecrets()"): the default acceptor credential (the host's keytab) is the
-    host's (qore#6844)
+    code, which a sandbox does not govern, may not receive the host's secrets (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): the
+    default acceptor credential (the host's keytab) is the host's (qore#6844)
     @throw KRB5-SANDBOX-ERROR if code that a sandbox governs gives no credential (the default keytab of the process
     is not visible to it, see @ref krb5sec_cache_isolation), or a credential that code of another isolation domain
     acquired from a keytab (it names the replay cache of that domain), or if the replay cache directory or file of a

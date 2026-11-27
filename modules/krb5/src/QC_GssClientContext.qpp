@@ -242,8 +242,9 @@ nothing GssClientContext::reset() {
     @return a @ref Qore::Krb5::GssStepInfo describing the step result
 
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails, or the context has no explicit credential and the calling
-    code may not receive the host's secrets (see @ref Qore::SandboxManager::callerMayReceiveHostSecrets()
-    "SandboxManager::callerMayReceiveHostSecrets()"): the process's default credential is the host's (qore#6844)
+    code, which a sandbox does not govern, may not receive the host's secrets (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): the
+    process's default credential is the host's (qore#6844)
     @throw KRB5-SANDBOX-ERROR if the active network sandbox policy cannot
     be enforced while MIT GSSAPI contacts the KDC, or if code that a sandbox
     governs gives no credential (the default credentials of the process are
@@ -260,8 +261,9 @@ hash<GssStepInfo> GssClientContext::step() {
 
     @throw KRB5-TOKEN-ERROR if \a token_hex is not valid hexadecimal
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails, or the context has no explicit credential and the calling
-    code may not receive the host's secrets (see @ref Qore::SandboxManager::callerMayReceiveHostSecrets()
-    "SandboxManager::callerMayReceiveHostSecrets()"): the process's default credential is the host's (qore#6844)
+    code, which a sandbox does not govern, may not receive the host's secrets (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): the
+    process's default credential is the host's (qore#6844)
     @throw KRB5-SANDBOX-ERROR if the active network sandbox policy cannot
     be enforced while MIT GSSAPI contacts the KDC, or if code that a sandbox
     governs gives no credential (the default credentials of the process are

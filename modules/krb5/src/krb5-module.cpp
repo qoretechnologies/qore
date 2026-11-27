@@ -671,7 +671,18 @@ static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mod
         const char* context) {
     {
         const char* type = krb5_cc_get_type(ctx, cache);
-        if (type && *type && !krb5_check_named_store(krb5_cache_backend_uses_filesystem(type), !strcmp(type, "MEMORY"),
+        bool own = type && !strcmp(type, "MEMORY");
+        if (!own && type && !strcmp(type, "KEYRING") && !krb5_caller_may_use_host_credentials()) {
+            // a process or thread keyring cache of the isolation domain of code that a sandbox governs is its own
+            // (qore#7671); other keyring caches hold the host's credentials (qore#6844)
+            Krb5CacheNamespace ns;
+            if (krb5_cache_namespace(ns, xsink, context)) {
+                return false;
+            }
+            const char* name = krb5_cc_get_name(ctx, cache);
+            own = ns.sandboxed && name && krb5_cache_in_namespace(type, name, ns);
+        }
+        if (type && *type && !krb5_check_named_store(krb5_cache_backend_uses_filesystem(type), own,
                 "KRB5-CACHE-ERROR", "credential cache", type, xsink, context)) {
             return false;
         }
@@ -3676,17 +3687,17 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
         return nullptr;
     }
 
+    // the listing enumerates the host's cache collection: it is refused to all code that may not receive the host's
+    // secrets, also to code that a sandbox governs (qore#6844)
+    if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "listing the credential caches of the host")) {
+        return nullptr;
+    }
+
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKrb5CredentialCacheInfo->getTypeInfo()), xsink);
     Krb5CccolCursorHolder cursor(ctx);
     // the caches of code that a sandbox governs are listed with the names that it gave them (qore#7671)
     Krb5CacheNamespace ns;
     if (krb5_cache_namespace(ns, xsink, "listing credential caches")) {
-        return nullptr;
-    }
-    // the caches of other code are the host's (qore#6844); code that a sandbox governs sees only those of its
-    // isolation domain
-    if (!ns.sandboxed && !krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR",
-            "listing the credential caches of the host")) {
         return nullptr;
     }
 
