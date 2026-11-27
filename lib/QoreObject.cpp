@@ -1067,9 +1067,12 @@ public:
     SharedUpdateScopeHelper(const qore_object_private* obj, const QoreProgram* pgm,
             const QoreThreadProgramMarker& marker) {
         qore_shared_update_scopes.push_back({obj, pgm, marker});
+        // once the scope is in place: the class frames entered in it are recorded until it ends (qore#7795)
+        qore_thread_shared_update_scope_begin();
     }
 
     ~SharedUpdateScopeHelper() {
+        qore_thread_shared_update_scope_end(qore_shared_update_scopes.back().marker);
         qore_shared_update_scopes.pop_back();
     }
 

@@ -3052,10 +3052,32 @@ struct QoreThreadProgramMarker {
     const QoreSandboxContext* sandbox_context = nullptr;
     //! the context that the thread or task inherited when the marker was taken (qore#7737)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
+    //! the number of the class frames that the thread had recorded in its open update scopes when the marker was
+    //! taken (qore#7795)
+    size_t class_frames = 0;
 };
 
 //! Returns the current point of the calling thread's Program context stack
 DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
+
+//! Opens an update scope of a shared object on the calling thread (qore#7795)
+/** While the thread has an open update scope, the class context helpers record the classes of the frames that they
+    enter, so that qore_thread_sandboxed_entered_since() counts the code of a class that restricted code declared at
+    any depth since the scope opened, not only in the innermost frame; each call is matched by a call of
+    qore_thread_shared_update_scope_end() with the marker of the scope, taken before this call
+*/
+DLLLOCAL void qore_thread_shared_update_scope_begin();
+
+//! Ends an update scope of a shared object on the calling thread (qore#7795)
+/** @param marker the marker of the scope (see qore_thread_shared_update_scope_begin()); the class frames recorded
+    since it are removed
+*/
+DLLLOCAL void qore_thread_shared_update_scope_end(const QoreThreadProgramMarker& marker);
+
+//! Returns the number of the class frames that the calling thread has recorded in its open update scopes (qore#7795)
+/** For the unit tests
+*/
+DLLLOCAL size_t qore_thread_scope_class_frame_count();
 
 //! Returns true if the calling thread has entered the code of a restricted Program since \a marker was taken and not
 //! left it yet: the thread runs code that restricted code supplied (a callback, a method of a class of a restricted
@@ -3063,10 +3085,11 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 /** A Program counts if qore_program_is_restricted() reports it restricted: code that a trusted (governed) sandbox
     governs changes shared objects as trusted code (qore#7737); code compiled in a restricted Program that runs in
     another Program counts as the code of the restricted Program (qore#7202).  The code of a class that restricted
-    code declared counts wherever it runs (qore_calling_class_is_restricted()), and so does code that runs under a
-    context of a thread, task or continued operation that records restricted code and that was applied since \a marker
-    was taken (qore#7737); a provenance frame does not (the code of the scope's Program that runs with it is the
-    scope's code).  Fails closed: true if \a marker is not on the thread's Program context stack
+    code declared counts wherever it runs (qore_calling_class_is_restricted()), also in a frame that was entered since
+    \a marker was taken and is lower on the stack, while the thread has an open update scope (qore#7795), and so does
+    code that runs under a context of a thread, task or continued operation that records restricted code and that was
+    applied since \a marker was taken (qore#7737); a provenance frame does not (the code of the scope's Program that
+    runs with it is the scope's code).  Fails closed: true if \a marker is not on the thread's Program context stack
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 

@@ -683,6 +683,17 @@ struct ThreadLocalVarRelease {
     qore_program_id_t pgm_id;
 };
 
+//! A class frame entered while an update scope of a shared object is open (qore#7795)
+/** Recorded by the class context helpers when they switch the thread to the class, and removed by the helper that
+    recorded it when it restores its caller's class context
+*/
+struct QoreScopeClassFrame {
+    //! the helper that recorded the frame
+    const void* helper;
+    //! the class that the helper entered
+    const qore_class_private* cls;
+};
+
 class ThreadData;
 
 namespace {
@@ -899,6 +910,15 @@ public:
 
     // the class context of the code that made the call running now (CodeContextHelperBase)
     const qore_class_private* caller_class = nullptr;
+
+    // the number of update scopes of shared objects open on the thread: while there is one, the class context
+    // helpers record the classes that they enter in scope_class_frames (qore#7795)
+    unsigned shared_update_scopes = 0;
+    // true if a class frame entered in an open update scope could not be recorded: every scope's check fails closed
+    // until the thread's outermost scope ends (qore#7795)
+    bool scope_class_frames_lost = false;
+    // the class frames entered while an update scope is open, innermost last (qore#7795)
+    std::vector<QoreScopeClassFrame> scope_class_frames;
 
     // current generic receiver type for static generic method bodies
     const QoreTypeInfo* current_receiver_type_info = nullptr;
@@ -5561,6 +5581,86 @@ void CalleeProgramContextHelper::restoreCallProgramContext() {
     qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm, xsink);
 }
 
+namespace {
+//! Records the class frame that \a helper enters in an open update scope (qore#7795)
+/** Out of line, so that the class context helpers, which call it only while a scope is open, keep the frames and the
+    code of the calls that they are inlined in; a builtin class is trusted and not recorded.  A frame that stays in
+    its caller's class is recorded as well: the caller's frame may have been entered before the innermost scope opened,
+    which then does not count it.  Fails closed: a frame that cannot be recorded makes the check of every open scope
+    count restricted code (see qore_thread_sandboxed_entered_since())
+*/
+QORE_INTERN_NOINLINE void qore_scope_class_frame_record(ThreadData* td, const void* helper,
+        const qore_class_private* cls) noexcept {
+    assert(td->shared_update_scopes);
+    if (!cls || cls->sys) {
+        return;
+    }
+    try {
+        td->scope_class_frames.push_back({helper, cls});
+    } catch (std::bad_alloc&) {
+        td->scope_class_frames_lost = true;
+    }
+}
+
+//! Removes the class frame that \a helper recorded, if it recorded one, when it restores its caller's class context
+/** The frames are recorded and removed in the order of the helpers' lives (they are locals of the frames of calls,
+    also when an exception unwinds them), so the frame of \a helper is the innermost one if it recorded one; it is
+    matched by the helper and by the class that the helper entered, which the thread has until the helper restores its
+    caller's.  The frames of a scope are removed when it ends in any case (qore_thread_shared_update_scope_end())
+*/
+QORE_INTERN_NOINLINE void qore_scope_class_frame_remove(ThreadData* td, const void* helper) noexcept {
+    std::vector<QoreScopeClassFrame>& frames = td->scope_class_frames;
+    if (!frames.empty() && frames.back().helper == helper && frames.back().cls == td->current_class) {
+        frames.pop_back();
+    }
+}
+
+//! Records the class that \a helper enters if an update scope is open on the thread (qore#7795)
+/** Without an open scope, the cost is one test of a field of the thread's data
+*/
+QORE_INTERN_ALWAYS_INLINE void qore_scope_class_enter(ThreadData* td, const void* helper,
+        const qore_class_private* cls) {
+    if (__builtin_expect(td->shared_update_scopes != 0, 0)) {
+        qore_scope_class_frame_record(td, helper, cls);
+    }
+}
+
+//! Removes the class frame that \a helper recorded, if an update scope is open on the thread; called before the
+//! helper restores its caller's class context
+QORE_INTERN_ALWAYS_INLINE void qore_scope_class_leave(ThreadData* td, const void* helper) {
+    if (__builtin_expect(td->shared_update_scopes != 0, 0)) {
+        qore_scope_class_frame_remove(td, helper);
+    }
+}
+}
+
+void qore_thread_shared_update_scope_begin() {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    ++td->shared_update_scopes;
+}
+
+size_t qore_thread_scope_class_frame_count() {
+    ThreadData* td = thread_data.get();
+    return td ? td->scope_class_frames.size() : 0;
+}
+
+void qore_thread_shared_update_scope_end(const QoreThreadProgramMarker& marker) {
+    ThreadData* td = thread_data.get();
+    assert(td && td->shared_update_scopes);
+    std::vector<QoreScopeClassFrame>& frames = td->scope_class_frames;
+    // the frames entered in the scope have ended with it; any frame left of a helper that did not remove its own
+    // cannot outlive the scope, so that no later helper can be taken for it
+    assert(frames.size() == marker.class_frames);
+    if (frames.size() > marker.class_frames) {
+        frames.resize(marker.class_frames);
+    }
+    if (!--td->shared_update_scopes) {
+        frames.clear();
+        td->scope_class_frames_lost = false;
+    }
+}
+
 CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
         : td(static_cast<ThreadData*>(thread_data_ptr)) {
     assert(td && td == thread_data.get());
@@ -5594,6 +5694,7 @@ void CalleeContextHelper::switchContext(const qore_class_private* cls) {
     td->current_class = cls;
     rc->obj = nullptr;
     rc->cls = cls;
+    qore_scope_class_enter(td, this, cls);
 }
 
 CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, QoreObject* obj, const qore_class_private* cls)
@@ -5621,10 +5722,12 @@ void CalleeContextHelper::switchObjectContext(QoreObject* obj, const qore_class_
     td->current_class = cls;
     rc->obj = obj;
     rc->cls = cls;
+    qore_scope_class_enter(td, this, cls);
 }
 
 void CalleeContextHelper::restoreContext() {
     assert(switched && td->rc);
+    qore_scope_class_leave(td, this);
     td->current_obj = old_obj;
     td->current_class = old_class;
     td->rc->obj = old_rc_obj;
@@ -5652,6 +5755,7 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
+    qore_scope_class_enter(td, this, c);
     RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
     old_rc_obj = rc.obj;
     old_rc_class = rc.cls;
@@ -5665,6 +5769,7 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = keep_class ? old_class : c;
+    qore_scope_class_enter(td, this, td->current_class);
     RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
     old_rc_obj = rc.obj;
     old_rc_class = rc.cls;
@@ -5681,6 +5786,7 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
+    qore_scope_class_enter(td, this, c);
     RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
     old_rc_obj = rc.obj;
     old_rc_class = rc.cls;
@@ -5696,6 +5802,7 @@ ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
         qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm,
             call_pgm_xsink);
     }
+    qore_scope_class_leave(td, this);
     td->current_obj = old_obj;
     td->current_class = old_class;
     RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
@@ -5722,6 +5829,7 @@ ClassOnlySubstitutionHelper::ClassOnlySubstitutionHelper(const qore_class_privat
     ThreadData* td = thread_data.get();
     old_class = td->current_class;
     td->current_class = qc;
+    qore_scope_class_enter(td, this, qc);
     RuntimeConfig& rc = rc_get_tls_ref();
     old_rc_class = rc.getClass();
     rc.setClass(qc);
@@ -5730,6 +5838,7 @@ ClassOnlySubstitutionHelper::ClassOnlySubstitutionHelper(const qore_class_privat
 
 ClassOnlySubstitutionHelper::~ClassOnlySubstitutionHelper() {
     ThreadData* td = thread_data.get();
+    qore_scope_class_leave(td, this);
     td->current_class = old_class;
     if (do_rc_update) {
         rc_get_tls_ref().setClass(old_rc_class);
@@ -5742,6 +5851,7 @@ OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const q
         ThreadData* td = thread_data.get();
         old_class = td->current_class;
         td->current_class = qc;
+        qore_scope_class_enter(td, this, qc);
         RuntimeConfig& rc = rc_get_tls_ref();
         old_rc_class = rc.getClass();
         rc.setClass(qc);
@@ -5751,6 +5861,7 @@ OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const q
 OptionalClassOnlySubstitutionHelper::~OptionalClassOnlySubstitutionHelper() {
     if (subst) {
         ThreadData* td = thread_data.get();
+        qore_scope_class_leave(td, this);
         td->current_class = old_class;
         rc_get_tls_ref().setClass(old_rc_class);
     }
@@ -5764,6 +5875,7 @@ OptionalClassObjSubstitutionHelper::OptionalClassObjSubstitutionHelper(const qor
         old_class = td->current_class;
         td->current_obj = nullptr;
         td->current_class = qc;
+        qore_scope_class_enter(td, this, qc);
         RuntimeConfig& rc = rc_get_tls_ref();
         old_rc_obj = rc.getObject();
         old_rc_class = rc.getClass();
@@ -5775,6 +5887,7 @@ OptionalClassObjSubstitutionHelper::OptionalClassObjSubstitutionHelper(const qor
 OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
     if (subst) {
         ThreadData* td = thread_data.get();
+        qore_scope_class_leave(td, this);
         td->current_obj = old_obj;
         td->current_class = old_class;
         RuntimeConfig& rc = rc_get_tls_ref();
@@ -5809,6 +5922,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
 
     old_class = td->current_class;
     td->current_class = c;
+    qore_scope_class_enter(td, this, c);
     // the class context of the caller, for builtin code that applies the caller's member access (reflection)
     old_caller_class = td->caller_class;
     td->caller_class = old_class;
@@ -5899,6 +6013,7 @@ CodeContextHelperBase::~CodeContextHelperBase() {
         assert(td->current_obj);
         qore_object_private::get(*td->current_obj)->endCall(xsink);
     }
+    qore_scope_class_leave(td, this);
     td->current_code = old_code;
     td->current_obj = old_obj;
     td->current_class = old_class;
@@ -8838,6 +8953,7 @@ QoreThreadProgramMarker qore_thread_program_marker() {
         marker.code_pgm = td->runtime_po_state.code_pgm;
         marker.sandbox_context = td->sandbox_context;
         marker.inherited_sandbox_context = td->inherited_sandbox_context;
+        marker.class_frames = td->scope_class_frames.size();
     }
     return marker;
 }
@@ -8914,6 +9030,29 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
     // qore_object_private::runSharedUpdate())
     if (qore_calling_class_is_restricted()) {
         return true;
+    }
+    // and such code lower on the stack, in a frame entered since the marker (qore#7795): the code that it called acts
+    // for it, also a trusted method of the object's own class; the frames that the thread had when the marker was
+    // taken are the frames of the code that opened the scope.  Fails closed: a frame entered in an open scope could
+    // not be recorded, or the marker's frames are not on the thread's stack
+    if (td->scope_class_frames_lost || td->scope_class_frames.size() < marker.class_frames) {
+        return true;
+    }
+    {
+        const qore_class_private* last = nullptr;
+        for (size_t i = marker.class_frames, e = td->scope_class_frames.size(); i < e; ++i) {
+            const qore_class_private* cls = td->scope_class_frames[i].cls;
+            // a class entered again, as in a recursion, is looked at once in a row
+            if (cls == last) {
+                continue;
+            }
+            last = cls;
+            // as qore_calling_class_is_restricted(); a builtin class is not recorded
+            assert(!cls->sys);
+            if (cls->sandbox_ctx || cls->isRestrictedCode()) {
+                return true;
+            }
+        }
     }
     // a context of a thread, task or continued operation that records restricted code, applied since the marker
     // (qore#7737): the code runs for restricted code; a context that the thread had when the marker was taken is the
@@ -13196,6 +13335,12 @@ QoreClass* parse_get_class() {
     return cls ? cls->cls : nullptr;
 }
 
+// the parse and commit class contexts that these set are not recorded for the update scopes of shared objects
+// (qore#7795): they are set by the parse and commit of code (QoreParseClassHelper, QoreDeferredMethodBindScope, the
+// parse of closures and the parse location of a Program), and the code that runs under them, the initializers of
+// constants and static variables, runs only while code is parsed or committed; in an update scope, that is only when
+// the scope's own trusted code parses or commits code, which the code that it calls in the scope cannot cause.  The
+// calls that such code makes switch the class context with the helpers, which record it
 void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns,
         const qore_class_private*& old_cls, qore_ns_private*& old_ns) {
     ThreadData* td = thread_data.get();
