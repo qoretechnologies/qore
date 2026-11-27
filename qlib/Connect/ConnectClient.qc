@@ -417,7 +417,15 @@ if (exists reply) {
 
     #! Destructor — ensures resources are released
     destructor() {
-        m_mgr.closeAll();
+        try {
+            m_mgr.closeAll();
+        } catch (hash<ExceptionInfo> ex) {
+            # a client that restricted code which does not own its connection manager deletes does not close the
+            # manager's connections (qore#7828): the manager closes them when it is deleted
+            if (ex.err != "PERMISSION-DENIED") {
+                rethrow;
+            }
+        }
     }
 
     #! Ensure the HTTP connection is ready for streaming
