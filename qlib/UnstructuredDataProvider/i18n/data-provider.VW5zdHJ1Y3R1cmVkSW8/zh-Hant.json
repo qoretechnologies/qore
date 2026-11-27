@@ -12,8 +12,8 @@
           "message": "Unstructured.io 文件分割與擷取工作流程"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.desc": {
-          "source": "Provides access to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\n- **Partition documents** — break PDFs, Office files, HTML, images and emails into a typed element tree (`Title` / `NarrativeText` / `ListItem` / `Table` / ...), with optional OCR, table-structure inference and retrieval-sized chunking\n- **Build ingestion pipelines** — connect a source system to a vector store through a workflow, run it on a schedule or on demand, and follow each run\n- **React to finished runs** — fire an event when a workflow run completes, so processed documents are picked up as soon as they land\n\nUse the @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" backend for the RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "提供對 [Unstructured.io](https://unstructured.io) 的存取；這項服務可將文件轉換為 AI 應用程式能夠使用的資料。\n\n- **分割文件** — 將 PDF、Office 檔案、HTML、影像與電子郵件拆解為具類型的元素樹（`Title` / `NarrativeText` / `ListItem` / `Table` / ...），並可選用 OCR、表格結構推斷，以及適合檢索的區塊大小分割\n- **建立擷取管線** — 透過工作流程將來源系統連接至向量儲存庫，依排程或隨需執行，並追蹤每一次執行\n- **回應已完成的執行** — 在工作流程執行完成時觸發事件，讓已處理的文件一送達就能被接手\n\n若要透過 @ref QoreRagUtils::RagPipeline \"RagPipeline\" 進行 RAG 擷取路徑，請使用 @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" 後端。"
+          "source": "Provides access to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\n- **Partition documents** — break PDFs, Office files, HTML, images and emails into a typed element tree (`Title` / `NarrativeText` / `ListItem` / `Table` / ...), with optional OCR, table-structure inference and retrieval-sized chunking\n- **Build ingestion pipelines** — connect a source system to a vector store through a workflow, run it on a schedule or on demand, and follow each run\n- **React to finished runs** — fire an event when a workflow run completes, so processed documents are picked up as soon as they land\n\nUse the `UnstructuredChunker` backend for the RAG ingestion path through `RagPipeline`.",
+          "message": "提供對 [Unstructured.io](https://unstructured.io) 的存取；這項服務可將文件轉換為 AI 應用程式能夠使用的資料。\n\n- **分割文件** — 將 PDF、Office 檔案、HTML、影像與電子郵件拆解為具類型的元素樹（`Title` / `NarrativeText` / `ListItem` / `Table` / ...），並可選用 OCR、表格結構推斷，以及適合檢索的區塊大小分割\n- **建立擷取管線** — 透過工作流程將來源系統連接至向量儲存庫，依排程或隨需執行，並追蹤每一次執行\n- **回應已完成的執行** — 在工作流程執行完成時觸發事件，讓已處理的文件一送達就能被接手\n\n若要透過 `RagPipeline` 進行 RAG 擷取路徑，請使用 `UnstructuredChunker` 後端。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "使用 multipart/form-data 上傳檔案"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 `FileDataType` 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

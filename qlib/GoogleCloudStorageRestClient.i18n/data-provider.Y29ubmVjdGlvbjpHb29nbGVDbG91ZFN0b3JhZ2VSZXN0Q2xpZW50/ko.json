@@ -4,8 +4,8 @@
     "ko": {
       "messages": {
         "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.desc": {
-          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via @ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or Application Default Credentials.",
-          "message": "[Google Cloud Storage](https://cloud.google.com/storage)에 대한 연결 — Google의 객체 저장 서비스입니다. 인증은 @ref gcpauthintro \"GcpAuth\"를 사용하여 명시적인 서비스 계정 JSON 키 또는 애플리케이션 기본 자격 증명을 통해 수행됩니다."
+          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via `GcpAuth` using an explicit service-account JSON key or Application Default Credentials.",
+          "message": "[Google Cloud Storage](https://cloud.google.com/storage)에 대한 연결 — Google의 객체 저장 서비스입니다. 인증은 `GcpAuth`를 사용하여 명시적인 서비스 계정 JSON 키 또는 애플리케이션 기본 자격 증명을 통해 수행됩니다."
         },
         "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.display_name": {
           "source": "Google Cloud Storage Connection",

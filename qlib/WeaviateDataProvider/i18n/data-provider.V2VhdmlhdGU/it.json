@@ -12,8 +12,8 @@
           "message": "Database vettoriale open source Weaviate con ricerca ibrida"
         },
         "app.V2VhdmlhdGU.desc": {
-          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "Fornisce l'accesso a [Weaviate](https://weaviate.io), un database vettoriale open source che supporta la ricerca ibrida (vettore + parole chiave), il multi-tenancy e un'ampia gamma di moduli di vettorizzazione.\n\nUtilizza il backend @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" in @ref qoreragutilsintro \"QoreRagUtils\" per il percorso di inserimento/recupero supportato tramite @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the `WeaviateVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "Fornisce l'accesso a [Weaviate](https://weaviate.io), un database vettoriale open source che supporta la ricerca ibrida (vettore + parole chiave), il multi-tenancy e un'ampia gamma di moduli di vettorizzazione.\n\nUtilizza il backend `WeaviateVectorStore` in `QoreRagUtils` per il percorso di inserimento/recupero supportato tramite `RagPipeline`."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "Carica un file utilizzando multipart/form-data"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura `FileDataType` (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
