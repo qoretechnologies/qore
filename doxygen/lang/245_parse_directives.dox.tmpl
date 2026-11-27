@@ -1932,6 +1932,9 @@ ArrayList l();
     - the directory of the module being loaded, which get_module_context_path() and get_module_context_path_ex() leave
       out: they return the file name of the module
     - the directories of the module path, which the error for a module that is not found does not list
+    - the values of the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV, which are
+      empty in the %Program and are read empty from other %Programs that are not restricted from external information
+      (see @ref sandbox_program_process_information)
 
     @par Known Limitation:
     The exceptions and warnings of module loads and of the code of modules can still name the files of modules with

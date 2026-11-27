@@ -633,6 +633,11 @@ public:
     /** @param var the variable name to return (do not include the "$" symbol)
         @param found returns true if the variable exists, false if not
         @return the value of the global variable given; if a non-zero pointer is returned, the caller owns the reference count returned
+
+        The process-information variables (\c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV) are external
+        information: if the code that calls the library is restricted from it (see qore_caller_restricts_domain())
+        and this Program is not, they are returned as they are in a Program restricted from external information:
+        empty (since %Qore 3.0)
     */
     DLLEXPORT QoreValue getGlobalVariableValue(const char* var, bool &found) const;
 
@@ -640,8 +645,31 @@ public:
     /** @param var the variable name to return (do not include the "$" symbol)
         @param found returns true if the variable exists, false if not
         @return the value of the global variable given; if a non-zero pointer is returned, the caller owns the reference count returned
+
+        The process-information variables (\c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV) are external
+        information: if the code that calls the library is restricted from it (see qore_caller_restricts_domain())
+        and this Program is not, they are returned as they are in a Program restricted from external information:
+        empty (since %Qore 3.0)
     */
     DLLEXPORT QoreValue getGlobalVariableVal(const char* var, bool &found) const;
+
+    //! returns true if the calling code may not be given the value of the global variable of this Program
+    /** For code that reads the value of a variable that it found in the Program by other means than
+        getGlobalVariableValue(), which applies this check itself: the process-information variables
+        (\c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV) are external information, so code that is restricted
+        from it (see qore_caller_restricts_domain()) gets them as they are in a Program restricted from external
+        information, unless this Program is restricted from it itself.  Call it before switching to the Program's
+        context, as the calling code is that of the current thread.
+
+        @param var the global variable of this Program (see findGlobalVar())
+        @param rv set to the value that the calling code gets instead (with a reference that the caller owns) if the
+        function returns true
+
+        @return true if the calling code may not be given the value of the variable; it gets \a rv instead
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool withholdGlobalVarValue(const QoreExternalGlobalVar* var, QoreValue& rv) const;
 
     // retrieves the time zone setting for the program
     DLLEXPORT const AbstractQoreZoneInfo *currentTZ() const;
@@ -734,6 +762,11 @@ public:
 
     //! retrieves a hash of global variables and their values
     /** @return a hash of global variable information; keys are namespace-justified global variable names, values are the values
+
+        The process-information variables (\c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV) are external
+        information: if the code that calls the library is restricted from it (see qore_caller_restricts_domain())
+        and this Program is not, their values are as they are in a Program restricted from external information:
+        empty (since %Qore 3.0)
 
         @since %Qore 0.8.13
     */

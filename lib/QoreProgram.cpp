@@ -1900,6 +1900,39 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
     return removed;
 }
 
+QoreValue qore_program_private_base::getRestrictedProcessInfoValue(const Var* v) const {
+    assert(isProcessInfoVar(v));
+    if (v == env_var) {
+        return new QoreHashNode(autoTypeInfo);
+    }
+    return new QoreListNode(stringTypeInfo);
+}
+
+bool qore_program_private_base::withholdProcessInfo() const {
+    return !restrictsExternalInfo() && qore_caller_restricts_domain(QDOM_EXTERNAL_INFO);
+}
+
+void qore_program_private_base::processInfoRestrictionChanged(bool was_restricted) {
+    if (was_restricted || !restrictsExternalInfo()) {
+        return;
+    }
+    // the variables get the values that they have in a Program created with the restriction; the old values are
+    // released here, without the locks of the options
+    ExceptionSink xsink;
+    for (Var* v : {argv_var, qore_argv_var, env_var}) {
+        if (!v) {
+            continue;
+        }
+        LValueHelper lvh(&xsink);
+        if (!v->getLValue(lvh, false)) {
+            lvh.assign(getRestrictedProcessInfoValue(v), "<process information>");
+        }
+    }
+    // an empty list or hash is assigned to a variable of its type, which cannot fail
+    assert(!xsink);
+    xsink.clear();
+}
+
 void qore_program_private_base::setDefines() {
     for (auto& i : pomaps.pomap) {
         if ((pwo.parse_options & i.first) == i.first) {
@@ -6094,7 +6127,16 @@ QoreValue QoreProgram::getGlobalVariableVal(const char* var, bool& found) const 
         return QoreValue();
     }
     found = true;
+    // the process-information variables are external information (qore#7693)
+    QoreValue rv;
+    if (priv->withholdVarValue(v, rv)) {
+        return rv;
+    }
     return v->eval();
+}
+
+bool QoreProgram::withholdGlobalVarValue(const QoreExternalGlobalVar* var, QoreValue& rv) const {
+    return priv->withholdVarValue(reinterpret_cast<const Var*>(var), rv);
 }
 
 QoreValue QoreProgram::getGlobalVariableValue(const char* var, bool& found) const {
@@ -6288,7 +6330,21 @@ void QoreProgram::saveObject(QoreObject* obj) {
 }
 
 QoreHashNode* QoreProgram::getGlobalVars() const {
-   return priv->getGlobalVars();
+    QoreHashNode* h = priv->getGlobalVars();
+    // the process-information variables are external information (qore#7693)
+    if (priv->withholdProcessInfo()) {
+        for (const Var* v : {priv->argv_var, priv->qore_argv_var, priv->env_var}) {
+            if (!v) {
+                continue;
+            }
+            std::string key = std::string("Qore::") + v->getName();
+            // the value replaced is also held by the variable, so releasing it here runs no code
+            if (h->existsKey(key.c_str())) {
+                h->setKeyValue(key.c_str(), priv->getRestrictedProcessInfoValue(v), nullptr);
+            }
+        }
+    }
+    return h;
 }
 
 int QoreProgram::setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink) {

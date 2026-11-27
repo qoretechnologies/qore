@@ -488,6 +488,36 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_program_process_information The Process Information of a Program
+
+    Each @ref Qore::Program "Program" gets a copy of the process information when it is created: the arguments
+    (\c Qore::ARGV, \c Qore::QORE_ARGV) and the environment (\c Qore::ENV) of the process.  They are external
+    information, so they are empty in a %Program restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO":
+    - <b>created with the restriction</b>: also when the %Program inherits it, as a child of restricted code does,
+      or takes it from the code that creates it (see @ref Qore::Program::constructor() "Program::constructor()")
+    - <b>restricted later</b>: a %Program whose own options get the restriction after it was created
+      (@ref Qore::Program::setParseOptions() "Program::setParseOptions()",
+      @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" or the
+      @ref no-external-info "%no-external-info" parse directive) loses their values: they are emptied then, and are
+      not restored if the restriction is removed again
+    - <b>read from another %Program</b>: code restricted from external information that reads them from a %Program
+      that is not restricted from it, with @ref Qore::Program::getGlobalVariable() "Program::getGlobalVariable()",
+      @ref Qore::Program::getGlobalVars() "Program::getGlobalVars()", the same methods of
+      @ref Qore::ProgramControl "ProgramControl", or the \c getValue() method of the \c GlobalVar class of the
+      \c reflection module, gets them empty, as they are in its own %Program, whatever name it uses for them; the
+      calling code decides, as for the functions of external information (see @ref sandbox_caller_domains).  The
+      variables of a %Program that is restricted from external information itself hold what was assigned to them in
+      it, and are read as they are
+
+    Only these variables are covered: a value that the code of a %Program stores elsewhere (in another variable, or
+    as the result of a call) is that %Program's own data, and code that runs in a %Program, also when restricted code
+    calls it (see @ref sandbox_program_capability), reads the %Program's own variables.  A file that restricts
+    external information only for its own code (with @ref push-parse-options "%push-parse-options") does not change
+    the variables of its %Program.
+
+    @since %Qore 3.0
+
     @subsection sandbox_thread_capabilities Thread Capability Scopes
 
     A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code

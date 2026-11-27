@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires reflection
+
+%allow-debugger
+
+%exec-class ExternalInfoProgramProcessDataTest
+
+# The process-information variables of a Program (Qore::ARGV, Qore::QORE_ARGV, Qore::ENV) are external information:
+# code restricted with PO_NO_EXTERNAL_INFO sees them empty in its own Program, in any Program that it reads them from
+# with the global-variable accessors, and in the Programs that it creates; a Program that a restriction is added to
+# loses their values
+class ExternalInfoProgramProcessDataTest inherits QUnit::Test {
+    public {
+        # the code of the restricted Program that reads the variables of another Program; it returns the type and size
+        # of each value (shape()), so that no value of the environment is ever in the output of the test
+        const ReaderCode = "%new-style
+string sub shape(auto v) {
+    switch (v.typeCode()) {
+        case NT_LIST:
+        case NT_HASH: return sprintf(\"%s:%d\", v.type(), v.size());
+        case NT_INT: return sprintf(\"int:%d\", v);
+    }
+    return v.type();
+}
+auto sub t(code c) { try { return c(); } catch (hash<ExceptionInfo> ex) { return ex.err; } }
+hash<auto> sub own() { return {\"ARGV\": shape(ARGV), \"QORE_ARGV\": shape(QORE_ARGV), \"ENV\": shape(ENV)}; }
+hash<auto> sub by_name(Program h) {
+    hash<auto> rv;
+    foreach string n in ((\"ARGV\", \"QORE_ARGV\", \"ENV\", \"Qore::ENV\", \"::Qore::ENV\", \"Qore::ARGV\", \"x\")) {
+        bool found;
+        rv{n} = {\"v\": shape(h.getGlobalVariable(n, \\found)), \"found\": found};
+    }
+    return rv;
+}
+hash<auto> sub all(Program h) {
+    hash<auto> g = h.getGlobalVars();
+    return map {$1: shape(g{$1})}, (\"Qore::ARGV\", \"Qore::QORE_ARGV\", \"Qore::ENV\", \"x\");
+}
+auto sub control(int id) {
+    return t(auto sub () {
+        ProgramControl pc = ProgramControl::resolveProgramId(id);
+        hash<auto> g = pc.getGlobalVars();
+        return {\"ENV\": shape(pc.getGlobalVariable(\"ENV\")), \"QORE_ARGV\": shape(pc.getGlobalVariable(\"QORE_ARGV\")),
+            \"all\": shape(g{\"Qore::ENV\"})};
+    });
+}
+auto sub reflection(Program h) {
+    return t(auto sub () {
+        return shape(Reflection::Namespace::forName(h, \"Qore\").getGlobalVar(\"ENV\").getValue());
+    });
+}
+hash<auto> sub child() {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"hash<auto> sub e() { return {\\\"ENV\\\": ENV.size(), \\\"QORE_ARGV\\\": QORE_ARGV.size(), \\\"ARGV\\\": ARGV.size()}; }\", \"c\");
+    return {\"own\": c.callFunction(\"e\"), \"ENV\": shape(c.getGlobalVariable(\"ENV\"))};
+}
+";
+    }
+
+    constructor() : QUnit::Test("ExternalInfoProgramProcessDataTest", "1.0", \ARGV) {
+        addTestCase("accessors of an unrestricted Program", \accessorTest());
+        addTestCase("debugger and reflection accessors", \debuggerReflectionTest());
+        addTestCase("accessors of a restricted Program", \restrictedTargetTest());
+        addTestCase("Program created by restricted code", \childTest());
+        addTestCase("restriction added to a Program", \addedRestrictionTest());
+        set_return_value(main());
+    }
+
+    accessorTest() {
+        Program h = getHost();
+        Program r = getReader();
+
+        # the host's own view is unchanged
+        assertTrue(h.getGlobalVariable("ENV").size() > 0);
+        assertTrue(h.getGlobalVariable("QORE_ARGV").size() > 0);
+        assertTrue(h.getGlobalVars(){"Qore::ENV"}.size() > 0);
+
+        # the restricted code's own view
+        assertEq({"ARGV": "list:0", "QORE_ARGV": "list:0", "ENV": "hash:0"}, r.callFunction("own"));
+
+        # every name form answers as the restricted code's own variables
+        hash<auto> v = r.callFunction("by_name", h);
+        foreach string n in ("ARGV", "QORE_ARGV", "Qore::ARGV") {
+            assertEq({"v": "list:0", "found": True}, v{n}, n);
+        }
+        foreach string n in ("ENV", "Qore::ENV", "::Qore::ENV") {
+            assertEq({"v": "hash:0", "found": True}, v{n}, n);
+        }
+        # other variables are read as before
+        assertEq({"v": "int:1", "found": True}, v.x);
+
+        # the whole-hash form
+        assertEq({"Qore::ARGV": "list:0", "Qore::QORE_ARGV": "list:0", "Qore::ENV": "hash:0", "x": "int:1"},
+            r.callFunction("all", h));
+    }
+
+    debuggerReflectionTest() {
+        Program h = getHost();
+        Program r = getReader();
+
+        # a Program reached by its ID
+        assertEq({"ENV": "hash:0", "QORE_ARGV": "list:0", "all": "hash:0"},
+            r.callFunction("control", h.getProgramId()));
+        # this Program
+        assertEq({"ENV": "hash:0", "QORE_ARGV": "list:0", "all": "hash:0"},
+            r.callFunction("control", ProgramControl::getProgram().getProgramId()));
+
+        # reflection refuses the values of another Program or answers as the restricted code's own variable
+        string rv = r.callFunction("reflection", h);
+        if (rv != "REFLECTION-ACCESS-ERROR") {
+            assertEq("hash:0", rv);
+        }
+    }
+
+    restrictedTargetTest() {
+        # a restricted Program's own variables: their values are what the Program holds
+        Program t(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        t.setGlobalVarValue("ENV", {"a": 1});
+        Program r = getReader();
+        hash<auto> v = r.callFunction("by_name", t);
+        assertEq({"v": "hash:1", "found": True}, v.ENV);
+        assertEq({"v": "list:0", "found": True}, v.QORE_ARGV);
+    }
+
+    childTest() {
+        Program r = getReader();
+        hash<auto> c = r.callFunction("child");
+        assertEq({"ENV": 0, "QORE_ARGV": 0, "ARGV": 0}, c.own);
+        assertEq("hash:0", c.ENV);
+    }
+
+    addedRestrictionTest() {
+        string code = "hash<auto> sub e() { return {\"ENV\": ENV.size(), \"QORE_ARGV\": QORE_ARGV.size(), "
+            "\"ARGV\": ARGV.size()}; }";
+        hash<auto> empty = {"ENV": 0, "QORE_ARGV": 0, "ARGV": 0};
+
+        Program p(PO_NEW_STYLE);
+        assertTrue(p.getGlobalVariable("ENV").size() > 0);
+        p.setParseOptions(PO_NO_EXTERNAL_INFO);
+        p.parse(code, "set");
+        assertEq(empty, p.callFunction("e"));
+        assertEq(0, p.getGlobalVariable("ENV").size());
+
+        p = new Program(PO_NEW_STYLE);
+        p.replaceParseOptions(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        p.parse(code, "replace");
+        assertEq(empty, p.callFunction("e"));
+
+        p = new Program(PO_NEW_STYLE);
+        p.parse("%no-external-info\n" + code, "directive");
+        assertEq(empty, p.callFunction("e"));
+    }
+
+    # returns an unrestricted Program with a variable of its own
+    static Program getHost() {
+        Program h(PO_NEW_STYLE);
+        h.parse("our int x = 1;", "host");
+        h.run();
+        return h;
+    }
+
+    # returns a Program restricted from external information
+    static Program getReader() {
+        Program r(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO | PO_ALLOW_DEBUGGER);
+        r.parse(ReaderCode, "reader");
+        return r;
+    }
+}
