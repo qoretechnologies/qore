@@ -350,6 +350,11 @@ class PipelineQueue {
         */
         int run_gen = 0;
 
+        #! True while the pipeline's run ends: the queue accepts no data from the pipeline (see submit())
+        /** Set only on queue 0, which the pipeline submits its data to; the data is submitted to the next run
+        */
+        bool submit_closed = False;
+
         #! Pipeline elements
         /** elements are either:
             - AbstractDataProcessor objects
@@ -558,9 +563,12 @@ class PipelineQueue {
     #! Submits data for processing
     /** @param qdata the data to process
 
+        @return @ref True if the data was accepted, @ref False if the queue accepts no data because the pipeline's run
+        is ending (see submit_closed)
+
         @throws PIPELINE-SUBMISSION-ABORTED cannot submit data; the pipeline is shutting down or has aborted
     */
-    submit(auto qdata) {
+    bool submit(auto qdata) {
         if (queue_abort) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
         }
@@ -575,7 +583,7 @@ class PipelineQueue {
         }
 
         bool waited = False;
-        while (!queue_stop && !queue_abort && queue.lsize() == size) {
+        while (!queue_stop && !queue_abort && !submit_closed && queue.lsize() == size) {
             waited = True;
             ++queue_waiting;
             cond.wait(lck);
@@ -584,6 +592,10 @@ class PipelineQueue {
 
         if (queue_abort) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+        }
+
+        if (submit_closed) {
+            return False;
         }
 
         if (queue_stop) {
@@ -612,6 +624,7 @@ class PipelineQueue {
         if (data_waiting) {
             cond.broadcast();
         }
+        return True;
     }
 
     #! Processing thread
@@ -876,6 +889,10 @@ class PipelineQueue {
                     if (flush_waiting) {
                         flush_cond.broadcast();
                     }
+                    # the flush can release the lock (a child queue's awaitFlush() or a submission to a full child
+                    # queue waits), so the queue's state is checked again before the thread waits: the end of the run
+                    # can have stopped the queue meanwhile
+                    continue;
                 }
 
                 ++data_waiting;
@@ -2046,10 +2063,7 @@ public class DataProviderPipeline {
         #! True when the current run has used synchronous processing and needs synchronous flush
         bool synchronous_processing = False;
 
-        #! The ID of the current run, incremented when a run ends (see endRunIntern())
-        int run_id = 0;
-
-        #! True while a run is ending (see endRunIntern())
+        #! True while a run is ending (see beginRunEndIntern())
         bool run_ending = False;
 
         #! Signaled when a run has ended
@@ -2259,6 +2273,8 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
+        # data submitted while a run ends is processed in the next run
+        waitRunEndIntern();
         checkSubmitIntern();
 
         submitIntern(_data);
@@ -2269,6 +2285,8 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
+        # data submitted while a run ends is processed in the next run
+        waitRunEndIntern();
         checkSubmitIntern();
 
         map submitDataIntern($1), i;
@@ -2281,6 +2299,8 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
+        # data submitted while a run ends is processed in the next run
+        waitRunEndIntern();
         checkSubmitIntern();
 
         if (do_bulk && i.supportsBulkApi()) {
@@ -2297,6 +2317,8 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
+        # data submitted while a run ends is processed in the next run
+        waitRunEndIntern();
         checkSubmitIntern();
 
         if (do_bulk) {
@@ -2320,8 +2342,9 @@ public class DataProviderPipeline {
     }
 
     #! Waits for all queues to have processed remaining data
-    /** Returns when the run has ended; if another thread ends the run (with waitDone() or abort()) while this
-        thread waits, this method returns when it has ended, and the other thread reports its result
+    /** Ends the run.  If another thread is ending the run (with waitDone() or abort()), this method returns when it
+        has ended, and the other thread reports its result.  Data submitted while the run ends is processed in the
+        next run, which its submission starts once this run has ended.
 
         @throws PIPELINE-FAILED thrown if there are any errors in pipeline processing, in which case the exception
         argument will have a list of exception arguments thrown by pipeline queue threads
@@ -2334,12 +2357,9 @@ public class DataProviderPipeline {
         if (!locked) {
             return;
         }
-        # the run that this thread waits for
-        int run = run_id;
-        # the queue threads end with the run; unlock on exit, unless another thread has ended the run
-        on_exit if (run == run_id) {
-            endRunIntern();
-        }
+        # this thread ends the run; the queue threads end with it, and the pipeline is unlocked
+        beginRunEndIntern();
+        on_exit endRunIntern();
 
         # wait for primary queue to complete processing
         if (synchronous_processing) {
@@ -2347,11 +2367,6 @@ public class DataProviderPipeline {
             synchronous_processing = False;
         } else {
             pmap."0".waitDone();
-            if (run != run_id) {
-                # another thread has ended the run
-                waitRunEndIntern();
-                return;
-            }
         }
 
         # set the stop time
@@ -2406,19 +2421,11 @@ public class DataProviderPipeline {
         if (!locked) {
             return;
         }
-        # the run that this thread aborts
-        int run = run_id;
-        # the queue threads end with the run; unlock on exit, unless another thread has ended the run
-        on_exit if (run == run_id) {
-            endRunIntern();
-        }
+        # this thread ends the run; the queue threads end with it, and the pipeline is unlocked
+        beginRunEndIntern();
+        on_exit endRunIntern();
 
         pmap."0".waitDone();
-        if (run != run_id) {
-            # another thread has ended the run
-            waitRunEndIntern();
-            return;
-        }
 
         stop_time = now_us();
         stop_mono_us = clock_get_monotonic_us();
@@ -2595,21 +2602,22 @@ public class DataProviderPipeline {
             } else if (shape == DataProviderShape::HashOfLists && rec_cnt > 1) {
                 logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
             }
-            record_count += rec_cnt;
             synchronous_processing = True;
             pmap."0".processSynchronously(_data);
+            # only records that the queue accepted are counted
+            record_count += rec_cnt;
             return;
         }
 
         if (shape == DataProviderShape::DataFrameBlock) {
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
             logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
-            pmap."0".submit(_data);
+            submitQueueIntern(_data);
             record_count += rec_cnt;
         } else if (do_bulk && (shape == DataProviderShape::HashOfLists || shape == DataProviderShape::BufferColumns)
                 && ((int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape)) > 1)) {
             logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
-            pmap."0".submit(_data);
+            submitQueueIntern(_data);
             record_count += rec_cnt;
         } else {
             submitDataIntern(_data);
@@ -2621,9 +2629,20 @@ public class DataProviderPipeline {
     */
     private:internal submitDataIntern(auto _data) {
         int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data);
-        pmap."0".submit(_data);
+        submitQueueIntern(_data);
         # only records that the queue accepted are counted
         record_count += rec_cnt;
+    }
+
+    #! Submits data to queue 0; the lock must be held
+    /** Data submitted while the run ends (another thread released the lock while it waited for a full queue) is
+        submitted to the next run, which is started once the run has ended
+    */
+    private:internal submitQueueIntern(auto _data) {
+        while (!pmap."0".submit(_data)) {
+            waitRunEndIntern();
+            checkSubmitIntern();
+        }
     }
 
     #! Submits bulk data for processing
@@ -2636,7 +2655,7 @@ public class DataProviderPipeline {
             DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(recs, shape);
             logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
-            pmap."0".submit(recs);
+            submitQueueIntern(recs);
             record_count += rec_cnt;
         }
     }
@@ -2794,30 +2813,43 @@ public class DataProviderPipeline {
                 stop = True;
             }
         }
-        if (!stop) {
-            return;
+        if (stop) {
+            # the lock is released while each thread ends
+            map $1.waitThreadExit(), pmap.iterator();
         }
+        # once every thread has ended, without releasing the lock: the flags of the run are reset for the next run
         foreach PipelineQueue q in (pmap.iterator()) {
-            q.waitThreadExit();
             if (!stop_flag) {
                 q.queue_stop = False;
             }
-            # the flags of the run that its thread set while it ended are reset for the next run
             q.do_flush = False;
             remove q.data_flushed;
         }
     }
 
+    #! Starts ending the current run; the lock must be held
+    /** From now on until the run has ended (endRunIntern()), the other threads that end the run (waitDone(), abort())
+        wait until it has ended, and data submitted is processed in the next run (see submitQueueIntern()), as the
+        thread that ends the run releases the lock while it waits for the queues
+    */
+    private:internal beginRunEndIntern() {
+        run_ending = True;
+        PipelineQueue q0 = pmap."0";
+        q0.submit_closed = True;
+        if (q0.queue_waiting) {
+            q0.cond.broadcast();
+        }
+    }
+
     #! Ends the current run; the lock must be held
-    /** The run is ended first (run_id), so that the threads that wait for it, and that the lock is released to while
-        the queue threads end, do not end it again; waitDone() and abort() wait until it has ended
-        (waitRunEndIntern())
+    /** The queue threads are ended (the lock is released while they end), and the pipeline is unlocked; the threads
+        that wait until the run has ended (waitRunEndIntern()) then continue
     */
     private:internal endRunIntern() {
-        ++run_id;
         run_ending = True;
         on_exit {
             locked = False;
+            pmap."0".submit_closed = False;
             run_ending = False;
             if (run_end_waiting) {
                 run_end_cond.broadcast();
