@@ -764,6 +764,19 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         }
     }
 
+    #! Checks the target and the proxy that the connection's async client is created for for a restricted borrower (qore#7862)
+    /** @throw PERMISSION-DENIED the target or the proxy is not the one that the connection's creator gave
+    */
+    private checkLentAsyncTarget() {
+        # the configured URLs and proxy are checked by their targets only (scheme, host and port, without user
+        # information), as the client parses them (qore#7236)
+        *string proxy = opts.proxy.val() ? getLentTargetUrl(opts.proxy) : NOTHING;
+        checkBorrowerTarget(getLentTargetUrl(real_url ?? url), proxy);
+        if (url.val() && url != real_url) {
+            checkBorrowerTarget(getLentTargetUrl(getRealUrl(url, getConnectionSchemeInfo(), getType())), proxy);
+        }
+    }
+
     #! Called by the constructor to set the real URL
     /** @param url the new URL
 

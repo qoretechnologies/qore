@@ -2934,7 +2934,20 @@ printf("%d connection(s) migrated\n", migrated);
         }
         # the borrower counts also when it calls through the method of a lent object, whose capability frame lends
         # nothing here (qore#7052): a restricted borrower is always bound to the proof (fail closed)
-        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
+        if (!lent_proof) {
+            return NOTHING;
+        }
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
+            return lent_proof;
+        }
+        # code that a sandbox governs and that is not the owner is a restricted borrower too (qore#7862)
+        if (SandboxManager::isRestricted()) {
+            *int caller = SandboxManager::getCallerProgramId();
+            if (!exists caller || caller != owner_pgm_id) {
+                return lent_proof;
+            }
+        }
+        return NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)

@@ -622,6 +622,19 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         return sc;
     }
 
+    #! Checks the target and the proxy that the async client is created for for a restricted borrower (qore#7862)
+    /** The connection's members, which a restricted borrower can change, name the target; the manager that the
+        connection creates for it is bound to the creator's, as the synchronous client is (see getImpl())
+
+        @throw PERMISSION-DENIED the target or the proxy is not the one that the connection's creator gave
+    */
+    private checkLentAsyncTarget() {
+        # the target only (scheme, host and port): the credentials and path, which the calling code can set, are not
+        # given to the check (qore#7236)
+        HTTPClient sc(getConnectionOptions());
+        checkBorrowerTarget(sc.getURL(UC_TARGET), sc.getProxyURL(UC_TARGET));
+    }
+
     #! Returns an async HTTP connection manager
     /** The manager uses the process-wide async I/O controller and establishes and pools connections lazily.
         Therefore \a connect is accepted for API compatibility but has no effect. Pass this connection's
