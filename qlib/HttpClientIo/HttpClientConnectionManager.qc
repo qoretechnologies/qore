@@ -964,6 +964,42 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
     }
 
+    #! Raises an exception if the cookie jar is the manager's own and the calling code is restricted and does not own the manager
+    /** A client that shares the cookie jar of its manager (see
+        @ref RestClientIo::RestClientIo::getCookieJar() "RestClientIo::getCookieJar()") asks before it gives the jar to
+        its caller; a jar of another kind is not checked
+
+        @param jar the cookie jar
+
+        @throw PERMISSION-DENIED the jar is the manager's, and the calling code is restricted by a sandbox and does
+        not own the manager (qore#7837)
+
+        @since HttpClientIo 1.0
+    */
+    checkCookieJar(*CookieJar jar) {
+        if (isOwnJar(jar)) {
+            checkStateCaller("take the cookie jar of");
+        }
+    }
+
+    #! Returns @ref True if the cookie jar is the manager's own, which holds the cookies of the host (qore#7837)
+    private:internal bool isOwnJar(*CookieJar jar) {
+        return jar && cookie_jar && jar.uniqueHash() == cookie_jar.uniqueHash();
+    }
+
+    #! Raises an exception if restricted code that does not own the manager uses its secrets for a request (qore#7837)
+    /** The cookies of the manager's jar and the credentials of its proxy are sent for the requests of every caller; the
+        headers that prepareRequestHeaders() returns give them to the code that calls it, so code that a sandbox
+        restricts and that does not own the manager is refused when the request uses them
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkRequestSecretCaller(hash<auto> auth_state) {
+        if (proxy_auth || ((auth_state.cookies ?? True) && isOwnJar(auth_state.cookie_jar ?? cookie_jar))) {
+            checkStateCaller("use the cookies and the proxy credentials of");
+        }
+    }
+
     #! Raises an exception if restricted code that does not own the manager asks for a pooled connection (qore#7813)
     /** A pooled connection serves the requests of every caller of the manager: restricted code that does not own the
         manager is not given it, as it could close it or lease it while a request of the host uses it (see
@@ -1391,7 +1427,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         in_flight.inc();
         on_exit in_flight.dec();
         # Inject cookies from jar into request headers; the response body is decoded by the Future
-        headers = addDefaultHeaders(addCookieHeaders(url, path, headers));
+        headers = addDefaultHeaders(addCookieHeadersIntern(url, path, headers));
 
         int retries = 0;
         int max_retries = opts.max_request_retries;
@@ -1616,14 +1652,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<auto> auth_state = newRequestState(options);
         while (True) {
             hash<auto> resp = requestIntern(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                prepareRequestHeaders(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
+                prepareRequestHeadersIntern(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
             string request_url = rf.getRequestUrl();
 
             # Process Set-Cookie before checking redirect
-            storeStateCookies(auth_state, rf, resp.headers);
+            storeStateCookiesIntern(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request
-            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+            if (processAuthChallengeIntern(resp.status_code, resp.headers, auth, \auth_state)) {
                 continue;
             }
 
@@ -1692,7 +1728,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         });
         while (True) {
             HttpClientStreamHandle sh = acquireAndStartStreaming(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                prepareRequestHeaders(rf, auth, \auth_state, o.decode), False, rf.getBody());
+                prepareRequestHeadersIntern(rf, auth, \auth_state, o.decode), False, rf.getBody());
             # the stream is cancelled if the response cannot be returned
             bool keep = False;
             on_exit if (!keep) {
@@ -1751,11 +1787,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 pending += d.typeCode() == NT_BINARY ? d : binary(d);
             }
             string request_url = rf.getRequestUrl();
-            storeStateCookies(auth_state, rf, resp.headers);
+            storeStateCookiesIntern(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request; the body of the challenge response is
             # discarded
-            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+            if (processAuthChallengeIntern(resp.status_code, resp.headers, auth, \auth_state)) {
                 continue;
             }
 
@@ -1948,10 +1984,32 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     */
     hash<auto> prepareRequestHeaders(HttpRedirectFollower rf, *HttpAuthenticator auth,
             reference<hash<auto>> auth_state, bool decoded = True) {
+        checkRequestSecretCaller(auth_state);
+        return prepareRequestHeadersIntern(rf, auth, \auth_state, decoded);
+    }
+
+    #! Returns the headers of the next request for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::prepareRequestHeaders())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final hash<auto> prepareRequestHeadersFor(object access, HttpRedirectFollower rf, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state, bool decoded = True) {
+        HttpClientIoSocketAccess::check(access);
+        return prepareRequestHeadersIntern(rf, auth, \auth_state, decoded);
+    }
+
+    #! The body of prepareRequestHeaders(), for the callers that were checked
+    private:internal hash<auto> prepareRequestHeadersIntern(HttpRedirectFollower rf, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state, bool decoded = True) {
         string origin = rf.getOrigin();
         string path = rf.getPath();
         hash<auto> hdr = addDefaultHeaders(auth_state.cookies ?? True
-            ? addCookieHeaders(origin, path, rf.getHeaders(), auth_state.cookie_jar)
+            ? addCookieHeadersIntern(origin, path, rf.getHeaders(), auth_state.cookie_jar)
             : rf.getHeaders(), decoded);
         remove auth_state.sent;
         remove auth_state.sent_proxy;
@@ -1994,6 +2052,30 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     */
     bool processAuthChallenge(int status_code, *hash<auto> resp_headers, *HttpAuthenticator auth,
             reference<hash<auto>> auth_state) {
+        if (proxy_auth) {
+            checkStateCaller("answer the proxy challenges of");
+        }
+        return processAuthChallengeIntern(status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! Processes an authentication challenge for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::processAuthChallenge())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final bool processAuthChallengeFor(object access, int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
+        HttpClientIoSocketAccess::check(access);
+        return processAuthChallengeIntern(status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! The body of processAuthChallenge(), for the callers that were checked
+    private:internal bool processAuthChallengeIntern(int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
         if (status_code == 401 && auth && auth_state.sent && !auth_state.answered
                 && auth.processChallenge(resp_headers, auth_state.sent)) {
             auth_state.answered = True;
@@ -2073,7 +2155,16 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
 
         @since HttpClientIo 1.0
     */
-    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar) {
+    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar,
+            *HttpClientCreatorProof proof) {
+        if (isOwnJar(jar ?? cookie_jar)) {
+            checkStateCaller("take the cookies of", proof);
+        }
+        return addCookieHeadersIntern(url, path, headers, jar);
+    }
+
+    #! The body of addCookieHeaders(), for the callers that were checked
+    private:internal hash<auto> addCookieHeadersIntern(string url, string path, *hash<auto> headers, *CookieJar jar) {
         # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
         # {"X-Count": 1}), and adding the Cookie header would throw
         hash<auto!> req_headers = headers ?? {};
@@ -2105,7 +2196,16 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
 
         @since HttpClientIo 1.0
     */
-    storeResponseCookies(string url, string path, *hash<auto> resp_headers, *CookieJar jar) {
+    storeResponseCookies(string url, string path, *hash<auto> resp_headers, *CookieJar jar,
+            *HttpClientCreatorProof proof) {
+        if (isOwnJar(jar ?? cookie_jar)) {
+            checkStateCaller("store cookies in the jar of", proof);
+        }
+        storeResponseCookiesIntern(url, path, resp_headers, jar);
+    }
+
+    #! The body of storeResponseCookies(), for the callers that were checked
+    private:internal storeResponseCookiesIntern(string url, string path, *hash<auto> resp_headers, *CookieJar jar) {
         jar = jar ?? cookie_jar;
         if (jar && resp_headers) {
             hash<UrlInfo> url_info = parseRequestUrl(url);
@@ -2136,8 +2236,30 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     storeStateCookies(hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
+        if ((state.cookies ?? True) && isOwnJar(state.cookie_jar ?? cookie_jar)) {
+            checkStateCaller("store cookies in the jar of");
+        }
+        storeStateCookiesIntern(state, rf, resp_headers);
+    }
+
+    #! Stores the cookies of a response for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::storeStateCookies())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final storeStateCookiesFor(object access, hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
+        HttpClientIoSocketAccess::check(access);
+        storeStateCookiesIntern(state, rf, resp_headers);
+    }
+
+    #! The body of storeStateCookies(), for the callers that were checked
+    private:internal storeStateCookiesIntern(hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
         if (state.cookies ?? True) {
-            storeResponseCookies(rf.getOrigin(), rf.getPath(), resp_headers, state.cookie_jar);
+            storeResponseCookiesIntern(rf.getOrigin(), rf.getPath(), resp_headers, state.cookie_jar);
         }
     }
 

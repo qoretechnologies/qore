@@ -88,6 +88,24 @@ class HttpClientIoSocketAccess {
         return mgr.processProxyConnectFailureFor(token, url, err);
     }
 
+    #! Returns the headers of the next request of a redirect chain for the code that makes the request (qore#7837)
+    static hash<auto> prepareRequestHeaders(HttpClientConnectionManager mgr, HttpRedirectFollower rf,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state, bool decoded = True) {
+        return mgr.prepareRequestHeadersFor(token, rf, auth, \auth_state, decoded);
+    }
+
+    #! Processes an authentication challenge for the code that makes the request (qore#7837)
+    static bool processAuthChallenge(HttpClientConnectionManager mgr, int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
+        return mgr.processAuthChallengeFor(token, status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! Stores the cookies of a response for the code that makes the request (qore#7837)
+    static storeStateCookies(HttpClientConnectionManager mgr, hash<auto> state, HttpRedirectFollower rf,
+            *hash<auto> resp_headers) {
+        mgr.storeStateCookiesFor(token, state, rf, resp_headers);
+    }
+
     #! Creates the status of a pooled connection for the code that waits for it (qore#7813)
     static HttpClientConnectionStatus newStatus(HttpClientConnection conn) {
         return new HttpClientConnectionStatus(token, conn);
