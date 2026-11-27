@@ -635,8 +635,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     }
 
     // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
-    // created the object (qore#7033)
-    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
+    // created the object (qore#7033); a trusted API gives all state, as its output is never given to sandboxed code
+    // (Program::serialize(), Serializable::serializeTrusted(), qore#7146)
+    bool non_public = context.caller.isUnrestricted()
+        || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);

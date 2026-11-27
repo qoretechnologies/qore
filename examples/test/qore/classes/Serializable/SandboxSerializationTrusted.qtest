@@ -41,7 +41,7 @@ class StCache {
             StCache::stored = Serializable::serialize(new StOrderData());
             return "OK";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 
@@ -51,7 +51,7 @@ class StCache {
             StCache::stored = Serializable::serializeTrusted(new StOrderData());
             return "OK";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 
@@ -62,7 +62,7 @@ class StCache {
             StOrderData o = Serializable::deserializeTrusted(h);
             return o.getSecret();
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 
@@ -75,7 +75,7 @@ class StCache {
             StOrderData o = Serializable::deserializeTrusted(input);
             return o.getSecret();
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 
@@ -85,7 +85,7 @@ class StCache {
             StOrderData o = Serializable::deserialize(StCache::stored);
             return o.getSecret();
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 
@@ -95,7 +95,7 @@ class StCache {
             StOrderData o = Serializable::deserializeTrusted(StCache::stored);
             return o.getSecret();
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return sprintf("%s: %s", ex.err, ex.desc);
         }
     }
 }
@@ -127,7 +127,8 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
             "            case \"serializeTrusted\": Serializable::serializeTrusted(new StOrderData()); break;\n"
             "            case \"serializeTrustedToData\": Serializable::serializeTrustedToData(new StOrderData()); "
             "break;\n"
-            "            case \"deserializeTrusted\": Serializable::deserializeTrusted(StCache::stored); break;\n"
+            "            case \"deserializeTrusted\": Serializable::deserializeTrusted(Serializable::serialize(1)); "
+            "break;\n"
             "        }\n"
             "        return \"OK\";\n"
             "    } catch (hash<ExceptionInfo> ex) {\n"
@@ -154,10 +155,10 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
 
     #! the plain forms withhold the state of the other trusted class; the trusted forms give and set it
     trustedCalleeTest() {
-        assertEq("SERIALIZATION-ERROR", p.callFunction("call", "storePlain"));
+        assertRegex("^SERIALIZATION-ERROR", p.callFunction("call", "storePlain"));
         assertEq("OK", p.callFunction("call", "storeTrusted"));
         # the data that the trusted code wrote is set with the trusted form only
-        assertEq("DESERIALIZATION-ERROR", p.callFunction("call", "loadPlain"));
+        assertRegex("^DESERIALIZATION-ERROR", p.callFunction("call", "loadPlain"));
         assertEq("ORDER-STATE", p.callFunction("call", "loadTrusted"));
         assertEq("ORDER-STATE", p.callFunction("call", "roundTripData"));
         assertEq("ORDER-STATE", p.callFunction("call", "roundTripStream"));
