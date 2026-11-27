@@ -11,6 +11,10 @@
 # small requests ran out of credit that way, and the server then ended a small response as soon as it waited (RST_STREAM
 # CANCEL on HTTP/2, H3_REQUEST_CANCELLED on HTTP/3).  The rate is now told when the last wait of a connection ends, so
 # that the time until the next wait is not charged.
+#
+# qoretechnologies/qore#7809: an HTTP/2 response body that the I/O thread pumps from a source with no data ready (a
+# stream or long-poll body between its events) was charged to its client for the time that it waited for its source:
+# the rate was told that the connection waited before the pump found that the source had nothing to send.
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -22,6 +26,7 @@
 %requires HttpClientIo
 %requires ../../TestCertificates.qm
 %requires ../../RawHttp2TestClient.qm
+%requires FsUtil
 
 %exec-class HttpServerSendRateIdleGapTest
 
@@ -46,6 +51,28 @@ const Requests = 12;
 #! minimum rate (500 ms at 1 MiB/s: 512 KiB), so that each such charge left a debt
 const WaitingBodySize = 100 * 1024;
 
+#! The events of the body read from a pipe: their pauses, charged in full (11 x 500 ms), use up the credit (4 s)
+const SourceEvents = 12;
+
+#! The size of each event of the body read from a pipe: larger than the default flow-control window, so that the body
+#! really waits for its client after each event, and the drained credit ended it then
+const EventSize = WaitingBodySize;
+
+#! Responds with a body read from a named pipe, which the I/O thread pumps
+class PipeBodyHandler inherits AbstractHttpRequestHandler {
+    private {
+        string path;
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, new FileInputStream(path), {"Content-Type": "text/plain"});
+    }
+}
+
 #! Answers each request with a small body, and /waiting with a body that waits for the client's flow-control credit
 class SmallHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -64,6 +91,8 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerSendRateIdleGap", "1.0") {
         addTestCase("HTTP/2: the time between the responses of a connection is not charged to its send rate",
             \testIdleGapH2());
+        addTestCase("HTTP/2: the time a pumped body waits for its source is not charged to the send rate",
+            \testSourceIdleH2());
         addTestCase("HTTP/3: the time between the responses of a connection is not charged to its send rate",
             \testIdleGap(), "h3");
         set_return_value(main());
@@ -77,7 +106,10 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
     }
 
     #! Starts the server with the minimum send rate; returns its port
-    private int startServer(HttpServer hs) {
+    private int startServer(HttpServer hs, *string pipe_path) {
+        if (pipe_path) {
+            hs.setHandler("pipe", "/pipe", NOTHING, new PipeBodyHandler(pipe_path));
+        }
         hs.setDefaultHandler("small", new SmallHandler());
         int port = hs.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
@@ -158,5 +190,94 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
         }
         assertNothing(failed, sprintf("a response was not completed: %y", failed));
         assertEq(Requests * 2, answered, "every response on the connection is completed");
+    }
+
+    #! HTTP/2: a body read from a pipe whose writer sends small events with pauses between them
+    /** Each pause is longer than what one update charges, so that the pauses, charged as waits for the client, used
+        up the credit and the body was reset
+    */
+    testSourceIdleH2() {
+        TmpDir dir("send-rate-source-idle-");
+        string path = dir.path + "/body";
+        if (mkfifo(path)) {
+            testSkip("mkfifo: " + strerror());
+        }
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs, path);
+
+        # the writer opens the pipe when the handler does, then writes the events with pauses between them
+        Counter done(1);
+        Queue writer_errors();
+        # the writer closes its end and records that it did under the lock, so that the cleanup never waits for a
+        # writer that is gone
+        Mutex writer_lock();
+        bool writer_closed;
+        background sub () {
+            on_exit done.dec();
+            File f();
+            on_exit {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (f.isOpen()) {
+                    f.close();
+                }
+                writer_closed = True;
+            }
+            try {
+                f.open2(path, O_WRONLY);
+                for (int i = 0; i < SourceEvents; ++i) {
+                    if (i) {
+                        # the source has nothing to send: the body waits for it, not for its client
+                        usleep(IdleGap);
+                    }
+                    f.write(binary(strmul(chr(ord("a") + i), EventSize)));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                writer_errors.push(get_exception_string(ex));
+            }
+        }();
+        # if the request fails, the writer can wait for a reader or for room in the pipe: a reader of the test's own
+        # takes the rest of the data, so that the writer ends
+        on_exit {
+            if (done.waitForZero(1ms)) {
+                drainPipe(path, writer_lock, \writer_closed);
+                done.waitForZero(HangGuard);
+            }
+        }
+
+        # the default flow-control window: each event waits for the client's WINDOW_UPDATE frames
+        RawHttp2Client c(port, True, DefaultWindow);
+        on_exit c.close();
+        hash<RawHttp2StreamResult> r = c.readStream(c.get("/pipe"), HangGuard);
+        # without the fix the body was reset (RST_STREAM CANCEL) once the pauses had used up the credit
+        assertNothing(r.reset_code, sprintf("the body was not reset: %y", r));
+        assertTrue(r.ended, "the body ended");
+        assertEq(SourceEvents * EventSize, r.data_bytes, "the whole body arrived");
+        assertEq(0, done.waitForZero(HangGuard), "the writer ended");
+        assertEq(0, writer_errors.size(), writer_errors.size() ? writer_errors.get() : "");
+    }
+
+    #! Reads a named pipe to its end, unless its writer has closed it
+    /** The pipe is opened without waiting, which also ends a writer's wait for a reader
+    */
+    static drainPipe(string path, Mutex writer_lock, reference<bool> writer_closed) {
+        try {
+            File r();
+            {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (writer_closed) {
+                    return;
+                }
+                r.open2(path, O_RDONLY | O_NONBLOCK);
+            }
+            while (r.isDataAvailable(HangGuard)) {
+                if (!r.readBinary(65536)) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
     }
 }
