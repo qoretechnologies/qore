@@ -12,6 +12,7 @@
 #include "ml_serialization.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
 
 QoreLabelEncoder::QoreLabelEncoder() {
@@ -136,12 +137,27 @@ QoreLabelEncoder* QoreLabelEncoder::deserializeState(const uint8_t* data,
     auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    auto* enc = new QoreLabelEncoder();
+    // the state must satisfy the invariants that fit() establishes (qore#7844): the classes are sorted and
+    // distinct, so that each has one label, and fit() sets no field names
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "LabelEncoder", xsink)
+        || checkRange((int64_t)cls.size(), 0, INT32_MAX, "LabelEncoder", "the number of classes", xsink)
+        || checkSize(fnames.size(), 0, "LabelEncoder", "the number of field names", xsink)) {
+        return nullptr;
+    }
+    for (size_t i = 1; i < cls.size(); ++i) {
+        if (!(cls[i - 1] < cls[i])) {
+            stateError(xsink, "LabelEncoder", "the classes are not sorted and distinct at class %d", (int)i);
+            return nullptr;
+        }
+    }
+
+    std::unique_ptr<QoreLabelEncoder> enc(new QoreLabelEncoder());
     enc->classes = std::move(cls);
     for (int i = 0; i < (int)enc->classes.size(); ++i) {
         enc->class_to_label[enc->classes[i]] = i;
     }
     enc->field_names = std::move(fnames);
     enc->fitted = true;
-    return enc;
+    return enc.release();
 }

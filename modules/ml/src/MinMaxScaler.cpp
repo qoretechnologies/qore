@@ -247,6 +247,25 @@ QoreMinMaxScaler* QoreMinMaxScaler::deserializeState(const uint8_t* data, size_t
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "MinMaxScaler", xsink)) {
+        return nullptr;
+    }
+    // the same comparison as the constructor
+    if (feature_min >= feature_max) {
+        stateError(xsink, "MinMaxScaler", "feature_min (%g) must be less than feature_max (%g)", feature_min,
+            feature_max);
+        return nullptr;
+    }
+    if (checkRange(n_features, 1, INT32_MAX, "MinMaxScaler", "the number of features", xsink)
+        || checkSize(data_min_v.size(), n_features, "MinMaxScaler", "the number of data minimums", xsink)
+        || checkSize(data_max_v.size(), n_features, "MinMaxScaler", "the number of data maximums", xsink)
+        || checkSize(scale_v.size(), n_features, "MinMaxScaler", "the number of scale factors", xsink)
+        || checkSize(min_adj_v.size(), n_features, "MinMaxScaler", "the number of offsets", xsink)) {
+        return nullptr;
+    }
+
     std::unique_ptr<QoreMinMaxScaler> obj(new QoreMinMaxScaler(feature_min, feature_max));
     obj->n_features = n_features;
     obj->data_min = std::move(data_min_v);

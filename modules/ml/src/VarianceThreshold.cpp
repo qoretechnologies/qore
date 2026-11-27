@@ -11,6 +11,8 @@
 #include "QC_VarianceThreshold.h"
 #include "ml_serialization.h"
 
+#include <memory>
+
 QoreVarianceThreshold::QoreVarianceThreshold(double threshold)
     : threshold(threshold) {
 }
@@ -129,31 +131,57 @@ QoreVarianceThreshold* QoreVarianceThreshold::deserializeState(
         const uint8_t* data, size_t len, ExceptionSink* xsink) {
     const uint8_t* ptr = data;
     size_t remaining = len;
+    using namespace MLSerialization;
 
-    double thr = MLSerialization::readScalar(ptr, remaining, xsink);
+    double thr = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nf = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t nf = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int ns = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t ns = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    VectorXd var = MLSerialization::readVector(ptr, remaining, xsink);
+    VectorXd var = readVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nsup = MLSerialization::readInt32(ptr, remaining, xsink);
+    // the support mask is a count and one value per feature, as writeIntVector() writes them
+    std::vector<int> sup_values = readIntVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<bool> sup(nsup);
-    for (int i = 0; i < nsup; ++i) {
-        sup[i] = MLSerialization::readInt32(ptr, remaining, xsink) != 0;
-        if (*xsink) { return nullptr; }
+    auto fnames = readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that fit() establishes (qore#7844)
+    if (checkEnd(remaining, "VarianceThreshold", xsink)
+        || checkRange(nf, 1, INT32_MAX, "VarianceThreshold", "the number of features", xsink)
+        || checkSize(var.size(), nf, "VarianceThreshold", "the number of variances", xsink)
+        || checkSize(sup_values.size(), nf, "VarianceThreshold", "the number of support values", xsink)) {
+        return nullptr;
     }
-    auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
+    // fit() keeps a feature when its variance is greater than the threshold, and counts the kept features
+    std::vector<bool> sup(nf);
+    int64_t selected = 0;
+    for (int32_t i = 0; i < nf; ++i) {
+        if (checkRange(sup_values[i], 0, 1, "VarianceThreshold", "a support value", xsink)) {
+            return nullptr;
+        }
+        bool kept = sup_values[i] != 0;
+        if (kept != (var(i) > thr)) {
+            stateError(xsink, "VarianceThreshold", "the support of feature %d does not agree with its variance "
+                "and the threshold", (int)i);
+            return nullptr;
+        }
+        sup[i] = kept;
+        if (kept) {
+            ++selected;
+        }
+    }
+    if (checkSize(ns, selected, "VarianceThreshold", "the number of selected features", xsink)) {
+        return nullptr;
+    }
 
-    auto* vt = new QoreVarianceThreshold(thr);
+    std::unique_ptr<QoreVarianceThreshold> vt(new QoreVarianceThreshold(thr));
     vt->n_features = nf;
     vt->n_selected = ns;
     vt->variances = std::move(var);
     vt->support = std::move(sup);
     vt->field_names = std::move(fnames);
     vt->fitted = true;
-    return vt;
+    return vt.release();
 }

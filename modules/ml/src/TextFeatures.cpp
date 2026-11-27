@@ -303,13 +303,37 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     // Read vocabulary
     int vocab_size = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkOneOf(mode, {"tfidf", "count"}, "TextFeatures", "mode", xsink)
+        || checkOneOf(tok_mode, {"whitespace", "subword"}, "TextFeatures", "tokenizer_mode", xsink)
+        || checkRange(max_features, 0, INT32_MAX, "TextFeatures", "max_features", xsink)
+        || checkRange(min_df, 1, INT32_MAX, "TextFeatures", "min_df", xsink)
+        || checkRange(n_docs, 1, INT32_MAX, "TextFeatures", "the number of documents", xsink)
+        // each term is written as a 32-bit length, its bytes and a 32-bit index
+        || checkRange(vocab_size, 0, remaining / (2 * sizeof(int32_t)), "TextFeatures", "the vocabulary size",
+            xsink)
+        || checkSize(n_features, vocab_size, "TextFeatures", "the number of features", xsink)
+        || (max_features && checkRange(vocab_size, 0, max_features, "TextFeatures", "the vocabulary size", xsink))) {
+        return nullptr;
+    }
+
+    // fit() numbers the terms in their sorted order, in which they are written
     std::map<std::string, int> vocab;
     for (int i = 0; i < vocab_size; ++i) {
         std::string word = MLSerialization::readString(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
         int idx = MLSerialization::readInt32(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
-        vocab[word] = idx;
+        if (i && word <= vocab.rbegin()->first) {
+            stateError(xsink, "TextFeatures", "the vocabulary terms must be in sorted order without duplicates");
+            return nullptr;
+        }
+        if (checkSize(idx, i, "TextFeatures", "the index of a vocabulary term", xsink)) {
+            return nullptr;
+        }
+        vocab.emplace_hint(vocab.end(), std::move(word), idx);
     }
 
     // Read IDF values
@@ -319,6 +343,14 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     // Read field names
     std::vector<std::string> fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    if (checkEnd(remaining, "TextFeatures", xsink)
+        // the IDF values are computed for each term in tfidf mode only
+        || checkSize(idf.size(), mode == "tfidf" ? vocab_size : 0, "TextFeatures", "the number of IDF values",
+            xsink)
+        || checkFinite(idf, "TextFeatures", "the IDF values", xsink)) {
+        return nullptr;
+    }
 
     auto* tf = new QoreTextFeatures(mode, max_features, min_df, tok_mode);
     tf->n_docs = n_docs;

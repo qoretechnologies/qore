@@ -1337,6 +1337,12 @@ AbstractMLModel ml_deserialize(binary data) [dom=DEFAULT] {
 
     AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
     if (*xsink || !priv) {
+        if (priv) {
+            priv->deref(xsink);
+        } else if (!*xsink) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR", "the state of algorithm '%s' could not be restored",
+                header.algorithm.c_str());
+        }
         return QoreValue();
     }
 
@@ -1436,6 +1442,12 @@ AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
 
     AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
     if (*xsink || !priv) {
+        if (priv) {
+            priv->deref(xsink);
+        } else if (!*xsink) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR", "the state of algorithm '%s' could not be restored",
+                header.algorithm.c_str());
+        }
         return QoreValue();
     }
 

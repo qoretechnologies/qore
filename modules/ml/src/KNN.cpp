@@ -330,6 +330,29 @@ QoreKNN* QoreKNN::deserializeState(const uint8_t* data, size_t len, ExceptionSin
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    int64_t rows = ref_data.rows();
+    if (checkEnd(remaining, "KNN", xsink)
+        || checkOneOf(metric, {"euclidean", "manhattan", "cosine"}, "KNN", "metric", xsink)
+        || checkOneOf(task, {"classification", "regression"}, "KNN", "task", xsink)
+        || checkOneOf(weight_func, {"uniform", "distance"}, "KNN", "weight_func", xsink)
+        || checkRange(rows, 1, INT32_MAX, "KNN", "the number of training rows", xsink)
+        || checkRange(ref_data.cols(), 1, INT32_MAX, "KNN", "the number of training columns", xsink)
+        || checkSize(n_features, ref_data.cols(), "KNN", "the number of features", xsink)
+        || checkSize(ref_labels.size(), rows, "KNN", "the number of labels", xsink)
+        || checkRange(k, 1, rows, "KNN", "k", xsink)) {
+        return nullptr;
+    }
+    if (task == "classification") {
+        // class labels are rounded to integers
+        for (Eigen::Index i = 0; i < ref_labels.size(); ++i) {
+            if (checkValueRange(ref_labels(i), -9.0e18, 9.0e18, "KNN", "a class label", xsink)) {
+                return nullptr;
+            }
+        }
+    }
+
     std::unique_ptr<QoreKNN> obj(new QoreKNN(k, metric, task, weight_func));
     obj->n_features = n_features;
     obj->ref_data = std::move(ref_data);

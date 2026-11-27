@@ -309,6 +309,23 @@ QoreDecisionTree* QoreDecisionTree::deserializeState(const uint8_t* data,
     FlatTree tree = FlatTree::deserialize(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "DecisionTree", xsink)
+        || checkOneOf(task, {"classification", "regression"}, "DecisionTree", "task", xsink)
+        || (task == "classification"
+            ? checkOneOf(criterion, {"gini", "entropy"}, "DecisionTree", "criterion", xsink)
+            : checkOneOf(criterion, {"mse"}, "DecisionTree", "criterion", xsink))
+        || checkRange(min_samples_split, 2, INT32_MAX, "DecisionTree", "min_samples_split", xsink)
+        || checkRange(min_samples_leaf, 1, INT32_MAX, "DecisionTree", "min_samples_leaf", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "DecisionTree", "the number of features", xsink)
+        || checkSize(tree.n_features, n_features, "DecisionTree", "the number of features of the tree", xsink)
+        || (task == "classification"
+            ? checkRange(tree.n_classes, 1, INT32_MAX, "DecisionTree", "the number of classes", xsink)
+            : checkSize(tree.n_classes, 0, "DecisionTree", "the number of classes of a regression tree", xsink))) {
+        return nullptr;
+    }
+
     auto* dt = new QoreDecisionTree(max_depth, min_samples_split, min_samples_leaf,
         criterion, task, 42);
     dt->n_features = n_features;

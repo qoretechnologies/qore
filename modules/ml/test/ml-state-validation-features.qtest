@@ -1,0 +1,426 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationFeaturesTest
+
+#! Restored feature selector, feature extractor, SparseMatrix and MLPipeline states are checked against the
+#! invariants of a trained model
+/** (qore#7844) A state that breaks one is refused with ML-DESERIALIZE-ERROR, and no model is restored.
+*/
+class MlStateValidationFeaturesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml restored state validation: features", "1.0", \ARGV) {
+        addTestCase("a well-formed SelectKBest state is restored", \selectKBestValidTest());
+        addTestCase("a SelectKBest state with an invalid option is refused", \selectKBestOptionTest());
+        addTestCase("a SelectKBest state without features is refused", \selectKBestEmptyTest());
+        addTestCase("a SelectKBest state whose sizes differ from its feature count is refused",
+            \selectKBestSizeTest());
+        addTestCase("a SelectKBest state whose selection differs from its support mask is refused",
+            \selectKBestSelectionTest());
+        addTestCase("a SelectKBest state with data after its end is refused", \selectKBestTrailingTest());
+
+        addTestCase("a well-formed RFE state is restored", \rfeValidTest());
+        addTestCase("an RFE state with an invalid option is refused", \rfeOptionTest());
+        addTestCase("an RFE state without features is refused", \rfeEmptyTest());
+        addTestCase("an RFE state whose sizes differ from its feature count is refused", \rfeSizeTest());
+        addTestCase("an RFE state whose selection differs from its support mask is refused", \rfeSelectionTest());
+        addTestCase("an RFE state with a rank that does not match its support mask is refused", \rfeRankTest());
+        addTestCase("an RFE state with data after its end is refused", \rfeTrailingTest());
+
+        addTestCase("a well-formed SparseMatrix state is restored", \sparseValidTest());
+        addTestCase("a SparseMatrix state without rows or columns is refused", \sparseDimensionTest());
+        addTestCase("a SparseMatrix state with an entry outside the matrix is refused", \sparseEntryTest());
+        addTestCase("a SparseMatrix state whose entries are out of order or repeated is refused",
+            \sparseOrderTest());
+        addTestCase("a SparseMatrix state whose entry count is out of range is refused", \sparseCountTest());
+        addTestCase("a SparseMatrix state with data after its end is refused", \sparseTrailingTest());
+
+        addTestCase("a well-formed DateTimeFeatures state is restored", \dtfValidTest());
+        addTestCase("a DateTimeFeatures state with an invalid feature list is refused", \dtfFeatureTest());
+        addTestCase("a DateTimeFeatures state with data after its end is refused", \dtfTrailingTest());
+
+        addTestCase("a well-formed TextFeatures state is restored", \textValidTest());
+        addTestCase("a TextFeatures state with an invalid option is refused", \textOptionTest());
+        addTestCase("a TextFeatures state whose feature count differs from its vocabulary is refused",
+            \textFeatureCountTest());
+        addTestCase("a TextFeatures state whose vocabulary is not numbered in term order is refused",
+            \textVocabularyTest());
+        addTestCase("a TextFeatures state whose IDF values do not match its vocabulary is refused", \textIdfTest());
+        addTestCase("a TextFeatures state with data after its end is refused", \textTrailingTest());
+
+        addTestCase("a well-formed MLPipeline state is restored", \pipelineValidTest());
+        addTestCase("an MLPipeline state that is not fitted or has no steps is refused", \pipelineStepsTest());
+        addTestCase("an MLPipeline state with a refused step state is refused", \pipelineStepStateTest());
+        addTestCase("an MLPipeline state with data after its end is refused", \pipelineTrailingTest());
+
+        addTestCase("a selector fit on data with null cells is restored", \roundTripNullSelectorTest());
+        addTestCase("a SparseMatrix made from data with null cells is restored", \roundTripNullSparseTest());
+        addTestCase("a TextFeatures and a DateTimeFeatures transformer are restored", \roundTripExtractorTest());
+        addTestCase("a pipeline fit on data with null cells is restored", \roundTripNullPipelineTest());
+        addTestCase("a pipeline whose step was fit on hashes of another width is restored",
+            \roundTripFieldNamesPipelineTest());
+        set_return_value(main());
+    }
+
+    refused(string algorithm, binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), (algorithm, state), what);
+    }
+
+    #! the state of a SelectKBest selector that selected the first of 2 features, with the given fields replaced
+    static binary selectKBestState(*hash<auto> opt) {
+        return i32(opt.k ?? 1) + str(opt.score_func ?? "f_classif") + i32(opt.n_features ?? 2)
+            + i32(opt.n_selected ?? 1)
+            + (opt.scores ?? vec(("2", "1")))
+            + (opt.support ?? intv((1, 0)))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    selectKBestValidTest() {
+        ML::SelectKBest skb = cast<ML::SelectKBest>(restore("SelectKBest", selectKBestState()));
+        assertEq(((5.0,),), skb.transformMatrix(((5.0, 3.0),)));
+        assertEq((0,), skb.getSelectedIndices());
+        skb = cast<ML::SelectKBest>(restore("SelectKBest", selectKBestState({"k": 3, "n_selected": 2,
+            "support": intv((1, 1)), "score_func": "mutual_info", "field_names": strv(("a", "b"))})));
+        assertEq(((5.0, 3.0),), skb.transformMatrix(((5.0, 3.0),)));
+    }
+
+    selectKBestOptionTest() {
+        refused("SelectKBest", selectKBestState({"k": 0}), "k = 0");
+        refused("SelectKBest", selectKBestState({"score_func": "other"}), "an unknown score function");
+    }
+
+    selectKBestEmptyTest() {
+        refused("SelectKBest", selectKBestState({"n_features": 0, "n_selected": 0, "scores": vec(()),
+            "support": intv(())}), "no features");
+    }
+
+    selectKBestSizeTest() {
+        refused("SelectKBest", selectKBestState({"support": intv((1,))}), "a support mask smaller than the features");
+        refused("SelectKBest", selectKBestState({"support": intv((1, 0, 0))}),
+            "a support mask larger than the features");
+        refused("SelectKBest", selectKBestState({"scores": vec(("1",))}), "fewer scores than features");
+        refused("SelectKBest", selectKBestState({"support": le(0xffffffff, 4)}),
+            "a support mask size beyond the data");
+    }
+
+    selectKBestSelectionTest() {
+        refused("SelectKBest", selectKBestState({"n_selected": 2}), "more selected features than supported");
+        refused("SelectKBest", selectKBestState({"n_selected": 0, "support": intv((0, 0))}), "no supported feature");
+        refused("SelectKBest", selectKBestState({"n_selected": 2, "support": intv((1, 1))}),
+            "more supported features than k");
+        refused("SelectKBest", selectKBestState({"support": intv((2, 0))}), "a support flag that is not 0 or 1");
+    }
+
+    selectKBestTrailingTest() {
+        refused("SelectKBest", selectKBestState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! the state of an RFE selector that kept the first of 2 features, with the given fields replaced
+    static binary rfeState(*hash<auto> opt) {
+        return i32(opt.n_features_to_select ?? 1) + i32(opt.step ?? 1) + i32(opt.n_features ?? 2)
+            + i32(opt.n_selected ?? 1)
+            + (opt.support ?? intv((1, 0)))
+            + (opt.ranking ?? intv((1, 2)))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    rfeValidTest() {
+        ML::RFE rfe = cast<ML::RFE>(restore("RFE", rfeState()));
+        assertEq(((5.0,),), rfe.transformMatrix(((5.0, 3.0),)));
+        assertEq((1, 2), rfe.getRanking());
+        rfe = cast<ML::RFE>(restore("RFE", rfeState({"n_features_to_select": 3, "n_selected": 2,
+            "support": intv((1, 1)), "ranking": intv((1, 1)), "field_names": strv(("a", "b"))})));
+        assertEq(((5.0, 3.0),), rfe.transformMatrix(((5.0, 3.0),)));
+    }
+
+    rfeOptionTest() {
+        refused("RFE", rfeState({"n_features_to_select": 0}), "n_features_to_select = 0");
+        refused("RFE", rfeState({"step": 0}), "step = 0");
+    }
+
+    rfeEmptyTest() {
+        refused("RFE", rfeState({"n_features": 0, "n_selected": 0, "support": intv(()), "ranking": intv(())}),
+            "no features");
+    }
+
+    rfeSizeTest() {
+        refused("RFE", rfeState({"support": intv((1,))}), "a support mask smaller than the features");
+        refused("RFE", rfeState({"ranking": intv((1,))}), "a ranking smaller than the features");
+        refused("RFE", rfeState({"ranking": intv((1, 2, 2))}), "a ranking larger than the features");
+        refused("RFE", rfeState({"support": le(0xffffffff, 4)}), "a support mask size beyond the data");
+    }
+
+    rfeSelectionTest() {
+        refused("RFE", rfeState({"n_selected": 2}), "more selected features than supported");
+        refused("RFE", rfeState({"n_selected": 2, "support": intv((1, 1)), "ranking": intv((1, 1))}),
+            "more supported features than n_features_to_select");
+        refused("RFE", rfeState({"support": intv((2, 0))}), "a support flag that is not 0 or 1");
+    }
+
+    rfeRankTest() {
+        refused("RFE", rfeState({"ranking": intv((2, 2))}), "a selected feature with a rank other than 1");
+        refused("RFE", rfeState({"ranking": intv((1, 1))}), "an eliminated feature with rank 1");
+        refused("RFE", rfeState({"ranking": intv((1, 3))}), "a rank beyond the number of features");
+    }
+
+    rfeTrailingTest() {
+        refused("RFE", rfeState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! a SparseMatrix entry
+    static binary entry(int row, int col, softstring value) {
+        return i32(row) + i32(col) + f64(value);
+    }
+
+    #! the state of a 2 x 3 SparseMatrix with 2 entries, with the given fields replaced
+    static binary sparseState(*hash<auto> opt) {
+        list<binary> entries = opt.entries ?? (entry(0, 1, "1"), entry(1, 2, "2"));
+        binary rv = i32(opt.rows ?? 2) + i32(opt.cols ?? 3) + i32(opt.nnz ?? entries.size());
+        foreach binary e in (entries) {
+            rv += e;
+        }
+        return rv + (opt.tail ?? binary());
+    }
+
+    sparseValidTest() {
+        ML::SparseMatrix sm = cast<ML::SparseMatrix>(restore("SparseMatrix", sparseState()));
+        assertEq(2, sm.rows());
+        assertEq(3, sm.cols());
+        assertEq(2, sm.nnz());
+        assertEq(((0.0, 1.0, 0.0), (0.0, 0.0, 2.0)), sm.toDense());
+        sm = cast<ML::SparseMatrix>(restore("SparseMatrix", sparseState({"entries": ()})));
+        assertEq(0, sm.nnz());
+    }
+
+    sparseDimensionTest() {
+        refused("SparseMatrix", sparseState({"rows": 0, "entries": ()}), "no rows");
+        refused("SparseMatrix", sparseState({"cols": 0, "entries": ()}), "no columns");
+        refused("SparseMatrix", sparseState({"rows": -1, "entries": ()}), "a negative number of rows");
+    }
+
+    sparseEntryTest() {
+        refused("SparseMatrix", sparseState({"entries": (entry(0, 1, "1"), entry(2, 0, "2"))}),
+            "an entry beyond the last row");
+        refused("SparseMatrix", sparseState({"entries": (entry(0, 3, "1"),)}), "an entry beyond the last column");
+        refused("SparseMatrix", sparseState({"entries": (entry(-1, 0, "1"),)}), "an entry with a negative row");
+    }
+
+    sparseOrderTest() {
+        refused("SparseMatrix", sparseState({"entries": (entry(1, 2, "2"), entry(0, 1, "1"))}),
+            "entries out of row-major order");
+        refused("SparseMatrix", sparseState({"entries": (entry(0, 1, "1"), entry(0, 1, "1"))}), "a repeated entry");
+    }
+
+    sparseCountTest() {
+        refused("SparseMatrix", sparseState({"rows": 1, "cols": 1, "entries": (entry(0, 0, "1"), entry(0, 0, "1"))}),
+            "more entries than the matrix has cells");
+        refused("SparseMatrix", sparseState({"nnz": -1, "entries": ()}), "a negative entry count");
+    }
+
+    sparseTrailingTest() {
+        refused("SparseMatrix", sparseState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! the state of a DateTimeFeatures transformer
+    static binary dtfState(*hash<auto> opt) {
+        return (opt.features ?? strv(("month", "is_weekend"))) + (opt.tail ?? binary());
+    }
+
+    dtfValidTest() {
+        ML::DateTimeFeatures dtf = cast<ML::DateTimeFeatures>(restore("DateTimeFeatures", dtfState()));
+        assertEq(((3.0, 1.0),), dtf.transform((2026-03-28T15:00:00,)));
+    }
+
+    dtfFeatureTest() {
+        # the restore refused these feature lists before with the error code of the constructor; these cases check
+        # that it refuses them with the error code of a restore
+        refused("DateTimeFeatures", dtfState({"features": strv(("month", "other"))}), "an unknown feature");
+        refused("DateTimeFeatures", dtfState({"features": strv(())}), "no features");
+    }
+
+    dtfTrailingTest() {
+        refused("DateTimeFeatures", dtfState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! a TextFeatures vocabulary of (term, index) pairs
+    static binary vocab(list<auto> terms) {
+        binary rv = i32(terms.size());
+        foreach list<auto> t in (terms) {
+            rv += str(t[0]) + i32(t[1]);
+        }
+        return rv;
+    }
+
+    #! the state of a TextFeatures transformer in count mode with the vocabulary "alpha" and "beta", with the
+    #! given fields replaced
+    static binary textState(*hash<auto> opt) {
+        return str(opt.mode ?? "count") + str(opt.tokenizer_mode ?? "whitespace") + i32(opt.max_features ?? 0)
+            + i32(opt.min_df ?? 1) + i32(opt.n_docs ?? 2) + i32(opt.n_features ?? 2)
+            + (opt.vocabulary ?? vocab((("alpha", 0), ("beta", 1))))
+            + (opt.idf ?? dblv(()))
+            + (opt.field_names ?? strv(("alpha", "beta")))
+            + (opt.tail ?? binary());
+    }
+
+    textValidTest() {
+        ML::TextFeatures tf = cast<ML::TextFeatures>(restore("TextFeatures", textState()));
+        assertEq(((1.0, 2.0),), tf.transform(("beta alpha beta",)));
+        tf = cast<ML::TextFeatures>(restore("TextFeatures", textState({"mode": "tfidf", "idf": dblv(("1", "2")),
+            "max_features": 2})));
+        assertEq(("alpha", "beta"), tf.getVocabulary());
+        assertEq(((0.5, 1.0),), tf.transform(("alpha beta",)));
+    }
+
+    textOptionTest() {
+        refused("TextFeatures", textState({"mode": "other"}), "an unknown mode");
+        refused("TextFeatures", textState({"tokenizer_mode": "other"}), "an unknown tokenizer mode");
+        refused("TextFeatures", textState({"max_features": -1}), "a negative max_features");
+        refused("TextFeatures", textState({"min_df": 0}), "min_df = 0");
+        refused("TextFeatures", textState({"n_docs": 0}), "no documents");
+        refused("TextFeatures", textState({"max_features": 1}), "a vocabulary larger than max_features");
+    }
+
+    textFeatureCountTest() {
+        refused("TextFeatures", textState({"n_features": 3}), "more features than vocabulary terms");
+        refused("TextFeatures", textState({"n_features": 1}), "fewer features than vocabulary terms");
+    }
+
+    textVocabularyTest() {
+        refused("TextFeatures", textState({"vocabulary": vocab((("alpha", 0), ("beta", 5)))}),
+            "an index beyond the vocabulary");
+        refused("TextFeatures", textState({"vocabulary": vocab((("alpha", 0), ("beta", 0)))}), "a repeated index");
+        refused("TextFeatures", textState({"vocabulary": vocab((("beta", 0), ("alpha", 1)))}),
+            "terms out of order");
+        refused("TextFeatures", textState({"vocabulary": vocab((("alpha", 0), ("alpha", 1)))}), "a repeated term");
+    }
+
+    textIdfTest() {
+        refused("TextFeatures", textState({"mode": "tfidf", "idf": dblv(("1",))}), "fewer IDF values than terms");
+        refused("TextFeatures", textState({"idf": dblv(("1", "1"))}), "IDF values in count mode");
+        refused("TextFeatures", textState({"mode": "tfidf", "idf": dblv(("1", "nan"))}),
+            "an IDF value that is not finite");
+    }
+
+    textTrailingTest() {
+        refused("TextFeatures", textState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! the state of a KNN classifier of 3 rows of 2 features with k = 1
+    static binary knnState(*hash<auto> opt) {
+        return i32(opt.k ?? 1) + str("euclidean") + str("classification") + str("uniform") + i32(2)
+            + mat(3, 2, ("0", "0", "1", "1", "5", "5")) + vec(("0", "0", "1")) + strv(()) + str("")
+            + (opt.tail ?? binary());
+    }
+
+    #! a pipeline step
+    static binary step(string name, string algorithm, binary state) {
+        return str(name) + str(algorithm) + i32(state.size()) + state;
+    }
+
+    #! the state of a fitted pipeline with a KNN classifier step, with the given fields replaced
+    static binary pipelineState(*hash<auto> opt) {
+        list<binary> steps = opt.steps ?? (step("model", "KNN", knnState()),);
+        binary rv = b8(opt.fitted ?? True) + i32(steps.size());
+        foreach binary s in (steps) {
+            rv += s;
+        }
+        return rv + (opt.tail ?? binary());
+    }
+
+    pipelineValidTest() {
+        ML::MLPipeline p = cast<ML::MLPipeline>(restore("MLPipeline", pipelineState()));
+        assertEq(("model",), p.getStepNames());
+        assertEq(1, p.predictMatrix(((5.0, 5.0),))[0].predicted_class);
+    }
+
+    pipelineStepsTest() {
+        refused("MLPipeline", pipelineState({"fitted": False}), "a pipeline that is not fitted");
+        refused("MLPipeline", pipelineState({"steps": ()}), "a pipeline without steps");
+    }
+
+    pipelineStepStateTest() {
+        refused("MLPipeline", pipelineState({"steps": (step("model", "KNN", knnState({"k": 0})),)}),
+            "a step state that is refused");
+        refused("MLPipeline", pipelineState({"steps": (step("model", "KNN", knnState({"tail": i32(0)})),)}),
+            "a step state with data after its end");
+        refused("MLPipeline", pipelineState({"steps": (step("first", "KNN", knnState()),
+            step("second", "KNN", knnState({"k": 0})))}), "a valid step state followed by a refused one");
+    }
+
+    pipelineTrailingTest() {
+        refused("MLPipeline", pipelineState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    roundTripNullSelectorTest() {
+        list<auto> X = ((1.0, NOTHING, 3.0), (2.0, 1.0, NOTHING), (8.0, 2.0, 1.0), (9.0, 3.0, 2.0));
+        list<auto> y = (0, 0, 1, 1);
+
+        ML::SelectKBest skb({"k": 2});
+        skb.fitMatrix(X, y);
+        ML::SelectKBest rskb = cast<ML::SelectKBest>(ML::ml_deserialize(ML::ml_serialize(skb)));
+        assertEq(skb.getSelectedIndices(), rskb.getSelectedIndices());
+        assertEq(2, rskb.transformMatrix(((1.0, 2.0, 3.0),))[0].size());
+
+        # mutual_info on finite data
+        skb = new ML::SelectKBest({"k": 1, "score_func": "mutual_info"});
+        skb.fitMatrix(((1.0, 0.0, 3.0), (2.0, 1.0, 0.0), (8.0, 2.0, 1.0), (9.0, 3.0, 2.0)), y);
+        rskb = cast<ML::SelectKBest>(ML::ml_deserialize(ML::ml_serialize(skb)));
+        assertEq(skb.getSelectedIndices(), rskb.getSelectedIndices());
+
+        ML::RFE rfe({"n_features_to_select": 1});
+        rfe.fitMatrix(X, y);
+        ML::RFE rrfe = cast<ML::RFE>(ML::ml_deserialize(ML::ml_serialize(rfe)));
+        assertEq(rfe.getRanking(), rrfe.getRanking());
+        assertEq(1, rrfe.transformMatrix(((1.0, 2.0, 3.0),))[0].size());
+    }
+
+    roundTripNullSparseTest() {
+        ML::SparseMatrix sm(((1.0, NOTHING, 0.0), (0.0, 2.0, NOTHING)));
+        ML::SparseMatrix rsm = cast<ML::SparseMatrix>(ML::ml_deserialize(ML::ml_serialize(sm)));
+        assertEq(sm.nnz(), rsm.nnz());
+        assertEq(sm.toTriplets(), rsm.toTriplets());
+    }
+
+    roundTripExtractorTest() {
+        ML::TextFeatures tf({"mode": "tfidf", "min_df": 2, "max_features": 3});
+        tf.fit(("beta alpha", "alpha gamma beta", "delta alpha beta", "gamma"));
+        ML::TextFeatures rtf = cast<ML::TextFeatures>(ML::ml_deserialize(ML::ml_serialize(tf)));
+        assertEq(tf.getVocabulary(), rtf.getVocabulary());
+        assertEq(tf.transform(("alpha gamma",)), rtf.transform(("alpha gamma",)));
+
+        ML::DateTimeFeatures dtf({"features": ("year", "week_of_year", "year")});
+        ML::DateTimeFeatures rdtf = cast<ML::DateTimeFeatures>(ML::ml_deserialize(ML::ml_serialize(dtf)));
+        assertEq(dtf.transform((2026-03-28T15:00:00,)), rdtf.transform((2026-03-28T15:00:00,)));
+    }
+
+    roundTripNullPipelineTest() {
+        ML::MLPipeline p();
+        p.addKNNClassification("model", new ML::KNN({"k": 1}));
+        # finite data: the neighbor search of the KNN step orders NaN distances only with qore#7824
+        p.fitMatrixWithTarget(((0.0, 0.0), (1.0, 1.0), (5.0, 5.0)), (0, 0, 1));
+        ML::MLPipeline rp = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(("model",), rp.getStepNames());
+        assertEq(1, rp.predictMatrix(((5.0, 5.0),))[0].predicted_class);
+    }
+
+    roundTripFieldNamesPipelineTest() {
+        # the step keeps the field names of its fit on hashes while the pipeline refits it with another width
+        ML::KNN knn({"k": 1});
+        knn.fit(({"a": 0.0, "b": 0.0, "t": 0}, {"a": 5.0, "b": 5.0, "t": 1}), "t");
+        ML::MLPipeline p();
+        p.addKNNClassification("model", knn);
+        p.fitMatrixWithTarget(((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (5.0, 5.0, 5.0)), (0, 0, 1));
+        ML::MLPipeline rp = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(1, rp.predictMatrix(((5.0, 5.0, 5.0),))[0].predicted_class);
+    }
+}

@@ -273,8 +273,8 @@ QoreHashNode* QoreSVM::predictInternal(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     if (n_classes == 2) {
         double decision = predictBinary(models[0], point);
-        int predicted = (decision >= 0)
-            ? (int)models[0].class_pos : (int)models[0].class_neg;
+        int64_t predicted = (decision >= 0)
+            ? (int64_t)models[0].class_pos : (int64_t)models[0].class_neg;
         double confidence = 1.0 / (1.0 + std::exp(-std::abs(decision)));
 
         ReferenceHolder<QoreHashNode> rv(
@@ -410,6 +410,10 @@ QoreSVM* QoreSVM::deserializeState(const uint8_t* data, size_t len,
     if (*xsink) { return nullptr; }
     int ncl = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    // each class takes a double
+    if (MLSerialization::checkRange(ncl, 0, remaining / sizeof(double), "SVM", "the number of classes", xsink)) {
+        return nullptr;
+    }
     std::vector<double> classes(ncl);
     for (int i = 0; i < ncl; ++i) {
         classes[i] = MLSerialization::readScalar(ptr, remaining, xsink);
@@ -421,6 +425,11 @@ QoreSVM* QoreSVM::deserializeState(const uint8_t* data, size_t len,
     if (*xsink) { return nullptr; }
     int nm = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    // each binary model takes at least 3 doubles, the dimensions of a matrix and the sizes of 2 vectors
+    if (MLSerialization::checkRange(nm, 0, remaining / (3 * sizeof(double) + 4 * sizeof(int32_t)), "SVM",
+            "the number of binary models", xsink)) {
+        return nullptr;
+    }
     std::vector<BinarySVM> models(nm);
     for (int i = 0; i < nm; ++i) {
         models[i].b = MLSerialization::readScalar(ptr, remaining, xsink);
@@ -435,6 +444,51 @@ QoreSVM* QoreSVM::deserializeState(const uint8_t* data, size_t len,
         if (*xsink) { return nullptr; }
         models[i].support_alpha = MLSerialization::readVector(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
+    }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "SVM", xsink)
+        || checkOneOf(kernel, {"linear", "rbf"}, "SVM", "kernel", xsink)
+        || (C <= 0.0 && stateError(xsink, "SVM", "C must be > 0"))
+        // fit() replaces a gamma <= 0 with 1 / the number of features
+        || (gamma <= 0.0 && stateError(xsink, "SVM", "gamma must be > 0"))
+        || checkRange(n_features, 1, INT32_MAX, "SVM", "the number of features", xsink)
+        || checkRange(n_classes, 1, INT32_MAX, "SVM", "n_classes", xsink)
+        || checkSize(ncl, n_classes, "SVM", "the number of classes", xsink)
+        // one binary model per pair of classes
+        || checkSize(nm, (int64_t)n_classes * (n_classes - 1) / 2, "SVM", "the number of binary models", xsink)) {
+        return nullptr;
+    }
+    for (int i = 0; i < ncl; ++i) {
+        // class labels are converted to integers
+        if (checkValueRange(classes[i], -9.0e18, 9.0e18, "SVM", "a class label", xsink)) {
+            return nullptr;
+        }
+        // the classes are the distinct labels in ascending order
+        if (i && !(classes[i - 1] < classes[i])) {
+            stateError(xsink, "SVM", "the classes must be distinct and in ascending order");
+            return nullptr;
+        }
+    }
+    int model_idx = 0;
+    for (int i = 0; i < n_classes; ++i) {
+        for (int j = i + 1; j < n_classes; ++j) {
+            const BinarySVM& m = models[model_idx++];
+            Eigen::Index n_sv = m.support_X.rows();
+            // the binary model of classes i < j separates class j (positive) from class i (negative)
+            if (m.class_pos != classes[j] || m.class_neg != classes[i]) {
+                stateError(xsink, "SVM", "the classes of binary model %d must be those of its class pair",
+                    model_idx - 1);
+                return nullptr;
+            }
+            if (checkSize(m.support_X.cols(), n_features, "SVM", "the number of support vector columns", xsink)
+                || checkSize(m.support_y.size(), n_sv, "SVM", "the number of support vector labels", xsink)
+                || checkSize(m.support_alpha.size(), n_sv, "SVM", "the number of support vector weights",
+                    xsink)) {
+                return nullptr;
+            }
+        }
     }
 
     auto* svm = new QoreSVM(C, kernel, gamma, degree, tol, max_iter, 42);
