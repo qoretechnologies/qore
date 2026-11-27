@@ -379,6 +379,8 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("sandboxed code that loads the HttpServer module first", \testFirstLoadSandboxed());
         addTestCase("code that may not use uncontrolled APIs loads the HttpServerUtil module first",
             \testRestrictedFirstLoad());
+        addTestCase("code that may not use uncontrolled APIs cannot reach the system-policy call by name",
+            \testRestrictedByName());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -652,6 +654,66 @@ public class Holder {
             string out = backquote(cmd, \rc);
             assertEq(0, rc, i.key + ": " + out);
             assertEq(i.value, out, i.key);
+        }
+    }
+
+    testRestrictedByName() {
+        # code that may not use uncontrolled APIs and has loaded the HttpServerUtil module, from its AOT module or its
+        # source, reaches the system-policy call by no route of its own (see restricted-by-name.q): the by-name
+        # calls of SandboxManager::createSystemPolicyCall() are refused at run time, the module's class that makes
+        # the call is not visible to it, and the references in its code are refused when it is parsed; trusted code
+        # makes the call by name (the control)
+        hash<string, list<auto>> routes = {
+            "call_static_method createSystemPolicyCall": ("INVALID-FUNCTION-ACCESS", True),
+            "call_static_method Qore::SandboxManager::createSystemPolicyCall": ("INVALID-FUNCTION-ACCESS", True),
+            "call_static_method_args createSystemPolicyCall": ("INVALID-FUNCTION-ACCESS", True),
+            "get_call_reference createSystemPolicyCall": ("INVALID-FUNCTION-ACCESS", True),
+            "call_function createSystemPolicyCall": ("NO-FUNCTION", False),
+            "call_function_args createSystemPolicyCall": ("NO-FUNCTION", False),
+            "reflection createSystemPolicyCall": ("INVALID-FUNCTION-ACCESS", True),
+            "call_static_method initResolve": ("UNKNOWN-CLASS", False),
+            "call_static_method ::initResolve": ("UNKNOWN-CLASS", False),
+            "call_static_method_args initResolve": ("UNKNOWN-CLASS", False),
+            "get_call_reference initResolve": ("CALL-REFERENCE-ERROR", False),
+            "call_function_args initResolve": ("NO-FUNCTION", False),
+            "reflection initResolve": ("UNKNOWN-CLASS", False),
+        };
+        hash<string, bool> parse_routes = {
+            "direct createSystemPolicyCall": True,
+            "reference createSystemPolicyCall": True,
+            "reference initResolve": False,
+            "direct initResolve": False,
+        };
+        TmpDir tmp("qore-dispatch-capability-by-name-");
+        hash<string, *string> dirs = {
+            "AOT module": NOTHING,
+            "source": sourceModuleDir(tmp.path),
+        };
+        foreach hash<auto> d in (dirs.pairIterator()) {
+            foreach string mode in (("restricted", "trusted")) {
+                string expected;
+                foreach hash<auto> r in (routes.pairIterator()) {
+                    # trusted code gets a call that runs with the system policy where restricted code is refused
+                    expected += sprintf("%s: %s\n", r.key, mode == "trusted" && r.value[1]
+                        ? "not refused: usable call returning \"system policy\""
+                        : r.value[0]);
+                }
+                foreach hash<auto> r in (parse_routes.pairIterator()) {
+                    expected += sprintf("%s: %s\n", r.key, mode == "trusted" && r.value
+                        ? "not refused at parse time"
+                        : "PARSE-EXCEPTION");
+                }
+                string cmd = sprintf("%s -b %s/HttpServerDispatchCapability/restricted-by-name.q %s",
+                    TestInterpreter::qore_interpreter(), get_script_dir(), mode);
+                if (d.value) {
+                    cmd = sprintf("QORE_MODULE_DIR=%s:%s %s", d.value, ENV.QORE_MODULE_DIR ?? "", cmd);
+                }
+                int rc;
+                string out = backquote(cmd, \rc);
+                string label = sprintf("%s, %s", mode, d.key);
+                assertEq(0, rc, label + ": " + out);
+                assertEq(expected, out, label);
+            }
         }
     }
 
