@@ -736,6 +736,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 bound to the creator's target, proxy and CA locations
             */
             *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+            #! The program of the code that the client's options and secrets are of (qore#7861)
+            /** The creator of the client, or for a client that the connection of the host created for code that was lent
+                it, the host that the creator proof is of; code that a sandbox restricts and that is not this program
+                is refused by the methods that give the options, the OAuth2 options and the tokens of the client
+                (see checkSecretCaller())
+            */
+            transient *int owner_pgm_id;
         }
 
         private {
@@ -1572,10 +1580,40 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 cookie_jar = mgr.getCookieJar(creator_proof);
             }
 
+            # the options and the tokens are the creator's: of the host for a client that the connection of the host
+            # created for code that was lent it (qore#7861)
+            owner_pgm_id = creator_proof ? creator_proof.getOwnerProgramId() : SandboxManager::getCallerProgramId();
+
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
             # request (for non-blocking ping operations that use the existing token as-is)
             if (!opts.skip_login) {
                 checkLogin();
+            }
+        }
+
+        #! Raises an exception if restricted code that is not the owner of the client asks for its secrets (qore#7861)
+        /** The options that a client was created with hold its tokens, passwords, API keys and proxy credentials, and its
+            OAuth2 options its client secret and refresh token: code that a sandbox restricts, and that was lent the
+            client, uses the client with them but does not read them
+
+            @param what what the calling code asks for
+
+            @throw PERMISSION-DENIED the calling code is restricted by a sandbox and is not the owner of the client
+        */
+        private:internal checkSecretCaller(string what) {
+            bool restricted;
+            try {
+                restricted = SandboxManager::isRestricted();
+            } catch (hash<ExceptionInfo> ex) {
+                restricted = True;
+            }
+            if (!restricted) {
+                return;
+            }
+            *int caller = SandboxManager::getCallerProgramId();
+            if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+                throw "PERMISSION-DENIED", sprintf("code that a sandbox restricts cannot take the %s of a REST client "
+                    "that it does not own", what);
             }
         }
 
@@ -1657,6 +1695,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 translated to \c protocol)
         */
         hash<auto> getConstructorOptions() {
+            checkSecretCaller("options");
             # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
             # values of other types to the returned hash, such as a token or flags, to create another client
             hash<auto!> rv = saved_opts;
@@ -1759,6 +1798,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 # the copy is the same client for another URL, and keeps its cookies
                 copy.setCookieJar(cookie_jar);
             }
+            # the options of the copy are the original's: it has the same owner, whoever made the copy (qore#7861)
+            copy.setOwnerProgramId(owner_pgm_id);
             return copy;
         }
 
@@ -1809,6 +1850,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Shares the cookie jar of a copied client
         private setCookieJar(*HttpClientIo::CookieJar cookie_jar) {
             self.cookie_jar = cookie_jar;
+        }
+
+        #! Gives a copied client the owner of the original (qore#7861)
+        private setOwnerProgramId(*int owner_pgm_id) {
+            self.owner_pgm_id = owner_pgm_id;
         }
 
         #! Shares the internally created manager's lifetime owner with a copied client
@@ -4692,6 +4738,12 @@ rest.addSensitiveHeaders("Qorus-Token");
         /** @return a hash of OAuth2 option values
         */
         hash<auto> getOAuth2Options() {
+            checkSecretCaller("OAuth2 options");
+            return getOAuth2OptionsIntern();
+        }
+
+        #! The body of getOAuth2Options(), for the callers that were checked: the constructor and setOAuth2Options() use it
+        private:internal hash<auto> getOAuth2OptionsIntern() {
             AutoReadLock al(config_lock);
             # sealed credentials are given only when set: the object gives out no secret (qoretechnologies/qore#7248)
             return (sealed_creds ? {"oauth2_sealed_credentials": sealed_creds} : {}) + {
@@ -4757,6 +4809,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             @throw OAUTH2-ERROR if OAuth2 is not configured or token acquisition fails
         */
         hash<auto> getNewToken() {
+            checkSecretCaller("tokens");
             date ts;
             {
                 AutoReadLock al(config_lock);
@@ -4813,7 +4866,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (!grant_type.val() || grant_type == "none") {
                 return True;
             }
-            hash<auto> effective = getOAuth2Options() + opts;
+            hash<auto> effective = getOAuth2OptionsIntern() + opts;
             # a client assertion replaces the client secret of the client credentials grant
             *hash<string, bool> satisfied;
             # sealed credentials replace the client secret and the token URL (qoretechnologies/qore#7248)
