@@ -849,6 +849,8 @@ public:
         Commit,
         //! in the installing phase, before the result is published to the variants
         Install,
+        //! at the end of a compile, before the compile in progress is cleared (finishBgCompileWork(), qore#7831)
+        Finish,
         //! the number of hold points: not a hold point; it stays last (the sizes of the tables indexed by a hold point)
         Count,
     };
@@ -1139,6 +1141,10 @@ public:
 
     //! For tests: returns true if the background compile thread is stopped at a hold point
     bool dbgBgCompileHeld();
+
+    //! For tests: returns true if the background compiler is idle as waitForBgCompileQueue() waits for it: no work
+    //! queued and none in progress (qore#7831)
+    bool dbgBgCompileIdle();
 
     //! For tests: takes the compilation mutex as a synchronous compile does (see lockForSyncCompile())
     /** @return false if the JIT refused, as for a synchronous compile; else the mutex is held: release it with
