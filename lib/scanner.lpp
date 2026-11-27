@@ -3967,7 +3967,7 @@ class{WS}+({WORD}::)+{WORD}             { yylval->nscope = new NamedScope(trim(y
 class{WS}+(::{WORD})+                   { yylval->nscope = new NamedScope(trim(yytext + 6)); parse_push_name(yylval->nscope->getIdentifier()); return CLASS_SCOPED_REF; }
 class{WS}+{WORD}                        { yylval->string = trim(yytext + 6); parse_push_name(yylval->string); return CLASS_STRING; }
 namespace{WS}+{WORD}                    { const char* ns = trim_inplace(yytext + 10); parse_push_ns_name(ns); return TOK_NAMESPACE; }
-module{WS}+{WORD}                       { const char* mod = trim_inplace(yytext + 7); parse_set_module_def_context_name(mod); return TOK_MODULE; }
+module{WS}+{WORD}                       { const char* mod = trim_inplace(yytext + 7); parse_set_module_def_context_name(get_loc(yylloc), mod); return TOK_MODULE; }
 {WORD}                                  yylval->string = strdup(yytext); return IDENTIFIER;
 \<({WORD}::)+{WORD}\>\{                 {
                                             yylval->string = strdup(yytext + 1);

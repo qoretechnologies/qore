@@ -5320,12 +5320,12 @@ QoreModuleDefContext* get_module_def_context() {
     return get_module_def_context(thread_data.get());
 }
 
-void parse_set_module_def_context_name(const char* name) {
+void parse_set_module_def_context_name(const QoreProgramLocation* loc, const char* name) {
     ThreadData* td = thread_data.get();
     if (get_module_def_context(td)) {
         QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(td->qmd);
         // set name and setup for parsing any header closures / call references
-        uqmd->setNameInit(name);
+        uqmd->setNameInit(loc, name);
     }
 }
 
