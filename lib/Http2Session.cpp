@@ -1200,6 +1200,7 @@ void Http2Session::releaseResetStream(int32_t stream_id, uint32_t error_code) {
     stream_send_limits.erase(stream_id);
     stream_refused_len.erase(stream_id);
     stream_taken_total.erase(stream_id);
+    endSendRateWaitUnlocked(stream_id);
     // an InputStream sending on the stream stops, as when the stream closes (see onStreamCloseCallback())
     {
         auto iit = stream_input_streams_.find(stream_id);
@@ -3022,6 +3023,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
     h2->stream_taken_total.erase(stream_id);
+    h2->endSendRateWaitUnlocked(stream_id);
     h2->streamed_response_rules.erase(stream_id);
     h2->app_reset_unsent_streams.erase(stream_id);
 #ifdef DEBUG
@@ -4419,16 +4421,125 @@ void Http2Session::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, 
         return;
     }
     pump_bound_set = true;
-    if (min_rate > 0 && window_ms > 0) {
-        pump_send_rate = SendRateWindow(min_rate, window_ms);
-        // the transport shows a client's progress in steps of its flow-control window and of TCP's; the I/O thread
-        // checks at least every check interval, so a longer time between checks is its own delay
-        pump_send_rate.enableProgressSteps();
-        pump_send_rate.setMaxWaitCharge(2 * pump_send_rate.getCheckIntervalMs());
-    }
+    // the bounds replace a rate that a check of a handler thread set without them, with a new measurement, as on
+    // HTTP/3
+    pump_rate_set = false;
+    pump_send_rate = SendRateWindow();
+    setSendRateUnlocked(min_rate, window_ms);
     if (stall_ms > 0) {
         pump_stall_ms = stall_ms;
     }
+}
+
+void Http2Session::setSendRateUnlocked(int64_t min_rate, int64_t window_ms) {
+    if (pump_rate_set) {
+        return;
+    }
+    pump_rate_set = true;
+    if (min_rate > 0 && window_ms > 0) {
+        pump_send_rate = SendRateWindow(min_rate, window_ms);
+        // the transport shows a client's progress in steps of its flow-control window and of TCP's; the I/O thread
+        // and the waiting senders check at least every check interval, so a longer time between checks is their own
+        // delay
+        pump_send_rate.enableProgressSteps();
+        pump_send_rate.setMaxWaitCharge(2 * pump_send_rate.getCheckIntervalMs());
+    }
+}
+
+void Http2Session::refreshClientTakenUnlocked() {
+    // the body bytes that the client has taken: the bytes that nghttp2 has taken less those still unwritten, so that
+    // data in Qore's send buffer is not counted, nor other frames that are written while flow control holds the
+    // bodies (qore#7653)
+    uint64_t unwritten = send_buffer.size() - send_offset;
+    uint64_t taken = conn_taken_total > unwritten ? conn_taken_total - unwritten : 0;
+    if (taken > conn_client_taken) {
+        conn_client_taken = taken;
+    }
+}
+
+bool Http2Session::isConnectionWaitingUnlocked(int32_t except) const {
+    for (int32_t id : send_rate_waiters) {
+        if (id != except) {
+            return true;
+        }
+    }
+    for (auto& [stream_id, b] : bound_bodies) {
+        if (isBoundBodyWaiting(stream_id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Http2Session::updateSendRateUnlocked(int64_t now_ms, std::vector<int32_t>& ended_bodies, int32_t leaving) {
+    if (!pump_send_rate.enabled()) {
+        return false;
+    }
+    refreshClientTakenUnlocked();
+    // a send that ends its wait with this update waited until now
+    bool was_waiting = leaving >= 0 && send_rate_waiters.count(leaving);
+    // waiting from now on: the other sends of handler threads, and the bodies that the bounds charge
+    bool waiting = isConnectionWaitingUnlocked(was_waiting ? leaving : -1);
+    if (!pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting, now_ms)) {
+        return false;
+    }
+    // a debt that no waiting body ends is not left for a later, unrelated wait
+    if (!(waiting || was_waiting)) {
+        pump_send_rate.restart();
+        return false;
+    }
+    for (auto& [stream_id, b] : bound_bodies) {
+        if (isBoundBodyWaiting(stream_id)) {
+            ended_bodies.push_back(stream_id);
+        }
+    }
+    // the waiting sends of handler threads end when they check next
+    send_rate_ended.insert(send_rate_waiters.begin(), send_rate_waiters.end());
+    send_rate_waiters.clear();
+    // the next waits start a new measurement: they are not charged for the ended bodies
+    pump_send_rate.restart();
+    return true;
+}
+
+bool Http2Session::checkStreamSendRate(int32_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    verdict = false;
+    setSendRateUnlocked(min_rate, window_ms);
+    if (send_rate_ended.erase(stream_id)) {
+        return true;
+    }
+    // only an open stream waits: a wait registered for another one would never be ended by its close
+    if (waiting && stream_id > 0 && session && !isSessionClosed() && nghttp2_session_find_stream(session, stream_id)) {
+        send_rate_waiters.insert(stream_id);
+    }
+    // the time is read under the lock, so that the measurement's samples are in order whatever thread takes them; the
+    // bodies that a verdict ends are ended by the I/O thread, which ending one can make end the connection
+    verdict = updateSendRateUnlocked(q_clock_getmicros_monotonic() / 1000, rate_ended_bodies,
+        waiting ? -1 : stream_id);
+    if (!waiting) {
+        send_rate_waiters.erase(stream_id);
+    }
+    // a send that is done is told of a verdict that it waited for as well
+    return send_rate_ended.erase(stream_id);
+}
+
+void Http2Session::endSendRateWaitUnlocked(int32_t stream_id) {
+    send_rate_ended.erase(stream_id);
+    if (!send_rate_waiters.count(stream_id)) {
+        return;
+    }
+    if (pump_send_rate.enabled()) {
+        refreshClientTakenUnlocked();
+        bool waiting = isConnectionWaitingUnlocked(stream_id);
+        // a verdict is not reached here; with other waits it is reached by their next check, and without one the
+        // debt is not left for a later, unrelated wait
+        if (pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting,
+                q_clock_getmicros_monotonic() / 1000) && !waiting) {
+            pump_send_rate.restart();
+        }
+    }
+    send_rate_waiters.erase(stream_id);
 }
 
 void Http2Session::updateActiveInputStreams() {
@@ -4570,22 +4681,12 @@ void Http2Session::endBoundBody(int32_t stream_id, const char* reason, Exception
 }
 
 void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
-    if (!pump_bound_set) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!pump_bound_set && send_rate_waiters.empty() && rate_ended_bodies.empty()) {
         return;
     }
     int64_t now = q_clock_getmicros_monotonic() / 1000;
     uint64_t written = send_buffer_base + send_offset;
-    // the body bytes that the client has taken: the bytes that nghttp2 has taken less those still unwritten, so that
-    // data in Qore's send buffer is not counted, nor other frames that are written while flow control holds the
-    // bodies (qore#7653)
-    {
-        uint64_t unwritten = send_buffer.size() - send_offset;
-        uint64_t taken = conn_taken_total > unwritten ? conn_taken_total - unwritten : 0;
-        if (taken > conn_client_taken) {
-            conn_client_taken = taken;
-        }
-    }
-    bool waiting = false;
     // the bodies that a bound ends, with the reason, which are ended after the iterations
     std::vector<std::pair<int32_t, std::string>> ended;
     // the no-progress bound of each body
@@ -4594,7 +4695,6 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
             b.bound_progress_ms = 0;
             continue;
         }
-        waiting = true;
         // a body whose ending frame waits in the connection's output progresses with the connection's writes
         bool by_written = b.end_pos_set || b.reset_pending;
         uint64_t progress;
@@ -4615,15 +4715,15 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
             ended.emplace_back(stream_id, reason.c_str());
         }
     }
-    // the minimum rate of the connection, across its streams, while a body waits for the client
-    if (pump_send_rate.enabled()
-            && pump_send_rate.update(static_cast<int64_t>(conn_client_taken), waiting, now) && waiting) {
+    // the minimum rate of the connection, across its streams, while a body or a send of a handler thread waits for
+    // the client; with the bodies that a check of a handler thread found below the rate, which only this thread ends
+    std::vector<int32_t> rate_ended;
+    rate_ended.swap(rate_ended_bodies);
+    updateSendRateUnlocked(now, rate_ended);
+    if (!rate_ended.empty()) {
         QoreStringMaker reason("the client took less than the minimum rate of %lld bytes/s",
             (long long)pump_send_rate.getMinRate());
-        for (auto& [stream_id, b] : bound_bodies) {
-            if (!isBoundBodyWaiting(stream_id)) {
-                continue;
-            }
+        for (int32_t stream_id : rate_ended) {
             bool found = false;
             for (auto& e : ended) {
                 if (e.first == stream_id) {
@@ -4631,12 +4731,10 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
                     break;
                 }
             }
-            if (!found) {
+            if (!found && bound_bodies.count(stream_id)) {
                 ended.emplace_back(stream_id, reason.c_str());
             }
         }
-        // the next waits start a new measurement: they are not charged for the ended bodies
-        pump_send_rate.restart();
     }
     for (auto& e : ended) {
         endBoundBody(e.first, e.second.c_str(), xsink);

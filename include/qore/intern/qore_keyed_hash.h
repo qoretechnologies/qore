@@ -83,6 +83,13 @@ DLLEXPORT const uint64_t* qore_intern_hash_process_key();
 */
 DLLEXPORT int qore_intern_hash_process_key_check(ExceptionSink* xsink);
 
+//! Internal (not public API; also called by the bundled modules): returns the two 64-bit keys of the keyed
+//! folded-multiply hash (qore_keyed_fold64()), which are derived from the secret key of the process with SipHash-1-3,
+//! and the two factors derived from them (for qore_keyed_fold64_pre()), creating the process key on the first call
+/** @throw std::runtime_error if no source of random bytes works
+*/
+DLLEXPORT const uint64_t* qore_intern_hash_fold_key();
+
 //! SipHash-1-3 with the secret key of the process, for std::unordered_* containers with string keys
 /** Transparent: with std::equal_to<> as the key comparison, a container with std::string keys is searched with a
     std::string_view or a C string without a std::string being created.
@@ -98,7 +105,7 @@ public:
     }
 
     DLLLOCAL size_t operator()(std::string_view s) const noexcept {
-        return static_cast<size_t>(qore_siphash13(k[0], k[1], s.data(), s.size()));
+        return static_cast<size_t>(qore_siphash13_fast(k[0], k[1], s.data(), s.size()));
     }
 
     //! the hash of a fixed string, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
@@ -125,12 +132,7 @@ public:
     template <typename T>
     DLLLOCAL size_t operator()(T v) const noexcept {
         static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_keyed_int_hash takes integer keys");
-        uint64_t u = static_cast<uint64_t>(v);
-        unsigned char b[8];
-        for (size_t i = 0; i < 8; ++i) {
-            b[i] = static_cast<unsigned char>(u >> (8 * i));
-        }
-        return static_cast<size_t>(qore_siphash13(k[0], k[1], b, sizeof b));
+        return static_cast<size_t>(qore_siphash13_u64(k[0], k[1], static_cast<uint64_t>(v)));
     }
 
     //! the hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
@@ -189,6 +191,112 @@ using qore_keyed_int_set = std::unordered_set<K, qore_keyed_int_hash>;
 //! the hash of the hasher's probe (QORE_KEYED_HASH_SITE()); read by dbg_keyed_hash_sites()
 DLLEXPORT void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept;
 #endif
+
+//! the keyed folded-multiply hash of a 64-bit integer (qore#7750)
+/** Two rounds of a full 64 x 64 -> 128-bit multiplication with the secret key of the process in both factors, each
+    folded by xoring the high and the low half of the product (the construction of wyhash and of ahash's fallback
+    hash).  Much cheaper than SipHash-1-3, and its values cannot be computed without the key, but it is not a
+    pseudorandom function as SipHash is: it is used only for the tables of integer keys of data operations, never for
+    tables that a network peer fills or searches.
+
+    @param k0 the first 64 bits of the key
+    @param k1 the second 64 bits of the key
+    @param v the value
+
+    @return the hash of the value
+*/
+//! the 64 x 64 -> 128-bit product of \a a and \a b, folded by xoring its high and its low half
+inline uint64_t qore_keyed_fold_mul(uint64_t a, uint64_t b) {
+#ifdef __SIZEOF_INT128__
+    unsigned __int128 r = static_cast<unsigned __int128>(a) * b;
+    return static_cast<uint64_t>(r) ^ static_cast<uint64_t>(r >> 64);
+#else
+    uint64_t al = a & 0xffffffffull, ah = a >> 32, bl = b & 0xffffffffull, bh = b >> 32;
+    uint64_t ll = al * bl, lh = al * bh, hl = ah * bl, hh = ah * bh;
+    uint64_t mid = (ll >> 32) + (lh & 0xffffffffull) + (hl & 0xffffffffull);
+    uint64_t lo = (ll & 0xffffffffull) | (mid << 32);
+    uint64_t hi = hh + (lh >> 32) + (hl >> 32) + (mid >> 32);
+    return lo ^ hi;
+#endif
+}
+
+//! the constants of the first and the second round of qore_keyed_fold64()
+static constexpr uint64_t QORE_KEYED_FOLD_C1 = 0x9e3779b97f4a7c15ull;
+static constexpr uint64_t QORE_KEYED_FOLD_C2 = 0xd6e8feb86659fd93ull;
+
+//! qore_keyed_fold64() with its key-derived factors computed once (qore_intern_hash_fold_key())
+/** @param p the four words: k0, k1, k1 ^ QORE_KEYED_FOLD_C1 and (k0 ^ QORE_KEYED_FOLD_C2) | 1
+    @param v the value
+
+    @return qore_keyed_fold64(p[0], p[1], v)
+*/
+inline uint64_t qore_keyed_fold64_pre(const uint64_t* p, uint64_t v) {
+    // the second factor rotates the value, so that the two factors are not related by a fixed xor
+    uint64_t m = qore_keyed_fold_mul(v ^ p[0], ((v << 23) | (v >> 41)) ^ p[2]);
+    return qore_keyed_fold_mul(m ^ p[1], p[3]);
+}
+
+inline uint64_t qore_keyed_fold64(uint64_t k0, uint64_t k1, uint64_t v) {
+    const uint64_t p[4] = {k0, k1, k1 ^ QORE_KEYED_FOLD_C1, (k0 ^ QORE_KEYED_FOLD_C2) | 1};
+    return qore_keyed_fold64_pre(p, v);
+}
+
+//! The keyed folded-multiply hash of the process (qore_keyed_fold64()), for std::unordered_* containers with integer
+//! keys of data operations
+/** libstdc++ stores its hashes in the nodes (see below), so that a search does not hash the keys of a chain again.
+*/
+class qore_keyed_fold_int_hash {
+public:
+    //! fetches the key of the process, creating it if necessary
+    /** @throw std::runtime_error if no key could be created
+    */
+    DLLLOCAL qore_keyed_fold_int_hash() {
+        const uint64_t* fk = qore_intern_hash_fold_key();
+        for (size_t i = 0; i < 4; ++i) {
+            k[i] = fk[i];
+        }
+    }
+
+    template <typename T>
+    DLLLOCAL size_t operator()(T v) const noexcept {
+        static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_keyed_fold_int_hash takes integer keys");
+        return static_cast<size_t>(qore_keyed_fold64_pre(k, static_cast<uint64_t>(v)));
+    }
+
+    //! the hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
+    DLLLOCAL uint64_t dbgProbe() const noexcept {
+        return (*this)(static_cast<uint64_t>(0x0123456789abcdefull));
+    }
+
+private:
+    //! the keys of the folded-multiply hash and the factors derived from them (qore_intern_hash_fold_key()), by value
+    uint64_t k[4];
+};
+
+template <>
+struct qore_is_keyed_hasher<qore_keyed_fold_int_hash> : public std::true_type {
+};
+
+#ifdef __GLIBCXX__
+// the nodes store the hashes of their keys: without them, libstdc++ hashes the key of each node of a chain that a
+// search walks again, to find the end of its bucket
+namespace std {
+template <>
+struct __is_fast_hash<qore_keyed_fold_int_hash> : public std::false_type {
+};
+}
+#endif
+
+//! an unordered map with integer keys of data operations and the keyed folded-multiply hash of the process
+template <typename K, typename V>
+using qore_keyed_fold_int_map = std::unordered_map<K, V, qore_keyed_fold_int_hash>;
+
+//! an unordered set of integers of data operations with the keyed folded-multiply hash of the process
+template <typename K>
+using qore_keyed_fold_int_set = std::unordered_set<K, qore_keyed_fold_int_hash>;
+
+//! an unordered set of string views with the keyed hash of the process, for the strings of data that outlive it
+using qore_keyed_string_view_set = std::unordered_set<std::string_view, qore_keyed_string_hash, std::equal_to<>>;
 
 //! Asserts at compile time that a container uses a keyed hasher, and in debug builds records its site
 /** Placed where the container is constructed (the constructor of its owner, or after the declaration of a local

@@ -162,6 +162,17 @@ void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook{nullptr};
+
+void qore_hash_private::dbgReleaseStep() {
+    assert(releasing);
+    if (qore_dbg_hash_release_step_hook_t hook = qore_dbg_hash_release_step_hook.load()) {
+        hook(this);
+    }
+}
+#endif
+
 bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
     if (!v.hasNode()) {
         return true;
@@ -291,6 +302,8 @@ void qore_hash_member_map::reserve(size_t n) {
 namespace {
 //! the secret key of the keyed hash of hardened key maps (qore#7557); created once, by the first hardening
 uint64_t qore_hash_process_key[2] = {0, 0};
+//! the keys of the keyed folded-multiply hash (qore_keyed_fold64()), derived from the process key when it is created
+uint64_t qore_hash_fold_key[4] = {0, 0, 0, 0};
 //! true once the key was created (qore_hash_ensure_process_key())
 std::atomic<bool> qore_hash_process_key_ready{false};
 //! serializes the creation of the key
@@ -412,6 +425,13 @@ void qore_hash_ensure_process_key() {
     if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
         qore_hash_process_key[0] = k[0];
         qore_hash_process_key[1] = k[1];
+        // the keys of the folded-multiply hash: derived with SipHash, so that they tell nothing of the process key
+        // (qore#7750)
+        qore_hash_fold_key[0] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d30ull);
+        qore_hash_fold_key[1] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d31ull);
+        // the factors of qore_keyed_fold64() that depend only on the keys, computed once
+        qore_hash_fold_key[2] = qore_hash_fold_key[1] ^ QORE_KEYED_FOLD_C1;
+        qore_hash_fold_key[3] = (qore_hash_fold_key[0] ^ QORE_KEYED_FOLD_C2) | 1;
         qore_hash_process_key_ready.store(true, std::memory_order_release);
     }
 }
@@ -429,6 +449,11 @@ QoreForkStdMutex qore_dbg_keyed_hash_sites_fork_handler(qore_dbg_keyed_hash_site
 const uint64_t* qore_intern_hash_process_key() {
     qore_hash_ensure_process_key();
     return qore_hash_process_key;
+}
+
+const uint64_t* qore_intern_hash_fold_key() {
+    qore_hash_ensure_process_key();
+    return qore_hash_fold_key;
 }
 
 int qore_intern_hash_process_key_check(ExceptionSink* xsink) {
@@ -688,6 +713,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
 }
 
 QoreListNode* qore_hash_private::getKeys() const {
+    assertNotReleasing();
     QoreListNode* list = new QoreListNode(stringTypeInfo);
     qore_list_private::get(*list)->reserve(size());
 
@@ -698,6 +724,7 @@ QoreListNode* qore_hash_private::getKeys() const {
 }
 
 QoreListNode* qore_hash_private::getValues() const {
+    assertNotReleasing();
     ReferenceHolder<QoreListNode> list(new QoreListNode(getValueTypeInfo()), nullptr);
     qore_list_private* l = qore_list_private::get(**list);
     l->reserve(size());
@@ -1626,6 +1653,11 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
         }
 #endif
     }
+#ifdef DEBUG
+    // no code can access the members until the release ends in finishFreeMembers(), on both paths: freeMembers() or
+    // freeNextMember() from free_nested_containers(), which can run in the constructor of the helper (qore#7569)
+    priv->releasing = true;
+#endif
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         priv->freeMembers(xsink);
@@ -1859,10 +1891,20 @@ QoreStringNode* HashIterator::getKeyStringNode() const {
 }
 
 bool HashIterator::next() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool HashIterator::prev() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->prev(h->priv->member_list) : false;
 }
 
@@ -2021,11 +2063,21 @@ QoreStringNode* ConstHashIterator::getKeyStringNode() const {
 }
 
 bool ConstHashIterator::next() {
-   return h ? priv->next(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool ConstHashIterator::prev() {
-   return h ? priv->prev(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->prev(h->priv->member_list) : false;
 }
 
 const char* ConstHashIterator::getKey() const {

@@ -105,6 +105,35 @@
     MIT Kerberos backends cannot accidentally become sandbox-reachable without
     review.
 
+    The library opens a \c FILE keytab by name at every use, following links,
+    and with an acceptor credential made from it at every context that the
+    credential accepts, long after the module checked the name; code that may
+    change the entries on the path of the keytab (the sandboxed code itself,
+    or code of another sandbox) could replace the file in the meantime, for
+    example with a link to another keytab, whose keys the library would then
+    use.  For code that a sandbox governs, the module therefore opens a
+    \c FILE or \c WRFILE keytab itself for each operation and gives the
+    library only the file that it opened:
+    - the file is opened in the directory of its canonical path without
+      following a link at the last component, the filesystem policy is checked
+      for the canonical path of the file opened, and a file that is not a
+      regular file with one link raises \c KRB5-SANDBOX-ERROR (another link to
+      it could be in a directory that the policy does not allow); a file that
+      does not exist raises \c KRB5-KEYTAB-ERROR (\c hasContent() returns
+      \c False), except for \c addEntry(), which creates it with mode 0600
+    - an operation that reads the keytab (\c hasContent(), \c getEntry(),
+      \c listEntries(), \c Krb5Context::acquireCredentialsWithKeytab() and
+      \c GssCredential::fromKeytab()) reads its entries once into a \c MEMORY
+      keytab of the module, which no code that a sandbox governs can open; an
+      acceptor credential keeps the keys that the file had when it was
+      acquired: after a change of the keytab file (a new key version, for
+      example), the credential must be acquired again
+    - an operation that writes the keytab (\c addEntry(), \c removeEntry())
+      writes the file that the module opened, in place
+    - a \c GssCredential that trusted code made from a \c FILE keytab and gives
+      to sandboxed code reads the keytab by name, as for trusted code: no
+      sandbox may be allowed to change the entries on its path
+
     @section krb5sec_cache_isolation Credential Caches and Keytabs of Sandboxed Code
 
     Credential caches that are not file based are shared by name: \c MEMORY

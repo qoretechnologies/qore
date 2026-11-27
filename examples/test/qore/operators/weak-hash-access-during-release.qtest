@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - releases of hashes whose members run destructors, in the interpreters and in native code
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakHashAccessDuringReleaseTest
+
+#! a destructor that runs during the release of a hash reads and changes it through a weak reference (qore#7569)
+/** The members of a hash are deleted while its key map and its member list still link them, until both are emptied
+    at the end of qore_hash_private::freeMembers(); no access path reaches them meanwhile, as a read through a weak
+    reference gets an empty stand-in during the release.  The programs are in \c weak-hash-access-during-release/:
+    - \c weak-hash-access-during-release.q releases hashes that hold an object whose destructor reads, iterates and
+      changes the hash through a weak reference, directly (\c freeMembers()) and nested in lists more deeply than the
+      recursive release goes (\c freeNextMember()); every mode (jit and tiered running native code) and qcc
+      executables must print the output of the AST, in which the destructor sees an empty hash that cannot be changed
+    - \c release-access-assert.q looks up, takes as an lvalue or iterates the members of a hash during its release
+      with a debug hook (dbg_hash_access_during_release()): a debug build ends the process with an assertion
+
+    Every child is killed if it runs longer than ChildTimeout seconds.
+*/
+class WeakHashAccessDuringReleaseTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-hash-access-during-release";
+        string kill_after = killAfter(ChildTimeout);
+
+        const Name = "weak-hash-access-during-release";
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Accesses = ("lookup", "lvalue", "iterate");
+        #! the seconds that a child can run before it is killed
+        const ChildTimeout = 120;
+    }
+
+    constructor() : QUnit::Test("WeakHashAccessDuringReleaseTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("an access to the members during the release asserts", \testAssert());
+        set_return_value(main());
+    }
+
+    #! returns a command prefix that kills the command after it when it still runs after \a secs seconds
+    /** timeout(1) is not installed on every platform (macOS has none); without it, perl forks the command and kills it
+        when the alarm fires; the status of a killed command is 137 (128 + SIGKILL), as with timeout -s KILL.  With
+        neither, the prefix is empty, and a hang is ended by the test runner (as in ir/AOTModuleForeignThread.qtest)
+    */
+    private static string killAfter(int secs) {
+        string cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -s KILL %d ", cmd, secs);
+        }
+        cmd = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -e 'my $s = shift; my $p = fork; exit 127 if !defined $p; if (!$p) { exec @ARGV; "
+                "exit 127; } $SIG{ALRM} = sub { kill 9, $p; }; alarm $s; waitpid $p, 0; "
+                "exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' %d ", cmd, secs);
+        }
+        return "";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", kill_after, qore_bin, mode, dir, Name));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        # jit and tiered compile the code synchronously (ExecModeHarness::TraceEnv) and run it as native code
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (Modes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(expected(), run(mode), mode);
+        }
+    }
+
+    testCompiled() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-weak-hash-access-during-release-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s%s -O%s -o %s %s/%s.q 2>&1", kill_after, qcc_bin, opt, exe, dir, Name),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the program: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s%s -b 2>&1", kill_after, exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+
+    testAssert() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the access is made with dbg_hash_access_during_release(), which only a library debug build has");
+        }
+        foreach string access in (Accesses) {
+            foreach string path in (("shallow", "deep")) {
+                int rc;
+                # no core file is written for the assertion; the shell's report of the abort is in the output too
+                string out = backquote(sprintf("(ulimit -c 0; %s%s -b %s/release-access-assert.q %s %s) 2>&1",
+                    kill_after, qore_bin, dir, access, path), \rc);
+                string label = sprintf("%s %s", access, path);
+                assertNeq(0, rc, sprintf("%s: the process ends with the assertion (output: %y)", label, out));
+                assertNeq(137, rc, sprintf("%s: the process is not killed by the timeout (output: %y)", label, out));
+                # the C libraries print the failed assertion differently: BSD/macOS "Assertion failed: (!releasing),
+                # function ...", glibc "...: Assertion `!releasing' failed.", musl "Assertion failed: !releasing
+                # (file: function: line)"; all have "Assertion" and the expression on one line
+                assertRegex("Assertion[^\\n]*!releasing", out,
+                    sprintf("%s: the assertion of the release fails", label));
+                assertFalse(out =~ /no assertion/, sprintf("%s: the program does not go on", label));
+            }
+        }
+    }
+}

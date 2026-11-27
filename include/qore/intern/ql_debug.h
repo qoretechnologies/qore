@@ -134,6 +134,13 @@ DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_
 typedef void (*qore_dbg_container_free_hook_t)(const char* type_name);
 DLLLOCAL extern std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook;
 
+class qore_hash_private;
+//! called by qore_hash_private::dbgReleaseStep() at each step of the release of a hash (at the start of
+//! qore_hash_private::freeMembers() and of each qore_hash_private::freeNextMember() call), while the hash is marked as
+//! being released; set by dbg_hash_access_during_release() (qore#7569)
+typedef void (*qore_dbg_hash_release_step_hook_t)(qore_hash_private* h);
+DLLLOCAL extern std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);

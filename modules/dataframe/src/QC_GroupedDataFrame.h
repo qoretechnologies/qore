@@ -87,7 +87,7 @@ private:
 
     //! Source column data (copies of group and agg columns from source)
     std::vector<Column> source_columns;
-    std::unordered_map<std::string, size_t> source_col_index;
+    df_col_index_t source_col_index;
 
     //! The rows of a group in the source; the key values of a group are those of its first row
     struct Group {

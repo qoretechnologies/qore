@@ -191,6 +191,16 @@ DLLLOCAL int qore_socket_object_quic_set_input_stream_send_bound(QoreSocketObjec
     int64_t min_rate, int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink);
 DLLLOCAL int qore_socket_object_h2_set_input_stream_send_bound(QoreSocketObject* s, int64_t min_rate,
     int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink);
+//! Checks the minimum rate of an HTTP/2 connection for a send of a handler thread that waits (qore#7280)
+/** @return 1 if the send must end for the rate, 0 if not, -1 with an exception raised
+*/
+DLLLOCAL int qore_socket_object_h2_check_stream_send_rate(QoreSocketObject* s, int64_t stream_id, bool waiting,
+    int64_t min_rate, int64_t window_ms, ExceptionSink* xsink);
+//! Checks the minimum rate of a QUIC connection for a send of a handler thread that waits (qore#7280)
+/** @return 1 if the send must end for the rate, 0 if not, -1 with an exception raised
+*/
+DLLLOCAL int qore_socket_object_quic_check_stream_send_rate(QoreSocketObject* s, int64_t session_id,
+    int64_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms, ExceptionSink* xsink);
 DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
 
 //! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session

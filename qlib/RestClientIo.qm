@@ -6499,7 +6499,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                         && rcio.tryPingNegotiateAuthRetry(resp.headers, \hdr,
                             \negotiate_context)) {
                     negotiate_retried = True;
-                    doSubmitRequest();
+                    startNextAttempt();
                     continue;
                 }
 
@@ -6512,7 +6512,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                         && rcio.tryHttpAuthRetry(resp.headers, \hdr)) {
                     http_auth_retried = True;
                     delete prepared_attempt;
-                    doSubmitRequest();
+                    startNextAttempt();
                     continue;
                 }
 
@@ -6551,6 +6551,18 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
             return NOTHING;
         }
+    }
+
+    #! Starts the attempt that answers an authentication challenge: the request is sent once a connection is ready
+    /** The request is not submitted at once: the server can close the connection with its 401 response, as
+        HttpServer does after every authentication error, and the new connection that the answer is sent on is not
+        ready until it is connected (qoretechnologies/qore#7768).
+    */
+    private startNextAttempt() {
+        connection_ready_notifier = NOTHING;
+        waiting_for_connection = False;
+        self_signaled_notifier = False;
+        state = SPS_CONNECTING;
     }
 
     private doStartConnecting() {
@@ -7719,7 +7731,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                         && rcio.tryPingNegotiateAuthRetry(resp.headers, \ping_headers,
                             \negotiate_context)) {
                     negotiate_retried = True;
-                    doSubmitPing();
+                    # the server can close the connection with its 401 response, so the retry waits for a
+                    # connection that is ready, as after a closed connection above (qoretechnologies/qore#7768)
+                    doStartConnecting();
                     continue;
                 }
 
