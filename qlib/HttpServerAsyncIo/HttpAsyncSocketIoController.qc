@@ -2731,6 +2731,26 @@ public class HttpAsyncSocketIoController {
         };
     }
 
+    #! Returns the numbers of the stream registrations of the HTTP/3 listeners' poll operations (for diagnostics)
+    /** @return a list of hashes, one for each HTTP/3 listener with a poll operation, as given by
+        @ref Qore::Http3ServerPollOperation::getStreamRegistrationInfo() "Http3ServerPollOperation::getStreamRegistrationInfo()",
+        which are bounded by the streams in use (qore#7802)
+
+        @since HttpServerAsyncIo 1.0
+    */
+    list<hash<auto>> getQuicStreamRegistrationInfo() {
+        list<Http3ServerPollOperation> ops = ();
+        {
+            AutoReadLock al(m);
+            foreach hash<auto> i in (listeners.pairIterator()) {
+                if (i.value.h3op) {
+                    push ops, i.value.h3op;
+                }
+            }
+        }
+        return map $1.getStreamRegistrationInfo(), ops;
+    }
+
     #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
     /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
         after connections are closed indicates a cache leak (poll operations not properly cancelled).

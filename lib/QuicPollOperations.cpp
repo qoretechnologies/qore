@@ -2973,6 +2973,9 @@ void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
         for (int64_t stream_id : resets) {
             lifecycle_peer_resets_.emplace_back(entry.first, stream_id);
         }
+        for (int64_t stream_id : entry.second->takeReleasedServerTunnels()) {
+            lifecycle_released_tunnels_.emplace_back(entry.first, stream_id);
+        }
         collectResponseSendResults(entry.first, *entry.second);
         if (entry.second->reportCloseIfNew()) {
             ASYNC_IO_TRACE("SocketQuicServerPollOperation::collectSessionLifecycleEvents "

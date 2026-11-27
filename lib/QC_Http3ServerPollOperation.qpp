@@ -77,6 +77,58 @@ static int materializeHttp3ServerDataBodyNode(const QoreValue& body, ValueHolder
 // Http3ServerPollOperationPriv implementation
 // ============================================================
 
+// removes a key from a hash member of the operation; the value is returned, so that it is released by the caller after
+// stream_member_lock (which the caller holds) is unlocked, as its release can run Qore code (qore#7802)
+static QoreValue h3_take_member_key(QoreObject* self, const char* member, const char* key, ExceptionSink* xsink) {
+    ValueHolder existing(self->getReferencedMemberNoMethod(member, xsink), xsink);
+    if (*xsink || existing->getType() != NT_HASH) {
+        return QoreValue();
+    }
+    const QoreHashNode* current = existing->get<const QoreHashNode>();
+    if (!current->existsKey(key)) {
+        return QoreValue();
+    }
+    // copy() ensures unique ownership (refcount == 1) before mutation
+    ReferenceHolder<QoreHashNode> h(current->copy(), xsink);
+    ValueHolder rv(h->takeKeyValue(key), xsink);
+    self->setMemberValue(member, QC_HTTP3SERVERPOLLOPERATION, h.release(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv.release();
+}
+
+// releases the registrations of a stream that nothing uses any more, after its notification (see
+// Http3ServerPollOperationPriv::takeStreamRelease(), qore#7802)
+static void h3_release_stream_registrations(QoreObject* self, Http3ServerPollOperationPriv* priv, const char* skey,
+        ExceptionSink* xsink) {
+    bool queue_released, tunnel_released;
+    priv->takeStreamRelease(skey, queue_released, tunnel_released);
+    if (!queue_released && !tunnel_released) {
+        return;
+    }
+    // released after the lock, in its own exception sink: the notification's error, if any, is the caller's
+    ExceptionSink release_xsink;
+    ValueHolder queue_obj(&release_xsink);
+    ValueHolder listener(&release_xsink);
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        if (queue_released) {
+            queue_obj = h3_take_member_key(self, "stream_queue_objs", skey, &release_xsink);
+        }
+        if (tunnel_released) {
+            listener = h3_take_member_key(self, "stream_listeners", skey, &release_xsink);
+        }
+    }
+    ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData RELEASE skey='%s' queue=%d listener=%d\n", skey,
+        (int)queue_released, (int)tunnel_released);
+    queue_obj = QoreValue();
+    listener = QoreValue();
+    if (release_xsink) {
+        xsink->assimilate(release_xsink);
+    }
+}
+
 Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
         QoreSocketObject* sock, std::chrono::microseconds drain_timeout, bool headers_only)
     : SocketPollOperationBase(self), sock_obj(sock), headers_only(headers_only),
@@ -89,6 +141,8 @@ Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
     QORE_KEYED_HASH_SITE("http3-server-4", response_send_watches);
     QORE_KEYED_HASH_SITE("http3-server-5", close_notify_streams);
     QORE_KEYED_HASH_SITE("http3-server-6", peer_closed_streams);
+    QORE_KEYED_HASH_SITE("http3-server-7", released_queue_keys);
+    QORE_KEYED_HASH_SITE("http3-server-8", released_tunnel_keys);
 }
 
 void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
@@ -175,6 +229,9 @@ void Http3ServerPollOperationPriv::closeStreamQueues() {
     // it (the H2 commit af761a3d9 closes the analogous race for H2).
     stream_queues_closed = true;
     tunnel_stream_keys.clear();
+    // the operation's member hashes are released with it
+    released_queue_keys.clear();
+    released_tunnel_keys.clear();
     for (auto& [skey, queue] : stream_queues) {
         (void)skey;
         if (queue) {
@@ -806,6 +863,9 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
                 if (i->second) {
                     i->second->pushAndTakeRef(QoreValue());
                     data_ready_streams.push_back(skey);
+                    // the notification releases the Queue object, which the I/O thread does not use any more
+                    // (qore#7802)
+                    released_queue_keys.insert(skey);
                 }
                 stream_queues.erase(i);
             }
@@ -842,7 +902,24 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     std::vector<std::pair<int64_t, int64_t>> resets;
     std::vector<int64_t> closed;
     std::vector<QuicResponseSendResult> send_results;
-    read_op->takeSessionLifecycleEvents(resets, closed, send_results);
+    std::vector<std::pair<int64_t, int64_t>> released;
+    read_op->takeSessionLifecycleEvents(resets, closed, send_results, released);
+
+    // the CONNECT tunnels whose records their sessions released: their streams have closed and their dispatches have
+    // returned, so nothing uses them any more; their registrations are released on a worker by the notification
+    // queued here, as the QoreObject references are held by the QPP layer (onStreamData(), qore#7802).  They were
+    // kept until the session closed, and the Queue objects for the life of the listener.
+    for (auto& p : released) {
+        std::string skey = std::to_string(p.first) + ":" + std::to_string(p.second);
+        auto i = stream_queues.find(skey);
+        if (i != stream_queues.end()) {
+            stream_queues.erase(i);
+            released_queue_keys.insert(skey);
+        }
+        tunnel_stream_keys.erase(skey);
+        released_tunnel_keys.insert(skey);
+        data_ready_streams.push_back(skey);
+    }
 
     // Report the transmission results of watched responses; they are taken before the close of their session, so
     // they are reported before closeSessionStreams() fails the session's remaining watches below
@@ -989,6 +1066,8 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
         ASYNC_IO_TRACE("Http3ServerPollOperationPriv::closeSessionStreams "
             "closing stream skey='%s'\n", it->first.c_str());
         data_ready_streams.push_back(it->first);
+        // the notification releases the Queue object, which the I/O thread does not use any more (qore#7802)
+        released_queue_keys.insert(it->first);
         close_notify_streams.erase(it->first);
         it = stream_queues.erase(it);
     }
@@ -1723,6 +1802,17 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_A
         }
     }
 
+    // the registrations of a stream that nothing uses any more are released after its notification (qore#7802)
+    struct StreamReleaseGuard {
+        QoreObject* self;
+        Http3ServerPollOperationPriv* priv;
+        const char* skey;
+        ExceptionSink* xsink;
+        ~StreamReleaseGuard() {
+            h3_release_stream_registrations(self, priv, skey, xsink);
+        }
+    } release_guard{self, priv, stream_key->c_str(), xsink};
+
     if (*xsink || !listener_found) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_LISTENERS skey='%s' xsink=%d null=%d\n",
             stream_key->c_str(), (int)(*xsink ? 1 : 0),
@@ -1745,6 +1835,55 @@ list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_
     for (auto& skey : ready) {
         rv->push(new QoreStringNode(skey), xsink);
     }
+    return rv.release();
+}
+
+//! Returns the numbers of the registrations of the operation's streams
+/** For diagnostics and tests: the registrations of a stream are released when the stream's tunnel is released (its
+    stream has closed and its dispatch has returned), when its QUIC session closes, or when a drain ends it, so their
+    numbers are bounded by the streams in use, not by the streams that the listener has served (qore#7802).
+
+    @return a hash with the keys:
+    - \c queue_objs: the Queue objects of the extended CONNECT streams (registerStreamQueue())
+    - \c listeners: the stream listeners (registerStreamListener())
+    - \c queues: the streams whose Queues the I/O thread checks for data
+    - \c pending: the stream notifications kept for a listener that has not registered yet
+    - \c close_notify: the streams whose listeners are notified of the close of their sessions
+    - \c peer_closed: the streams that the peer reset or whose sessions closed, kept for their listeners
+    - \c releasing: the streams whose registrations a notification that has not run yet releases
+
+    @since %Qore 3.0
+*/
+hash<auto> Http3ServerPollOperation::getStreamRegistrationInfo() [flags=RET_VALUE_ONLY] {
+    size_t queue_objs = 0;
+    size_t listeners = 0;
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder q(self->getReferencedMemberNoMethod("stream_queue_objs", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (q->getType() == NT_HASH) {
+            queue_objs = q->get<const QoreHashNode>()->size();
+        }
+        ValueHolder l(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (l->getType() == NT_HASH) {
+            listeners = l->get<const QoreHashNode>()->size();
+        }
+    }
+    size_t queues, pending, close_notify, peer_closed, releasing;
+    priv->getStreamRegistrationCounts(queues, pending, close_notify, peer_closed, releasing);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("queue_objs", (int64)queue_objs, xsink);
+    rv->setKeyValue("listeners", (int64)listeners, xsink);
+    rv->setKeyValue("queues", (int64)queues, xsink);
+    rv->setKeyValue("pending", (int64)pending, xsink);
+    rv->setKeyValue("close_notify", (int64)close_notify, xsink);
+    rv->setKeyValue("peer_closed", (int64)peer_closed, xsink);
+    rv->setKeyValue("releasing", (int64)releasing, xsink);
     return rv.release();
 }
 
