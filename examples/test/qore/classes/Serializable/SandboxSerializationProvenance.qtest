@@ -107,7 +107,8 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
             "code sub sb_closure() { return binary sub (Serializable v) { return v.serialize(); }; }\n"
             "code sub sb_method_ref(Serializable v) { return \\v.serialize(); }\n"
             "class SbSub inherits SspTrusted {}\n"
-            "object sub sb_sub() { return new SbSub(); }\n", "sandboxed");
+            "object sub sb_sub() { return new SbSub(); }\n"
+            "object sub sb_trusted() { return new SspTrusted(); }\n", "sandboxed");
 
         addTestCase("host class", \hostClassTest());
         addTestCase("qlib class", \qlibClassTest());
@@ -210,14 +211,20 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         assertEq("OK", SspSelf::dtor_static);
     }
 
-    #! an object of a class that sandboxed code declared with a trusted base class
+    #! objects that sandboxed code created: of a class that it declared with a trusted base class, and of a trusted
+    #! class that its Program imports; their classes are the sandboxed Program's copies, with their own methods
+    /** No sandboxed code runs when the host serializes them (a serializeMembers() method of the sandboxed code's
+        class would get only that class's members, and no access to the output), and the output goes to the host, so
+        the host gets the state of the trusted class with both forms; sandboxed code does not
+    */
     sandboxSubclassTest() {
-        object o = p.callFunction("sb_sub");
-        # the host gets the state of the trusted base class with both forms
-        assertRegex("PRIV-STATE", sprintf("%N", o.serializeToData()));
-        assertRegex("PRIV-STATE", sprintf("%N", Serializable::serializeToData(o)));
-        # sandboxed code does not
-        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("ser_method", o));
+        foreach string func in ("sb_sub", "sb_trusted") {
+            object o = p.callFunction(func);
+            assertRegex("PRIV-STATE", sprintf("%N", o.serializeToData()), func);
+            assertRegex("PRIV-STATE", sprintf("%N", Serializable::serializeToData(o)), func);
+            assertRegex("PRIV-STATE", sprintf("%N", Serializable::deserializeToData(o.serialize())), func);
+            assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("ser_method", o));
+        }
     }
 
     #! an object shared by every Program (qore#7673) that the host's code created while sandboxed code called it

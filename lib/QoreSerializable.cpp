@@ -260,18 +260,15 @@ bool qore_serialization_calling_code_trusted() {
     return !qore_caller_is_sandboxed();
 }
 
-//! returns the function of an instance method of Serializable
-static const QoreFunction* serializable_method_function(const char* name) {
-    const QoreMethod* m = QC_SERIALIZABLE->findLocalMethod(name);
-    assert(m);
-    return m ? qore_method_private::get(*m)->getFunction() : nullptr;
-}
-
 bool qore_serializable_receiver_function(const QoreFunction* func) {
-    // set once the first object with provenance is called, after the library's initialization
-    static const QoreFunction* const serialize = serializable_method_function("serialize");
-    static const QoreFunction* const serialize_to_data = serializable_method_function("serializeToData");
-    return func && (func == serialize || func == serialize_to_data);
+    // by the class and the name: the class of a Program is a copy of the class with its own method functions, as are
+    // the classes that a Program imports, and the builtin class Serializable of each Program is one
+    const QoreClass* cls = func ? func->getClass() : nullptr;
+    if (!cls || cls->getID() != CID_SERIALIZABLE || static_cast<const MethodFunctionBase*>(func)->isStatic()) {
+        return false;
+    }
+    const char* name = func->getName();
+    return !strcmp(name, "serialize") || !strcmp(name, "serializeToData");
 }
 
 bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool internal) {
