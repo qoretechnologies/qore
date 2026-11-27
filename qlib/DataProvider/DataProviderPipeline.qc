@@ -350,6 +350,13 @@ class PipelineQueue {
         */
         int run_gen = 0;
 
+%ifdef QoreDebug
+        #! Called by a queue thread after its flush, with the pipeline lock held (debug builds only)
+        /** See DataProviderPipeline::setTestHooks()
+        */
+        static *code after_flush_test_hook;
+%endif
+
         #! True while the pipeline's run ends: the queue accepts no data from the pipeline (see submit())
         /** Set only on queue 0, which the pipeline submits its data to; the data is submitted to the next run
         */
@@ -889,6 +896,19 @@ class PipelineQueue {
                     if (flush_waiting) {
                         flush_cond.broadcast();
                     }
+%ifdef QoreDebug
+                    if (*code hook = PipelineQueue::after_flush_test_hook) {
+                        try {
+                            # the hook can release the lock while it runs code
+                            hook(id, sub (code c) {
+                                lck.unlock();
+                                on_exit lck.lock();
+                                c();
+                            });
+                        } catch (hash<ExceptionInfo> ex) {
+                        }
+                    }
+%endif
                     # the flush can release the lock (a child queue's awaitFlush() or a submission to a full child
                     # queue waits), so the queue's state is checked again before the thread waits: the end of the run
                     # can have stopped the queue meanwhile
@@ -2063,6 +2083,13 @@ public class DataProviderPipeline {
         #! True when the current run has used synchronous processing and needs synchronous flush
         bool synchronous_processing = False;
 
+%ifdef QoreDebug
+        #! Called when the end of a run has stopped the queues, before it waits for their threads (debug builds only)
+        /** See setTestHooks()
+        */
+        static *code stop_test_hook;
+%endif
+
         #! True while a run is ending (see beginRunEndIntern())
         bool run_ending = False;
 
@@ -2519,6 +2546,34 @@ public class DataProviderPipeline {
         }
     }
 
+%ifdef QoreDebug
+    #! Sets the test hooks of the pipelines (debug builds only)
+    /** For tests: they are called in every pipeline of the process
+
+        @param after_flush called by a queue thread after it has flushed its queue, with the pipeline lock held, with
+        the queue ID and a closure that runs the code that it is given with the lock released
+        (<tt>sub (int id, code unlocked)</tt>)
+        @param after_stop called when the end of a run has stopped the queues, with the pipeline lock held, before it
+        waits for their threads to end
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL or is governed by a
+        sandbox
+    */
+    static setTestHooks(*code after_flush, *code after_stop) [dom=PROCESS_CONTROL] {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set a pipeline test hook from a context with restricted process "
+                "control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the pipeline's test hooks";
+        }
+        PipelineQueue::after_flush_test_hook = after_flush;
+        stop_test_hook = after_stop;
+    }
+
+%endif
     #! Called from a pipeline queue object to report a fatal error durring processing
     reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
         logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
@@ -2813,6 +2868,14 @@ public class DataProviderPipeline {
                 stop = True;
             }
         }
+%ifdef QoreDebug
+        if (stop && (*code hook = stop_test_hook)) {
+            try {
+                hook();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+%endif
         if (stop) {
             # the lock is released while each thread ends
             map $1.waitThreadExit(), pmap.iterator();
