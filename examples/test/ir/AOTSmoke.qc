@@ -506,8 +506,7 @@ class AOTSmokeBase inherits QUnit::Test {
                     run_cmd += " " + run_args[i];
                 }
             }
-            run_cmd += " 2>&1";
-            run_out = backquote(run_cmd);
+            run_out = run_executable(run_cmd);
         } else {
             run_out = "";
         }
@@ -565,8 +564,7 @@ class AOTSmokeBase inherits QUnit::Test {
                 run_cmd += " " + run_args[i];
             }
         }
-        run_cmd += " 2>&1";
-        return backquote(run_cmd);
+        return run_executable(run_cmd);
     }
 
     private bool compileOutputHasCompleteAot(string compile_out) {
@@ -605,8 +603,7 @@ class AOTSmokeBase inherits QUnit::Test {
                     run_cmd += " " + run_args[i];
                 }
             }
-            run_cmd += " 2>&1";
-            run_out = backquote(run_cmd);
+            run_out = run_executable(run_cmd);
         } else {
             run_out = "COMPILE_FAILED: " + compile_out;
         }
@@ -631,7 +628,29 @@ class AOTSmokeBase inherits QUnit::Test {
         assertEq("", res.stderr, label + ": stderr");
     }
 
-    #! runs a script with the interpreter and returns its output on stdout and stderr together
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+    }
+
+    #! runs a qcc executable and returns its output followed by its exit status, as "; echo EXIT=$?" did (qore#7805)
+    /** @return the output of run_executable() followed by a line \c EXIT=<i>status</i>
+    */
+    private string run_executable_status(string cmd) {
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        return sprintf("%sEXIT=%d\n", res.out, res.rc);
+    }
+
+    #! runs a script with the interpreter and returns its output, the reference of the executables' output
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's warnings and the
+        native compilation trace, as of run_executable(), in the default environment of the interpreter, which only
+        traces native compilation (see ExecModeHarness::run_command())
+    */
     private string runInterpreted(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -644,8 +663,7 @@ class AOTSmokeBase inherits QUnit::Test {
                 cmd += " " + run_args[i];
             }
         }
-        cmd += " 2>&1";
-        return backquote(cmd);
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 
     private string runExecMode(string code, string mode) {
@@ -4332,7 +4350,7 @@ sub main() {
         assertTrue(link_out.regex("EXIT=0"),
             "qcc links debugger-enabled .qo regex global probe: " + link_out);
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, app_path));
         assertEq("[\"$local:a\", \"$local:b\"]\nEXIT=0\n", run_out,
             "source-stripped debugger IR preserves regex extract /g");
@@ -6237,7 +6255,7 @@ sub main() {
         assertTrue(link_ok.regex("EXIT=0"),
             "qcc links provider before stub-compiled main: " + link_ok);
 
-        string run_ok = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_ok = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, app_path));
         assertEq("build real\nEXIT=0\n", run_ok,
             "stub constants resolve to host-injected runtime constants, not placeholder values");
@@ -6249,7 +6267,7 @@ sub main() {
             "qcc can link a host-missing binary so runtime diagnostics can name the missing constant: "
             + link_missing);
 
-        string run_missing = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_missing = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, missing_app_path));
         assertTrue(run_missing.regex("cannot resolve runtime constant reference 'Host::Banner'"),
             "missing host constant reports the unresolved stub-derived constant path: " + run_missing);
@@ -8406,8 +8424,7 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
                     run_cmd += " " + run_args[i];
                 }
             }
-            run_cmd += " 2>&1";
-            run_out = backquote(run_cmd);
+            run_out = run_executable(run_cmd);
         } else {
             run_out = "COMPILE_FAILED: " + compile_out;
         }
@@ -10227,7 +10244,7 @@ exit(0);
                 "qcc one-shot cleans temporary directory by default: " + temp_match[0]);
         }
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, app_path));
         assertEq("one-shot-qcc-ok\nEXIT=0\n", run_out,
             "qcc one-shot executable runs cross-file call: " + run_out);
@@ -10276,7 +10293,7 @@ printf(\"%d\\n\", FastEntryProbe::add(20, 22));
                 "call i64 @FastEntryProbe___static_add[^\\n]*_fast_h[0-9a-f]{16}\\("),
             "top-level static call uses the native fast entry: " + compile_out);
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, tmp.out));
         assertEq("42\nEXIT=0\n", run_out,
             "standalone static fast-entry executable result");
@@ -10362,7 +10379,7 @@ sub main() {
         assertTrue(link_out.regex("EXIT=0"),
             "qcc links sibling fragments: " + link_out);
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, app_path));
         assertEq("common\ncommon\njob\nEXIT=0\n", run_out,
             "batch fragment constants do not depend on later sibling const refs: " + run_out);
@@ -10485,7 +10502,7 @@ sub main() {
         assertTrue(link_out.regex("EXIT=0"),
             "qcc links deferred const-ref fragments: " + link_out);
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s",
             libqore_dir, app_path));
         assertEq("QorusServer\nint\nEXIT=0\n", run_out,
             "batch fragment member/class const refs resolve after shell phase: " + run_out);
@@ -10688,8 +10705,10 @@ printf(\"%d\\n\", probe(3));
         }
 
         # the compiled program gives the result of the interpreted one
-        string expected = backquote(sprintf("%s %s 2>&1", qore_bin, paths.src));
-        string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, paths.out));
+        # the interpreter's output, as of the executable: apart from the module loader's warnings and the trace
+        string expected = ExecModeHarness::run_command(sprintf("%s %s", qore_bin, paths.src), NOTHING,
+            "QORE_JIT_TIMING=1").out;
+        string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, paths.out));
         assertEq(expected, actual);
         assertEq("9\n", actual);
     }
@@ -11462,7 +11481,7 @@ printf(\"%s %s %s %s %s\\n\", L[0].format(\"IF\"), L[1].format(\"IF\"), H.w.form
             on_exit {
                 rename(path + ".moved", path);
             }
-            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1; echo EXIT=$?", libqore_dir,
+            string out = run_executable_status(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir,
                 paths.out));
             assertRegex("EXIT=[1-9]", out, "qcc -O" + opt + " without the zone file");
             assertNRegex("[0-9]T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[-+][0-9]{2}:[0-9]{2})", out,
