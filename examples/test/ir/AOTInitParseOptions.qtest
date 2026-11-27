@@ -359,8 +359,9 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
         write(script, ExeSource);
         # the interpreted script: the values, and its initializer runs with the script's strict arguments (qore#6205)
         foreach string mode in (Modes) {
-            assertEq(Expected + "True\n", backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
-                libqore_dir, qore_bin, mode, script)), "interpreted, mode " + mode);
+            assertEq(Expected + "True\n", ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, qore_bin, mode, script), NOTHING, "QORE_JIT_TIMING=1").out,
+                "interpreted, mode " + mode);
         }
         if (!qcc_bin.val() || !is_file(qcc_bin)) {
             testSkip("qcc is unavailable");
