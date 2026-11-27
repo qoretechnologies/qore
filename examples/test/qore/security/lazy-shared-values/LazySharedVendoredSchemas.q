@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # The data provider modules that load their vendored API schemas on first use build them as trusted code whatever
 # code needs them first: a sandboxed first caller gets schemas and action sets marked as shared, which it cannot
-# change (qore#7684); see lazy-shared-values.qtest
+# change (qore#7684); see LazySharedValuesTest.qc
 
 %modern
 %enable-all-warnings

@@ -140,7 +140,8 @@ class OnBlockExitOuterVarsTest inherits QUnit::Test {
                 worker));
             assertTrue(is_file(exe), sprintf("qcc -O%s: %s", opt, compile_out));
             string label = "aot-O" + opt;
-            checkResults(label, parseOutput(label, backquote(sprintf("%s %s 2>&1", env, exe))));
+            checkResults(label, parseOutput(label, ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+                "QORE_JIT_TIMING=1").out));
         }
     }
 

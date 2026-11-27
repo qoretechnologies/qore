@@ -137,8 +137,9 @@ class RpcClientHeaderValuesTest inherits QUnit::Test {
         string out = backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", module_dir,
             libqore_dir, qcc_bin, exe, getWorker()));
         assertTrue(is_file(exe), "compiled program: " + out);
-        checkWorkerOutput("aot", backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s 2>&1", module_dir,
-            libqore_dir, exe)), ".qmod");
+        # the executable runs in its default environment; a warning of the module loader on stderr is not output
+        checkWorkerOutput("aot", ExecModeHarness::run_command(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s",
+            module_dir, libqore_dir, exe), NOTHING, "QORE_JIT_TIMING=1").out, ".qmod");
     }
 
     private string getWorker() {

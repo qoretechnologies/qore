@@ -234,6 +234,11 @@ class HttpServerH2StreamLimitTest inherits QUnit::Test {
     }
 
     #! A client that opens more streams than the limit gets GOAWAY(PROTOCOL_ERROR); the server closes and logs it
+    /** RFC 9113 makes the over-limit stream a stream error (section 5.1.2) and allows an endpoint to treat a stream
+        error as a connection error (section 5.4.1), which nghttp2 does here once the client has acknowledged the
+        limit; its maintainers declined to send RST_STREAM(REFUSED_STREAM) instead (nghttp2 issue 687), so the
+        connection error is the expected behavior (qore#7776)
+    */
     testStreamOverLimit() {
         PlainHandler plain();
         HttpServer hs(<HttpServerOptionInfo>{"logger": logger});

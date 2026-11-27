@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 
 # a number, boolean or date converted to a string for a target encoding takes that encoding, also when it is not the
 # default encoding (join() with a UTF-8 separator while the default encoding is ISO-8859-1; a debug build asserted in
@@ -42,8 +43,9 @@ public class Main inherits QUnit::Test {
         }
         foreach hash<auto> c in (commands.pairIterator()) {
             string mode = c.key;
-            string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=ISO-8859-1 %s 2>&1", c.value))),
-                "ISO-8859-1");
+            # the children run in their default environment; a warning of the module loader on stderr is not output
+            string output = binary_to_string(binary(ExecModeHarness::run_command(sprintf("QORE_CHARSET=ISO-8859-1 %s",
+                c.value), NOTHING, "QORE_JIT_TIMING=1").out), "ISO-8859-1");
             hash<string, list<string>> r;
             foreach string line in (output.split("\n")) {
                 list<string> parts = line.split("=");

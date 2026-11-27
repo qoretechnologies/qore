@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires Util
 %requires FsUtil
 
@@ -143,8 +144,16 @@ printf(\"%y %y %y %y %y\\n\", namedSize(1), namedSize(1.5), positionalSize(2), n
         }
         string out = compile(tmp.path);
         assertTrue(is_file(tmp.path + "/rn"), "compiled the script: " + out);
-        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s/rn 2>&1", libqore_dir, libqore_dir,
-            tmp.path));
-        assertEq(expected, out, "AOT executable");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s/rn", libqore_dir, libqore_dir,
+            tmp.path), expected, "AOT executable");
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

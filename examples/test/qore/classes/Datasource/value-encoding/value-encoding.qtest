@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../../../TestInterpreter.qm
+%requires ../../../../ExecModeHarness.qm
 
 # Copyright 2026 Qore Technologies, s.r.o.
 #
@@ -52,11 +53,12 @@ public class Main inherits QUnit::Test {
         }
         foreach hash<auto> c in (commands.pairIterator()) {
             string mode = c.key;
-            int rc;
-            # the output is in the child's default encoding
-            string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=ISO-8859-1 %s 2>&1", c.value),
-                \rc)), "ISO-8859-1");
-            assertEq(0, rc, mode + ": exit code: " + output);
+            # the output is in the child's default encoding; the children run in their default environment, and a
+            # warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("QORE_CHARSET=ISO-8859-1 %s",
+                c.value), NOTHING, "QORE_JIT_TIMING=1");
+            string output = binary_to_string(binary(r.out), "ISO-8859-1");
+            assertEq(0, r.rc, mode + ": exit code: " + output);
             list<string> lines = output.split("\n");
             assertEq("default: ISO-8859-1", lines[0], mode + ": the child's default encoding: " + output);
             list<string> failures = select lines, $1 =~ /^FAIL: /;

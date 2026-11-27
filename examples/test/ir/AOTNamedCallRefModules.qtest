@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -239,7 +240,16 @@ RUNTIME-OVERLOAD-ERROR
             string exe = tmp.path + DirSep + "deferred" + opt;
             out = backquote(sprintf("%s %s %s -o %s %s/*.qo 2>&1", env, qcc_bin, opt, exe, lib));
             assertTrue(is_file(exe), "linked the executable " + opt + ": " + out);
-            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "deferred references " + opt);
+            checkExecutable(sprintf("%s %s", env, exe), Expected, "deferred references " + opt);
         }
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

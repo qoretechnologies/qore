@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 %exec-class MemberAccessPrivateInternalTest
 
@@ -65,6 +66,15 @@ class MemberAccessPrivateInternalTest inherits QUnit::Test {
         string exe = tmp.path + DirSep + "probe";
         string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        assertEq(expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+        checkExecutable(sprintf("%s %s", env, exe), expected, "executable");
+    }
+
+    #! runs the qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

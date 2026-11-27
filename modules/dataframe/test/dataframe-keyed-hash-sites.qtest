@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-keyed-hash-sites.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../../examples/test/TestInterpreter.qm
+
+%requires dataframe
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class DataFrameKeyedHashSitesTest
+
+#! The hash tables of the dataframe module that are keyed by values hash them with the keyed hash of the process
+#! (qore#7750)
+/** Each such table records its site when it is constructed (debug builds: QORE_KEYED_HASH_SITE()), with the hash of
+    a fixed probe by its hasher; dbg_keyed_hash_sites() returns them.  Child processes with fixed secret keys
+    (QORE_DBG_HASH_KEY) run the operations of the module that construct the tables: each site must be recorded, and
+    its hash must follow the key.
+*/
+class DataFrameKeyedHashSitesTest inherits QUnit::Test {
+    public {
+        #! the number of sites of the module
+        const NumSites = 20;
+
+        #! the time limit of a child process
+        const ChildTimeout = 120s;
+
+        const Key1 = "000102030405060708090a0b0c0d0e0f";
+        const Key2 = "0f0e0d0c0b0a09080706050403020100";
+
+        #! the operations that construct the tables of the module
+        const Src = "%modern\n"
+            "%requires dataframe\n"
+            "DataFrame::DataFrame s({\"k\": (\"a\", \"b\", \"a\"), \"i\": (1, 2, 1), \"v\": (1.0, 2.0, 3.0),\n"
+            "    \"c\": (\"x\", \"y\", \"x\"), \"f\": (1.5, 2.5, 1.5)});\n"
+            "s.groupBy((\"k\",)).agg({\"v\": \"sum\", \"c\": \"nunique\"});\n"
+            "map s.valueCounts($1), (\"i\", \"k\", \"f\");\n"
+            "map s.nunique($1), (\"i\", \"k\", \"f\");\n"
+            "s.describe();\n"
+            "DataFrame::DataFrame r({\"k\": (\"a\", \"b\"), \"i\": (1, 2), \"w\": (10, 20)});\n"
+            "s.join(r, (\"k\",));\n"
+            "s.join(r, (\"i\",), \"left\");\n"
+            "s.join(r, (\"i\",));\n"
+            "s.pivot(\"i\", \"c\", \"v\");\n"
+            "s.pivot(\"k\", \"c\", \"v\");\n"
+            "hash<auto> sites = call_function(\"dbg_keyed_hash_sites\");\n"
+            "foreach string site in (keys sites) {\n"
+            "    printf(\"%s=%s\\n\", site, sites{site});\n"
+            "}\n";
+    }
+
+    constructor() : QUnit::Test("dataframe keyed hash sites", "1.0", \ARGV) {
+        addTestCase("the tables of the module hash with the key of the process", \sitesTest());
+        set_return_value(main());
+    }
+
+    sitesTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the sites of keyed containers are only recorded in debug builds");
+        }
+        hash<string, string> s1 = runSites(Key1);
+        hash<string, string> s1b = runSites(Key1);
+        hash<string, string> s2 = runSites(Key2);
+        for (int i = 1; i <= NumSites; ++i) {
+            string site = "dataframe-" + i;
+            assertTrue(exists s1{site}, sprintf("site %y is recorded", site));
+            assertEq(s1{site}, s1b{site}, sprintf("site %y: the same key gives the same hash", site));
+            assertNeq(s1{site}, s2{site}, sprintf("site %y: another key gives another hash", site));
+        }
+    }
+
+    #! runs the operations in a child process with the secret key \a key and returns the sites that it prints
+    private hash<string, string> runSites(string key) {
+        hash<string, string> rv = {};
+        foreach string line in (trim(runChild(key)).split("\n")) {
+            if (line =~ /^([a-z0-9-]+)=([0-9a-f]{16})$/) {
+                list<string> l = line.split("=");
+                rv{l[0]} = l[1];
+            } else {
+                assertTrue(False, "unexpected output line: " + line);
+            }
+        }
+        return rv;
+    }
+
+    #! runs the operations in a child interpreter with QORE_DBG_HASH_KEY set to \a key and returns its output
+    /** the child is ended if it does not finish within the time limit; the test is skipped without the process
+        module, which bounds the run
+    */
+    private string runChild(string key) {
+%ifdef NoProcess
+        testSkip("the process module is required to run bounded child processes");
+        return "";
+%else
+        TmpDir tmp("qore-dataframe-keyed-hash-sites-");
+        string file = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Src);
+        f.close();
+        hash<auto> env = ENV - "QORE_DBG_HASH_KEY";
+        env.QORE_DBG_HASH_KEY = key;
+        StringOutputStream out_stream();
+        StringOutputStream err_stream();
+        Process p(TestInterpreter::qore_interpreter(), (file,), {
+            "env": env,
+            "stdout": out_stream,
+            "stderr": err_stream,
+        });
+        bool done = p.wait(ChildTimeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        # getData() empties the stream, so each is read once
+        string out = out_stream.getData();
+        string err = err_stream.getData();
+        assertTrue(done, "the child process finished within the time limit");
+        assertEq(0, p.exitCode(), out + err);
+        assertEq("", err, "the child process wrote nothing to stderr");
+        return out;
+%endif
+    }
+}

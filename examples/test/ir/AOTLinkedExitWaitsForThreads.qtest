@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 # test-platform: macos - process exit and static destructors of a qcc-linked executable while threads tear down
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -8,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -81,10 +83,16 @@ sub main() {
         assertTrue(is_file(exe), "linked executable: " + out);
 
         for (int i = 0; i < Runs; ++i) {
-            int rc;
-            out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
-            assertEq(0, rc, sprintf("run %d exit code; output: %y", i, out));
-            assertEq("done\n", out, sprintf("run %d output", i));
+            checkExecutable(sprintf("%s %s", env, exe), "done\n", sprintf("run %d", i));
         }
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }
