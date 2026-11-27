@@ -10,7 +10,7 @@ class SharedCache {
     }
 
     #! runs a method of the tenant's object in an update scope, and changes the object after it returns
-    string update(object t, string method, *object helper) {
+    string update(object t, string method, auto helper) {
         return SandboxManager::updateSharedObject(self, string sub () {
             v = "scope";
             string rv;
@@ -21,6 +21,14 @@ class SharedCache {
                 case "library": rv = t.library(self, helper); break;
                 case "share": rv = t.share(self, new Plain()); break;
                 case "scope": rv = t.scope(self); break;
+                # code of the tenant's class that the scope's own code runs: a call reference or a closure
+                case "code": rv = helper(self); break;
+                # the destructor of an object of the tenant's class
+                case "delete": delete helper; rv = t.trap(); break;
+                # the copy method of an object of the tenant's class
+                case "copy": rv = helper.copy().r; break;
+                # the serialization hook of an object of the tenant's class
+                case "serialize": Serializable::serialize(helper); rv = t.trap(); break;
                 default: throw "UNKNOWN-METHOD", method;
             }
             # the scope's own code changes the object again once the tenant's code has returned
@@ -57,6 +65,15 @@ class SharedCache {
     #! raises an exception
     throwIt() {
         throw "CACHE-ERROR", "an error";
+    }
+
+    #! the scope's own code starts a thread that changes the object: the thread is not in the scope
+    string ownThread() {
+        return SandboxManager::updateSharedObject(self, string sub () {
+            Queue q();
+            background q.push(set("thread"));
+            return q.get() + ", " + set("own");
+        });
     }
 
     #! a method of the object's own class that changes it
