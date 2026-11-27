@@ -123,34 +123,39 @@ class EchoConnection inherits WebSocketConnection {
     }
 }
 
-class EchoHandler inherits WebSocketHandler {
-    public {
-        #! The unique hashes of the sockets of the connections of the streams, in the order of their start
-        list<string> socks = ();
-    }
-
+#! Records the internal keys of the connections of a server, in the order in which they are accepted
+/** The asynchronous I/O controller logs the key of a connection when it accepts it, before it reads the connection's
+    requests; a handler gets only the connection's session token, which names no operation (qore#7251)
+*/
+class ConnectionKeyCapture inherits LoggerAppenderWithLayout {
     private {
-        Mutex socks_lock();
+        Mutex m();
+        list<string> conn_keys = ();
     }
 
-    constructor() : WebSocketHandler() {
+    constructor() : LoggerAppenderWithLayout("connection-keys", new LoggerLayoutPattern("%m")) {
+        open();
     }
 
-    #! Records the key of the connection of the stream; an HTTP/2 stream's start holds its thread until it ends
-    /** The socket that the handler of an HTTP/2 request gets is its own (qore#7214), so the key of the connection is
-        the one that the server gives in the request context (\c cx.sock_key)
-    */
-    bool start(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
-        {
-            AutoLock al(socks_lock);
-            socks += cx.sock_key;
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
         }
-        return WebSocketHandler::start(lid, cx, hdr, s);
+        *string key = (params =~ x/Accept complete: "([0-9a-f]{40})"/)[0];
+        if (key) {
+            AutoLock al(m);
+            push conn_keys, key;
+        }
     }
 
-    list<string> getSockets() {
-        AutoLock al(socks_lock);
-        return socks;
+    list<string> getKeys() {
+        AutoLock al(m);
+        return conn_keys;
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
@@ -414,10 +419,10 @@ class SseEventSourcePoolTest inherits QUnit::Test {
     /** The streams use a listener of their own (an HTTP/1.1 listener for h1, a TLS listener for h2 and h3), and
         ordinary requests the HTTP/1.1 listener; the case is skipped if no TLS listener can be created
     */
-    private ServerCtx startServer(string proto, *DeferredTasks deferred) {
+    private ServerCtx startServer(string proto, *DeferredTasks deferred, *Logger logger) {
         ServerCtx ctx();
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
-            "logger": mLogger,
+            "logger": logger ?? mLogger,
             "debug": True,
             "max_handler_threads": PoolThreads,
         };
@@ -610,15 +615,24 @@ class SseEventSourcePoolTest inherits QUnit::Test {
     }
 
     testWebSocketStreamConnectionCancel() {
-        ServerCtx ctx = startServer("h2");
+        # the internal keys of the connections, which own their operations
+        ConnectionKeyCapture conn_keys();
+        Logger logger("sse-event-source-pool-keys", LoggerLevel::getLevelDebug());
+        logger.addAppender(conn_keys);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        ServerCtx ctx = startServer("h2", NOTHING, logger);
         on_exit delete ctx.server;
         ws_closed = new Counter(1);
         on_exit remove ws_closed;
         list<WebSocketClient> clients = openWebSocketStreams(ctx, "h2");
         on_exit map $1.disconnect(), clients;
+        list<string> conn_list = conn_keys.getKeys();
+        assertEq(PoolThreads, conn_list.size(), "the server logged the key of each stream's connection");
         # every thread of the handler pool now waits for the end of a stream; the cancel of a connection's operation
         # (as by the removal of its listener, without the handler's own stop) must still report the end to its stream
-        AsyncIoController::cancelByOwner(ctx.ws.getSockets()[0]);
+        AsyncIoController::cancelByOwner(conn_list[0]);
         assertEq(0, ws_closed.waitForZero(HangTimeout), "the stream of the canceled connection ended on the server");
         probe(ctx, "an ordinary request after the canceled connection's stream ended");
     }

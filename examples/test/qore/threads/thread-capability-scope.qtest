@@ -334,7 +334,7 @@ public namespace ThreadCapabilitySteal {
         SandboxManager sm();
         sp.setSandboxManager(sm);
         code sandboxed_code = sp.callFunction("get");
-        assertThrows("THREAD-CAPABILITY-ERROR", "sandboxed", sub () {
+        assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a restricted Program", sub () {
             ThreadCapabilityScope scope({"start_thread": sandboxed_code});
         });
         # sandboxed code that may control threads cannot set a scope: it would stay in effect for the host's code after

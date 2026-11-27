@@ -185,6 +185,11 @@ public class CrossEncoderReranker {
                         "omit output_names to request all model outputs";
                 }
             }
+            if (!exists config.model_data || config.session_config.enable_profiling
+                    || config.session_config.profile_file_prefix) {
+                # the model path and the profile files are the creator's input (qore#7806)
+                check_creator_file_access("the 'model_path' and profiling options");
+            }
             onnx_model = exists config.session_config
                 ? (exists config.model_data
                     ? new ML::OnnxModel(config.model_data, config.session_config)

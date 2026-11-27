@@ -571,7 +571,9 @@ bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id) {
         }
         return true;
     }
-    return qore_caller_is_sandboxed(pgm_id);
+    // only restricted code: the exceptions of code that a trusted (governed) sandbox governs are the host's
+    // (qore#7737)
+    return qore_caller_is_restricted(pgm_id);
 }
 
 //! the mark of the first exception of the chain that code that is sandboxed or acts for sandboxed code raised

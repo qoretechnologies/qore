@@ -64,6 +64,8 @@ public namespace Hl7v2Util {
             if (opts.data) {
                 data = opts.data;
             } else if (opts.path) {
+                # the path is the creator's input (qore#7806)
+                check_creator_file_access("the 'path' option of the HL7 v2 read data provider");
                 # HL7 v2 files are often in ISO-8859-1: "latin1" reads such a file that is not valid UTF-8
                 data = File::readTextFile(opts.path, encoding_errors: opts.encoding_errors);
             } else {
@@ -169,6 +171,8 @@ public namespace Hl7v2Util {
             } else {
                 throw "HL7V2-WRITE-ERROR", "record must contain `message`, `segments`, or `tag` and `fields`";
             }
+            # the path is the creator's input (qore#7806)
+            check_creator_file_access("the 'path' option of the HL7 v2 write data provider");
             File f();
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(text);
