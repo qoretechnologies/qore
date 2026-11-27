@@ -1,0 +1,17 @@
+Swagger:
+  fromString: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromFile: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromUrl: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  trusted code's schema: host: shared: True, setLogger(): changed; tenant A: owned: False, shared: True, setLogger(): SHARED-OBJECT-ERROR, delete: SHARED-OBJECT-ERROR; host deletes it: changed
+OpenAPI 3:
+  fromString: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromFile: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromUrl: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  trusted code's schema: host: shared: True, setLogger(): changed; tenant A: owned: False, shared: True, setLogger(): SHARED-OBJECT-ERROR, delete: SHARED-OBJECT-ERROR; host deletes it: changed
+AsyncAPI:
+  fromString: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromFile: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  fromUrl: tenant B: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR; host: shared: False, setLogger(): changed; tenant A: owned: True, shared: False, setLogger(): changed, delete: changed
+  trusted code's schema: host: shared: True, setLogger(): changed; tenant A: owned: False, shared: True, setLogger(): SHARED-OBJECT-ERROR, delete: SHARED-OBJECT-ERROR; host deletes it: changed
+the RestClient module's validator for tenant A: owned: False, shared: False, setLogger(): SANDBOX-OBJECT-ACCESS-ERROR, delete: SANDBOX-OBJECT-ACCESS-ERROR
+a tenant at the level of code safety: owned: True, shared: False, setLogger(): changed, delete: changed

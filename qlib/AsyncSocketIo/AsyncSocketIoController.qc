@@ -429,11 +429,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! A copy of the process-wide wrapper that code that is sandboxed or acts for sandboxed code makes has no logger
     /** The copy is not shared, so it would otherwise give its caller the logger that trusted code set on the
-        process-wide wrapper (issue #7666)
+        process-wide wrapper (issue #7666).  The class clears the member itself: the copy keeps the provenance of the
+        process-wide wrapper and is not the caller's (see @ref sandbox_object_ownership), so the setter, which
+        accepts only the owner of the object, would refuse it
     */
     copy(AsyncSocketIoController old) {
         if (SandboxManager::isSharedObject(old) && !SandboxManager::isProcessWideRegistrationAllowed()) {
-            LoggerWrapper::setLogger();
+            # LoggerWrapper's logger member is private:hierarchy, so the subclass resets it directly
+            self.logger = NOTHING;
         }
     }
 
