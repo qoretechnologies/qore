@@ -81,7 +81,9 @@ the type `jsoncons::jsonschema::property_name_set`, a local patch: `validator.hp
 `JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET`, `std::unordered_set<std::string>` by default, and
 `modules/json/src/QC_JsonSchema.h` defines that to `qore_keyed_string_set` before including jsoncons, so that these
 sets hash the names with the keyed hash of the process (qore#7750); the module's initialization creates its key.  Keep
-the alias, and use it for every set of instance property names, when updating jsoncons.
+the alias, and use it for every set of instance property names, when updating jsoncons.  The maps that schema
+compilation fills from the schema itself (anchors, identifiers, vocabularies, custom messages) keep `std::hash`: a
+schema is part of the program, while the instances that it validates are data.
 
 The module's own parsers and serializers (JSON, CBOR, TOON, the SAX parser and the stream writer) call
 `q_check_stack()` for each nested container, so the nesting depth that they accept is limited by the thread's stack
