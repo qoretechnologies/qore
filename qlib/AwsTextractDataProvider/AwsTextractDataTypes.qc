@@ -196,8 +196,7 @@ public class AwsTextractDetectDocumentTextResponseDataType inherits HashDataType
             "Blocks": {
                 "display_name": "Blocks",
                 "desc": "Extracted text blocks — each is an "
-                    "@ref AwsTextractDataProvider::AwsTextractBlockDataType "
-                    "\"AwsTextractBlock\" with `BlockType`, `Text`, "
+                    "`AwsTextractBlock` with `BlockType`, `Text`, "
                     "`Confidence`, `Geometry`, and relationship IDs.",
                 "type": new ListDataType("AwsTextractBlockList",
                     new AwsTextractBlockDataType(), True),

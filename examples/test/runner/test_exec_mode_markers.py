@@ -340,6 +340,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
+                                 "examples/test/qore/vars/timezone-spelling-casefold.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTModuleMissingDependencyFallback.qtest",

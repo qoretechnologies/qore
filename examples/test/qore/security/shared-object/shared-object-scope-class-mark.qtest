@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SharedObjectScopeClassMarkTest
+
+#! The code of a class that restricted code declared acts for restricted code in an update scope (qore#7737)
+/** An update scope of a shared object admits only its own code: the code of a class that restricted code declared,
+    which stays restricted when its sandbox manager is relaxed to trust its code, cannot change the object or share an
+    object in a scope that trusted code opened, also when the class is in the %Program of the scope, while the scope's
+    own code still changes the object and shares objects; the code of a class that the code of a trusted (governed)
+    sandbox declared is not affected
+*/
+
+#! the code of a trusted library: a shared object whose class updates it in an update scope
+const CacheSource = "
+class SharedCache {
+    public {
+        string v = 'orig';
+    }
+
+    #! changes the object in an update scope and runs the method of the tenant's object in it
+    string update(object t) {
+        return SandboxManager::updateSharedObject(self, string sub () {
+            v = 'scope';
+            string rv = t.poke(self);
+            # the scope's own code changes the object again
+            v = 'scope again';
+            return rv;
+        });
+    }
+
+    #! runs the method of the tenant's object that shares an object in an update scope
+    string share(object t) {
+        return SandboxManager::updateSharedObject(self, string sub () {
+            return t.share(new Plain());
+        });
+    }
+
+    #! the scope's own code shares an object
+    bool shareOwn() {
+        return SandboxManager::updateSharedObject(self, bool sub () {
+            Plain p();
+            SandboxManager::shareObject(p);
+            return SandboxManager::isSharedObject(p);
+        });
+    }
+}
+
+#! an object that the tenant's code tries to share
+class Plain {
+}
+
+SharedCache sub new_cache() {
+    SharedCache c();
+    SandboxManager::shareObject(c);
+    return c;
+}
+";
+
+#! the tenant's code: a class whose methods change a shared object and share an object
+const TenantSource = "
+class TenantBox {
+    string poke(object c) {
+        try {
+            c.v = 'tenant';
+            return 'changed';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    string share(object o) {
+        try {
+            SandboxManager::shareObject(o);
+            return 'shared';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+TenantBox sub tenant_box() {
+    return new TenantBox();
+}
+";
+
+class SharedObjectScopeClassMarkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("shared object scope class mark", "1.0", \ARGV) {
+        addTestCase("a class of restricted code under a restricting manager", \restrictingTest());
+        addTestCase("a class of restricted code after its manager is relaxed", \relaxedTest());
+        addTestCase("a class of restricted code in the Program of the scope", \sameProgramTest());
+        addTestCase("a class of a trusted (governed) sandbox", \trustedTest());
+        addTestCase("a class of a trusted (governed) sandbox in the Program of the scope", \trustedSameProgramTest());
+        set_return_value(main());
+    }
+
+    private static SandboxManager manager(bool trusted) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        if (trusted) {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        return sm;
+    }
+
+    private static Program tenant(SandboxManager sm) {
+        # the library's code is parsed into it as well in some cases
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! the trusted library's Program, which no sandbox governs
+    private static Program library() {
+        Program p(PO_NEW_STYLE);
+        p.parse(CacheSource, "library");
+        return p;
+    }
+
+    #! checks the scopes of a shared object of \a lib for an object of the tenant's class
+    /** @param restricted if the tenant's code is restricted
+    */
+    private checkScopes(Program lib, object box, bool restricted, string what) {
+        object c = lib.callFunction("new_cache");
+        assertEq(restricted ? "SHARED-OBJECT-ERROR" : "changed", c.update(box), what + ": change in a scope");
+        # the scope's own code changed the object after the tenant's code returned
+        assertEq("scope again", c.v, what + ": the scope's own change");
+        assertEq(restricted ? "SHARED-OBJECT-ERROR" : "shared", c.share(box), what + ": share in a scope");
+        assertTrue(c.shareOwn(), what + ": the scope's own code shares an object");
+        # outside a scope
+        assertEq(restricted ? "SHARED-OBJECT-ERROR" : "changed", box.poke(c), what + ": change outside a scope");
+    }
+
+    #! the tenant's Program is restricted: its code is entered in the scope
+    restrictingTest() {
+        SandboxManager sm = manager(False);
+        Program p = tenant(sm);
+        checkScopes(library(), p.callFunction("tenant_box"), True, "restricting");
+    }
+
+    #! the tenant's Program is no longer restricted, but the class that restricted code declared is
+    relaxedTest() {
+        SandboxManager sm = manager(False);
+        Program p = tenant(sm);
+        object box = p.callFunction("tenant_box");
+        sm.setUncontrolledApiPolicy(True);
+        assertFalse(sm.isRestricted(), "the manager is relaxed");
+        checkScopes(library(), box, True, "relaxed");
+    }
+
+    #! the class that restricted code declared is in the Program of the scope, whose manager was relaxed before the
+    #! trusted library's code was parsed into it
+    sameProgramTest() {
+        SandboxManager sm = manager(False);
+        Program p = tenant(sm);
+        # created by restricted code
+        object box = p.callFunction("tenant_box");
+        sm.setUncontrolledApiPolicy(True);
+        p.parse(CacheSource, "library");
+        checkScopes(p, box, True, "same Program");
+    }
+
+    #! the class that code of a trusted (governed) sandbox declared is not restricted
+    trustedTest() {
+        SandboxManager sm = manager(True);
+        Program p = tenant(sm);
+        checkScopes(library(), p.callFunction("tenant_box"), False, "trusted");
+    }
+
+    #! as above, in the Program of the scope
+    trustedSameProgramTest() {
+        SandboxManager sm = manager(True);
+        Program p = tenant(sm);
+        p.parse(CacheSource, "library");
+        checkScopes(p, p.callFunction("tenant_box"), False, "trusted, same Program");
+    }
+}

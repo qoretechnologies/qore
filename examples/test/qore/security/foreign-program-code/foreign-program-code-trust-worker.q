@@ -195,13 +195,19 @@ set_app_registry("qore-7202-host-value", "host value");
         new SandboxManager());
 }
 
-# a sandboxed tenant does not get the host's registry values, may not replace another Program's sandbox, and calls the
-# sandbox introspection APIs as sandboxed code
+# a tenant that a restricting sandbox governs does not get the host's registry values; the code of a tenant that a
+# trusted (governed) sandbox governs, one that allows uncontrolled APIs, gets them as trusted code (qore#7737)
+{
+    Tenant rt(PO_NEW_STYLE, new SandboxManager());
+    rt.check("sandboxed-registry", "registry", "null", NOTHING);
+}
+# a sandboxed tenant may not replace another Program's sandbox, and calls the sandbox introspection APIs as sandboxed
+# code
 {
     SandboxManager sm();
     sm.setUncontrolledApiPolicy(True);
     Tenant t(PO_NEW_STYLE, sm);
-    t.check("sandboxed-registry", "registry", "null", NOTHING);
+    t.check("trusted-registry", "registry", "\"host value\"", NOTHING);
     Program v1(PO_NEW_STYLE);
     v1.setSandboxManager(new SandboxManager());
     Program v2(PO_NEW_STYLE);

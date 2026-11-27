@@ -237,6 +237,8 @@ public class ModelRegistry {
         @since QoreModelRegistry 1.0.0
     */
     string registerPackage(string package_path, hash<auto> options) {
+        # the path is the caller's input (qore#7806)
+        check_caller_file_access("the package path of a model package registration");
         *string name = options.name;
         if (!name.val()) {
             throw "ML-REGISTRY-ERROR", "required option 'name' not provided";

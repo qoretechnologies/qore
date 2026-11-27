@@ -225,9 +225,9 @@ public:
         nothing is held
         @param snapshot true if a later operand of the operator can change the value in place: a list, hash, string,
         binary or number value that the operand gives without a reference of its own (the value of a variable) then
-        gets one, which the holder keeps at least while the operator runs, so that a later change of the variable
-        copies the value first and the operand keeps the value that it read, as in the other execution modes
-        (qore#7722)
+        gets one, which the holder keeps while the operator runs and releases when it returns (it is not a temporary
+        of the statement), so that a later change of the variable copies the value first and the operand keeps the
+        value that it read, as in the other execution modes (qore#7722)
 
         Always inlined: every operator of the AST evaluates its operands with it, and whether it is inlined must not
         depend on the size of the code around it in the library's single compilation unit (as for
@@ -263,7 +263,12 @@ private:
             qore_type_t t = v.getType();
             if (t == NT_LIST || t == NT_HASH || t == NT_STRING || t == NT_BINARY || t == NT_NUMBER) {
                 v.getInternalNode()->ref();
-                nd = true;
+                // the reference is the snapshot's, not a temporary of the statement: the holder releases it when the
+                // operator returns, after its later operands ran, as the other execution modes release the value
+                // that they read; held by the statement, it would keep the value (and the objects in it) to the end
+                // of the statement (in a functional operator, until the operand is evaluated again)
+                needs_deref = true;
+                return;
             }
         }
         needs_deref = nd;

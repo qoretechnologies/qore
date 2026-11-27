@@ -105,6 +105,10 @@ public class OcrEngine {
                 "ocr module is required for native mode but is not available";
 %endif
 %ifndef NoOcr
+            if (config.datapath.val()) {
+                # the data directory is the creator's input (qore#7806)
+                check_creator_file_access("the 'datapath' option");
+            }
             native_engine = new Ocr::TesseractEngine(config.datapath, config.language);
 %endif
         } else if (mode == "http") {

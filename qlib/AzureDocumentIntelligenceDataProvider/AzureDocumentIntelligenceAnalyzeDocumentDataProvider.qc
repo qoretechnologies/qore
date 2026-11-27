@@ -116,6 +116,8 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             if (!req.document_path.val()) {
                 throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document_path must be a nonempty local file path";
             }
+            # the path is the caller's input: refused before it is read or anything is sent (qore#7806)
+            check_caller_file_access("the 'document_path' field of the request");
             body.base64Source =
                 make_base64_string(File::readBinaryFile(req.document_path));
         }

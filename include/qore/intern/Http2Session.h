@@ -1664,6 +1664,12 @@ private:
     DLLLOCAL void addBoundBody(int32_t stream_id);
     //! Removes a body from the bounds (qore#7653)
     DLLLOCAL void eraseBoundBody(int32_t stream_id);
+
+    //! Records the end of the connection's wait for its client if no body or send waits any more (qorus#1335)
+    /** The send rate of the connection is told that the wait has ended, so that the time until the next wait is not
+        charged; called with the session's mutex held
+    */
+    DLLLOCAL void endSendRateWaitIfIdleUnlocked();
     //! Marks a bounded body whose stream is reset: unless its END_STREAM frame has been serialized, it stays bounded
     //! until its RST_STREAM frame has been written (qore#7653)
     DLLLOCAL void resetBoundBody(int32_t stream_id);

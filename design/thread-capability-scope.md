@@ -14,6 +14,13 @@ Implemented (qorus#867, the Qore part; follows qorus#766 and qore#5943); see Dec
 - the tests: `examples/test/qore/threads/thread-capability-scope.qtest` (with the module fixture
   `ThreadCapabilityFixture.qm`), and a capability case in each module's test.
 
+"Sandboxed" and "a sandbox governs" in this document mean restricted (qore#7737): only a sandbox that refuses
+uncontrolled APIs (a restricting manager) counts, and a Program counts if `qore_program_is_restricted()` reports it
+restricted (`qore_scope_creator_is_restricted()`, `thread_capability_call_refusal()`,
+`thread_capability_check_code()`).  The code of a Program that a trusted (governed) sandbox governs, one that allows
+uncontrolled APIs, which a host such as Qorus attaches to its trusted interfaces for their interrupts and limits,
+sets, sees and provides capabilities as trusted code.
+
 ## Problem
 
 Library modules that start threads or wrap callbacks for their callers take that code as an option: `start_thread`

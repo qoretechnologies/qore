@@ -1954,6 +1954,9 @@ ArrayList l();
       of a @ref sandbox_filesystem "sandbox file-system policy" for the sources that these loads and \c %%include
       read; the \c desc of a child module in the \c "child-modules" of a module description is replaced by a note
       when the error was built for code without this option
+    - the values of the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV, which are
+      empty in the %Program and are read empty from other %Programs that are not restricted from external information
+      (see @ref sandbox_program_process_information)
 
     @par Known Limitation:
     The following still give paths of the host to code with this option:

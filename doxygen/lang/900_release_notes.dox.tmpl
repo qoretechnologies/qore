@@ -44,8 +44,9 @@
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
     - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
       @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
-      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
-      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
+      refuse) decides whether the code counts as restricted for the rules that restrict what code may do, such as
+      the rules that keep sandboxed code from I/O that %Qore does not control (see @ref sandbox_manager_classes);
+      queried with
       @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
       @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
       \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
@@ -111,6 +112,12 @@
     A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
     that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
     @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
+    @par Data Provider Actions Refuse Local Paths of Code Restricted From the File System
+    Code restricted from the file system cannot give a local path or file location in the request of a qlib data
+    provider action, also with a provider that the host lent it, or create a provider with a path; a host gives such
+    code files with a sandbox or a confined provider (see @ref sandbox_caller_domains;
+    <a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
 
     @par Library Code Gives Restricted Code No Values of the Host's Environment
     For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
@@ -300,6 +307,12 @@
     their directories for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the host gets the
     same exceptions with full paths (see @ref no-external-info "%no-external-info";
     <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
+
+    @par Code Restricted From External Information Gets No Process Arguments or Environment
+    \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are empty in a %Program restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", also when it inherits the restriction or gets it later, and
+    code with this restriction reads them empty from other %Programs (see @ref sandbox_program_process_information;
+    <a href="https://github.com/qoretechnologies/qore/issues/7693">issue 7693</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -1530,6 +1543,12 @@
     the same for the %Program of a call reference or a closure
     (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
 
+    @par Trusted (Governed) and Restricting Sandbox Managers
+    The rules that restrict what code may do (shared objects, injection, private access, process-wide state, trusted
+    capabilities, deferral) apply only to code that a restricting sandbox governs, also code acting for it, which cannot
+    send @ref Qore::Program::issueModuleCmd() "module commands" to another Program; trusting sandboxes keep interrupts,
+    limits and I/O policies (@ref sandbox_manager_classes; <a href="https://github.com/qoretechnologies/qore/issues/7737">issue 7737</a>).
+
     @par Configurable Exception Report Limit
     @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an
     unhandled text report, including the errors from a syntax check (issue #2311).
@@ -2294,6 +2313,12 @@
         @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "getActionProcessing()" and
         @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()"
         (<a href="https://github.com/qoretechnologies/qore/issues/7568">issue 7568</a>)
+      - a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in a global variable no longer keeps the
+        program from ending, and an error of its thread callback is raised instead of deadlocking it
+        (<a href="https://github.com/qoretechnologies/qore/issues/7771">issue 7771</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
+      - a synchronous @ref DataProvider::DataProviderPipeline "DataProviderPipeline" processes the records of an
+        iterator instead of hanging (<a href="https://github.com/qoretechnologies/qore/issues/7793">issue 7793</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -3068,8 +3093,9 @@
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
       running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
-    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
-      through links to directories), such as those in data, no longer add a time zone each without bound
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS and in
+      directories that do not distinguish case, names through links to directories, case variants of Windows time zone
+      names), such as those in data, no longer add a time zone each without bound
       (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
     - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
@@ -3393,6 +3419,10 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - qlib data provider actions refuse a local path or file location in a request from a caller restricted from the
+      file system, also with a lent provider, as do providers created with a path and the file options of locations;
+      see @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "checkCallerLocation()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)

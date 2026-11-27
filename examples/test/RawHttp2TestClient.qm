@@ -194,8 +194,8 @@ public class RawHttp2Client {
 
     #! Reads frames until the stream ends (END_STREAM or RST_STREAM) or the connection is closed
     /** SETTINGS and PING frames are acknowledged; the data of other streams is read and not counted; each DATA frame
-        of the stream is credited back (WINDOW_UPDATE for the stream and the connection), so that the whole body can
-        be read whatever the client's windows; every RST_STREAM and GOAWAY frame is recorded (@ref resets,
+        of the stream is credited back (WINDOW_UPDATE for the stream and the connection; the connection only for the
+        frame that ends the stream), so that the whole body can be read whatever the client's windows; every RST_STREAM and GOAWAY frame is recorded (@ref resets,
         @ref goaway_code)
 
         @param stream_id the stream to read
@@ -307,9 +307,18 @@ public class RawHttp2Client {
                 resets{f.stream_id} = u32val(f.payload, 0);
                 break;
             case FrameData:
-                if (f.payload.size() && !(f.flags & FlagEndStream)) {
-                    return sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
-                        + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())));
+                # the data is credited back to the connection, also the data of the frame that ends its stream (whose
+                # stream needs no more credit): otherwise each stream would use up part of the connection's window
+                # for good (qorus#1335)
+                if (f.payload.size()) {
+                    bool ends = (f.flags & FlagEndStream).toBool();
+                    binary credit = frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()));
+                    if (!ends) {
+                        credit += frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size()));
+                    }
+                    # a credit that cannot be sent after the end of a stream does not change that the stream ended:
+                    # the next read finds the closed connection
+                    return sendOrClosed(credit) || ends;
                 }
                 break;
         }

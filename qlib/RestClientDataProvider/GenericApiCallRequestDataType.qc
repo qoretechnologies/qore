@@ -69,7 +69,7 @@ public class GenericApiCallRequestDataType inherits HashDataType {
                 "display_name": "Multipart Form",
                 "short_desc": "Upload a file using multipart/form-data",
                 "desc": "Upload a file using `multipart/form-data`. The body must be a "
-                    "@ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + "
+                    "`FileDataType` structure (filename + content + "
                     "mime_type). The framework builds the multipart envelope and sets the boundary header.",
                 "value": "multipart",
             },
