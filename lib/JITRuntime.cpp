@@ -12310,11 +12310,14 @@ static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_finis
     if (prefix.isNothing()) {
         return toBits(rv.release());
     }
-    SimpleRefHolder<QoreStringNode> result(prefix.get<const QoreStringNode>()->copy());
+    // the values are read in either string representation: the join of the call can be an inline short string
+    QoreStringNodeValueHelper prefix_str(prefix);
+    SimpleRefHolder<QoreStringNode> result(prefix_str->copy());
     QoreStringValueHelper separator_str(separator);
     result->concat(*separator_str, xsink);
     if (!*xsink) {
-        result->concat(rv->get<const QoreStringNode>(), xsink);
+        QoreStringValueHelper joined(*rv);
+        result->concat(*joined, xsink);
     }
     return *xsink ? toBits(QoreValue()) : toBits(QoreValue(result.release()));
 }
@@ -12347,6 +12350,7 @@ static QORE_ALWAYS_INLINE bool qore_rt_string_join_append_raw(qore_string_privat
     if (node->getType() != NT_STRING) {
         return false;
     }
+    // note: safe; an inline short string, which has no node, was appended above
     const qore_string_private* vp = qore_string_private::get(*static_cast<const QoreStringNode*>(node));
     if (vp->getEncoding() != p->getEncoding()) {
         return false;
@@ -12427,10 +12431,10 @@ static __attribute__((noinline)) uint64_t qore_rt_string_method_join_other(QoreV
         return toBits(first);
     }
 
-    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start())
+    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start()); the join is the
+    // string node that the start made, and an inline short string, which has no reference, is given as it is
     assert(value.isNothing());
-    first.getInternalNode()->ref();
-    return toBits(first);
+    return toBits(first.refSelf());
 }
 
 //! string.method.join.start: the join of the values that a fused map gives, for <list>::join() of the map
@@ -12460,6 +12464,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
     if (first.hasNode() && !value.isNothing()) [[likely]] {
         AbstractQoreNode* node = first.getInternalNode();
         if (node->getType() == NT_STRING) [[likely]] {
+            // note: safe; the node of the value (an inline short string has none), which is the join that the start
+            // made
             return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
                 fromBits(separator_bits), value, xsink);
         }
