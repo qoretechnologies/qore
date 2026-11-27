@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires json
+
+%exec-class PresentationTextsNoDocMarkupTest
+
+#! The labels and descriptions of the data provider modules in qlib contain no documentation commands
+/** A user interface (such as the Automation Hub) shows the labels and descriptions of apps, actions, options,
+    types and connections as plain text or Markdown, so a documentation command copied from a module's API
+    documentation, such as <tt>\@ref DataProvider::FileDataType "FileDataType"</tt>, is shown verbatim.
+
+    This test checks the texts that reach a user interface in two ways:
+    - the catalogs of the modules in qlib: every message, in the root catalog (the source texts of the apps,
+      actions, options, option types and connections that the modules register) and in every translation
+    - the sources of the modules in qlib: every text given as the label or the description of a record in a hash
+      (\c display_name, \c short_desc, \c desc and \c validation_regex_desc), which also covers the texts that no
+      catalog has, such as the descriptions of the fields of an action's output type
+
+    The source scan reads the sources as tokens (strings, comments, brackets), as
+    \c ActionDisplayNamesSentenceCase.qtest does; it does not see a text given otherwise, such as a description
+    passed to a constructor.
+
+    @ref DataProvider::DataProviderPresentation::findDocumentationMarkup()
+    "DataProviderPresentation::findDocumentationMarkup()" decides what a documentation command is;
+    \c qore-data-provider-i18n rejects source texts and translations with one in every mode.
+*/
+class PresentationTextsNoDocMarkupTest inherits QUnit::Test {
+    public {
+        #! The members of a record in a hash whose value is a presentation text
+        const TextKeys = ("\"display_name\"", "\"short_desc\"", "\"desc\"", "\"validation_regex_desc\"");
+
+        #! A quick test of the raw text of a catalog file; only a file that matches it is parsed
+        /** A documentation command is written in JSON as it is, or with its backslash escaped.  This pattern
+            matches more than @ref DataProvider::DataProviderPresentation::findDocumentationMarkup()
+            "findDocumentationMarkup()" finds, which decides on the parsed texts.
+        */
+        const RawCommandPattern = "(?:@|\\\\\\\\)(?:"
+            + DataProviderPresentation::DocumentationMarkupCommands.join("|") + ")(?![\\w-])";
+    }
+
+    private {
+        #! the qlib directory of the source tree
+        string root;
+    }
+
+    constructor() : Test("PresentationTextsNoDocMarkupTest", "1.0") {
+        root = normalize_dir(get_script_dir() + "/../../../../qlib");
+        addTestCase("documentation commands are found in presentation texts", \findTest());
+        addTestCase("the source scan finds the texts of every record", \scanTest());
+        addTestCase("the catalogs of qlib have no documentation commands", \catalogTest());
+        addTestCase("the presentation texts in the sources of qlib have no documentation commands", \sourceTest());
+        set_return_value(main());
+    }
+
+    findTest() {
+        # commands with @ and with a backslash
+        assertEq("@ref", DataProviderPresentation::findDocumentationMarkup(
+            "The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure"));
+        assertEq("@ref", DataProviderPresentation::findDocumentationMarkup("See @ref True."));
+        assertEq("\\c", DataProviderPresentation::findDocumentationMarkup("the \\c json body type"));
+        assertEq("@c", DataProviderPresentation::findDocumentationMarkup("@c"));
+        assertEq("@see", DataProviderPresentation::findDocumentationMarkup("Lists items.\n@see other"));
+        assertEq("@note", DataProviderPresentation::findDocumentationMarkup("x\n\n@note y"));
+        assertEq("@code", DataProviderPresentation::findDocumentationMarkup("@code{.py} x @endcode"));
+        assertEq("@since", DataProviderPresentation::findDocumentationMarkup("(@since 2.0)"));
+        assertEq("\\ref", DataProviderPresentation::findDocumentationMarkup("x\n\\ref y"));
+        # the first command
+        assertEq("@p", DataProviderPresentation::findDocumentationMarkup("@p a and @ref b"));
+        # each command in the list is found
+        foreach string cmd in (DataProviderPresentation::DocumentationMarkupCommands) {
+            assertEq("@" + cmd, DataProviderPresentation::findDocumentationMarkup("x @" + cmd + " y"), cmd);
+            assertEq("\\" + cmd, DataProviderPresentation::findDocumentationMarkup("x \\" + cmd + " y"), cmd);
+        }
+
+        # text that is not a command
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("Plain text with **Markdown**"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("mail user@example.com"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("mail user@c.example"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("such as exists @a.b or @a{b}"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("the @type and @timestamp fields"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("@references and @c-suite"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("a separator such as \\n or \\t"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("@@ref and \\\\c"));
+        # text in a Markdown code span is literal
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup("write `@ref X` or `\\c y` in a comment"));
+        assertEq("@ref", DataProviderPresentation::findDocumentationMarkup("`@ref X` and @ref Y"));
+        assertEq(NOTHING, DataProviderPresentation::findDocumentationMarkup(""));
+
+        # the raw pattern finds every command in a JSON text, escaped or not
+        assertTrue(make_json({"x": "a \\c b"}) =~ RawCommandPattern, "a backslash command in JSON");
+        assertTrue(make_json({"x": "a @ref b"}) =~ RawCommandPattern, "an @ command in JSON");
+        assertFalse(make_json({"x": "a\nnote b"}) =~ RawCommandPattern, "a newline before a command name");
+    }
+
+    scanTest() {
+        string src = "const A = {\n"
+            "    \"display_name\": \"Get one\",\n"
+            "    \"short_desc\": \"Gets \" \"one @ref X\",\n"
+            "    \"desc\": \"Gets one; see \" + \"@ref Y \\\"Y\\\"\",\n"
+            "    # \"desc\": \"a comment @ref Z\",\n"
+            "    /* \"desc\": \"a block @ref W\", */\n"
+            "    \"name\": \"not a text key @ref V\",\n"
+            "    \"fields\": {\"x\": {\"desc\": \"a field \\\\c x\"}},\n"
+            "    \"validation_regex_desc\": \"two letters\",\n"
+            "};\n";
+        assertEq(({"line": 2, "text": "Get one"}, {"line": 3, "text": "Gets one @ref X"},
+            {"line": 4, "text": "Gets one; see @ref Y \"Y\""}, {"line": 8, "text": "a field \\c x"},
+            {"line": 9, "text": "two letters"}), findTexts(src));
+    }
+
+    catalogTest() {
+        list<string> files = findCatalogFiles(root);
+        assertTrue(files.size() > 1000, sprintf("catalog files found: %d", files.size()));
+        int roots = 0;
+        list<string> offenders = ();
+        foreach string file in (files) {
+            if (basename(file) == "root.json") {
+                ++roots;
+            }
+            string raw = ReadOnlyFile::readTextFile(file);
+            if (raw !~ RawCommandPattern) {
+                continue;
+            }
+            hash<auto> catalog = parse_json(raw);
+            foreach hash<auto> locale in ((catalog.locales ?? {}).pairIterator()) {
+                foreach hash<auto> message in ((locale.value.messages ?? {}).pairIterator()) {
+                    foreach string member in (("source", "message")) {
+                        if (message.value{member}.typeCode() != NT_STRING) {
+                            continue;
+                        }
+                        if (*string cmd = DataProviderPresentation::findDocumentationMarkup(message.value{member})) {
+                            offenders += sprintf("%s: %s %s (%s)", file.substr(root.length() + 1), message.key,
+                                member, cmd);
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(roots > 100, sprintf("root catalogs found: %d", roots));
+        assertEq((), offenders, "catalog messages with documentation commands; write the texts in the module "
+            "sources as plain text or Markdown and regenerate the catalogs");
+    }
+
+    sourceTest() {
+        int count = 0;
+        list<string> offenders = ();
+        foreach string file in (findSources(root)) {
+            foreach hash<auto> text in (findTexts(ReadOnlyFile::readTextFile(file))) {
+                ++count;
+                if (*string cmd = DataProviderPresentation::findDocumentationMarkup(text.text)) {
+                    offenders += sprintf("%s:%d: %s: %y", file.substr(root.length() + 1), text.line, cmd,
+                        text.text);
+                }
+            }
+        }
+        assertTrue(count > 10000, sprintf("presentation texts found: %d", count));
+        assertEq((), offenders, "presentation texts with documentation commands; write them as plain text or "
+            "Markdown");
+    }
+
+    #! The presentation texts of a source: the strings, joined, after a text key and a colon, with their lines
+    private static list<hash<auto>> findTexts(string src) {
+        # strings, comments, newlines and the tokens of hash and list structure, in source order
+        list<string> raw = (src =~ x/("(?:[^"\\]|\\.)*"|\/\*.*?\*\/|#[^\n]*|[{}():,+\n])/gs) ?? ();
+        # the tokens without comments and newlines, with their lines
+        list<hash<auto>> tokens = ();
+        int line = 1;
+        foreach string tok in (raw) {
+            if (tok != "\n" && tok !~ /^(#|\/\*)/) {
+                tokens += {"tok": tok, "line": line};
+            }
+            line += (tok =~ x/(\n)/g ?? ()).size();
+        }
+        list<hash<auto>> rv = ();
+        int size = tokens.size();
+        for (int i = 0; i < size; ++i) {
+            if (i + 2 >= size || !inlist(tokens[i].tok, TextKeys) || tokens[i + 1].tok != ":"
+                    || tokens[i + 2].tok[0] != "\"") {
+                continue;
+            }
+            string text;
+            int j = i + 2;
+            while (j < size) {
+                if (tokens[j].tok[0] == "\"") {
+                    text += PresentationTextsNoDocMarkupTest::unquote(tokens[j].tok);
+                    ++j;
+                } else if (tokens[j].tok == "+" && j + 1 < size && tokens[j + 1].tok[0] == "\"") {
+                    ++j;
+                } else {
+                    break;
+                }
+            }
+            rv += {"line": tokens[i].line, "text": text};
+            i = j - 1;
+        }
+        return rv;
+    }
+
+    #! The text of a double-quoted string token
+    private static string unquote(string tok) {
+        string rv = tok.substr(1, -1);
+        rv =~ s/\\(.)/$1/g;
+        return rv;
+    }
+
+    #! The catalog files of the modules in qlib: the JSON files in their i18n directories
+    private static list<string> findCatalogFiles(string dir, bool in_catalog = False) {
+        list<string> rv = ();
+        foreach string entry in (glob(dir + "/*")) {
+            if (is_dir(entry)) {
+                string name = basename(entry);
+                rv += findCatalogFiles(entry, in_catalog || name == "i18n" || name =~ /\.i18n$/);
+            } else if (in_catalog && entry =~ /\.json$/) {
+                rv += entry;
+            }
+        }
+        return rv;
+    }
+
+    private static list<string> findSources(string dir) {
+        list<string> rv = ();
+        foreach string entry in (glob(dir + "/*")) {
+            if (is_dir(entry)) {
+                rv += findSources(entry);
+            } else if (entry =~ /\.(qc|qm)$/) {
+                rv += entry;
+            }
+        }
+        return rv;
+    }
+}

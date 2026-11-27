@@ -79,6 +79,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
         const PatternOwnerDesc = "a two-letter language code, such as en";
         const PatternOwnerNestedDesc = "a three-letter currency code, such as EUR";
 
+        #! The fixture module that registers an app whose descriptions contain documentation commands
+        const MarkupOwnerModule = "PresentationMarkupOwner";
+        const MarkupOwnerApp = "QoreTestMarkupProvider";
+
         #! The fixture module that registers an app whose three options reach one nested type
         const RekeyOwnerModule = "PresentationRekeyOwner";
         const RekeyOwnerApp = "QoreTestRekeyProvider";
@@ -135,6 +139,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \validationPatternPresentationTest());
         addTestCase("qore-data-provider-i18n extracts validation pattern descriptions",
             \validationPatternExtractionToolTest());
+        addTestCase("qore-data-provider-i18n rejects documentation commands in source texts",
+            \markupExtractionToolTest());
         addTestCase("qore-data-provider-i18n re-keys nested type texts to their per-action ids",
             \rekeySourceTreeToolTest());
         addTestCase("qore-data-provider-i18n re-keys committed catalogs as it re-keys to extracted ones",
@@ -1928,6 +1934,27 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "a field's description has the field's message id for the member");
     }
 
+    #! The tool refuses to write a catalog whose source texts contain documentation commands
+    markupExtractionToolTest() {
+        string root = sourceRoot();
+        string output = make_tmp_dir("data-provider-i18n-markup-");
+        on_exit remove_tree(output);
+        string out;
+        assertEq(1, runI18nTool(root, sprintf("-o %s --owner %s", shellQuote(output), shellQuote(MarkupOwnerModule)),
+                \out), "the tool rejects source texts with documentation commands");
+        assertGt(-1, out.find("DATA-PROVIDER-I18N-ERROR"), "the tool reports the error: " + out);
+        string domain = DataProviderPresentation::defaultCatalogDomain(MarkupOwnerApp);
+        assertGt(-1, out.find(sprintf("%s %s (@ref)", domain,
+                DataProviderPresentation::actionMessageId(MarkupOwnerApp, "upload", "desc"))),
+            "the tool names the action description and its command: " + out);
+        assertGt(-1, out.find(sprintf("%s %s (\\c)", domain,
+                DataProviderPresentation::optionMessageId(MarkupOwnerApp, "upload", "name", "desc"))),
+            "the tool names the option description and its command: " + out);
+        assertEq(-1, out.find(DataProviderPresentation::appMessageId(MarkupOwnerApp, "desc")),
+            "a command in a Markdown code span is literal text: " + out);
+        assertFalse(is_file(output + DirSep + domain + DirSep + "root.json"), "no catalog is written");
+    }
+
     #! The tool re-keys the nested type texts of a catalog from their per-option ids to their per-action ids
     rekeySourceTreeToolTest() {
         string root = sourceRoot();
@@ -2825,6 +2852,32 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
                 ("DataProvider",)),
             "source-tree verification accepts identical brands and cognates");
+
+        # a translation with a documentation command fails every check
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": source, "message": source + " (@ref Qore::Program \"Program\")"},
+            }}},
+        });
+        assertEq(({"locale": "cs", "message_id": id, "reason": "translation message contains the documentation "
+                "command \"@ref\", which a user interface shows verbatim"},),
+            map $1 - "path", DataProviderPresentation::inspectTranslationCatalogs(domain,
+                catalogs{domain}.locales.root.messages, {"search_path": (output,)}).issues,
+            "translation inspection reports a documentation command in a translated message");
+        assertEq(2, runCatalogCheck(root, qore_bin, output),
+            "catalog verification rejects a documentation command in a translation");
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, output),
+            "catalog-tree verification rejects a documentation command in a translation");
+        assertEq(2, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",)),
+            "source-tree verification rejects a documentation command in a translation");
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                id: {"source": source, "message": source},
+            }}},
+        });
         hash<auto> inspection =
             DataProviderPresentation::inspectTranslationCatalogs(domain,
                 catalogs{domain}.locales.root.messages,

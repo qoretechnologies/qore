@@ -1833,6 +1833,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref dpql_list_functions "DPQL list functions" for grouping, sorting, selecting distinct values,
       flattening nested lists, counting matches, selecting records by extreme keys, and computing percentiles
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
+    - added @ref DataProvider::DataProviderPresentation::findDocumentationMarkup()
+      "DataProviderPresentation::findDocumentationMarkup()", which finds the documentation commands that a user
+      interface would show verbatim in a label or a description; \c qore-data-provider-i18n rejects source texts and
+      translations that contain one
     - @ref DataProvider::DataProvider::listKnownFactories() "factory discovery" includes the optional native
       PDF provider and its installed actions
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
