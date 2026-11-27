@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH3StreamQueueRelease.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/3 (QUIC) WebSocket streams and the registrations of the listener's poll operation
+#
+# qoretechnologies/qore#7802: the poll operation of an HTTP/3 listener kept the Queue object of every extended CONNECT
+# stream (an HTTP/3 WebSocket connection, RFC 9220) for the life of the listener, and the listener of each WebSocket
+# stream until its session closed, also after the stream and its handler had ended; each registration copied the hash
+# of all of them.  A stream's registrations are now released once its tunnel has closed and its dispatch has returned,
+# or its session has closed, so that their numbers are bounded by the streams in use.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH3StreamQueueReleaseTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The number of WebSocket connections that a case opens and closes on one QUIC session
+const Connections = 50;
+
+#! The streams whose release may not have been reported to the poll operation when a case checks while their session
+#! is open: the last ones, whose closing the client may not have completed yet (its answer to the server's
+#! STOP_SENDING); the request that a case sends after them is read by the server after what the client sent before,
+#! on the same QUIC session, so the earlier streams are closed.  The releases that are recorded and not yet applied
+#! are counted by the operation (\c released_queues, \c released_listeners, \c releasing).
+const LastStreams = 2;
+
+#! Echoes each message and reports its close code when it has closed
+class EchoConnection inherits WebSocketConnection {
+    private {
+        Queue closed;
+    }
+
+    constructor(WebSocketHandler handler, Queue closed) : WebSocketConnection(handler) {
+        self.closed = closed;
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        closed.push(getCloseCode());
+    }
+}
+
+#! The WebSocket handler of the test's server
+class EchoHandler inherits WebSocketHandler {
+    public {
+        #! gets the close code of each connection when it has closed
+        Queue closed();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self, closed);
+    }
+}
+
+#! Answers every other request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerH3StreamQueueReleaseTest inherits QUnit::Test {
+    private {
+        Logger logger;
+        #! the WebSocket handler of the server of the current case
+        EchoHandler ws_handler;
+    }
+
+    constructor() : QUnit::Test("HttpServerH3StreamQueueRelease", "1.0") {
+        addTestCase("HTTP/3: the registrations of closed WebSocket streams are released while their session is open",
+            \testReleasedWhileOpen());
+        addTestCase("HTTP/3: the registrations of WebSocket streams that the client resets are released",
+            \testReleasedAfterReset());
+        addTestCase("HTTP/3: the registrations of the WebSocket streams of a session are released when it closes",
+            \testReleasedAtSessionClose());
+        addTestCase("HTTP/3: the registrations of open WebSocket streams are released when the client drops their "
+            "session", \testReleasedAtSessionDrop());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("h3-queue-release", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        logger.addAppender(new StdoutAppender());
+    }
+
+    #! Starts a server with HTTP/3, the WebSocket handler on /ws and the plain handler on every other path
+    private int startServer(HttpServer hs) {
+        ws_handler = new EchoHandler({"logger": logger});
+        hs.setHandler("ws", "/ws", NOTHING, ws_handler);
+        hs.setDefaultHandler("plain", new PlainHandler());
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        hs.waitForAsyncIo();
+        return port;
+    }
+
+    #! Returns a connection manager whose requests share one HTTP/3 connection
+    private HttpClientIo::HttpClientConnectionManager getManager() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    #! Opens a WebSocket connection and exchanges a message; returns the stream
+    private HttpClientIo::HttpClientStreamHandle open(HttpClientIo::HttpClientConnectionManager mgr, int port) {
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/ws", port));
+        stream.startStreaming("CONNECT", "/ws", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto rh = stream.readData(HangGuard);
+        assertEq(200, rh.status_code, "the server accepts the WebSocket connection");
+        # client frames are masked
+        stream.sendData(ws_encode_message("hello", WSOP_Text, True));
+        auto echo = stream.readData(HangGuard);
+        assertTrue(exists echo, "the server echoes the message");
+        return stream;
+    }
+
+    #! Opens a WebSocket connection, exchanges a message and closes the connection
+    private openAndClose(HttpClientIo::HttpClientConnectionManager mgr, int port) {
+        HttpClientIo::HttpClientStreamHandle stream = open(mgr, port);
+        stream.sendData(ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));
+        # the echo and the server's close frame, then the end of the server's half of the stream
+        while (True) {
+            auto d = stream.readData(HangGuard);
+            if (!exists d || (d.typeCode() == NT_HASH && (d.error || d.err))) {
+                break;
+            }
+        }
+        assertEq(WSCC_NormalClosure, ws_handler.closed.get(HangGuard), "the server's connection closed normally");
+    }
+
+    #! Returns the registrations of the server's HTTP/3 listener
+    private hash<auto> getRegistrations(HttpServer hs) {
+        list<hash<auto>> l = hs.getHttpAsyncIo().getQuicStreamRegistrationInfo();
+        assertEq(1, l.size(), "the server has one HTTP/3 listener with a poll operation");
+        return l[0];
+    }
+
+    #! Many WebSocket connections on one QUIC session, which stays open
+    testReleasedWhileOpen() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        for (int i = 0; i < Connections; ++i) {
+            openAndClose(mgr, port);
+        }
+        # a request on the same session: its response is sent after the server has read what the client sent before
+        assertEq(200, mgr.request(sprintf("https://localhost:%d", port), "GET", "/plain", NOTHING, NOTHING)
+            .status_code, "a request after the WebSocket connections is answered");
+
+        checkReleased(getRegistrations(hs), LastStreams);
+    }
+
+    #! Checks that the registrations of the streams that have ended are released or their releases recorded
+    /** Without the fix, the operation kept the Queue object and the listener of every stream: Connections of each
+    */
+    private checkReleased(hash<auto> r, int open_streams) {
+        assertLe(r.released_queues + r.releasing + open_streams, r.queue_objs, sprintf("the Queue objects of the "
+            "ended streams are released: %y", r));
+        assertLe(r.released_listeners + r.releasing + open_streams, r.listeners, sprintf("the listeners of the ended "
+            "streams are released: %y", r));
+        assertLe(open_streams, r.queues, sprintf("the Queues that the I/O thread checks: %y", r));
+        assertLe(open_streams, r.pending, sprintf("no notifications are kept for the ended streams: %y", r));
+    }
+
+    #! Many WebSocket connections whose streams the client resets without closing the connection
+    testReleasedAfterReset() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        for (int i = 0; i < Connections; ++i) {
+            HttpClientIo::HttpClientStreamHandle stream = open(mgr, port);
+            stream.cancel();
+            # the server's connection ends without a close frame
+            assertTrue(exists ws_handler.closed.get(HangGuard), "the server's connection closed");
+        }
+        assertEq(200, mgr.request(sprintf("https://localhost:%d", port), "GET", "/plain", NOTHING, NOTHING)
+            .status_code, "a request after the WebSocket connections is answered");
+        checkReleased(getRegistrations(hs), LastStreams);
+    }
+
+    #! The WebSocket connections of a session that then closes (the server's drain closes it)
+    testReleasedAtSessionClose() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        for (int i = 0; i < Connections; ++i) {
+            openAndClose(mgr, port);
+        }
+        HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = hs.getHttpAsyncIo();
+        ctrl.startDrain();
+        assertTrue(ctrl.waitDrain(HangGuard), "the drain ends");
+
+        # the session has closed: the registrations of its streams are released, or their releases are recorded
+        checkReleased(getRegistrations(hs), 0);
+    }
+
+    #! WebSocket connections that are open when the client drops their QUIC session
+    testReleasedAtSessionDrop() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        {
+            HttpClientIo::HttpClientConnectionManager mgr = getManager();
+            list<HttpClientIo::HttpClientStreamHandle> streams = ();
+            for (int i = 0; i < Connections; ++i) {
+                push streams, open(mgr, port);
+            }
+            # the client's connection manager closes its QUIC session with the streams open
+            delete mgr;
+        }
+        # the server's connections end when it gets the close of their session
+        for (int i = 0; i < Connections; ++i) {
+            assertTrue(exists ws_handler.closed.get(HangGuard), "the server's connection closed");
+        }
+        checkReleased(getRegistrations(hs), 0);
+    }
+}

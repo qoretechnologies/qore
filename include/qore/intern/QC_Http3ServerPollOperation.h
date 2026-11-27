@@ -184,10 +184,86 @@ public:
 
     //! Records stream data that arrived before a listener was registered
     /** @param stream_key composite key "session_id:stream_id"
+        @param known true if the stream can still have a listener to come although its Queue is released: the
+        notification took the release of its Queue alone (see takeStreamRelease()), as a drain ended its tunnel
+
+        Recorded only for a stream that a listener can still register for: its Queue is registered, its listener is
+        notified of the close of its session, or @p known; a notification that runs after the release of a stream's
+        registrations records nothing, so that nothing is kept for the stream (qore#7802)
     */
-    DLLLOCAL void markStreamDataPending(const std::string& stream_key) {
+    DLLLOCAL void markStreamDataPending(const std::string& stream_key, bool known = false) {
         AutoLocker al(op_lock);
-        pending_stream_data.insert(stream_key);
+        if (known || stream_queues.find(stream_key) != stream_queues.end()
+                || close_notify_streams.find(stream_key) != close_notify_streams.end()) {
+            pending_stream_data.insert(stream_key);
+        }
+    }
+
+    //! Takes the release of the registrations of a stream: its Queue object and, for a released tunnel, its listener
+    /** Called by onStreamData() on a worker before the stream's notification, which releases them after it, as the
+        QoreObject references are held in the QPP layer's member hashes, which only Qore code changes, never the I/O
+        thread (qore#7802); a release taken is counted until endStreamRelease().
+
+        @param stream_key composite key "session_id:stream_id"
+        @param queue_released set to true if the stream's Queue object is released: the stream's entry has left
+        @ref stream_queues (its tunnel was released, its session closed or a drain ended it), and the I/O thread does
+        not use the Queue any more
+        @param tunnel_released set to true if the stream's listener is released: its tunnel has closed and its
+        dispatch has returned, or its session has closed, so no listener registers for it any more (one that
+        registers after its session closed is released at once, see registerStreamListener()); its other records are
+        erased too
+    */
+    DLLLOCAL void takeStreamRelease(const std::string& stream_key, bool& queue_released, bool& tunnel_released) {
+        AutoLocker al(op_lock);
+        queue_released = released_queue_keys.erase(stream_key) > 0;
+        tunnel_released = released_tunnel_keys.erase(stream_key) > 0;
+        if (tunnel_released) {
+            close_notify_streams.erase(stream_key);
+            peer_closed_streams.erase(stream_key);
+            pending_stream_data.erase(stream_key);
+        }
+        if (queue_released || tunnel_released) {
+            ++releases_in_progress;
+        }
+    }
+
+    //! Ends a release taken by takeStreamRelease(), once the registrations are released
+    DLLLOCAL void endStreamRelease() {
+        AutoLocker al(op_lock);
+        assert(releases_in_progress);
+        --releases_in_progress;
+    }
+
+    //! Returns true if no notification of a stream of a session that has closed is to come
+    /** True if the session has closed, the stream's entry is not in @ref stream_queues and no release of its
+        registrations is recorded.  Called by registerStreamListener() only for a listener whose registration found
+        the session closed (registerStreamCloseNotify()), which then got the close in the registration's replay: with
+        no Queue entry and no release left, no notification of the stream is to come, so the listener is released at
+        once (qore#7802)
+    */
+    DLLLOCAL bool isClosedSessionStreamReleased(int64_t session_id, const std::string& stream_key) const {
+        {
+            AutoLocker al(op_lock);
+            if (stream_queues.find(stream_key) != stream_queues.end()
+                    || released_queue_keys.find(stream_key) != released_queue_keys.end()
+                    || released_tunnel_keys.find(stream_key) != released_tunnel_keys.end()) {
+                return false;
+            }
+        }
+        return sock_obj && qore_socket_object_private(sock_obj).isQuicSessionClosedOrGone(session_id);
+    }
+
+    //! Returns the numbers of the registrations of the operation's streams; see getStreamRegistrationInfo()
+    DLLLOCAL void getStreamRegistrationCounts(size_t& queues, size_t& pending, size_t& close_notify,
+            size_t& peer_closed, size_t& released_queues, size_t& released_listeners, size_t& releasing) const {
+        AutoLocker al(op_lock);
+        queues = stream_queues.size();
+        pending = pending_stream_data.size();
+        close_notify = close_notify_streams.size();
+        peer_closed = peer_closed_streams.size();
+        released_queues = released_queue_keys.size();
+        released_listeners = released_tunnel_keys.size();
+        releasing = releases_in_progress;
     }
 
     //! Consumes a pending stream-data notification or detects queued data
@@ -272,14 +348,19 @@ public:
 
         @param session_id the QUIC session of the stream
         @param stream_key composite key "session_id:stream_id"
+
+        @return true if the session had closed when the listener registered: its listener then gets its close from
+        the registration's replay, if not from the notification of the session's close (qore#7802)
     */
-    DLLLOCAL void registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
+    DLLLOCAL bool registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
         AutoLocker al(op_lock);
         close_notify_streams.insert(stream_key);
         // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents()
         if (sock_obj && qore_socket_object_private(sock_obj).isQuicSessionClosedOrGone(session_id)) {
             peer_closed_streams.insert(stream_key);
+            return true;
         }
+        return false;
     }
 
     //! Drops a stream key registered with @ref registerStreamCloseNotify()
@@ -537,6 +618,21 @@ private:
 
     //! Stream data notifications that arrived before listener registration
     qore_keyed_string_set pending_stream_data;
+
+    //! The streams whose entries left @ref stream_queues, whose Queue objects onStreamData() releases (qore#7802)
+    /** Protected by @c op_lock; each has a notification queued in @ref data_ready_streams, so the set is bounded by the
+        notifications that have not run yet
+    */
+    qore_keyed_string_set released_queue_keys;
+
+    //! The streams whose listeners onStreamData() releases (qore#7802): the tunnels whose records their sessions
+    //! released, and the streams of a session that closed
+    /** Protected by @c op_lock; bounded as @ref released_queue_keys
+    */
+    qore_keyed_string_set released_tunnel_keys;
+
+    //! The releases taken by takeStreamRelease() whose registrations are not released yet; protected by @c op_lock
+    size_t releases_in_progress = 0;
 
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;

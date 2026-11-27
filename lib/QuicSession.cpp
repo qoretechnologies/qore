@@ -5096,6 +5096,12 @@ void QuicSession::eraseClosedServerTunnelLocked(StreamMap::iterator it) {
     // reports the stream as closed
     releaseStream(stream_id);
     updateKeepAliveAfterStreamStateChangeLocked();
+    // the H3 server poll operation releases its registrations of the stream (qore#7802); a failure to record it only
+    // leaves them to the close of the session, as before
+    try {
+        released_server_tunnels_.push_back(stream_id);
+    } catch (std::bad_alloc&) {
+    }
 }
 
 void QuicSession::stopReadingStreamLocked(int64_t stream_id) {

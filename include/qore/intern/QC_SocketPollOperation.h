@@ -2494,12 +2494,17 @@ public:
         @param closed appended with session_id for each newly-closed session
         @param send_results appended with the transmission result of each watched response (see
         QuicSession::watchResponseSend()); a result is always taken before the close of its session
+        @param released appended with (session_id, stream_id) for each server CONNECT tunnel whose record its
+        session released (see QuicSession::takeReleasedServerTunnels(), qore#7802)
     */
     DLLLOCAL void takeSessionLifecycleEvents(std::vector<std::pair<int64_t, int64_t>>& resets,
-            std::vector<int64_t>& closed, std::vector<QuicResponseSendResult>& send_results) {
+            std::vector<int64_t>& closed, std::vector<QuicResponseSendResult>& send_results,
+            std::vector<std::pair<int64_t, int64_t>>& released) {
         AutoLocker al(sock->priv->m);
         resets.insert(resets.end(), lifecycle_peer_resets_.begin(), lifecycle_peer_resets_.end());
         lifecycle_peer_resets_.clear();
+        released.insert(released.end(), lifecycle_released_tunnels_.begin(), lifecycle_released_tunnels_.end());
+        lifecycle_released_tunnels_.clear();
         closed.insert(closed.end(), lifecycle_closed_sessions_.begin(), lifecycle_closed_sessions_.end());
         lifecycle_closed_sessions_.clear();
         send_results.insert(send_results.end(), lifecycle_send_results_.begin(), lifecycle_send_results_.end());
@@ -2602,6 +2607,8 @@ private:
     std::vector<std::pair<int64_t, int64_t>> lifecycle_peer_resets_;  //!< (session_id, stream_id)
     std::vector<int64_t> lifecycle_closed_sessions_;                  //!< session_ids
     std::vector<QuicResponseSendResult> lifecycle_send_results_;      //!< watched response results
+    //! the server CONNECT tunnels whose records their sessions released (qore#7802): (session_id, stream_id)
+    std::vector<std::pair<int64_t, int64_t>> lifecycle_released_tunnels_;
 
     //! Takes the transmission results of watched responses from a session; sock->priv->m held
     DLLLOCAL void collectResponseSendResults(int64_t session_id, QuicSession& session);

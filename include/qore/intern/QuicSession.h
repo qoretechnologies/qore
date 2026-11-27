@@ -1043,6 +1043,17 @@ public:
         return rv;
     }
 
+    //! Returns and clears the IDs of the server CONNECT tunnel streams whose records were released
+    /** See @ref released_server_tunnels_; drained by the H3 server poll operation, which releases its own
+        registrations of the streams (qore#7802).  Protected by mtx_.
+    */
+    DLLLOCAL std::vector<int64_t> takeReleasedServerTunnels() {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        std::vector<int64_t> rv;
+        rv.swap(released_server_tunnels_);
+        return rv;
+    }
+
     //! Watches the response on a server request stream so that the result of its transmission is reported
     /** Must be called before the response is submitted.  One result is reported per watched stream by
         takeResponseSendResults() when ngtcp2 closes the stream: @c true if it was closed without an application
@@ -2263,6 +2274,14 @@ private:
         they are not kept there.  Protected by mtx_.
     */
     std::vector<int64_t> pending_peer_reset_reports_;
+
+    //! The server CONNECT tunnel streams whose records eraseClosedServerTunnelLocked() released
+    /** The stream has closed and its dispatch has returned, so nothing uses the stream any more: the H3 server poll
+        operation releases its registrations of the stream (its Queue, its listener, qore#7802), which it otherwise
+        kept until the session closed or, for its Queue, for the life of the listener.  Drained by
+        @ref takeReleasedServerTunnels(); bounded by the tunnels released between two polls.  Protected by mtx_.
+    */
+    std::vector<int64_t> released_server_tunnels_;
 
     //! Streams whose response transmission result is reported; see watchResponseSend().  Protected by mtx_.
     // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
