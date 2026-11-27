@@ -384,7 +384,8 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntri
     }
     switch (intrinsic) {
         case QoreIRIntrinsic::StringLength:
-            return {"qore_fast_length", false, true};
+            // the pseudo-method, whose exception has the frame of <string>::length() (qore#7711)
+            return {"qore_rt_pseudo_string_length_xsink_noguard", false, true};
         case QoreIRIntrinsic::StringLower:
             return {"qore_rt_pseudo_string_lwr_noguard", true, true};
         case QoreIRIntrinsic::StringUpper:
@@ -428,6 +429,22 @@ static QoreIRStringFindPseudoInfo qore_ir_get_string_pseudo_find_info(QoreIRIntr
 
 static bool qore_ir_is_string_pseudo_substr(QoreIRIntrinsic intrinsic) {
     return intrinsic == QoreIRIntrinsic::StringSubstr;
+}
+
+//! the fast path of a call of the function index() or rindex() that the lowering made as a call of <string>::find()
+//! or rfind() (qore_ir_is_string_function_form()), whose exception has the function's frame (qore#7711)
+static QoreIRStringFindPseudoInfo qore_ir_get_string_function_find_info(QoreIRStringFindPseudoInfo info,
+        bool function_form) {
+    if (function_form && info.symbol) {
+        info.symbol = info.default_offset ? "qore_fast_rindex_string" : "qore_fast_index_string";
+    }
+    return info;
+}
+
+//! the runtime function of the fast path of <string>::substr(), or of the function substr() (\a function_form,
+//! qore#7711)
+static const char* qore_ir_get_string_substr_symbol(bool function_form) {
+    return function_form ? "qore_fast_substr_string" : "qore_rt_pseudo_string_substr_noguard";
 }
 
 static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(QoreIRIntrinsic intrinsic,
@@ -1565,11 +1582,12 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
             && facts->assigned_state == QoreIRAssignedState::Assigned
             && facts->representation == QoreIRValueRepresentation::Boxed
             && facts->never_nothing;
+        // the functions, whose exceptions have the frames of tolower() and toupper() (qore#7711)
         if (exact_assigned_string && !strcmp(name, "tolower")) {
-            return "qore_rt_pseudo_string_lwr_noguard";
+            return "qore_fast_tolower_string";
         }
         if (exact_assigned_string && !strcmp(name, "toupper")) {
-            return "qore_rt_pseudo_string_upr_noguard";
+            return "qore_fast_toupper_string";
         }
     }
     return nullptr;
@@ -9873,6 +9891,14 @@ llvm::Value* QoreIRToLLVM::emitGuardedStringPseudoFastPath(
     result_needs_cleanup = false;
     if (QORE_ENV_IS_SET("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO")
             || !pseudo || !base_known_string) {
+        return nullptr;
+    }
+    // a call of index(), rindex() or substr() has the function's fast path only (qore#7711)
+    if ((inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                && qore_ir_is_string_function_form(*static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)))
+            || (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect
+                && qore_ir_is_string_function_form(
+                    *static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)))) {
         return nullptr;
     }
 
@@ -31423,8 +31449,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(direct_inst->intrinsic) : -1;
-            QoreIRStringFindPseudoInfo string_find_info =
-                qore_ir_get_string_pseudo_find_info(direct_inst->intrinsic);
+            // a call of index(), rindex() or substr() has the function's fast path (qore#7711)
+            const bool string_function_form = qore_ir_is_string_function_form(*direct_inst);
+            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_function_find_info(
+                qore_ir_get_string_pseudo_find_info(direct_inst->intrinsic), string_function_form);
             bool string_find_fast_path = direct_inst->pseudo
                 && direct_inst->pseudo_base_known_assigned_string
                 && direct_inst->pseudo_arg0_known_assigned_string
@@ -31634,7 +31662,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                          llvm::ConstantInt::get(i32_type,
                             direct_inst->aot_string_transform_upper ? 1 : 0),
                          llvm::ConstantInt::get(i32_type,
-                            static_cast<int32_t>(consumer)),
+                            static_cast<int32_t>(consumer)
+                                | (string_function_form ? QORE_STRING_CASE_CONSUMER_FUNCTION : 0)),
                          xsink_arg});
                     clear_fast_path_arg_cleanups();
                     if (consumer == QoreStringCaseConsumer::StartsWith
@@ -31713,7 +31742,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!length_val) { return false; }
                     length = ensureIntTypeInline(length_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                auto helper = module.getOrInsertFunction(qore_ir_get_string_substr_symbol(string_function_form),
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, start, length,
                     llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});
@@ -32387,8 +32416,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->intrinsic) : -1;
-            QoreIRStringFindPseudoInfo string_find_info =
-                qore_ir_get_string_pseudo_find_info(invoke_inst->intrinsic);
+            // a call of index(), rindex() or substr() has the function's fast path (qore#7711)
+            const bool string_function_form = qore_ir_is_string_function_form(*invoke_inst);
+            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_function_find_info(
+                qore_ir_get_string_pseudo_find_info(invoke_inst->intrinsic), string_function_form);
             bool string_find_fast_path = invoke_inst->pseudo
                 && invoke_inst->pseudo_base_known_assigned_string
                 && invoke_inst->pseudo_arg0_known_assigned_string
@@ -32575,7 +32606,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!length_val) { return false; }
                     length = ensureIntTypeInline(length_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                auto helper = module.getOrInsertFunction(qore_ir_get_string_substr_symbol(string_function_form),
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, start, length,
                     llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});

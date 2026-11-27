@@ -69,6 +69,11 @@ enum class QoreStringCaseConsumer : int32_t {
     RFind,
 };
 
+//! added to a QoreStringCaseConsumer given to qore_rt_pseudo_string_case_consume_native_noguard() for a consumer that
+//! is the call of index() or rindex() that the lowering made as the call of find() or rfind(): an exception has the
+//! function's frame (qore#7711)
+constexpr int32_t QORE_STRING_CASE_CONSUMER_FUNCTION = 0x10;
+
 //! The date kind check of a date<absolute>/date<relative> parameter (qore_rt_date_kind_matches()); 0: no check
 enum QoreDateKindGuardFlags : uint8_t {
     QORE_DATE_KIND_GUARD_ABSOLUTE = 1, //!< the value must be an absolute date
@@ -2627,6 +2632,26 @@ uint64_t qore_rt_pseudo_string_lwr_noguard(uint64_t val_bits, ExceptionSink* xsi
 
 //! Fast no-guard pseudo-method: <string>::upr() for assigned string bases.
 uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsink);
+
+//! The fast path of tolower() for an argument proven to be an assigned string; an exception has the frame of tolower()
+uint64_t qore_fast_tolower_string(uint64_t val_bits, ExceptionSink* xsink);
+
+//! The fast path of toupper() for an argument proven to be an assigned string; an exception has the frame of toupper()
+uint64_t qore_fast_toupper_string(uint64_t val_bits, ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::length() for assigned string bases; raises INVALID-ENCODING for text that is
+//! not valid in its encoding, in the frame of <string>::length()
+uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_t val_bits, ExceptionSink* xsink);
+
+//! The fast path of substr() for a string argument proven to be assigned; an exception has the frame of substr()
+uint64_t qore_fast_substr_string(uint64_t val_bits, int64_t start, int64_t length, int32_t has_length,
+    ExceptionSink* xsink);
+
+//! The fast path of index() for assigned string arguments; an exception has the frame of index()
+uint64_t qore_fast_index_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset, ExceptionSink* xsink);
+
+//! The fast path of rindex() for assigned string arguments; an exception has the frame of rindex()
+uint64_t qore_fast_rindex_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset, ExceptionSink* xsink);
 
 //! Measure an assigned string after lower/upper-case conversion without retaining the result.
 int64_t qore_rt_pseudo_string_case_measure_native_noguard(uint64_t val_bits,

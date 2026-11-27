@@ -5965,4 +5965,23 @@ inline bool isTerminator(QoreIROpcode op) {
     return getOpcodeIsTerminator(static_cast<int>(op));
 }
 
+//! true if a pseudo-method call instruction is the call of a function that the lowering made as the call of a <string>
+//! pseudo-method (substr(), index() or rindex() of a string, see QoreIRLowering): its expression is the function call
+/** An exception of the call has the frame of the function, not of the pseudo-method (qore#7711): the code generator and
+    the IR interpreter make its fast path with the function's ordinary call for an exception, and no summary or fusion
+    whose runtime function makes the pseudo-method's takes it.  An instruction read from serialized IR has no
+    expression (qore#7733).
+*/
+template <typename Instruction>
+inline bool qore_ir_is_string_function_form(const Instruction& inst) {
+    // the functions that the lowering makes as calls of other pseudo-methods, such as strlen(), raise nothing
+    if (!inst.pseudo || !inst.fallback_method_name || !inst.expr.hasNode()
+            || (inst.intrinsic != QoreIRIntrinsic::StringFind && inst.intrinsic != QoreIRIntrinsic::StringRFind
+                && inst.intrinsic != QoreIRIntrinsic::StringSubstr)) {
+        return false;
+    }
+    qore_type_t t = inst.expr.getInternalNode()->getType();
+    return t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL;
+}
+
 #endif

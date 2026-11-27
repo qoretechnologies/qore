@@ -19250,8 +19250,10 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         }
         const auto* method =
             static_cast<const QoreIRDotEvalMethodDirectInstruction*>(consumer);
+        // a call of index(), rindex() or substr() is not fused as the pseudo-method, whose runtime functions raise in
+        // the pseudo-method's frame (qore#7711)
         if (!method->pseudo || method->has_ref_args || !method->qc
-                || strcmp(method->qc->getName(), "<string>")) {
+                || strcmp(method->qc->getName(), "<string>") || qore_ir_is_string_function_form(*method)) {
             return false;
         }
         QoreIRIntrinsic intrinsic = method->intrinsic;

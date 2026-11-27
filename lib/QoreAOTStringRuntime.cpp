@@ -30,13 +30,17 @@
 */
 
 // The calls of the canonical <string>::split(string) and trim(string) builtins that AOT code makes without an argument
-// list (issue #5578, see design/aot-string-split-trim.md).  Compiled in a unit of its own, outside the single
-// compilation unit: in that unit, the code below would change how the compiler inlines the call helpers that it shares
-// with the other calls (CodeContextHelper, the stack location updates), and so the code of those calls.
+// list (issue #5578, see design/aot-string-split-trim.md), and the ordinary calls of the string builtins that the fast
+// paths make to raise their exceptions in the builtin's frame (qore#7711, QoreStringFastPathCalls.h).  Compiled in a
+// unit of its own, outside the single compilation unit: in that unit, the code below would change how the compiler
+// inlines the call helpers that it shares with the other calls (CodeContextHelper, the stack location updates), and so
+// the code of those calls.
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/BuiltinFunction.h"
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreStringFastPathCalls.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_thread_intern.h"
 
@@ -265,4 +269,111 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_trim_guarded_aot(QoreAOTContext* ct
         SimpleRefHolder<QoreStringNode> rv(str->copy());
         return rv->trim(xsink, nullptr) ? QoreValue() : rv.release();
     }));
+}
+
+// the ordinary calls that the string fast paths make for an exception (QoreStringFastPathCalls.h): the call of a
+// pseudo-method by name, as the AST interpreter makes it for a value (pseudo_classes_eval()), or of the Qore builtin
+// function by name in the current Program, as qore_rt_builtin_function_call() makes it; out of line and cold, as they
+// are made only for an exception
+namespace {
+//! the argument list of a call: the borrowed values (referenced), then the integers (owned by the list)
+QoreListNode* qore_string_call_args(std::initializer_list<QoreValue> borrowed, std::initializer_list<int64> ints,
+        ExceptionSink* xsink) {
+    if (!borrowed.size() && !ints.size()) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    for (QoreValue arg : borrowed) {
+        arg_list->push(arg.refSelf(), xsink);
+    }
+    for (int64 arg : ints) {
+        // an integer outside the inline range is a new node, which the list takes over
+        arg_list->push(QoreValue(arg), xsink);
+    }
+    return arg_list.release();
+}
+
+QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_string_pseudo_call(QoreValue str, const char* name,
+        std::initializer_list<QoreValue> borrowed, std::initializer_list<int64> ints, ExceptionSink* xsink) {
+    assert(xsink);
+    ReferenceHolder<QoreListNode> arg_list(qore_string_call_args(borrowed, ints, xsink), xsink);
+    return pseudo_classes_eval(str, name, *arg_list, xsink);
+}
+
+QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_string_function_call(const char* qualified_name,
+        QoreValue str, std::initializer_list<QoreValue> borrowed, std::initializer_list<int64> ints,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    assert(!strncmp(qualified_name, "Qore::", 6));
+    QoreProgram* pgm = getProgram();
+    const QoreFunction* func = pgm ? reinterpret_cast<const QoreFunction*>(pgm->findFunction(qualified_name))
+        : nullptr;
+    if (!func) {
+        // as qore_rt_builtin_function_call() for a Program without the builtin
+        xsink->raiseException("RUNTIME-OVERLOAD-ERROR", "no variant matching '%s(%s)' can be found",
+            qualified_name + 6, str.getTypeName());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    arg_list->push(str.refSelf(), xsink);
+    for (QoreValue arg : borrowed) {
+        arg_list->push(arg.refSelf(), xsink);
+    }
+    for (int64 arg : ints) {
+        arg_list->push(QoreValue(arg), xsink);
+    }
+    return func->evalFunction(nullptr, *arg_list, pgm, rc_get_current_ref(), xsink);
+}
+}
+
+QoreValue qore_string_call_case(QoreValue str, bool upper, bool function, ExceptionSink* xsink) {
+    if (function) {
+        return qore_string_function_call(upper ? "Qore::toupper" : "Qore::tolower", str, {}, {}, xsink);
+    }
+    return qore_string_pseudo_call(str, upper ? "upr" : "lwr", {}, {}, xsink);
+}
+
+QoreValue qore_string_call_length(QoreValue str, bool function, ExceptionSink* xsink) {
+    if (function) {
+        return qore_string_function_call("Qore::length", str, {}, {}, xsink);
+    }
+    return qore_string_pseudo_call(str, "length", {}, {}, xsink);
+}
+
+QoreValue qore_string_call_size(QoreValue str, ExceptionSink* xsink) {
+    return qore_string_pseudo_call(str, "size", {}, {}, xsink);
+}
+
+QoreValue qore_string_call_substr(QoreValue str, int64 start, int64 length, bool has_length, bool function,
+        ExceptionSink* xsink) {
+    if (function) {
+        return has_length
+            ? qore_string_function_call("Qore::substr", str, {}, {start, length}, xsink)
+            : qore_string_function_call("Qore::substr", str, {}, {start}, xsink);
+    }
+    return has_length
+        ? qore_string_pseudo_call(str, "substr", {}, {start, length}, xsink)
+        : qore_string_pseudo_call(str, "substr", {}, {start}, xsink);
+}
+
+QoreValue qore_string_call_search(QoreValue str, QoreValue pattern, QoreStringSearchCall call, int64 offset,
+        ExceptionSink* xsink) {
+    switch (call) {
+        case QoreStringSearchCall::StartsWith:
+            return qore_string_pseudo_call(str, "startsWith", {pattern}, {}, xsink);
+        case QoreStringSearchCall::EndsWith:
+            return qore_string_pseudo_call(str, "endsWith", {pattern}, {}, xsink);
+        case QoreStringSearchCall::Contains:
+            return qore_string_pseudo_call(str, "contains", {pattern}, {}, xsink);
+        case QoreStringSearchCall::Find:
+            return qore_string_pseudo_call(str, "find", {pattern}, {offset}, xsink);
+        case QoreStringSearchCall::RFind:
+            return qore_string_pseudo_call(str, "rfind", {pattern}, {offset}, xsink);
+    }
+    assert(false);
+    return QoreValue();
+}
+
+QoreValue qore_string_call_index(QoreValue str, QoreValue pattern, bool reverse, int64 offset, ExceptionSink* xsink) {
+    return qore_string_function_call(reverse ? "Qore::rindex" : "Qore::index", str, {pattern}, {offset}, xsink);
 }
