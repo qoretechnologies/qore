@@ -200,8 +200,17 @@ class FixedTmpPathTest(unittest.TestCase):
 
     def test_runner_gives_tests_their_own_tmpdir(self):
         runner = (ROOT / "run_tests.sh").read_text()
-        self.assertIn('TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR"', runner)
+        self.assertIn('TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR ', runner)
         self.assertIn("check_test_tmpdir", runner)
+
+    def test_runner_keeps_the_aot_memory_ledger_shared(self):
+        # a test with a TMPDIR of its own keeps the AOT batch memory ledger of the run, so that the batch compiles of
+        # tests running beside each other still share their memory admission (qore#7823)
+        runner = (ROOT / "run_tests.sh").read_text()
+        self.assertIn("TMPDIR=$TEST_TMPDIR QORE_AOT_MEMORY_LEDGER_DIR=${QORE_AOT_MEMORY_LEDGER_DIR:-${TMPDIR:-/tmp}}",
+            runner)
+        ledger = (ROOT / "lib" / "QoreAOTBatchMemory.cpp").read_text()
+        self.assertIn('"QORE_AOT_MEMORY_LEDGER_DIR", "TMPDIR"', ledger)
 
 
 if __name__ == "__main__":
