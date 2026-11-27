@@ -387,8 +387,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
         #   started with a module directory of library code, as a module's initialization runs once in a process
+        # - AOTStringSplitTrim (#5578 theme F), StringFastPathFrames (#7711) and ListJoinFastPathFrames (#7731): their
+        #   checks run in child processes that set their own execution modes and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
+                                 "examples/test/ir/AOTStringSplitTrim.qtest",
+                                 "examples/test/ir/StringFastPathFrames.qtest",
+                                 "examples/test/ir/ListJoinFastPathFrames.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
