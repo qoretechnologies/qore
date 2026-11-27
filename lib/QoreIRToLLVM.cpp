@@ -25798,6 +25798,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
                 result = builder->CreateCall(helper, {left, rhs_boxed, xsink_arg});
                 emitAddAssignOperandRelease(inv, rhs_boxed, result, llvm_func, module);
+            } else if ((inv->invoke_opcode == QoreIROpcode::ListStringJoin
+                        || inv->invoke_opcode == QoreIROpcode::ListStringJoinIdentityMap)
+                    && inv->operands.size() >= 2) {
+                // the join of <list>::join() or join(), so that an exception has the frame of the builtin (qore#7731)
+                auto* separator = getVal(inv->operands[0].id, error);
+                auto* list = getVal(inv->operands[1].id, error);
+                if (!separator || !list) { return false; }
+                const bool function = qore_ir_is_list_join_function_form(inst);
+                const char* helper_name = inv->invoke_opcode == QoreIROpcode::ListStringJoin
+                    ? (function ? "qore_fast_join_list" : "qore_rt_list_string_join_checked")
+                    : (function ? "qore_fast_join_list_identity_map" : "qore_rt_list_string_join_identity_map_checked");
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {boxValue(separator, inv->operands[0].id),
+                        boxValue(list, inv->operands[1].id), xsink_arg});
+                // No reloadAllLocalsFromRuntime - pure computation
+
             } else if (!inv->operands.empty() && isBinaryInvokeOpcode(inv->invoke_opcode)
                     && inv->operands.size() >= 2) {
                 // Binary invoke: use pre-evaluated operands with qore_rt_binary_op
@@ -40310,7 +40327,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!separator || !list) { return false; }
             llvm::Value* separator_boxed = boxValue(separator, inst->operands[0].id);
             llvm::Value* list_boxed = boxValue(list, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_string_join_checked",
+            auto helper = module.getOrInsertFunction(qore_ir_is_list_join_function_form(inst)
+                        ? "qore_fast_join_list" : "qore_rt_list_string_join_checked",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {separator_boxed, list_boxed, xsink_arg});
             values[inst->result.id] = result;
@@ -40325,7 +40343,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!separator || !list) { return false; }
             llvm::Value* separator_boxed = boxValue(separator, inst->operands[0].id);
             llvm::Value* list_boxed = boxValue(list, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_string_join_identity_map_checked",
+            auto helper = module.getOrInsertFunction(qore_ir_is_list_join_function_form(inst)
+                        ? "qore_fast_join_list_identity_map" : "qore_rt_list_string_join_identity_map_checked",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {separator_boxed, list_boxed, xsink_arg});
             values[inst->result.id] = result;

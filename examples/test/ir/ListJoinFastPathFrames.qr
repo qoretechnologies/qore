@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# exceptions raised by <list>::join() and join(), which the IR interpreter and JIT and AOT code call through fast
+# paths and fuse with a map; each exception and its whole call stack, and the output of the map, are printed and
+# compared with the AST interpreter's (ListJoinFastPathFrames.qtest)
+
+%modern
+# a map expression whose evaluation can be seen: the AST interpreter evaluates the whole map before the join
+string sub tr(string s) { printf("tr %y\n", s.encoding()); return s; }
+string sub tr_throw(string s) {
+    printf("trt %y\n", s.encoding());
+    if (s == "c") {
+        throw "MAP-ERR", "c";
+    }
+    return s;
+}
+# the joins of lists, and of an identity map (list.string.join, list.string.join.identity-map)
+string sub f_mjoin(list<string> l, string sep) { return l.join(sep); }
+string sub f_fjoin(list<string> l, string sep) { return join(sep, l); }
+string sub f_idjoin(list<string> l, string sep) { return (map $1, l).join(sep); }
+string sub f_fidjoin(list<string> l, string sep) { return join(sep, map $1, l); }
+# a join of a map, which the lowering fuses (string.method.join.start); the map gives all its values before the join
+# raises
+string sub f_mapjoin(list<string> l) { return (map tr($1), l).join(","); }
+string sub f_selmapjoin(list<string> l) { return (map tr($1), l, $1 != "x").join(","); }
+string sub f_mapselmapjoin(list<string> l) { return (map tr($1), (select l, $1 != "x")).join(","); }
+string sub f_mapjoin_throw(list<string> l) { return (map tr_throw($1), l).join(","); }
+# negative: the folds of a concatenation, an operator, whose exception has no frame of its own
+string sub f_foldmap(list<string> l) { return foldl $1 + "," + $2, (map tr($1), l); }
+string sub f_fold(list<string> l) { return foldl $1 + "," + $2, l; }
+# in try blocks: the invoke forms
+string sub f_mjoin_try(list<string> l, string sep) {
+    try {
+        return l.join(sep);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+}
+string sub f_fjoin_try(list<string> l, string sep) {
+    try {
+        return join(sep, l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+}
+string sub f_mapjoin_try(list<string> l) {
+    try {
+        return (map tr($1), l).join(",");
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+}
+# closures and a nested closure
+code cl_mjoin = string sub (list<string> l, string sep) { return l.join(sep); };
+code cl_fjoin = string sub (list<string> l, string sep) { return join(sep, l); };
+code cl_mapjoin = string sub (list<string> l) { return (map tr($1), l).join(","); };
+code cl_nested_mapjoin = string sub (list<string> l) {
+    code inner = string sub (list<string> l2) { return (map tr($1), l2).join(","); };
+    return inner(l);
+};
+sub show(string name, code c) {
+    try {
+        auto v = c();
+        printf("%s: %y\n", name, v.typeCode() == NT_STRING ? binary(v) : v);
+    } catch (hash<ExceptionInfo> ex) {
+        *hash<ExceptionInfo> e = ex;
+        string label = name;
+        while (e) {
+            printf("%s: %y\n", label, e - ("callstack", "next") + {"file": basename(e.file)});
+            foreach hash<CallStackInfo> frame in (e.callstack) {
+                printf("  %d: %y\n", $#, frame - ("statementid", "start_column", "end_column")
+                    + {"file": basename(frame.file)});
+            }
+            e = e.next;
+            label = "  next";
+        }
+    }
+}
+string asep = convert_encoding(",", "ASCII");
+string badsj = binary_to_string(<8120>, "SHIFT_JIS");
+# text that cannot be converted to the separator's encoding: a non-ASCII character for an ASCII separator, and text
+# that is not valid in its encoding for a UTF-8 separator
+list<string> l1 = ("a", "日", "c");
+list<string> l2 = ("a", badsj, "c");
+list<string> l2f = (badsj, "b", "c");
+list<string> l3 = ("a", badsj, "c", "d");
+list<string> ok = ("a", "日", convert_encoding("ö", "ISO-8859-1"));
+list<string> empty = ();
+show("mjoin", auto sub () { return f_mjoin(l1, asep); });
+show("fjoin", auto sub () { return f_fjoin(l1, asep); });
+show("idjoin", auto sub () { return f_idjoin(l1, asep); });
+show("fidjoin", auto sub () { return f_fidjoin(l1, asep); });
+show("mapjoin", auto sub () { return f_mapjoin(l2); });
+show("mapjoin-first", auto sub () { return f_mapjoin(l2f); });
+show("mapjoin-ok", auto sub () { return f_mapjoin(ok); });
+show("mapjoin-one", auto sub () { return f_mapjoin(("a",)); });
+show("mapjoin-empty", auto sub () { return f_mapjoin(empty); });
+show("selmapjoin", auto sub () { return f_selmapjoin(l2); });
+show("mapselmapjoin", auto sub () { return f_mapselmapjoin(l2); });
+show("mapjoin-throw", auto sub () { return f_mapjoin_throw(l3); });
+show("foldmap", auto sub () { return f_foldmap(l2); });
+show("fold", auto sub () { return f_fold(l2); });
+show("mjoin-try", auto sub () { return f_mjoin_try(l1, asep); });
+show("fjoin-try", auto sub () { return f_fjoin_try(l1, asep); });
+show("mapjoin-try", auto sub () { return f_mapjoin_try(l2); });
+show("cl-mjoin", auto sub () { return cl_mjoin(l1, asep); });
+show("cl-fjoin", auto sub () { return cl_fjoin(l1, asep); });
+show("cl-mapjoin", auto sub () { return cl_mapjoin(l2); });
+show("cl-nested-mapjoin", auto sub () { return cl_nested_mapjoin(l2); });
+# a temporary source; two values that cannot be converted (the first raises); the map on a line of its own
+list<string> sub get_list(list<string> l) { return l; }
+string sub f_tmpjoin(list<string> l) { return (map tr($1), get_list(l)).join(","); }
+string sub f_tmpjoin_try(list<string> l) {
+    try {
+        return (map tr($1), get_list(l)).join(",");
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+}
+string sub f_mlmapjoin(list<string> l) {
+    return (map tr($1),
+        l)
+        .join(",");
+}
+list<string> l4 = ("a", badsj, binary_to_string(<7882>, "SHIFT_JIS"), "d");
+show("tmpjoin", auto sub () { return f_tmpjoin(l2); });
+show("tmpjoin-try", auto sub () { return f_tmpjoin_try(l2); });
+show("mapjoin-two", auto sub () { return f_mapjoin(l4); });
+show("mlmapjoin", auto sub () { return f_mlmapjoin(l2); });
+# values in inline short string storage, which a step of the fused join appends as they are (in a release build,
+# the values of a constant hash are inline in AOT code)
+const Short = {"a": "a", "bb": "bb"};
+string sub ss(string s) {
+    # a value in another encoding is given as it is: its lookup in the hash would convert it
+    if (s.encoding() != "UTF-8") {
+        return s;
+    }
+%ifdef QoreDebug
+    return exists Short{s} ? dbg_make_short_string(s) : s;
+%else
+    return Short{s} ?? s;
+%endif
+}
+string sub f_ssjoin(list<string> l) { return (map ss($1), l).join(","); }
+show("ssjoin", auto sub () { return f_ssjoin(("a", "bb", "日", "a")); });
+show("ssjoin-bad", auto sub () { return f_ssjoin(("a", "bb", badsj, "a")); });

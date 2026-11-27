@@ -377,3 +377,11 @@ QoreValue qore_string_call_search(QoreValue str, QoreValue pattern, QoreStringSe
 QoreValue qore_string_call_index(QoreValue str, QoreValue pattern, bool reverse, int64 offset, ExceptionSink* xsink) {
     return qore_string_function_call(reverse ? "Qore::rindex" : "Qore::index", str, {pattern}, {offset}, xsink);
 }
+
+QoreValue qore_string_call_join(QoreValue list, QoreValue separator, bool function, ExceptionSink* xsink) {
+    if (function) {
+        // join(string separator, list l)
+        return qore_string_function_call("Qore::join", separator, {list}, {}, xsink);
+    }
+    return qore_string_pseudo_call(list, "join", {separator}, {}, xsink);
+}

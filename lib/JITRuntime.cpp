@@ -12413,48 +12413,83 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldr_string_join_checked(
     return qore_rt_fold_string_join_checked(list_val, separator_val, true, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
-        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+//! the join of a list of strings: <list>::join() or join() (\a function() true, which is called only for an exception),
+//! for list.string.join (\a identity false) or list.string.join.identity-map
+/** An exception that the join raises is raised by the ordinary call, in the builtin's frame (qore#7731,
+    qore_rt_string_fast_path()).
+*/
+template <typename Function>
+static QORE_ALWAYS_INLINE uint64_t qore_rt_list_string_join_impl(uint64_t separator_bits, uint64_t list_bits,
+        Function function, bool identity, ExceptionSink* xsink) {
     QoreValue separator_value = fromBits(separator_bits);
     QoreValue list_value = fromBits(list_bits);
     if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
         if (xsink) {
-            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in list<string> join");
-        }
-        return toBits(QoreValue());
-    }
-    // note: the separator can be held in inline short string storage, which has no QoreStringNode
-    QoreStringNodeValueHelper separator(separator_value);
-    const QoreListNode* list = list_value.get<const QoreListNode>();
-    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
-
-extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
-        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
-    QoreValue separator_value = fromBits(separator_bits);
-    QoreValue list_value = fromBits(list_bits);
-    if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
-        if (xsink) {
-            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in identity-map list<string> join");
+            xsink->raiseException("IR-EXEC-ERROR", identity
+                ? "invalid typed value in identity-map list<string> join"
+                : "invalid typed value in list<string> join");
         }
         return toBits(QoreValue());
     }
 
     const QoreListNode* list = list_value.get<const QoreListNode>();
-    for (size_t i = 0, size = list->size(); i < size; ++i) {
-        QoreValue entry = list->retrieveEntry(i);
-        if (entry.getType() != NT_STRING) {
-            ValueHolder checked(entry.refSelf(), xsink);
-            QoreTypeInfo::acceptAssignment(stringTypeInfo,
-                "<list element assignment>", *checked, xsink);
+    if (identity) {
+        for (size_t i = 0, size = list->size(); i < size; ++i) {
+            QoreValue entry = list->retrieveEntry(i);
+            if (entry.getType() != NT_STRING) {
+                ValueHolder checked(entry.refSelf(), xsink);
+                QoreTypeInfo::acceptAssignment(stringTypeInfo,
+                    "<list element assignment>", *checked, xsink);
+                return toBits(QoreValue());
+            }
+        }
+    }
+
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        // note: the separator can be held in inline short string storage, which has no QoreStringNode
+        QoreStringNodeValueHelper separator(separator_value);
+        // the join returns nullptr if and only if it raised an exception (join_intern())
+        QoreStringNode* result = join_intern(*separator, list, 0, xsink);
+        if (!result) [[unlikely]] {
+            failed = true;
             return toBits(QoreValue());
         }
-    }
+        // the string node, boxed as QoreValue::set() boxes a node (QoreValueEncoding.h)
+        return TAG_POINTER | (reinterpret_cast<uint64_t>(result) & PAYLOAD_MASK);
+    }, [&]() {
+        return toBits(qore_string_call_join(list_value, separator_value, function(), xsink));
+    });
+}
 
-    // note: the separator can be held in inline short string storage, which has no QoreStringNode
-    QoreStringNodeValueHelper separator(separator_value);
-    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
+//! list.string.join: <list>::join() of a list of strings
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return false; }, false, xsink);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+//! list.string.join: join() of a list of strings
+extern "C" DLLEXPORT uint64_t qore_fast_join_list(uint64_t separator_bits, uint64_t list_bits,
+        ExceptionSink* xsink) {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, false, xsink);
+}
+
+//! list.string.join.identity-map: <list>::join() of the identity map of a list
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return false; }, true, xsink);
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+//! list.string.join.identity-map: join() of the identity map of a list
+extern "C" DLLEXPORT uint64_t qore_fast_join_list_identity_map(uint64_t separator_bits, uint64_t list_bits,
+        ExceptionSink* xsink) {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, true, xsink);
+}
+
+uint64_t qore_rt_list_string_join_inst(const QoreIRInstruction* inst, bool identity, uint64_t separator_bits,
+        uint64_t list_bits, ExceptionSink* xsink) {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits,
+        [inst]() { return qore_ir_is_list_join_function_form(inst); }, identity, xsink);
+}
 
 static bool qore_rt_is_optional_string(const QoreValue& value) {
     return value.isNothing() || value.getType() == NT_STRING;
@@ -12571,27 +12606,190 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
     return toBits(accumulator);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
-extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
-        uint64_t, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) try {
-    QoreValue separator_value = fromBits(separator_bits);
-    QoreValue value = fromBits(value_bits);
-    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(value)) {
+//! a value of a fused <list>::join() that the join cannot convert (see qore_rt_string_method_join_start()): gives the
+//! failed join, a list of the join of the values before it (or NOTHING for the first value) and the value
+static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_failed(QoreValue join, QoreValue value,
+        ExceptionSink* xsink) {
+    assert(xsink && *xsink);
+    // the exception of the conversion, which the join raises again when the map has given all its values
+    xsink->clear();
+    ReferenceHolder<QoreListNode> failed(new QoreListNode(autoTypeInfo), xsink);
+    failed->push(join.refSelf(), xsink);
+    failed->push(value.refSelf(), xsink);
+    return toBits(QoreValue(failed.release()));
+}
+
+//! the finish of a failed join (see qore_rt_string_method_join_start()): the ordinary call of <list>::join() with the
+//! value that could not be converted and the values after it
+static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_finish_failed(const QoreListNode* failed,
+        QoreValue separator, ExceptionSink* xsink) {
+    assert(xsink && failed->size() >= 2);
+    ReferenceHolder<QoreListNode> values(failed->copyListFrom(1), xsink);
+    ValueHolder rv(qore_string_call_join(*values, separator, false, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // the call joined the values (the conversion failed for a reason of its own): the join of the values before them,
+    // the separator and their join, which is the join of all the values
+    QoreValue prefix = failed->retrieveEntry(0);
+    if (prefix.isNothing()) {
+        return toBits(rv.release());
+    }
+    SimpleRefHolder<QoreStringNode> result(prefix.get<const QoreStringNode>()->copy());
+    QoreStringValueHelper separator_str(separator);
+    result->concat(*separator_str, xsink);
+    if (!*xsink) {
+        result->concat(rv->get<const QoreStringNode>(), xsink);
+    }
+    return *xsink ? toBits(QoreValue()) : toBits(QoreValue(result.release()));
+}
+
+static uint64_t qore_rt_string_method_join_other(QoreValue first, QoreValue separator_value, QoreValue value,
+        ExceptionSink* xsink);
+
+//! appends the text of a string value to \a p without a conversion: the text of a short string (UTF-8), or of a
+//! string node in the encoding of \a p; returns false for any other value
+static QORE_ALWAYS_INLINE bool qore_rt_string_join_append_raw(qore_string_private* p, QoreValue value) {
+    if (value.isShortString()) {
+        if (p->getEncoding() != QCS_UTF8) {
+            return false;
+        }
+        uint64_t bits = toBits(value);
+        size_t size = value.shortStringLen();
+        p->check_char(p->len + size + STR_CLASS_EXTRA);
+        char* buf = p->ownedBuffer() + p->len;
+        for (size_t i = 0; i < size; ++i) {
+            buf[i] = static_cast<char>((bits >> (40 - i * 8)) & 0xFF);
+        }
+        p->len += size;
+        p->ownedBuffer()[p->len] = '\0';
+        return true;
+    }
+    if (!value.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (node->getType() != NT_STRING) {
+        return false;
+    }
+    const qore_string_private* vp = qore_string_private::get(*static_cast<const QoreStringNode*>(node));
+    if (vp->getEncoding() != p->getEncoding()) {
+        return false;
+    }
+    p->concat(vp);
+    return true;
+}
+
+//! a step of the join of a fused <list>::join() (see qore_rt_string_method_join_start()): appends the separator and
+//! the value, converted to the join's encoding, or gives the failed join if the value cannot be converted
+static QORE_ALWAYS_INLINE uint64_t qore_rt_string_method_join_step(QoreStringNode* join, uint64_t join_bits,
+        QoreValue separator, QoreValue value, ExceptionSink* xsink) {
+    // The join is created by the start and cannot escape the fused fold before its finish; its additional references
+    // are compiler cleanup aliases, never user aliases or string views, so mutating it through the private primitive
+    // is safe and keeps the join linear.  The separator has its encoding.
+    qore_string_private* p = qore_string_private::get(*join);
+    size_t len = p->len;
+    if (!qore_rt_string_join_append_raw(p, separator)) [[unlikely]] {
+        if (separator.getType() != NT_STRING) {
+            return qore_rt_string_method_join_other(fromBits(join_bits), separator, value, xsink);
+        }
+        QoreStringValueHelper separator_str(separator);
+        p->concat(*separator_str);
+    }
+    if (!qore_rt_string_join_append_raw(p, value)) [[unlikely]] {
+        if (value.getType() != NT_STRING) {
+            p->terminate(len);
+            return qore_rt_string_method_join_other(fromBits(join_bits), separator, value, xsink);
+        }
+        QoreStringValueHelper string(value, join->getEncoding(), xsink);
+        if (xsink && *xsink) [[unlikely]] {
+            // the join of the values before this one
+            p->terminate(len);
+            return qore_rt_string_method_join_failed(fromBits(join_bits), value, xsink);
+        }
+        p->concat(*string);
+    }
+    join->ref();
+    return join_bits;
+}
+
+//! the start and the finish of the join of a fused <list>::join(), and the steps of a failed join (see
+//! qore_rt_string_method_join_start())
+static __attribute__((noinline)) uint64_t qore_rt_string_method_join_other(QoreValue first, QoreValue separator_value,
+        QoreValue value, ExceptionSink* xsink) {
+    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(value)
+            || (!first.isNothing() && first.getType() != NT_STRING && first.getType() != NT_LIST)) {
         if (xsink) {
             xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in fused method string join");
         }
         return toBits(QoreValue());
     }
 
-    QoreStringValueHelper separator(separator_value);
-    QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
-    if (value.getType() == NT_STRING) {
-        QoreStringValueHelper string(value, separator->getEncoding(), xsink);
-        if (xsink && *xsink) {
-            return toBits(QoreValue());
+    if (first.isNothing()) {
+        // the start
+        QoreStringValueHelper separator(separator_value);
+        QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
+        if (value.getType() == NT_STRING) {
+            QoreStringValueHelper string(value, separator->getEncoding(), xsink);
+            if (xsink && *xsink) [[unlikely]] {
+                return qore_rt_string_method_join_failed(QoreValue(), value, xsink);
+            }
+            qore_string_private::get(*result)->concat(*string);
         }
-        qore_string_private::get(*result)->concat(*string);
+        return toBits(QoreValue(result.release()));
     }
-    return toBits(QoreValue(result.release()));
+
+    if (first.getType() == NT_LIST) {
+        // note: safe; the failed join is a list that qore_rt_string_method_join_failed() created, which cannot escape
+        // the fused fold before its finish, so it is extended in place
+        QoreListNode* failed = first.get<QoreListNode>();
+        if (value.isNothing()) {
+            // the finish of the failed join: the exception, in the frame of the join
+            return qore_rt_string_method_join_finish_failed(failed, separator_value, xsink);
+        }
+        failed->push(value.refSelf(), xsink);
+        failed->ref();
+        return toBits(first);
+    }
+
+    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start())
+    assert(value.isNothing());
+    first.getInternalNode()->ref();
+    return toBits(first);
+}
+
+//! string.method.join.start: the join of the values that a fused map gives, for <list>::join() of the map
+/** The AST interpreter evaluates the whole map, and then the join raises an exception for the first value that it
+    cannot convert to the separator's encoding.  So the join of a value that cannot be converted gives the failed join:
+    a list of the join of the values before it and that value; the following values of the map are evaluated and added
+    to it, and the finish makes the ordinary call of <list>::join() with the value and the values after it, which
+    raises the exception of the value in the frame of the join, as the join of all the values does (join_intern()
+    converts each value on its own, in order) (qore#7731).  Should the call join them, the result is the join of all
+    the values.
+
+    - \a first NOTHING: starts the join with \a value, or gives an empty string (a map without values) if \a value
+      is NOTHING
+    - \a first a string (the join): appends the separator and \a value, or with \a value NOTHING (the finish) gives the
+      join
+    - \a first a list (the failed join): adds \a value to it, or with \a value NOTHING (the finish) makes the ordinary
+      call
+
+    A value of the map is never NOTHING.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
+        uint64_t first_bits, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) try {
+    assert(!xsink || !*xsink);
+    QoreValue first = fromBits(first_bits);
+    QoreValue value = fromBits(value_bits);
+    // a step of the join with a value of the map, the usual case
+    if (first.hasNode() && !value.isNothing()) [[likely]] {
+        AbstractQoreNode* node = first.getInternalNode();
+        if (node->getType() == NT_STRING) [[likely]] {
+            return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
+                fromBits(separator_bits), value, xsink);
+        }
+    }
+    return qore_rt_string_method_join_other(first, fromBits(separator_bits), value, xsink);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 static bool qore_rt_build_fixed_int_format(

@@ -5984,4 +5984,23 @@ inline bool qore_ir_is_string_function_form(const Instruction& inst) {
     return t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL;
 }
 
+//! returns true if \a inst, list.string.join or list.string.join.identity-map, is a call of join() rather than of
+//! <list>::join(), so that an exception has the frame of the function (qore#7731)
+/** The form is known from the expression of the instruction, which an IR function serialized for debugging does not
+    keep (qore#7733).
+*/
+inline bool qore_ir_is_list_join_function_form(const QoreIRInstruction* inst) {
+    const QoreValue* expr = nullptr;
+    if (auto* e = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
+        expr = &e->expr;
+    } else if (auto* i = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
+        expr = &i->expr;
+    }
+    if (!expr || !expr->hasNode()) {
+        return false;
+    }
+    qore_type_t t = expr->getInternalNode()->getType();
+    return t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL;
+}
+
 #endif
