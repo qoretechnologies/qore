@@ -2514,7 +2514,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (ctx && McpServerHandler::callerIsRestricted()) {
             ctx.cx = ctx.handler
                 ? ctx.handler.getRestrictedCallContext(ctx.cx)
-                : AbstractStreamRequest::filterRequest(ctx.cx, ctx.cx.hdr ?? {}).cx;
+                : AbstractStreamRequest::filterRequest(ctx.cx, ctx.cx.hdr ?? {}, <HttpRequestFilterOptions>{
+                    # the session is given only as mcp_session and sid, as by the handler (getDispatchWithheldHeaders())
+                    "platform_headers": (McpSessionHeader,),
+                }).cx;
             remove ctx.handler;
             foreach string key in ("requestState", "inputResponses") {
                 if (AbstractHttpRequestHandler::holdsObjectOrCode(ctx{key})) {
