@@ -45,6 +45,10 @@ print_usage () {
   echo "                           it is stopped by SIGTTOU."
   echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
   echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
+  echo "  QORE_TEST_TMP_LEAKS      'report' or 'fail': each test gets a temporary directory of its own as TMPDIR,"
+  echo "                           and what it leaves there is removed and reported as a warning, or fails the test"
+  echo "                           ('fail'); not set by default, as tests then share the AOT batch memory ledger in"
+  echo "                           TMPDIR and keep short socket paths (qore#7817)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  QORE_TEST_STACK_TOOLS    The tools that capture the native call stacks of the test's other"
@@ -2147,6 +2151,11 @@ remove_runner_files() {
             rm -f "$f"
         fi
     done
+    # the temporary directory of a test that an interrupted run did not get to check (see run_test())
+    if [ -n "$TEST_EVENT_DIR" ] && [ -e "$TEST_EVENT_DIR/tmp" ]; then
+        chmod -R u+rwx "$TEST_EVENT_DIR/tmp" 2>/dev/null
+        rm -rf "$TEST_EVENT_DIR/tmp"
+    fi
     if [ -n "$TEST_EVENT_DIR" ]; then
         rmdir "$TEST_EVENT_DIR" 2>/dev/null
     fi
@@ -3270,6 +3279,47 @@ does not handle SIGUSR1, which would end it without its call stacks or a core du
     return $WATCHDOG_TEST_EXIT
 }
 
+# Removes a temporary directory of a test (the argument), also with entries that the test made unwritable; returns
+# non-zero if it is still there
+remove_test_tmpdir() {
+    if [ ! -e "$1" ]; then
+        return 0
+    fi
+    chmod -R u+rwx "$1" 2>/dev/null
+    rm -rf "$1" 2>/dev/null
+    [ ! -e "$1" ]
+}
+
+# Reports and removes what a test left in its temporary directory (TEST_TMPDIR, see run_test()), after the processes
+# it left running have been ended; with QORE_TEST_TMP_LEAKS=fail, a test that passed fails for it (qore#7817)
+check_test_tmpdir() {
+    if [ -z "$TEST_TMPDIR" ] || [ ! -d "$TEST_TMPDIR" ]; then
+        return
+    fi
+    # entries that the test made unreadable are listed too
+    chmod -R u+rwx "$TEST_TMPDIR" 2>/dev/null
+    tmp_left=`ls -A "$TEST_TMPDIR" 2>/dev/null`
+    if [ -n "$tmp_left" ]; then
+        tmp_count=`printf '%s\n' "$tmp_left" | wc -l | tr -d ' '`
+        if [ "$QORE_TEST_TMP_LEAKS" = fail ]; then
+            echo "*** FAILURE: the test left files in its temporary directory (TMPDIR; $tmp_count entries); they are removed: ***"
+            if [ $test_exit -eq 0 ]; then
+                test_exit=1
+            fi
+        else
+            echo "*** WARNING: the test left files in its temporary directory (TMPDIR; $tmp_count entries); they are" \
+                "removed (qore#7817): ***"
+        fi
+        printf '%s\n' "$tmp_left" | head -20 | sed 's/^/  /'
+        if [ "$tmp_count" -gt 20 ]; then
+            echo "  ..."
+        fi
+    fi
+    if ! remove_test_tmpdir "$TEST_TMPDIR"; then
+        echo "*** WARNING: the temporary directory of the test cannot be removed: $TEST_TMPDIR ***"
+    fi
+}
+
 # Prints the header of a test (the arguments: the test and its number)
 print_test_header() {
     if [ $PRINT_TEXT -eq 1 ]; then
@@ -3308,6 +3358,21 @@ run_test() {
     # find_test_survivors())
     TEST_PROCESS_MARK="$$.$i"
     TEST_ENV="env QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
+    # with QORE_TEST_TMP_LEAKS, the test's own temporary directory, given to it as TMPDIR (which tmp_location(),
+    # TmpDir, TmpFile and mktemp use): it is in the directory of the test's events, which is the test's own in a
+    # parallel run, so tests running beside each other do not share it, and what the test leaves in it is reported
+    # after it (see check_test_tmpdir()).  Not by default: tests share the AOT batch memory ledger in TMPDIR, and a
+    # deeper TMPDIR lengthens the UNIX socket paths of tests (at most 104 bytes on macOS)
+    TEST_TMPDIR=""
+    if [ -n "$QORE_TEST_TMP_LEAKS" ] && [ -n "$TEST_EVENT_DIR" ]; then
+        remove_test_tmpdir "$TEST_EVENT_DIR/tmp"
+        if mkdir "$TEST_EVENT_DIR/tmp"; then
+            TEST_TMPDIR="$TEST_EVENT_DIR/tmp"
+            TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR"
+        else
+            echo "*** WARNING: no temporary directory of its own for the test: $TEST_EVENT_DIR/tmp ***"
+        fi
+    fi
     # set by run_with_watchdog()
     WATCHDOG_TEST_EXIT=""
     WATCHDOG_TIMED_OUT=0
@@ -3379,6 +3444,10 @@ EOF
             test_exit=1
         fi
     fi
+
+    # A test removes the files it creates (in its own TmpDir or make_tmp_dir()), also when it fails: what it leaves in
+    # its temporary directory is reported, after its own output, and removed (qore#7817)
+    check_test_tmpdir
 
     # The watchdog failed: the test's result is its own, but the run fails as a harness error, so that the failure is
     # not lost
@@ -3741,6 +3810,8 @@ stop_parallel_tests() {
             cat "$output"
         fi
     done
+    # also the temporary directories of the tests (QORE_TEST_TMP_LEAKS) with entries that a test made unwritable
+    chmod -R u+rwx "$RUN_DIR" 2>/dev/null
     rm -rf "$RUN_DIR"
     RUN_DIR=""
 }
