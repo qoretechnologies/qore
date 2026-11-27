@@ -808,7 +808,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.display_name": {
-          "source": "Convert from PDF into Images",
+          "source": "Convert from PDF into images",
           "message": "PDFから画像へ変換"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.display_name": {
-          "source": "Convert from Images into PDF",
+          "source": "Convert from images into PDF",
           "message": "画像からPDFに変換"
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.display_name": {
-          "source": "Compress and Optimize PDF",
+          "source": "Compress and optimize PDF",
           "message": "PDF の圧縮と最適化"
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.short_desc": {
@@ -2968,7 +2968,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.display_name": {
-          "source": "Add Text and Images to a PDF",
+          "source": "Add text and images to a PDF",
           "message": "PDFにテキストと画像を追加"
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.short_desc": {
@@ -3620,7 +3620,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.display_name": {
-          "source": "Create Fillable PDF Form",
+          "source": "Create fillable PDF form",
           "message": "入力可能なPDFフォームを作成"
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.display_name": {
-          "source": "Fill a PDF Form",
+          "source": "Fill a PDF form",
           "message": "PDF フォームへの入力"
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.short_desc": {
@@ -4540,7 +4540,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.display_name": {
-          "source": "Get PDF Information",
+          "source": "Get PDF information",
           "message": "PDF情報の取得"
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.short_desc": {
@@ -4768,7 +4768,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.display_name": {
-          "source": "Search Text in PDF",
+          "source": "Search text in PDF",
           "message": "PDF 内のテキストを検索"
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.short_desc": {
@@ -5104,7 +5104,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.display_name": {
-          "source": "Search and Delete Found Text in PDF",
+          "source": "Search and delete found text in PDF",
           "message": "PDF 内で見つかったテキストの検索と削除"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.short_desc": {
@@ -5428,7 +5428,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.display_name": {
-          "source": "Search and Replace Text in PDF",
+          "source": "Search and replace text in PDF",
           "message": "PDF 内のテキストの検索と置換"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.short_desc": {
@@ -5752,7 +5752,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.display_name": {
-          "source": "Search and Replace With Image in PDF",
+          "source": "Search and replace with image in PDF",
           "message": "PDF 内のテキストを検索して画像に置換"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.short_desc": {
@@ -6076,7 +6076,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.display_name": {
-          "source": "AI Invoice Parser",
+          "source": "AI invoice parser",
           "message": "AI請求書パーサー"
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.short_desc": {
@@ -6316,7 +6316,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "ドキュメントをパース"
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {
@@ -6652,7 +6652,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.display_name": {
-          "source": "Document Classifier",
+          "source": "Document classifier",
           "message": "ドキュメント分類器"
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.short_desc": {
@@ -6928,7 +6928,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.display_name": {
-          "source": "Generate a Barcode",
+          "source": "Generate a barcode",
           "message": "バーコードの生成"
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.display_name": {
-          "source": "Read a Barcode",
+          "source": "Read a barcode",
           "message": "バーコードの読み取り"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.short_desc": {
@@ -7948,7 +7948,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.display_name": {
-          "source": "Add Password and Security into PDF",
+          "source": "Add password and security into PDF",
           "message": "PDFにパスワードとセキュリティを追加"
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.short_desc": {
@@ -8368,7 +8368,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.display_name": {
-          "source": "Remove Password and Security from PDF",
+          "source": "Remove password and security from PDF",
           "message": "PDFからパスワードとセキュリティを解除"
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email With Attachment",
+          "source": "Send email with attachment",
           "message": "添付ファイル付きメールを送信"
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.short_desc": {
@@ -8812,7 +8812,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "ファイルをアップロード"
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "OCR、暗号化、その他の内部オプションをきめ細かく制御するためのJSON文字列としての高度な処理プロファイル。\n\n**例**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.am9iLWNoZWNr.display_name": {
-          "source": "Job Check",
+          "source": "Job check",
           "message": "ジョブの確認"
         },
         "app.UGRmQ28.action.am9iLWNoZWNr.short_desc": {

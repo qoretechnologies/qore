@@ -590,6 +590,7 @@ private:
         data_ready_streams after ChannelAction dispatch, and in notifyPendingStreams(), which removes the streams that
         the failure of the connection notifies (issue #7695).  Guarded by stream_lock.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int64_t> notify_streams;
 
     //! Stream IDs that had data dispatched in the last continuePoll cycle

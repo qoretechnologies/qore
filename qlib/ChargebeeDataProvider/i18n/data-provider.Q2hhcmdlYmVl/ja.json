@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
-          "source": "Find Customers",
+          "source": "Find customers",
           "message": "顧客の検索"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
@@ -404,7 +404,7 @@
           "message": "姓で顧客を絞り込み"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "顧客を取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -424,7 +424,7 @@
           "message": "顧客 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "顧客を作成"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -460,7 +460,7 @@
           "message": "顧客の姓"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "顧客を更新"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "顧客の名"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "顧客を削除"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -516,7 +516,7 @@
           "message": "削除する顧客"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "Find Subscriptions",
+          "source": "Find subscriptions",
           "message": "サブスクリプションを検索"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "所属する顧客でサブスクリプションをフィルタリングします"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "サブスクリプションを取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
@@ -600,7 +600,7 @@
           "message": "サブスクリプションID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Subscription",
+          "source": "Create subscription",
           "message": "サブスクリプションを作成"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -620,7 +620,7 @@
           "message": "サブスクリプションの対象顧客"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Update Subscription",
+          "source": "Update subscription",
           "message": "サブスクリプションを更新"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -640,7 +640,7 @@
           "message": "更新するサブスクリプション"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Delete Subscription",
+          "source": "Delete subscription",
           "message": "サブスクリプションを削除"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -660,7 +660,7 @@
           "message": "削除するサブスクリプション"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
-          "source": "Find Invoices",
+          "source": "Find invoices",
           "message": "請求書を検索"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
@@ -708,7 +708,7 @@
           "message": "保留中"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "請求書を取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -728,7 +728,7 @@
           "message": "請求書 ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "請求書を作成"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "請求書の対象顧客"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "請求書を更新"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "更新する請求書"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "請求書を削除"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -788,7 +788,7 @@
           "message": "削除する請求書"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
-          "source": "Collect Invoice Payment",
+          "source": "Collect invoice payment",
           "message": "請求書の支払いを回収"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "支払い金額 (セント単位)"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
-          "source": "Record Invoice Payment",
+          "source": "Record invoice payment",
           "message": "請求書の支払いを記録"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "支払い金額 (セント単位)"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
-          "source": "Refund Invoice",
+          "source": "Refund invoice",
           "message": "請求書を返金"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
@@ -872,7 +872,7 @@
           "message": "返金額（セント単位）"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
-          "source": "Get Invoice Link",
+          "source": "Get invoice link",
           "message": "請求書リンクを取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
@@ -892,7 +892,7 @@
           "message": "PDFリンクを取得する請求書"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
-          "source": "Find Coupons",
+          "source": "Find coupons",
           "message": "クーポンを検索"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
@@ -960,7 +960,7 @@
           "message": "提供数量"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "クーポンを取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "クーポン ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "クーポンを作成"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "期間限定"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "クーポンを更新"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "クーポンの表示名"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "クーポンを削除"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "削除するクーポン"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
-          "source": "Find Promotional Credits",
+          "source": "Find promotional credits",
           "message": "プロモーションクレジットを検索"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "設定"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Get Promotional Credit",
+          "source": "Get promotional credit",
           "message": "プロモーションクレジットを取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "プロモーションクレジットID"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Add Promotional Credit",
+          "source": "Add promotional credit",
           "message": "プロモーションクレジットを追加"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "クレジットの通貨"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Deduct Promotional Credit",
+          "source": "Deduct promotional credit",
           "message": "プロモーションクレジットを差し引く"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "クレジットの通貨"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Set Promotional Credit",
+          "source": "Set promotional credit",
           "message": "プロモーションクレジットを設定"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "クレジットの通貨"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "トランザクションを取得"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "取得するトランザクション"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "顧客が作成されました"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Chargebee で新しい顧客が作成されたときに発火します。顧客イベントの詳細を提供します。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
-          "source": "Any Event (Instant)",
+          "source": "Any event (instant)",
           "message": "すべてのイベント (即時)"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Chargebee のすべてのイベントで発火します。すべてのイベントタイプの完全なイベント詳細を提供します。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
-          "source": "Invoice Generated",
+          "source": "Invoice generated",
           "message": "請求書が生成されました"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Chargebee で新しい請求書が生成されたときに発火します。請求書イベントの詳細を提供します。"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "サブスクリプション作成"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {

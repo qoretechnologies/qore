@@ -371,7 +371,7 @@ public class IntercomDataProviderTest inherits QUnit::Test {
         # deliberately left alone
         foreach string action in (("listTags", "listAdmins", "listTagsForAContact")) {
             # an action with no options at all has no request type, which is itself the answer for
-            # "List Tags": every option Intercom declares on it is the revision header the connection owns
+            # "List tags": every option Intercom declares on it is the revision header the connection owns
             *AbstractDataProviderType rt = aset.getOperationEx(action).getRequestType();
             *hash<string, AbstractDataField> fields = rt ? rt.getFields() : NOTHING;
             assertFalse(exists fields.starting_after,

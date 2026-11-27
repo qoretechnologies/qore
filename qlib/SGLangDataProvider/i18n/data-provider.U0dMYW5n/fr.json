@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Complétion de chat"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Identifiant opaque représentant l'utilisateur final. Consigné côté serveur pour le suivi des abus et l'attribution de l'utilisation ; n'affecte pas la génération."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Créer des plongements"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Identifiant opaque représentant l'utilisateur final. Journalisé côté serveur pour le suivi des abus et l'attribution de l'utilisation ; n'affecte pas la sortie."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "Génération contrainte"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Lorsque la valeur est `True`, chaque entrée de log-probabilité inclut le texte décodé du jeton en plus de l'identifiant du jeton. Plus facile à inspecter mais augmente la charge utile."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Obtenir les informations sur le serveur"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Renvoie la configuration du serveur SGLang (nom du modèle, chemin du tokenizer, max_total_tokens, chat_template, etc.) et l'état d'exécution (version, périphérique CUDA, nombre de GPU). Utile pour les bilans de santé et la validation de configuration."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "Vider le cache KV"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

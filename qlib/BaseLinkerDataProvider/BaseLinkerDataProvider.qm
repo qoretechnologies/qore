@@ -95,7 +95,7 @@ module BaseLinkerDataProvider {
             "path": "/orders",
             "action": "list-orders",
             "groups": "Orders",
-            "display_name": "List Orders",
+            "display_name": "List orders",
             "short_desc": "List BaseLinker orders with cursor pagination",
             "desc": "Returns a stream of BaseLinker orders via `getOrders`. Supports cursor "
                 "pagination through `id_from`/`date_from` and filters by status, email, and "
@@ -113,7 +113,7 @@ module BaseLinkerDataProvider {
             "path": "/orders",
             "action": "get-order",
             "groups": "Orders",
-            "display_name": "Get Order",
+            "display_name": "Get order",
             "short_desc": "Get a single order by ID",
             "desc": "Retrieve a single BaseLinker order by its `order_id` via `getOrders`.",
             "action_code": DPAT_FIND_SINGLE,
@@ -134,7 +134,7 @@ module BaseLinkerDataProvider {
             "path": "/add-order",
             "action": "add-order",
             "groups": "Orders",
-            "display_name": "Add Order",
+            "display_name": "Add order",
             "short_desc": "Create a new order",
             "desc": "Create a new order in BaseLinker via `addOrder`. Returns the new "
                 "`order_id` on success.",
@@ -153,7 +153,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-fields",
             "action": "set-order-fields",
             "groups": "Orders",
-            "display_name": "Set Order Fields",
+            "display_name": "Set order fields",
             "short_desc": "Update fields on an existing order",
             "desc": "Update one or more fields on an existing BaseLinker order via "
                 "`setOrderFields`. Only supplied fields are modified.",
@@ -172,7 +172,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-status",
             "action": "set-order-status",
             "groups": "Orders",
-            "display_name": "Set Order Status",
+            "display_name": "Set order status",
             "short_desc": "Change the status of an order",
             "desc": "Change the status of a BaseLinker order via `setOrderStatus`. The new "
                 "`status_id` must be one of the statuses configured in BaseLinker.",
@@ -191,7 +191,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-payment",
             "action": "set-order-payment",
             "groups": "Orders",
-            "display_name": "Set Order Payment",
+            "display_name": "Set order payment",
             "short_desc": "Record a payment against an order",
             "desc": "Record a payment for a BaseLinker order via `setOrderPayment`.",
             "action_code": DPAT_API,
@@ -209,7 +209,7 @@ module BaseLinkerDataProvider {
             "path": "/delete-order",
             "action": "delete-order",
             "groups": "Orders",
-            "display_name": "Delete Order",
+            "display_name": "Delete order",
             "short_desc": "Delete one or more orders",
             "desc": "Delete a BaseLinker order (or list of orders) via `deleteOrders`.",
             "action_code": DPAT_API,
@@ -231,7 +231,7 @@ module BaseLinkerDataProvider {
             "path": "/add-order-product",
             "action": "add-order-product",
             "groups": "Orders / Line Items",
-            "display_name": "Add Order Product",
+            "display_name": "Add order product",
             "short_desc": "Add a product line to an order",
             "desc": "Add a product line item to an existing BaseLinker order via "
                 "`addOrderProduct`.",
@@ -256,7 +256,7 @@ module BaseLinkerDataProvider {
                 "path": "/set-order-product-fields",
                 "action": "set-order-product-fields",
                 "groups": "Orders / Line Items",
-                "display_name": "Set Order Product Fields",
+                "display_name": "Set order product fields",
                 "short_desc": "Update a product line on an order",
                 "desc": "Update fields on a specific product line of a BaseLinker order via "
                     "`setOrderProductFields`.",
@@ -280,7 +280,7 @@ module BaseLinkerDataProvider {
                 "path": "/delete-order-product",
                 "action": "delete-order-product",
                 "groups": "Orders / Line Items",
-                "display_name": "Delete Order Product",
+                "display_name": "Delete order product",
                 "short_desc": "Remove a product line from an order",
                 "desc": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
                 "action_code": DPAT_API,
@@ -302,7 +302,7 @@ module BaseLinkerDataProvider {
             "path": "/order-returns",
             "action": "list-order-returns",
             "groups": "Order Returns",
-            "display_name": "List Order Returns",
+            "display_name": "List order returns",
             "short_desc": "List BaseLinker order returns",
             "desc": "Returns a stream of BaseLinker order returns via `getOrderReturns`. "
                 "Supports cursor pagination through `id_from` and filters by status and "
@@ -321,7 +321,7 @@ module BaseLinkerDataProvider {
             "path": "/order-returns",
             "action": "get-order-return",
             "groups": "Order Returns",
-            "display_name": "Get Order Return",
+            "display_name": "Get order return",
             "short_desc": "Get a single order return by ID",
             "desc": "Retrieve a single BaseLinker order return by its `return_id`.",
             "action_code": DPAT_FIND_SINGLE,
@@ -342,7 +342,7 @@ module BaseLinkerDataProvider {
             "path": "/add-order-return",
             "action": "add-order-return",
             "groups": "Order Returns",
-            "display_name": "Add Order Return",
+            "display_name": "Add order return",
             "short_desc": "Create a new order return",
             "desc": "Create a new BaseLinker order return via `addOrderReturn`. Returns the new "
                 "`return_id` on success.",
@@ -361,7 +361,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-return-fields",
             "action": "set-order-return-fields",
             "groups": "Order Returns",
-            "display_name": "Set Order Return Fields",
+            "display_name": "Set order return fields",
             "short_desc": "Update fields on an existing order return",
             "desc": "Update one or more fields on a BaseLinker order return via "
                 "`setOrderReturnFields`.",
@@ -380,7 +380,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-return-status",
             "action": "set-order-return-status",
             "groups": "Order Returns",
-            "display_name": "Set Order Return Status",
+            "display_name": "Set order return status",
             "short_desc": "Change the status of an order return",
             "desc": "Change the status of a BaseLinker order return via "
                 "`setOrderReturnStatus`.",
@@ -399,7 +399,7 @@ module BaseLinkerDataProvider {
             "path": "/set-order-return-refund",
             "action": "set-order-return-refund",
             "groups": "Order Returns",
-            "display_name": "Set Order Return Refund",
+            "display_name": "Set order return refund",
             "short_desc": "Record a refund against an order return",
             "desc": "Record a refund on a BaseLinker order return via "
                 "`setOrderReturnRefund`.",
@@ -422,7 +422,7 @@ module BaseLinkerDataProvider {
             "path": "/inventories",
             "action": "list-inventories",
             "groups": "Inventory",
-            "display_name": "List Inventories",
+            "display_name": "List inventories",
             "short_desc": "List BaseLinker inventories (catalogs)",
             "desc": "List all BaseLinker inventories (catalogs) via `getInventories`.",
             "action_code": DPAT_FIND,
@@ -439,7 +439,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-products",
             "action": "list-inventory-products",
             "groups": "Inventory",
-            "display_name": "List Inventory Products",
+            "display_name": "List inventory products",
             "short_desc": "List products in a BaseLinker inventory",
             "desc": "List products in a BaseLinker inventory via "
                 "`getInventoryProductsList`. Supports page-number pagination and filters by "
@@ -458,7 +458,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-products",
             "action": "get-inventory-product",
             "groups": "Inventory",
-            "display_name": "Get Inventory Product",
+            "display_name": "Get inventory product",
             "short_desc": "Get a single inventory product by ID",
             "desc": "Retrieve a single BaseLinker inventory product by its `product_id`.",
             "action_code": DPAT_FIND_SINGLE,
@@ -496,7 +496,7 @@ module BaseLinkerDataProvider {
                 "path": "/add-inventory-product",
                 "action": "add-inventory-product",
                 "groups": "Inventory",
-                "display_name": "Add / Update Inventory Product",
+                "display_name": "Add / update inventory product",
                 "short_desc": "Create or update a BaseLinker inventory product",
                 "desc": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit "
                     "`product_id` to create a new product; supply it (together with "
@@ -521,7 +521,7 @@ module BaseLinkerDataProvider {
                 "path": "/delete-inventory-product",
                 "action": "delete-inventory-product",
                 "groups": "Inventory",
-                "display_name": "Delete Inventory Product",
+                "display_name": "Delete inventory product",
                 "short_desc": "Delete a BaseLinker inventory product",
                 "desc": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
                 "action_code": DPAT_API,
@@ -539,7 +539,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-stock",
             "action": "list-inventory-stock",
             "groups": "Inventory",
-            "display_name": "List Inventory Stock",
+            "display_name": "List inventory stock",
             "short_desc": "List stock levels for inventory products",
             "desc": "List BaseLinker inventory product stock levels via "
                 "`getInventoryProductsStock`. Each row contains a `product_id` keyed hash of "
@@ -558,7 +558,7 @@ module BaseLinkerDataProvider {
             "path": "/update-inventory-stock",
             "action": "update-inventory-stock",
             "groups": "Inventory",
-            "display_name": "Update Inventory Stock",
+            "display_name": "Update inventory stock",
             "short_desc": "Bulk update stock levels (up to 1000 products per call)",
             "desc": "Bulk-update BaseLinker inventory stock via "
                 "`updateInventoryProductsStock`. Accepts up to 1000 product entries per call.",
@@ -577,7 +577,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-prices",
             "action": "list-inventory-prices",
             "groups": "Inventory",
-            "display_name": "List Inventory Prices",
+            "display_name": "List inventory prices",
             "short_desc": "List prices for inventory products",
             "desc": "List BaseLinker inventory product prices via "
                 "`getInventoryProductsPrices`. Each row contains a `product_id` keyed hash of "
@@ -596,7 +596,7 @@ module BaseLinkerDataProvider {
             "path": "/update-inventory-prices",
             "action": "update-inventory-prices",
             "groups": "Inventory",
-            "display_name": "Update Inventory Prices",
+            "display_name": "Update inventory prices",
             "short_desc": "Bulk update prices (up to 1000 products per call)",
             "desc": "Bulk-update BaseLinker inventory prices via "
                 "`updateInventoryProductsPrices`. Accepts up to 1000 product entries per "
@@ -616,7 +616,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-manufacturers",
             "action": "list-inventory-manufacturers",
             "groups": "Inventory",
-            "display_name": "List Inventory Manufacturers",
+            "display_name": "List inventory manufacturers",
             "short_desc": "List inventory manufacturers",
             "desc": "List BaseLinker inventory manufacturers via "
                 "`getInventoryManufacturers`.",
@@ -634,7 +634,7 @@ module BaseLinkerDataProvider {
             "path": "/inventory-categories",
             "action": "list-inventory-categories",
             "groups": "Inventory",
-            "display_name": "List Inventory Categories",
+            "display_name": "List inventory categories",
             "short_desc": "List inventory categories",
             "desc": "List BaseLinker inventory categories via `getInventoryCategories`. "
                 "When `inventory_id` is supplied, results are scoped to that catalog.",
@@ -656,7 +656,7 @@ module BaseLinkerDataProvider {
             "path": "/order-packages",
             "action": "list-order-packages",
             "groups": "Shipping",
-            "display_name": "List Order Packages",
+            "display_name": "List order packages",
             "short_desc": "List courier packages for an order",
             "desc": "List courier packages (shipments) associated with a BaseLinker order "
                 "via `getOrderPackages`.",
@@ -680,7 +680,7 @@ module BaseLinkerDataProvider {
                 "path": "/add-package",
                 "action": "add-package",
                 "groups": "Shipping",
-                "display_name": "Add Courier Package",
+                "display_name": "Add courier package",
                 "short_desc": "Create a courier package (shipment)",
                 "desc": "Create a courier package for a BaseLinker order via `createPackage`. "
                     "Returns the courier package identifier on success.",
@@ -699,7 +699,7 @@ module BaseLinkerDataProvider {
             "path": "/get-label",
             "action": "get-label",
             "groups": "Shipping",
-            "display_name": "Get Courier Label",
+            "display_name": "Get courier label",
             "short_desc": "Retrieve a shipping label",
             "desc": "Retrieve a shipping label for a courier package via `getLabel`. "
                 "The label is returned as a base64-encoded blob (typically a PDF).",
@@ -719,7 +719,7 @@ module BaseLinkerDataProvider {
             "path": "/delete-courier-package",
             "action": "delete-courier-package",
             "groups": "Shipping",
-            "display_name": "Delete Courier Package",
+            "display_name": "Delete courier package",
             "short_desc": "Delete a courier package",
             "desc": "Delete a courier package (shipment) via `deleteCourierPackage`.",
             "action_code": DPAT_API,
@@ -741,7 +741,7 @@ module BaseLinkerDataProvider {
             "path": "/couriers",
             "action": "list-couriers",
             "groups": "Shipping — Metadata",
-            "display_name": "List Couriers",
+            "display_name": "List couriers",
             "short_desc": "List configured couriers",
             "desc": "List the couriers configured for this BaseLinker account via "
                 "`getCouriersList`.",
@@ -758,7 +758,7 @@ module BaseLinkerDataProvider {
             "path": "/courier-services",
             "action": "list-courier-services",
             "groups": "Shipping — Metadata",
-            "display_name": "List Courier Services",
+            "display_name": "List courier services",
             "short_desc": "List services for a courier",
             "desc": "List available services (product/tier options) for a given courier via "
                 "`getCourierServices`.",
@@ -776,7 +776,7 @@ module BaseLinkerDataProvider {
             "path": "/courier-accounts",
             "action": "list-courier-accounts",
             "groups": "Shipping — Metadata",
-            "display_name": "List Courier Accounts",
+            "display_name": "List courier accounts",
             "short_desc": "List courier-account credentials",
             "desc": "List the courier-account credentials configured for a given courier via "
                 "`getCourierAccounts`.",
@@ -794,7 +794,7 @@ module BaseLinkerDataProvider {
             "path": "/courier-fields",
             "action": "list-courier-fields",
             "groups": "Shipping — Metadata",
-            "display_name": "List Courier Fields",
+            "display_name": "List courier fields",
             "short_desc": "List the custom-field schema for a courier",
             "desc": "List the custom-field schema (required/optional inputs) for a given "
                 "courier via `getCourierFields`. Useful when programmatically constructing "
@@ -817,7 +817,7 @@ module BaseLinkerDataProvider {
             "path": "/order-statuses",
             "action": "list-order-statuses",
             "groups": "Orders — Metadata",
-            "display_name": "List Order Statuses",
+            "display_name": "List order statuses",
             "short_desc": "List BaseLinker order statuses",
             "desc": "List the order statuses configured in BaseLinker via "
                 "`getOrderStatusList`.",
@@ -835,7 +835,7 @@ module BaseLinkerDataProvider {
             "path": "/order-sources",
             "action": "list-order-sources",
             "groups": "Orders — Metadata",
-            "display_name": "List Order Sources",
+            "display_name": "List order sources",
             "short_desc": "List BaseLinker order sources",
             "desc": "List the order sources (marketplaces/shops) configured in BaseLinker via "
                 "`getOrderSources`.",
@@ -857,7 +857,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_CREATED,
             "action": EVENT_ORDER_CREATED,
             "groups": "Events",
-            "display_name": "Order Created",
+            "display_name": "Order created",
             "short_desc": "Trigger when a new order is created",
             "desc": "Fires when a new order is created in BaseLinker. (Polled from "
                 "`getJournalList` `log_type` 1.)",
@@ -871,7 +871,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_DOWNLOADED,
             "action": EVENT_ORDER_DOWNLOADED,
             "groups": "Events",
-            "display_name": "Order Downloaded",
+            "display_name": "Order downloaded",
             "short_desc": "Trigger when an order is downloaded from a shop",
             "desc": "Fires when an order is downloaded from a connected shop. (Polled "
                 "from `getJournalList` `log_type` 2.)",
@@ -885,7 +885,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_PAID,
             "action": EVENT_ORDER_PAID,
             "groups": "Events",
-            "display_name": "Order Paid",
+            "display_name": "Order paid",
             "short_desc": "Trigger when an order is paid",
             "desc": "Fires when an order is marked paid. (Polled from `getJournalList` "
                 "`log_type` 3.)",
@@ -899,7 +899,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_REMOVED,
             "action": EVENT_ORDER_REMOVED,
             "groups": "Events",
-            "display_name": "Order Removed",
+            "display_name": "Order removed",
             "short_desc": "Trigger when an order is removed",
             "desc": "Fires when an order is removed. (Polled from `getJournalList` "
                 "`log_type` 4.)",
@@ -913,7 +913,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDERS_MERGED,
             "action": EVENT_ORDERS_MERGED,
             "groups": "Events",
-            "display_name": "Orders Merged",
+            "display_name": "Orders merged",
             "short_desc": "Trigger when two or more orders are merged",
             "desc": "Fires when two or more orders are merged. (Polled from "
                 "`getJournalList` `log_type` 5.)",
@@ -927,7 +927,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_SPLIT,
             "action": EVENT_ORDER_SPLIT,
             "groups": "Events",
-            "display_name": "Order Split",
+            "display_name": "Order split",
             "short_desc": "Trigger when an order is split",
             "desc": "Fires when an order is split. (Polled from `getJournalList` "
                 "`log_type` 6.)",
@@ -941,7 +941,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_INVOICE_ISSUED,
             "action": EVENT_INVOICE_ISSUED,
             "groups": "Events",
-            "display_name": "Invoice Issued",
+            "display_name": "Invoice issued",
             "short_desc": "Trigger when an invoice is issued",
             "desc": "Fires when an invoice is issued. (Polled from `getJournalList` "
                 "`log_type` 7.)",
@@ -955,7 +955,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_RECEIPT_ISSUED,
             "action": EVENT_RECEIPT_ISSUED,
             "groups": "Events",
-            "display_name": "Receipt Issued",
+            "display_name": "Receipt issued",
             "short_desc": "Trigger when a receipt is issued",
             "desc": "Fires when a receipt is issued. (Polled from `getJournalList` "
                 "`log_type` 8.)",
@@ -969,7 +969,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_PACKAGE_CREATED,
             "action": EVENT_PACKAGE_CREATED,
             "groups": "Events",
-            "display_name": "Package Created",
+            "display_name": "Package created",
             "short_desc": "Trigger when a courier package is created",
             "desc": "Fires when a courier package is created. (Polled from "
                 "`getJournalList` `log_type` 9.)",
@@ -983,7 +983,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_PACKAGE_DELETED,
             "action": EVENT_PACKAGE_DELETED,
             "groups": "Events",
-            "display_name": "Package Deleted",
+            "display_name": "Package deleted",
             "short_desc": "Trigger when a courier package is deleted",
             "desc": "Fires when a courier package is deleted. (Polled from "
                 "`getJournalList` `log_type` 10.)",
@@ -997,7 +997,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_DELIVERY_DATA_EDITED,
             "action": EVENT_DELIVERY_DATA_EDITED,
             "groups": "Events",
-            "display_name": "Delivery Data Edited",
+            "display_name": "Delivery data edited",
             "short_desc": "Trigger when delivery data on an order is edited",
             "desc": "Fires when delivery data on an order is edited. (Polled from "
                 "`getJournalList` `log_type` 11.)",
@@ -1011,7 +1011,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_PRODUCT_ADDED,
             "action": EVENT_ORDER_PRODUCT_ADDED,
             "groups": "Events",
-            "display_name": "Order Product Added",
+            "display_name": "Order product added",
             "short_desc": "Trigger when a product is added to an order",
             "desc": "Fires when a product is added to an order. (Polled from "
                 "`getJournalList` `log_type` 12.)",
@@ -1025,7 +1025,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_PRODUCT_EDITED,
             "action": EVENT_ORDER_PRODUCT_EDITED,
             "groups": "Events",
-            "display_name": "Order Product Edited",
+            "display_name": "Order product edited",
             "short_desc": "Trigger when an order product is edited",
             "desc": "Fires when a product line on an order is edited. (Polled from "
                 "`getJournalList` `log_type` 13.)",
@@ -1039,7 +1039,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_PRODUCT_REMOVED,
             "action": EVENT_ORDER_PRODUCT_REMOVED,
             "groups": "Events",
-            "display_name": "Order Product Removed",
+            "display_name": "Order product removed",
             "short_desc": "Trigger when a product is removed from an order",
             "desc": "Fires when a product line is removed from an order. (Polled from "
                 "`getJournalList` `log_type` 14.)",
@@ -1053,7 +1053,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_BLACKLIST_ADDED,
             "action": EVENT_BLACKLIST_ADDED,
             "groups": "Events",
-            "display_name": "Blacklist Entry Added",
+            "display_name": "Blacklist entry added",
             "short_desc": "Trigger when a buyer is added to the blacklist",
             "desc": "Fires when a buyer is added to the blacklist. (Polled from "
                 "`getJournalList` `log_type` 15.)",
@@ -1067,7 +1067,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_DATA_EDITED,
             "action": EVENT_ORDER_DATA_EDITED,
             "groups": "Events",
-            "display_name": "Order Data Edited",
+            "display_name": "Order data edited",
             "short_desc": "Trigger when general order data is edited",
             "desc": "Fires when general order data is edited. (Polled from "
                 "`getJournalList` `log_type` 16.)",
@@ -1081,7 +1081,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_COPIED,
             "action": EVENT_ORDER_COPIED,
             "groups": "Events",
-            "display_name": "Order Copied",
+            "display_name": "Order copied",
             "short_desc": "Trigger when an order is copied",
             "desc": "Fires when an order is copied. (Polled from `getJournalList` "
                 "`log_type` 17.)",
@@ -1095,7 +1095,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_ORDER_STATUS_CHANGED,
             "action": EVENT_ORDER_STATUS_CHANGED,
             "groups": "Events",
-            "display_name": "Order Status Changed",
+            "display_name": "Order status changed",
             "short_desc": "Trigger when the status of an order changes",
             "desc": "Fires when an order's status changes. (Polled from `getJournalList` "
                 "`log_type` 18.)",
@@ -1109,7 +1109,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_INVOICE_DELETED,
             "action": EVENT_INVOICE_DELETED,
             "groups": "Events",
-            "display_name": "Invoice Deleted",
+            "display_name": "Invoice deleted",
             "short_desc": "Trigger when an invoice is deleted",
             "desc": "Fires when an invoice is deleted. (Polled from `getJournalList` "
                 "`log_type` 19.)",
@@ -1123,7 +1123,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_RECEIPT_DELETED,
             "action": EVENT_RECEIPT_DELETED,
             "groups": "Events",
-            "display_name": "Receipt Deleted",
+            "display_name": "Receipt deleted",
             "short_desc": "Trigger when a receipt is deleted",
             "desc": "Fires when a receipt is deleted. (Polled from `getJournalList` "
                 "`log_type` 20.)",
@@ -1137,7 +1137,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_INVOICE_EDITED,
             "action": EVENT_INVOICE_EDITED,
             "groups": "Events",
-            "display_name": "Invoice Edited",
+            "display_name": "Invoice edited",
             "short_desc": "Trigger when an invoice is edited",
             "desc": "Fires when an invoice is edited. (Polled from `getJournalList` "
                 "`log_type` 21.)",
@@ -1151,7 +1151,7 @@ module BaseLinkerDataProvider {
             "path": "/events/" + EVENT_PACKAGE_STATUS_CHANGED,
             "action": EVENT_PACKAGE_STATUS_CHANGED,
             "groups": "Events",
-            "display_name": "Package Status Changed",
+            "display_name": "Package status changed",
             "short_desc": "Trigger when a courier package status changes",
             "desc": "Fires when a courier package's status changes. (Polled from "
                 "`getJournalList` `log_type` 22.)",

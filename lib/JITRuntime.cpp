@@ -767,6 +767,24 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_get_cross_module_fast_entry",
         reinterpret_cast<void*>(&qore_rt_try_get_cross_module_fast_entry) },
     { "qore_rt_enter_cross_module_call", reinterpret_cast<void*>(&qore_rt_enter_cross_module_call) },
+    { "qore_rt_call_ref_int_0_v1", reinterpret_cast<void*>(&qore_rt_call_ref_int_0_v1) },
+    { "qore_rt_call_ref_int_int_v1", reinterpret_cast<void*>(&qore_rt_call_ref_int_int_v1) },
+    { "qore_rt_call_ref_int_float_v1", reinterpret_cast<void*>(&qore_rt_call_ref_int_float_v1) },
+    { "qore_rt_call_ref_int_bool_v1", reinterpret_cast<void*>(&qore_rt_call_ref_int_bool_v1) },
+    { "qore_rt_call_ref_float_0_v1", reinterpret_cast<void*>(&qore_rt_call_ref_float_0_v1) },
+    { "qore_rt_call_ref_float_int_v1", reinterpret_cast<void*>(&qore_rt_call_ref_float_int_v1) },
+    { "qore_rt_call_ref_float_float_v1", reinterpret_cast<void*>(&qore_rt_call_ref_float_float_v1) },
+    { "qore_rt_call_ref_float_bool_v1", reinterpret_cast<void*>(&qore_rt_call_ref_float_bool_v1) },
+    { "qore_rt_call_ref_bool_0_v1", reinterpret_cast<void*>(&qore_rt_call_ref_bool_0_v1) },
+    { "qore_rt_call_ref_bool_int_v1", reinterpret_cast<void*>(&qore_rt_call_ref_bool_int_v1) },
+    { "qore_rt_call_ref_bool_float_v1", reinterpret_cast<void*>(&qore_rt_call_ref_bool_float_v1) },
+    { "qore_rt_call_ref_bool_bool_v1", reinterpret_cast<void*>(&qore_rt_call_ref_bool_bool_v1) },
+    { "qore_rt_call_ref_value_0_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_0_v1) },
+    { "qore_rt_call_ref_value_int_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_int_v1) },
+    { "qore_rt_call_ref_value_float_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_float_v1) },
+    { "qore_rt_call_ref_value_bool_v1", reinterpret_cast<void*>(&qore_rt_call_ref_value_bool_v1) },
+    { "qore_rt_call_ref_boxed_v1", reinterpret_cast<void*>(&qore_rt_call_ref_boxed_v1) },
+    { "qore_rt_call_ref_boxed_given_v1", reinterpret_cast<void*>(&qore_rt_call_ref_boxed_given_v1) },
     { "qore_rt_leave_cross_module_call", reinterpret_cast<void*>(&qore_rt_leave_cross_module_call) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
     { "qore_rt_date_kind_matches", reinterpret_cast<void*>(&qore_rt_date_kind_matches) },
@@ -7874,7 +7892,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path_cached(QoreAOTConte
     return qore_rt_make_list(vals, count, type_info, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo,
+        ExceptionSink* xsink) try {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
     bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
     ReferenceHolder<QoreHashNode> hash(
@@ -7914,7 +7933,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs, int count,
         const char* type_path, ExceptionSink* xsink) {
@@ -8283,7 +8302,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* 
 }
 
 static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* vals,
-        int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink, bool unique_keys) {
+        int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink, bool unique_keys) try {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
     bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
     ReferenceHolder<QoreHashNode> hash(
@@ -8322,11 +8341,11 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
         hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1, uint64_t val1_bits,
-        ExceptionSink* xsink, bool infer_value_type) {
+        ExceptionSink* xsink, bool infer_value_type) try {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD");
     const bool enabled = !enabled_env.get();
     if (!enabled) {
@@ -8347,18 +8366,14 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
 
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
-    if (val0.needsRef()) {
-        val0.refSelf();
-    }
-    if (val1.needsRef()) {
-        val1.refSelf();
-    }
 
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(2);
-    hp->setKeyValueKnownAbsentIntern(key0, val0);
-    hp->setKeyValueKnownAbsentIntern(key1, val1);
+    // each reference is taken once its member exists, so that memory that cannot be allocated for the hash or a
+    // member leaves no reference that nothing releases (qore#7763)
+    hp->setKeyValueKnownAbsentInternBorrowed(key0, val0);
+    hp->setKeyValueKnownAbsentInternBorrowed(key1, val1);
 
     const QoreTypeInfo* value_type = autoTypeInfo;
     if (infer_value_type) {
@@ -8371,7 +8386,7 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
         const char* key0, uint64_t val0_bits, const char* key1,
@@ -8391,26 +8406,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(
 static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1,
         uint64_t val1_bits, const char* key2, uint64_t val2_bits,
-        ExceptionSink* xsink, bool infer_value_type) {
+        ExceptionSink* xsink, bool infer_value_type) try {
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
     QoreValue val2 = fromBits(val2_bits);
-    if (val0.needsRef()) {
-        val0.refSelf();
-    }
-    if (val1.needsRef()) {
-        val1.refSelf();
-    }
-    if (val2.needsRef()) {
-        val2.refSelf();
-    }
 
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(3);
-    hp->setKeyValueKnownAbsentIntern(key0, val0);
-    hp->setKeyValueKnownAbsentIntern(key1, val1);
-    hp->setKeyValueKnownAbsentIntern(key2, val2);
+    // each reference is taken once its member exists (qore#7763)
+    hp->setKeyValueKnownAbsentInternBorrowed(key0, val0);
+    hp->setKeyValueKnownAbsentInternBorrowed(key1, val1);
+    hp->setKeyValueKnownAbsentInternBorrowed(key2, val2);
 
     const QoreTypeInfo* value_type = autoTypeInfo;
     if (infer_value_type) {
@@ -8427,7 +8434,7 @@ static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique(
         const char* key0, uint64_t val0_bits, const char* key1,
@@ -9101,6 +9108,8 @@ static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
     }
     const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
     const qore_hash_private* hp = qore_hash_private::get(*hash);
+    // the members are walked directly (qore#7569)
+    hp->assertNotReleasing();
     if (hp->hashdecl && slot >= 0
             && static_cast<size_t>(slot) < hp->size()) {
         const HashMember* member = hp->member_list.front();
@@ -12396,48 +12405,83 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldr_string_join_checked(
     return qore_rt_fold_string_join_checked(list_val, separator_val, true, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
-        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+//! the join of a list of strings: <list>::join() or join() (\a function() true, which is called only for an exception),
+//! for list.string.join (\a identity false) or list.string.join.identity-map
+/** An exception that the join raises is raised by the ordinary call, in the builtin's frame (qore#7731,
+    qore_rt_string_fast_path()).
+*/
+template <typename Function>
+static QORE_ALWAYS_INLINE uint64_t qore_rt_list_string_join_impl(uint64_t separator_bits, uint64_t list_bits,
+        Function function, bool identity, ExceptionSink* xsink) {
     QoreValue separator_value = fromBits(separator_bits);
     QoreValue list_value = fromBits(list_bits);
     if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
         if (xsink) {
-            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in list<string> join");
-        }
-        return toBits(QoreValue());
-    }
-    // note: the separator can be held in inline short string storage, which has no QoreStringNode
-    QoreStringNodeValueHelper separator(separator_value);
-    const QoreListNode* list = list_value.get<const QoreListNode>();
-    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
-
-extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
-        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
-    QoreValue separator_value = fromBits(separator_bits);
-    QoreValue list_value = fromBits(list_bits);
-    if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
-        if (xsink) {
-            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in identity-map list<string> join");
+            xsink->raiseException("IR-EXEC-ERROR", identity
+                ? "invalid typed value in identity-map list<string> join"
+                : "invalid typed value in list<string> join");
         }
         return toBits(QoreValue());
     }
 
     const QoreListNode* list = list_value.get<const QoreListNode>();
-    for (size_t i = 0, size = list->size(); i < size; ++i) {
-        QoreValue entry = list->retrieveEntry(i);
-        if (entry.getType() != NT_STRING) {
-            ValueHolder checked(entry.refSelf(), xsink);
-            QoreTypeInfo::acceptAssignment(stringTypeInfo,
-                "<list element assignment>", *checked, xsink);
+    if (identity) {
+        for (size_t i = 0, size = list->size(); i < size; ++i) {
+            QoreValue entry = list->retrieveEntry(i);
+            if (entry.getType() != NT_STRING) {
+                ValueHolder checked(entry.refSelf(), xsink);
+                QoreTypeInfo::acceptAssignment(stringTypeInfo,
+                    "<list element assignment>", *checked, xsink);
+                return toBits(QoreValue());
+            }
+        }
+    }
+
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        // note: the separator can be held in inline short string storage, which has no QoreStringNode
+        QoreStringNodeValueHelper separator(separator_value);
+        // the join returns nullptr if and only if it raised an exception (join_intern())
+        QoreStringNode* result = join_intern(*separator, list, 0, xsink);
+        if (!result) [[unlikely]] {
+            failed = true;
             return toBits(QoreValue());
         }
-    }
+        // the string node, boxed as QoreValue::set() boxes a node (QoreValueEncoding.h)
+        return TAG_POINTER | (reinterpret_cast<uint64_t>(result) & PAYLOAD_MASK);
+    }, [&]() {
+        return toBits(qore_string_call_join(list_value, separator_value, function(), xsink));
+    });
+}
 
-    // note: the separator can be held in inline short string storage, which has no QoreStringNode
-    QoreStringNodeValueHelper separator(separator_value);
-    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
+//! list.string.join: <list>::join() of a list of strings
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return false; }, false, xsink);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+//! list.string.join: join() of a list of strings
+extern "C" DLLEXPORT uint64_t qore_fast_join_list(uint64_t separator_bits, uint64_t list_bits,
+        ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, false, xsink);
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+//! list.string.join.identity-map: <list>::join() of the identity map of a list
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return false; }, true, xsink);
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+//! list.string.join.identity-map: join() of the identity map of a list
+extern "C" DLLEXPORT uint64_t qore_fast_join_list_identity_map(uint64_t separator_bits, uint64_t list_bits,
+        ExceptionSink* xsink) try {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits, []() { return true; }, true, xsink);
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+
+uint64_t qore_rt_list_string_join_inst(const QoreIRInstruction* inst, bool identity, uint64_t separator_bits,
+        uint64_t list_bits, ExceptionSink* xsink) {
+    return qore_rt_list_string_join_impl(separator_bits, list_bits,
+        [inst]() { return qore_ir_is_list_join_function_form(inst); }, identity, xsink);
+}
 
 static bool qore_rt_is_optional_string(const QoreValue& value) {
     return value.isNothing() || value.getType() == NT_STRING;
@@ -12554,27 +12598,204 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
     return toBits(accumulator);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
-extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
-        uint64_t, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) try {
-    QoreValue separator_value = fromBits(separator_bits);
-    QoreValue value = fromBits(value_bits);
-    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(value)) {
+//! a value of a fused <list>::join() that the join cannot convert (see qore_rt_string_method_join_start()): gives the
+//! failed join, a list of the join of the values before it (or NOTHING for the first value) and the value
+static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_failed(QoreValue join, QoreValue value,
+        ExceptionSink* xsink) {
+    assert(xsink && *xsink);
+    // the exception of the conversion, which the join raises again when the map has given all its values
+    xsink->clear();
+    ReferenceHolder<QoreListNode> failed(new QoreListNode(autoTypeInfo), xsink);
+    failed->push(join.refSelf(), xsink);
+    failed->push(value.refSelf(), xsink);
+    return toBits(QoreValue(failed.release()));
+}
+
+//! the finish of a failed join (see qore_rt_string_method_join_start()): the ordinary call of <list>::join() with the
+//! value that could not be converted and the values after it
+static __attribute__((noinline, cold)) uint64_t qore_rt_string_method_join_finish_failed(const QoreListNode* failed,
+        QoreValue separator, ExceptionSink* xsink) {
+    assert(xsink && failed->size() >= 2);
+    ReferenceHolder<QoreListNode> values(failed->copyListFrom(1), xsink);
+    ValueHolder rv(qore_string_call_join(*values, separator, false, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // the call joined the values (the conversion failed for a reason of its own): the join of the values before them,
+    // the separator and their join, which is the join of all the values
+    QoreValue prefix = failed->retrieveEntry(0);
+    if (prefix.isNothing()) {
+        return toBits(rv.release());
+    }
+    // the values are read in either string representation: the join of the call can be an inline short string
+    QoreStringNodeValueHelper prefix_str(prefix);
+    SimpleRefHolder<QoreStringNode> result(prefix_str->copy());
+    QoreStringValueHelper separator_str(separator);
+    result->concat(*separator_str, xsink);
+    if (!*xsink) {
+        QoreStringValueHelper joined(*rv);
+        result->concat(*joined, xsink);
+    }
+    return *xsink ? toBits(QoreValue()) : toBits(QoreValue(result.release()));
+}
+
+static uint64_t qore_rt_string_method_join_other(QoreValue first, QoreValue separator_value, QoreValue value,
+        ExceptionSink* xsink);
+
+//! appends the text of a string value to \a p without a conversion: the text of a short string (UTF-8), or of a
+//! string node in the encoding of \a p; returns false for any other value
+static QORE_ALWAYS_INLINE bool qore_rt_string_join_append_raw(qore_string_private* p, QoreValue value) {
+    if (value.isShortString()) {
+        if (p->getEncoding() != QCS_UTF8) {
+            return false;
+        }
+        uint64_t bits = toBits(value);
+        size_t size = value.shortStringLen();
+        p->check_char(p->len + size + STR_CLASS_EXTRA);
+        char* buf = p->ownedBuffer() + p->len;
+        for (size_t i = 0; i < size; ++i) {
+            buf[i] = static_cast<char>((bits >> (40 - i * 8)) & 0xFF);
+        }
+        p->len += size;
+        p->ownedBuffer()[p->len] = '\0';
+        return true;
+    }
+    if (!value.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (node->getType() != NT_STRING) {
+        return false;
+    }
+    // note: safe; an inline short string, which has no node, was appended above
+    const qore_string_private* vp = qore_string_private::get(*static_cast<const QoreStringNode*>(node));
+    if (vp->getEncoding() != p->getEncoding()) {
+        return false;
+    }
+    p->concat(vp);
+    return true;
+}
+
+//! a step of the join of a fused <list>::join() (see qore_rt_string_method_join_start()): appends the separator and
+//! the value, converted to the join's encoding, or gives the failed join if the value cannot be converted
+static QORE_ALWAYS_INLINE uint64_t qore_rt_string_method_join_step(QoreStringNode* join, uint64_t join_bits,
+        QoreValue separator, QoreValue value, ExceptionSink* xsink) {
+    // The join is created by the start and cannot escape the fused fold before its finish; its additional references
+    // are compiler cleanup aliases, never user aliases or string views, so mutating it through the private primitive
+    // is safe and keeps the join linear.  The separator has its encoding.
+    qore_string_private* p = qore_string_private::get(*join);
+    size_t len = p->len;
+    if (!qore_rt_string_join_append_raw(p, separator)) [[unlikely]] {
+        if (separator.getType() != NT_STRING) {
+            return qore_rt_string_method_join_other(fromBits(join_bits), separator, value, xsink);
+        }
+        QoreStringValueHelper separator_str(separator);
+        p->concat(*separator_str);
+    }
+    if (!qore_rt_string_join_append_raw(p, value)) [[unlikely]] {
+        if (value.getType() != NT_STRING) {
+            p->terminate(len);
+            return qore_rt_string_method_join_other(fromBits(join_bits), separator, value, xsink);
+        }
+        QoreStringValueHelper string(value, join->getEncoding(), xsink);
+        if (xsink && *xsink) [[unlikely]] {
+            // the join of the values before this one
+            p->terminate(len);
+            return qore_rt_string_method_join_failed(fromBits(join_bits), value, xsink);
+        }
+        p->concat(*string);
+    }
+    join->ref();
+    return join_bits;
+}
+
+//! the start and the finish of the join of a fused <list>::join(), and the steps of a failed join (see
+//! qore_rt_string_method_join_start())
+static __attribute__((noinline)) uint64_t qore_rt_string_method_join_other(QoreValue first, QoreValue separator_value,
+        QoreValue value, ExceptionSink* xsink) {
+    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(value)
+            || (!first.isNothing() && first.getType() != NT_STRING && first.getType() != NT_LIST)) {
         if (xsink) {
             xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in fused method string join");
         }
         return toBits(QoreValue());
     }
 
-    QoreStringValueHelper separator(separator_value);
-    QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
-    if (value.getType() == NT_STRING) {
-        QoreStringValueHelper string(value, separator->getEncoding(), xsink);
-        if (xsink && *xsink) {
-            return toBits(QoreValue());
+    if (first.isNothing()) {
+        // the start
+        QoreStringValueHelper separator(separator_value);
+        QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
+        if (value.getType() == NT_STRING) {
+            QoreStringValueHelper string(value, separator->getEncoding(), xsink);
+            if (xsink && *xsink) [[unlikely]] {
+                return qore_rt_string_method_join_failed(QoreValue(), value, xsink);
+            }
+            qore_string_private::get(*result)->concat(*string);
         }
-        qore_string_private::get(*result)->concat(*string);
+        return toBits(QoreValue(result.release()));
     }
-    return toBits(QoreValue(result.release()));
+
+    if (first.getType() == NT_LIST) {
+        // note: safe; the failed join is a list that qore_rt_string_method_join_failed() created, which cannot escape
+        // the fused fold before its finish, so it is extended in place
+        QoreListNode* failed = first.get<QoreListNode>();
+        if (value.isNothing()) {
+            // the finish of the failed join: the exception, in the frame of the join
+            return qore_rt_string_method_join_finish_failed(failed, separator_value, xsink);
+        }
+        failed->push(value.refSelf(), xsink);
+        failed->ref();
+        return toBits(first);
+    }
+
+    // the finish of the join (a step with a value is made by qore_rt_string_method_join_start()); the join is the
+    // string node that the start made, and an inline short string, which has no reference, is given as it is
+    assert(value.isNothing());
+    if (!first.isShortString()) {
+        first.getInternalNode()->ref();
+    }
+    return toBits(first);
+}
+
+//! string.method.join.start: the join of the values that a fused map gives, for <list>::join() of the map
+/** The AST interpreter evaluates the whole map, and then the join raises an exception for the first value that it
+    cannot convert to the separator's encoding.  So the join of a value that cannot be converted gives the failed join:
+    a list of the join of the values before it and that value; the following values of the map are evaluated and added
+    to it, and the finish makes the ordinary call of <list>::join() with the value and the values after it, which
+    raises the exception of the value in the frame of the join, as the join of all the values does (join_intern()
+    converts each value on its own, in order) (qore#7731).  Should the call join them, the result is the join of all
+    the values.
+
+    - \a first NOTHING: starts the join with \a value, or gives an empty string (a map without values) if \a value
+      is NOTHING
+    - \a first a string (the join): appends the separator and \a value, or with \a value NOTHING (the finish) gives the
+      join
+    - \a first a list (the failed join): adds \a value to it, or with \a value NOTHING (the finish) makes the ordinary
+      call
+
+    A value of the map is never NOTHING.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
+        uint64_t first_bits, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) try {
+    assert(!xsink || !*xsink);
+    QoreValue first = fromBits(first_bits);
+    QoreValue value = fromBits(value_bits);
+    // a step of the join with a value of the map, the usual case, or its finish
+    if (first.hasNode()) [[likely]] {
+        AbstractQoreNode* node = first.getInternalNode();
+        if (node->getType() == NT_STRING) [[likely]] {
+            if (!value.isNothing()) [[likely]] {
+                // note: safe; the node of the value (an inline short string has none), which is the join that the
+                // start made
+                return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
+                    fromBits(separator_bits), value, xsink);
+            }
+            // the finish of the join
+            node->ref();
+            return first_bits;
+        }
+    }
+    return qore_rt_string_method_join_other(first, fromBits(separator_bits), value, xsink);
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 static bool qore_rt_build_fixed_int_format(
@@ -15596,7 +15817,11 @@ extern "C" DLLEXPORT int qore_rt_try_enter_native_method_v1(void* storage, QoreA
         }
     }
     if (obj) {
-        if (!obj->isValid() || obj->getClass() != target.qc || qore_object_private::get(*obj)->sandbox_provenance
+        // an object that another thread destroys is entered on the generic path, which refuses the call while the
+        // destructor runs (qore_object_private::startCall(), qore#7509), as is one that has been deleted, which raises
+        // the error
+        if (qore_object_private::checkFastCallEntry(obj) || obj->getClass() != target.qc
+                || qore_object_private::get(*obj)->sandbox_provenance
                 || target.method->getNameStr() == "copy") {
             return 0;
         }
@@ -16056,6 +16281,137 @@ extern "C" DLLEXPORT void qore_rt_unbind_fast_entry_ref_params_aot(QoreAOTContex
 extern DLLLOCAL std::atomic<int64_t> qore_dbg_function_reference_fast_calls;
 #endif
 
+//! the outcome of the admission of a call through a reference to a user function without the generic call path
+//! (qore_rt_admit_function_reference())
+enum class QoreFunctionReferenceAdmission {
+    //! nothing was done: the caller makes the call through the generic call path
+    Miss,
+    //! the call was refused with an exception, as the generic call path refuses it
+    Refused,
+    //! the call can be made without the generic call path
+    Admitted,
+};
+
+//! the call admitted by qore_rt_admit_function_reference()
+struct DLLLOCAL QoreFunctionReferenceCall {
+    const LocalFunctionCallReferenceNode* ref = nullptr;
+    //! the explicit Program of the call (the reference's Program), or nullptr
+    QoreProgram* ref_pgm = nullptr;
+    const QoreFunction* func = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const UserVariantBase* uvb = nullptr;
+    //! the Program of the caller, the thread's current Program
+    QoreProgram* caller_pgm = nullptr;
+    //! true if the function runs in another Program than the caller's (a module's Program)
+    bool cross_pgm = false;
+    //! the current thread's data
+    ThreadData* td = nullptr;
+};
+
+//! the admission of a call through a reference to a user function without the generic call path (qore#5578)
+/** Makes the checks of the call, which every call path that skips the generic call path of a reference to a user
+    function makes (qore_rt_try_call_function_reference_t(), the call-reference entries of AOT code:
+    qore_rt_call_ref_t()); see qore_rt_try_call_function_reference_t() for what they are.  A miss leaves no trace: it is
+    decided before anything that the generic call path would not do.
+
+    @param nargs the number of arguments of the call
+    @param allow_cross_pgm false if a function that runs in another Program than the caller's is a miss
+    @param args_accepted called as <tt>bool(const UserVariantBase*)</tt> once the variant's signature can be read: returns
+    true if the call's arguments bind to the variant's parameters without the generic call path, false for a miss
+    @param call set to the call that was admitted
+*/
+template <typename ArgsAccepted>
+static QORE_INTERN_ALWAYS_INLINE QoreFunctionReferenceAdmission qore_rt_admit_function_reference(
+        const AbstractQoreNode* node, int nargs, bool allow_cross_pgm, ArgsAccepted&& args_accepted,
+        QoreFunctionReferenceCall& call, ExceptionSink* xsink) {
+    using Admission = QoreFunctionReferenceAdmission;
+    QoreProgram* ref_pgm;
+    const LocalFunctionCallReferenceNode* ref = qore_get_exact_function_call_reference(node, ref_pgm);
+    if (!ref) {
+        return Admission::Miss;
+    }
+    LocalFunctionCallReferenceNode::FastCallState state = ref->getFastCallState();
+    if (state == LocalFunctionCallReferenceNode::FCS_NOT_ELIGIBLE
+            || state == LocalFunctionCallReferenceNode::FCS_TAKING) {
+        return Admission::Miss;
+    }
+    // the function's variants are checked on every call, as a later parse commit could add variants (the reference
+    // holds the function, so its variants are not freed); the class is known, so the call is not virtual
+    const QoreFunction* func = ref->LocalFunctionCallReferenceNode::getFunction();
+    if (!func->hasSingleCallVariant()) {
+        return Admission::Miss;
+    }
+    const AbstractQoreFunctionVariant* variant = func->first();
+    if (state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE) {
+        const LocalFunctionCallReferenceNode::FastCallInfo& info = ref->getFastCallInfo();
+        if (info.variant != variant || static_cast<int>(info.num_params) != nargs) {
+            return Admission::Miss;
+        }
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    // a callee that has neither native code nor IR (yet) is called through the generic call path, which runs it
+    if (!uvb || !uvb->pgm || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
+        return Admission::Miss;
+    }
+    // the thread's data is taken once for the checks that read it
+    ThreadData* td = qore_get_thread_data();
+    QoreProgram* caller_pgm = runtime_get_program(td);
+    if (!caller_pgm || (ref_pgm && ref_pgm != caller_pgm) || !ref->creatorContextIsCurrent(td, caller_pgm)
+            || !runtime_call_context_is_plain(td, caller_pgm)) {
+        return Admission::Miss;
+    }
+    assert(!qore_rt_call_needs_call_program(ref_pgm, uvb));
+    // a FunctionCallReferenceNode's call refuses a reference that code that may not control threads created, if the
+    // expression of the background operator makes it itself (qore#7087), before anything else
+    if (ref_pgm && ref->checkBackgroundCreator(xsink)) {
+        return Admission::Refused;
+    }
+
+    // the Program that the function runs in (see qore_rt_function_execution_program()): the reference holds the
+    // function, not its Program.  Nothing that the generic call path would not do may happen before a miss, so every
+    // check is made before a Program is entered (entering one runs its thread entry handlers and charges a sandbox's
+    // budgets); some checks read the variant's signature, whose types can be those of the Program's classes, which its
+    // deletion frees (qore#5822).  So the call is made only where the Program's code stays without a reference to it,
+    // as QoreSourceProgramHolder::setVariant() takes none: in the caller's Program, which the running thread holds a
+    // count of (its ID tells it from a later Program at its address), or in a module's Program, which stays while any
+    // code can run (module lifetime, known once a call from another Program has taken a reference to it); a function
+    // of another Program, which can be deleted, takes the generic call path
+    QoreProgram* exec_pgm = uvb->pgm;
+    const bool cross_pgm = exec_pgm != caller_pgm;
+    if (cross_pgm ? (!allow_cross_pgm || !(uvb->pgm_module_lifetime.load(std::memory_order_acquire)
+                && qore_module_lifetime_active()))
+            : exec_pgm->getProgramId() != uvb->pgm_id) {
+        return Admission::Miss;
+    }
+    // a debugger attached to the callee's Program, which is allocated (the caller's, or a module's)
+    // fastCallBlocked(): its Program is being deleted, or it runs in another Program, as the other fast paths test it
+    // (qore#5822, qore#7202)
+    if (uvb->fastCallBlocked() || qore_rt_debugger_attached(uvb)) {
+        return Admission::Miss;
+    }
+    const LocalFunctionCallReferenceNode::FastCallInfo* info = state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE
+        ? &ref->getFastCallInfo() : ref->takeFastCallInfo();
+    if (!info || info->variant != variant || !args_accepted(uvb)) {
+        return Admission::Miss;
+    }
+    assert(info->uvb == uvb && static_cast<int>(info->num_params) == nargs);
+    // a call that the expression of the background operator makes itself, of code of a Program that may not control
+    // threads, is refused before the Program is entered, as the generic call path refuses it (qore#7087; see
+    // UserVariantExecHelper::getCheckedExecutionProgram()); the call's frame is not pushed yet
+    if (qore_check_background_direct_entry(td, uvb->pgm, false, xsink)) {
+        return Admission::Refused;
+    }
+    call.ref = ref;
+    call.ref_pgm = ref_pgm;
+    call.func = func;
+    call.variant = variant;
+    call.uvb = uvb;
+    call.caller_pgm = caller_pgm;
+    call.cross_pgm = cross_pgm;
+    call.td = td;
+    return Admission::Admitted;
+}
+
 //! calls a reference to a user function without the generic call path if the reference and the call allow it
 /** The call through a reference whose class is exactly FunctionCallReferenceNode or LocalFunctionCallReferenceNode
     (qore_get_exact_function_call_reference(); never a subclass, such as a sandbox-bound reference) to a function with
@@ -16105,96 +16461,36 @@ template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(const AbstractQoreNode* node,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS");
-    QoreProgram* ref_pgm;
-    const LocalFunctionCallReferenceNode* ref = qore_get_exact_function_call_reference(node, ref_pgm);
-    if (!ref || disabled_env.get()) {
+    if (disabled_env.get()) {
         return false;
     }
-    LocalFunctionCallReferenceNode::FastCallState state = ref->getFastCallState();
-    if (state == LocalFunctionCallReferenceNode::FCS_NOT_ELIGIBLE
-            || state == LocalFunctionCallReferenceNode::FCS_TAKING) {
-        return false;
-    }
-    // the function's variants are checked on every call, as a later parse commit could add variants (the reference
-    // holds the function, so its variants are not freed); the class is known, so the call is not virtual
-    const QoreFunction* func = ref->LocalFunctionCallReferenceNode::getFunction();
-    if (!func->hasSingleCallVariant()) {
-        return false;
-    }
-    const AbstractQoreFunctionVariant* variant = func->first();
-    if (state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE) {
-        const LocalFunctionCallReferenceNode::FastCallInfo& info = ref->getFastCallInfo();
-        if (info.variant != variant || static_cast<int>(info.num_params) != nargs) {
+    QoreFunctionReferenceCall call;
+    switch (qore_rt_admit_function_reference(node, nargs, true, [args, nargs, xsink](const UserVariantBase* uvb) {
+                return closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink);
+            }, call, xsink)) {
+        case QoreFunctionReferenceAdmission::Miss:
             return false;
-        }
-    }
-    const UserVariantBase* uvb = variant->getUserVariantBase();
-    // a callee that has neither native code nor IR (yet) is called through the generic call path, which runs it
-    if (!uvb || !uvb->pgm || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
-        return false;
-    }
-    QoreProgram* caller_pgm = getProgram();
-    if (!caller_pgm || (ref_pgm && ref_pgm != caller_pgm) || !ref->creatorContextIsCurrent(caller_pgm)
-            || !runtime_call_context_is_plain(caller_pgm)) {
-        return false;
-    }
-    assert(!qore_rt_call_needs_call_program(ref_pgm, uvb));
-    // a FunctionCallReferenceNode's call refuses a reference that code that may not control threads created, if the
-    // expression of the background operator makes it itself (qore#7087), before anything else
-    if (ref_pgm && ref->checkBackgroundCreator(xsink)) {
-        clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
-        result = toBits(QoreValue());
-        return true;
-    }
-
-    // the Program that the function runs in (see qore_rt_function_execution_program()): the reference holds the
-    // function, not its Program.  Nothing that the generic call path would not do may happen before a miss, so every
-    // check is made before a Program is entered (entering one runs its thread entry handlers and charges a sandbox's
-    // budgets); some checks read the variant's signature, whose types can be those of the Program's classes, which its
-    // deletion frees (qore#5822).  So the call is made only where the Program's code stays without a reference to it,
-    // as QoreSourceProgramHolder::setVariant() takes none: in the caller's Program, which the running thread holds a
-    // count of (its ID tells it from a later Program at its address), or in a module's Program, which stays while any
-    // code can run (module lifetime, known once a call from another Program has taken a reference to it); a function
-    // of another Program, which can be deleted, takes the generic call path
-    QoreProgram* exec_pgm = uvb->pgm;
-    const bool cross_pgm = exec_pgm != caller_pgm;
-    if (cross_pgm ? !(uvb->pgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active())
-            : exec_pgm->getProgramId() != uvb->pgm_id) {
-        return false;
-    }
-    // a debugger attached to the callee's Program, which is allocated (the caller's, or a module's); fastCallBlocked():
-    // its Program is being deleted, or it runs in another Program, as the other fast paths test it (qore#5822,
-    // qore#7202)
-    if (uvb->fastCallBlocked() || qore_rt_debugger_attached(uvb)) {
-        return false;
-    }
-    const LocalFunctionCallReferenceNode::FastCallInfo* info = state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE
-        ? &ref->getFastCallInfo() : ref->takeFastCallInfo();
-    if (!info || info->variant != variant || !closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
-        return false;
-    }
-    assert(info->uvb == uvb && static_cast<int>(info->num_params) == nargs);
-    // a call that the expression of the background operator makes itself, of code of a Program that may not control
-    // threads, is refused before the Program is entered, as the generic call path refuses it (qore#7087; see
-    // UserVariantExecHelper::getCheckedExecutionProgram()); the call's frame is not pushed yet
-    if (qore_check_background_direct_entry(uvb->pgm, false, xsink)) {
-        clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
-        result = toBits(QoreValue());
-        return true;
+        case QoreFunctionReferenceAdmission::Refused:
+            clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
+            result = toBits(QoreValue());
+            return true;
+        case QoreFunctionReferenceAdmission::Admitted:
+            break;
     }
 #ifdef DEBUG
     qore_dbg_function_reference_fast_calls.fetch_add(1, std::memory_order_relaxed);
 #endif
     // none is recorded for the reference (creatorContextIsCurrent()), so this applies nothing; kept as for every call
     // through a reference
-    QoreSandboxProvenanceHelper provenance(ref);
+    QoreSandboxProvenanceHelper provenance(call.ref);
     // the call is made by the code of the runtime's fast call of a function, out of line, from the caller's Program:
     // its checks pass, as the ones above include them, and it enters a module's Program itself (or the caller's, for
     // thread entry handlers that must run); its explicit Program is the reference's
     if constexpr (CONSUME) {
-        result = qore_rt_call_fast_consume_impl(func, variant, ref_pgm, args, arg_cleanups, nargs, xsink);
+        result = qore_rt_call_fast_consume_impl(call.func, call.variant, call.ref_pgm, args, arg_cleanups, nargs,
+            xsink);
     } else {
-        result = qore_rt_call_fast(func, variant, ref_pgm, args, nargs, xsink);
+        result = qore_rt_call_fast(call.func, call.variant, call.ref_pgm, args, nargs, xsink);
     }
     return true;
 }
@@ -16224,6 +16520,451 @@ static bool qore_rt_try_call_function_reference(const AbstractQoreNode* node, ui
         return qore_rt_try_call_function_reference_consume(node, args, arg_cleanups, nargs, xsink, result);
     }
     return qore_rt_try_call_function_reference_t<false>(node, args, nullptr, nargs, xsink, result);
+}
+
+#ifdef DEBUG
+//! the number of calls through references to AOT functions made through their call-reference entries (qore#5578),
+//! for the tests (dbg_function_reference_native_calls())
+DLLLOCAL std::atomic<int64_t> qore_dbg_function_reference_native_calls{0};
+#endif
+
+#ifndef NDEBUG
+//! returns true if sandbox provenance is recorded for the reference (qore_get_call_reference_provenance())
+static bool qore_call_reference_has_provenance(const ResolvedCallReferenceNode* ref) {
+    QoreSandboxContext* context = qore_get_call_reference_provenance(ref);
+    if (!context) {
+        return false;
+    }
+    context->deref();
+    return true;
+}
+#endif
+
+//! the outcome of qore_rt_call_ref_t()
+enum class QoreCallRefOutcome {
+    //! nothing was done: the caller makes the call through the generic call path
+    Miss,
+    //! the call was refused with an exception, as the generic call path refuses it; no value
+    Refused,
+    //! the call was made: its value is in the raw result, in the entry's return kind (possibly with an exception)
+    Called,
+};
+
+//! calls a reference to an AOT function through the function's call-reference entry if the call allows it (qore#5578)
+/** The checks are those of every call through a reference without the generic call path
+    (qore_rt_admit_function_reference()), with a function that runs in the caller's Program, plus: the variant has the
+    native code of its image (an AOT function) with a call-reference entry for it (UserVariantBase::getAOTCallRefEntry(),
+    found by the identity of the standard native entry), whose parameter kinds take the arguments (\a kinds_ok), and no
+    thread entry handler of the Program must run first.  The entry is then called as AOT code calls the native fast entry
+    of a function directly (QoreIRToLLVM::emitAotBatchFastEntryOrFallback()): with the frame of the call, which this
+    pushes in its own storage and which records the caller's Program, the callee's Program, and the AOT context of the
+    variant in the callee's Program, which this takes for each call (code of a module can be loaded into several
+    Programs, each with its own variants and contexts).  The entry checks the stack, and the callee raises its
+    exceptions in \a xsink, as for a direct call.
+
+    Like a direct call of a native fast entry, and unlike the runtime's fast call (qore_rt_call_fast()), this sets no
+    runtime parse-option override of the callee's code (QoreRtUserCallOverrideHelper), no object or class context and
+    no implicit arguments (CalleeContextHelper), and does not clear a calling closure's environment: the entry exists
+    only for a body that observes none of them (a context-independent fast entry: scalar operations on its own locals
+    and direct calls of other such bodies, no builtin call, see qore_aot_callref_entry_eligible()), so a change that
+    admits other bodies must set them up here.  The reference's sandbox provenance is not applied
+    (QoreSandboxProvenanceHelper) as the admission found none recorded (creatorContextIsCurrent() tests it first).
+
+    @param kinds_ok called as <tt>bool(const QoreAOTCallRefEntry&, const UserVariantBase*)</tt> once the variant's
+    signature can be read: returns true if the entry's parameter and return kinds and the variant's parameters take
+    the call's arguments and give its result
+    @param fill called as <tt>void(uint64_t* raw_args, const QoreAOTCallRefEntry&)</tt> to fill the raw arguments of the
+    entry
+    @param raw_result set to the raw value that the entry returned, if it was called
+    @param ret_kind set to the return kind of the entry, if it was called
+    @param arg_cleanups the cleanup slots of the temporaries among the (NaN-boxed) arguments that the call gives to the
+    callee, or nullptr: the entry borrows them, and they are released in the frame of the call once the entry returns,
+    unless an exception is pending (the caller releases them then, after the value of the call), as a direct call of
+    a native fast entry releases them (QoreIRToLLVM::endAotInlineCallFrame()); a refused call releases them as the
+    runtime's fast call through a reference does; a miss leaves them to the generic call path
+*/
+template <typename KindsOk, typename Fill>
+static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_bits, int nargs,
+        KindsOk&& kinds_ok, Fill&& fill, uint64_t& raw_result, uint8_t& ret_kind, ExceptionSink* xsink,
+        uint64_t** arg_cleanups = nullptr) {
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRIES");
+    // the switch of every call through a reference without the generic call path disables these calls too
+    static constinit QoreEnvFlag fast_calls_disabled_env("QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS");
+    QoreValue ref_val = fromBits(ref_bits);
+    // a value that is not a reference held as an ordinary pointer, a closure and any other kind of reference takes the
+    // generic call path
+    const AbstractQoreNode* node = ref_val.isPlainPointer() ? ref_val.get<const AbstractQoreNode>() : nullptr;
+    if (!node || node->getType() != NT_FUNCREF || nargs > static_cast<int>(QORE_AOT_CALLREF_MAX_PARAMS)
+            || disabled_env.get() || fast_calls_disabled_env.get()) {
+        return QoreCallRefOutcome::Miss;
+    }
+    // a call made while an exception is pending (code whose exceptions are checked later, such as an init function)
+    // takes the generic call path, as the value of the call is told from an exception that it raised by the sink
+    if (*xsink) {
+        return QoreCallRefOutcome::Miss;
+    }
+    // a function without an entry for the native code of its variant (no AOT code, or a body that has none) takes the
+    // generic call path at once, before the admission, which the runtime's fast call through a reference makes then
+    {
+        QoreProgram* ref_pgm;
+        const LocalFunctionCallReferenceNode* ref = qore_get_exact_function_call_reference(node, ref_pgm);
+        if (!ref) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const QoreFunction* func = ref->LocalFunctionCallReferenceNode::getFunction();
+        if (!func->hasSingleCallVariant()) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const UserVariantBase* uvb = func->first()->getUserVariantBase();
+        if (!uvb || !uvb->hasCachedAOT() || !uvb->hasCachedFunction()) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const QoreAOTCallRefEntry* e = uvb->getAOTCallRefEntry();
+        if (!e || e->fn != uvb->getCachedAOTFunction()) {
+            return QoreCallRefOutcome::Miss;
+        }
+    }
+    const QoreAOTCallRefEntry* entry = nullptr;
+    QoreFunctionReferenceCall call;
+    switch (qore_rt_admit_function_reference(node, nargs, false,
+            [&entry, &kinds_ok, nargs](const UserVariantBase* uvb) {
+                // the native code of an AOT image, the variant's current native code
+                if (!uvb->hasCachedAOT() || !uvb->hasCachedFunction()) {
+                    return false;
+                }
+                entry = uvb->getAOTCallRefEntry();
+                if (!entry || entry->fn != uvb->getCachedAOTFunction() || entry->nparams != nargs
+                        || !kinds_ok(*entry, uvb)) {
+                    return false;
+                }
+                // a Program whose thread entry handlers must run first is entered by the generic call path
+                return !qore_program_private::hasThreadEntryHandlers(*uvb->pgm) || !thread_entry_pending(uvb->pgm);
+            }, call, xsink)) {
+        case QoreFunctionReferenceAdmission::Miss:
+            return QoreCallRefOutcome::Miss;
+        case QoreFunctionReferenceAdmission::Refused:
+            if (arg_cleanups) {
+                clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+            }
+            return QoreCallRefOutcome::Refused;
+        case QoreFunctionReferenceAdmission::Admitted:
+            break;
+    }
+    assert(entry && !call.cross_pgm);
+    const UserVariantBase* uvb = call.uvb;
+    // the context of the variant, which is the callee's Program's; a lazily registered function builds it now
+    QoreAOTContext* callee_ctx = uvb->getCachedAOTContext();
+    if (!callee_ctx) {
+        if (!uvb->ensureAOTContext(nullptr, nullptr) || !(callee_ctx = uvb->getCachedAOTContext())) {
+            return QoreCallRefOutcome::Miss;
+        }
+    }
+#ifdef DEBUG
+    qore_dbg_function_reference_native_calls.fetch_add(1, std::memory_order_relaxed);
+#endif
+    uint64_t raw_args[QORE_AOT_CALLREF_MAX_PARAMS];
+    fill(raw_args, *entry);
+    ret_kind = entry->retKind();
+    // the reference's sandbox provenance is not applied (QoreSandboxProvenanceHelper): the admission found none
+    // recorded for it (creatorContextIsCurrent(), which looks it up in the same registry; a reference has it from its
+    // construction on, or never), so the helper would apply nothing
+    assert(!qore_call_reference_has_provenance(call.ref));
+    // the frame of the call, as AOT code pushes it for a direct call of the function's native fast entry: named by the
+    // function, at the caller's current location, recording the caller's Program (the current one)
+    QoreAOTNativeCallStackLocation frame(call.td, uvb->getCallName(), uvb->getStatementBlock());
+    try {
+        raw_result = entry->cref_fn(raw_args, callee_ctx, xsink);
+    } catch (const QoreJITException&) {
+        // the exception is in xsink already (see UserVariantBase::execCachedFunction())
+        assert(*xsink);
+        raw_result = 0;
+    }
+    if (*xsink && ret_kind == static_cast<uint8_t>(BatchCalleeReturnKind::Boxed)) {
+        // the value of a call that raised is not used
+        fromBits(raw_result).discard(xsink);
+        raw_result = 0;
+    }
+    // the temporaries given to the call are released in its frame
+    if (arg_cleanups) {
+        qore_rt_clear_given_arg_cleanups(arg_cleanups, nargs, xsink);
+    }
+    return QoreCallRefOutcome::Called;
+}
+
+static_assert(QORE_RT_CALL_REF_NOT_FUNCREF < 0, "the call site tests the result of the helpers with a signed compare");
+
+//! returns true if the value is a reference to a function held as an ordinary pointer: the only value whose call
+//! the call-reference helpers can make (a closure takes the generic call path at once, without the frame of the
+//! admission, which the helpers make out of line: qore_rt_call_ref_native_impl(), qore_rt_call_ref_value_impl() and
+//! qore_rt_call_ref_boxed_impl())
+static QORE_INTERN_ALWAYS_INLINE bool qore_rt_call_ref_candidate(uint64_t ref_bits) {
+    QoreValue ref_val = fromBits(ref_bits);
+    const AbstractQoreNode* node = ref_val.isPlainPointer() ? ref_val.get<const AbstractQoreNode>() : nullptr;
+    return node && node->getType() == NT_FUNCREF;
+}
+
+namespace {
+//! the native kind of a native argument or result of a call-reference helper
+template <BatchCalleeParamKind K>
+struct QoreCallRefNative;
+
+template <>
+struct QoreCallRefNative<BatchCalleeParamKind::NativeInt> {
+    using type = int64_t;
+    static uint64_t toRaw(int64_t v) {
+        return static_cast<uint64_t>(v);
+    }
+    static int64_t fromRaw(uint64_t raw) {
+        return static_cast<int64_t>(raw);
+    }
+};
+
+template <>
+struct QoreCallRefNative<BatchCalleeParamKind::NativeFloat> {
+    using type = double;
+    static uint64_t toRaw(double v) {
+        return std::bit_cast<uint64_t>(v);
+    }
+    static double fromRaw(uint64_t raw) {
+        return std::bit_cast<double>(raw);
+    }
+};
+
+//! a bool is passed as an int64_t 0 or 1
+template <>
+struct QoreCallRefNative<BatchCalleeParamKind::NativeBool> {
+    using type = int64_t;
+    static uint64_t toRaw(int64_t v) {
+        return v ? 1 : 0;
+    }
+    static int64_t fromRaw(uint64_t raw) {
+        return raw ? 1 : 0;
+    }
+};
+
+//! returns the NaN-boxed value of a raw value of the given return kind, which the caller owns
+uint64_t qore_rt_call_ref_box_raw(uint8_t ret_kind, uint64_t raw) {
+    switch (static_cast<BatchCalleeReturnKind>(ret_kind)) {
+        case BatchCalleeReturnKind::NativeInt:
+            return toBits(QoreValue(static_cast<int64_t>(raw)));
+        case BatchCalleeReturnKind::NativeFloat:
+            return toBits(QoreValue(std::bit_cast<double>(raw)));
+        case BatchCalleeReturnKind::NativeBool:
+            return toBits(QoreValue(raw != 0));
+        case BatchCalleeReturnKind::Boxed:
+            break;
+    }
+    return raw;
+}
+}
+
+//! qore_rt_call_ref_t() with no argument or one native argument of kind \a A, giving a native result of kind \a R
+template <BatchCalleeParamKind R, BatchCalleeParamKind... A>
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_native_impl(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, typename QoreCallRefNative<R>::type* result, ExceptionSink* xsink) {
+    static_assert(sizeof...(A) <= 1);
+    uint64_t raw;
+    uint8_t ret_kind;
+    QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, static_cast<int>(sizeof...(A)),
+        [](const QoreAOTCallRefEntry& e, const UserVariantBase*) {
+            // a native parameter has the plain type of its kind, which takes the argument as it is; an entry that
+            // returns a NaN-boxed value gives it to the caller, which converts it (see below)
+            return (e.retKind() == static_cast<uint8_t>(R)
+                    || e.retKind() == static_cast<uint8_t>(BatchCalleeReturnKind::Boxed))
+                && ((e.kinds[0] == static_cast<uint8_t>(A)) && ...);
+        },
+        [&a...](uint64_t* raw_args, const QoreAOTCallRefEntry&) {
+            [[maybe_unused]] unsigned i = 0;
+            ((raw_args[i++] = QoreCallRefNative<A>::toRaw(a)), ...);
+        }, raw, ret_kind, xsink);
+    switch (rc) {
+        case QoreCallRefOutcome::Miss:
+            return 0;
+        case QoreCallRefOutcome::Refused:
+            *result = typename QoreCallRefNative<R>::type();
+            return 1;
+        case QoreCallRefOutcome::Called:
+            break;
+    }
+    if (ret_kind == static_cast<uint8_t>(BatchCalleeReturnKind::Boxed)) {
+        // the NaN-boxed value (NOTHING if the call raised an exception), which the caller owns, in the result's bits
+        static_assert(sizeof(typename QoreCallRefNative<R>::type) == sizeof(uint64_t));
+        *result = std::bit_cast<typename QoreCallRefNative<R>::type>(raw);
+        return 2;
+    }
+    *result = QoreCallRefNative<R>::fromRaw(raw);
+    return 1;
+}
+
+//! qore_rt_call_ref_native_impl() for a function reference only; any other value takes the generic call path at once
+template <BatchCalleeParamKind R, BatchCalleeParamKind... A>
+static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_native_t(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, typename QoreCallRefNative<R>::type* result, ExceptionSink* xsink) {
+    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_native_impl<R, A...>(ref_bits, a..., result, xsink)
+        : QORE_RT_CALL_REF_NOT_FUNCREF;
+}
+
+//! qore_rt_call_ref_t() with no argument or one native argument of kind \a A, giving a NaN-boxed result
+template <BatchCalleeParamKind... A>
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_value_impl(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a,
+        uint64_t* result, ExceptionSink* xsink) {
+    static_assert(sizeof...(A) <= 1);
+    uint64_t raw;
+    uint8_t ret_kind;
+    QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, static_cast<int>(sizeof...(A)),
+        [](const QoreAOTCallRefEntry& e, const UserVariantBase*) {
+            // a native parameter has the plain type of its kind, which takes the argument as it is
+            return ((e.kinds[0] == static_cast<uint8_t>(A)) && ...);
+        },
+        [&a...](uint64_t* raw_args, const QoreAOTCallRefEntry&) {
+            [[maybe_unused]] unsigned i = 0;
+            ((raw_args[i++] = QoreCallRefNative<A>::toRaw(a)), ...);
+        }, raw, ret_kind, xsink);
+    switch (rc) {
+        case QoreCallRefOutcome::Miss:
+            return 0;
+        case QoreCallRefOutcome::Refused:
+            *result = toBits(QoreValue());
+            return 1;
+        case QoreCallRefOutcome::Called:
+            break;
+    }
+    *result = qore_rt_call_ref_box_raw(ret_kind, raw);
+    return 1;
+}
+
+//! qore_rt_call_ref_value_impl() for a function reference only; any other value takes the generic call path at once
+template <BatchCalleeParamKind... A>
+static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_value_t(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, uint64_t* result, ExceptionSink* xsink) {
+    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_value_impl<A...>(ref_bits, a..., result, xsink)
+        : QORE_RT_CALL_REF_NOT_FUNCREF;
+}
+
+#define QORE_RT_CALL_REF_NATIVE_HELPERS(rname, R, rtype) \
+extern "C" DLLEXPORT int qore_rt_call_ref_##rname##_0_v1(uint64_t ref_bits, rtype* result, ExceptionSink* xsink) { \
+    return qore_rt_call_ref_native_t<R>(ref_bits, result, xsink); \
+} \
+extern "C" DLLEXPORT int qore_rt_call_ref_##rname##_int_v1(uint64_t ref_bits, int64_t a0, rtype* result, \
+        ExceptionSink* xsink) { \
+    return qore_rt_call_ref_native_t<R, BatchCalleeParamKind::NativeInt>(ref_bits, a0, result, xsink); \
+} \
+extern "C" DLLEXPORT int qore_rt_call_ref_##rname##_float_v1(uint64_t ref_bits, double a0, rtype* result, \
+        ExceptionSink* xsink) { \
+    return qore_rt_call_ref_native_t<R, BatchCalleeParamKind::NativeFloat>(ref_bits, a0, result, xsink); \
+} \
+extern "C" DLLEXPORT int qore_rt_call_ref_##rname##_bool_v1(uint64_t ref_bits, int64_t a0, rtype* result, \
+        ExceptionSink* xsink) { \
+    return qore_rt_call_ref_native_t<R, BatchCalleeParamKind::NativeBool>(ref_bits, a0, result, xsink); \
+}
+
+QORE_RT_CALL_REF_NATIVE_HELPERS(int, BatchCalleeParamKind::NativeInt, int64_t)
+QORE_RT_CALL_REF_NATIVE_HELPERS(float, BatchCalleeParamKind::NativeFloat, double)
+QORE_RT_CALL_REF_NATIVE_HELPERS(bool, BatchCalleeParamKind::NativeBool, int64_t)
+#undef QORE_RT_CALL_REF_NATIVE_HELPERS
+
+extern "C" DLLEXPORT int qore_rt_call_ref_value_0_v1(uint64_t ref_bits, uint64_t* result, ExceptionSink* xsink) {
+    return qore_rt_call_ref_value_t<>(ref_bits, result, xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_value_int_v1(uint64_t ref_bits, int64_t a0, uint64_t* result,
+        ExceptionSink* xsink) {
+    return qore_rt_call_ref_value_t<BatchCalleeParamKind::NativeInt>(ref_bits, a0, result, xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_value_float_v1(uint64_t ref_bits, double a0, uint64_t* result,
+        ExceptionSink* xsink) {
+    return qore_rt_call_ref_value_t<BatchCalleeParamKind::NativeFloat>(ref_bits, a0, result, xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_value_bool_v1(uint64_t ref_bits, int64_t a0, uint64_t* result,
+        ExceptionSink* xsink) {
+    return qore_rt_call_ref_value_t<BatchCalleeParamKind::NativeBool>(ref_bits, a0, result, xsink);
+}
+
+//! qore_rt_call_ref_boxed_v1() for a function reference
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_boxed_impl(uint64_t ref_bits, const uint64_t* args, int nargs,
+        uint64_t* result, ExceptionSink* xsink, uint64_t** arg_cleanups) {
+    uint64_t raw;
+    uint8_t ret_kind;
+    QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, nargs,
+        [args, nargs, xsink](const QoreAOTCallRefEntry& e, const UserVariantBase* uvb) {
+            // the generic call path's binding is not needed (each argument is a value of its parameter's type, as for
+            // the runtime's fast call through a reference), and an argument of a native parameter is a value of the
+            // parameter's plain type
+            if (!closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
+                return false;
+            }
+            for (int i = 0; i < nargs; ++i) {
+                QoreValue v = fromBits(args[i]);
+                switch (static_cast<BatchCalleeParamKind>(e.kinds[i])) {
+                    case BatchCalleeParamKind::NativeInt:
+                        if (v.getType() != NT_INT) {
+                            return false;
+                        }
+                        break;
+                    case BatchCalleeParamKind::NativeFloat:
+                        if (v.getType() != NT_FLOAT) {
+                            return false;
+                        }
+                        break;
+                    case BatchCalleeParamKind::NativeBool:
+                        if (v.getType() != NT_BOOLEAN) {
+                            return false;
+                        }
+                        break;
+                    case BatchCalleeParamKind::Boxed:
+                        break;
+                }
+            }
+            return true;
+        },
+        [args, nargs](uint64_t* raw_args, const QoreAOTCallRefEntry& e) {
+            for (int i = 0; i < nargs; ++i) {
+                QoreValue v = fromBits(args[i]);
+                switch (static_cast<BatchCalleeParamKind>(e.kinds[i])) {
+                    case BatchCalleeParamKind::NativeInt:
+                        raw_args[i] = static_cast<uint64_t>(v.getAsBigInt());
+                        break;
+                    case BatchCalleeParamKind::NativeFloat:
+                        raw_args[i] = std::bit_cast<uint64_t>(v.getAsFloat());
+                        break;
+                    case BatchCalleeParamKind::NativeBool:
+                        raw_args[i] = v.getAsBool() ? 1 : 0;
+                        break;
+                    case BatchCalleeParamKind::Boxed:
+                        // borrowed: the caller keeps the value through the call, as for a direct call
+                        raw_args[i] = args[i];
+                        break;
+                }
+            }
+        }, raw, ret_kind, xsink, arg_cleanups);
+    switch (rc) {
+        case QoreCallRefOutcome::Miss:
+            return 0;
+        case QoreCallRefOutcome::Refused:
+            *result = toBits(QoreValue());
+            return 1;
+        case QoreCallRefOutcome::Called:
+            break;
+    }
+    *result = qore_rt_call_ref_box_raw(ret_kind, raw);
+    return 1;
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs,
+        uint64_t* result, ExceptionSink* xsink) {
+    // any other value than a function reference takes the generic call path at once
+    return qore_rt_call_ref_candidate(ref_bits)
+        ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink, nullptr) : QORE_RT_CALL_REF_NOT_FUNCREF;
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_boxed_given_v1(uint64_t ref_bits, const uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, uint64_t* result, ExceptionSink* xsink) {
+    // any other value than a function reference takes the generic call path at once
+    return qore_rt_call_ref_candidate(ref_bits)
+        ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink, arg_cleanups)
+        : QORE_RT_CALL_REF_NOT_FUNCREF;
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
@@ -20333,6 +21074,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
 // Precondition: `lvh` is navigated to the parent container; `ct` is the
 // container's type (NT_HASH or NT_OBJECT); `last_step` is the terminal
 // HashKeySlice step with `slice_values` populated.
+//! hands a value that a slice removal removed to \a lvh, which releases it after the lvalue locks, when the removal is
+//! left with an exception (qore#7763); if the helper cannot keep it, the value is released here
+static __attribute__((noinline, cold)) void qore_lv_save_removed_temp(LValueHelper& lvh, QoreValue v,
+        ExceptionSink* xsink) {
+    try {
+        lvh.saveTemp(v);
+    } catch (...) {
+        // saveTemp() took the node only in its own copy of the value
+        v.discard(xsink);
+    }
+}
+
 QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
@@ -20372,23 +21125,36 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         qore_hash_private* hp = qore_hash_private::get(*h);
         const bool old_needs_scan = qore_hash_private::needsScan(*h);
         ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
-        if (for_each_key([&](const QoreValue& key_val) -> bool {
-            QoreHashKeyHelper mem(key_val, xsink);
-            if (*xsink) {
-                return true;
-            }
-            bool exists;
-            QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
-            if (!exists) {
+        bool failed;
+        try {
+            failed = for_each_key([&](const QoreValue& key_val) -> bool {
+                QoreHashKeyHelper mem(key_val, xsink);
+                if (*xsink) {
+                    return true;
+                }
+                if (!hp->findMember(mem.c_str())) {
+                    return false;
+                }
+                // the member of the result is created before the value leaves the hash: memory that cannot be
+                // allocated for it leaves the value in the hash (qore#7763)
+                hash_assignment_priv ha(**rvh, mem.c_str());
+                bool exists;
+                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
+                assert(exists);
+                // note that no exception can occur here
+                ha.assign(n, xsink);
+                if (*xsink) {
+                    return true;
+                }
                 return false;
-            }
-            // note that no exception can occur here
-            qore_hash_private::setKeyValueCanonical(**rvh, mem.c_str(), n, xsink);
-            if (*xsink) {
-                return true;
-            }
-            return false;
-        })) {
+            });
+        } catch (...) {
+            // memory that a member of the result needed could not be allocated: the values removed so far are
+            // released once the lvalue locks are released, as for a delete (qore#7763)
+            qore_lv_save_removed_temp(lvh, QoreValue(rvh.release()), xsink);
+            throw;
+        }
+        if (failed) {
             return QoreValue();
         }
         // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed
@@ -20428,7 +21194,14 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         QoreLValueGeneric rv;
-        qore_object_private::takeMembers(*o, rv, lvh, *key_list, is_delete);
+        try {
+            qore_object_private::takeMembers(*o, rv, lvh, *key_list, is_delete);
+        } catch (...) {
+            // takeMembers() gave the result hash to rv first: the members removed so far are released once the lvalue
+            // locks are released (qore#7763)
+            qore_lv_save_removed_temp(lvh, rv.removeValue(true), xsink);
+            throw;
+        }
         if (*xsink) {
             lvh.saveTemp(rv.removeValue(true));
             return QoreValue();
@@ -20806,7 +21579,7 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink) try {
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -21346,7 +22119,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
     return toBits(res);
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 // documented in QoreIRInterpreter.h
 int qore_rt_list_replace_with_bind_probe(LValueHelper& lvh, QoreListNode& vl, size_t offset, size_t length,
@@ -24499,7 +25272,12 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     if (o->getClass() != qc && o->getClass() != method->getClass() && !method->isStatic()) {
         return false;
     }
-    if (!o->isValid()) {
+    if (int entry = qore_object_private::checkFastCallEntry(o)) [[unlikely]] {
+        if (entry > 0) {
+            // another thread destroys the object: the slow path refuses the call while the destructor runs, as the
+            // AST interpreter does (qore_object_private::startCall(), qore#7509)
+            return false;
+        }
         // as the AST interpreter raises it (issue #5784)
         qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
         result = toBits(QoreValue());
@@ -26062,7 +26840,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
     }
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
     }
@@ -26121,7 +26901,9 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
             ctx, slot, base_bits, nullptr, 0, xsink));
     } else {
         QoreObject* object = base.get<QoreObject>();
-        if (!object->isValid() || object->getClass() != target.qc) {
+        // an object that another thread destroys is called on the generic path, which refuses the call while
+        // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+        if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
             value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
                 ctx, slot, base_bits, nullptr, 0, xsink));
         } else {
@@ -26194,7 +26976,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     }
 
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, args, nargs, xsink);
     }
@@ -26278,7 +27062,9 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             ctx, slot, base_bits, args, nargs, xsink));
     } else {
         QoreObject* object = base.get<QoreObject>();
-        if (!object->isValid() || object->getClass() != target.qc) {
+        // an object that another thread destroys is called on the generic path, which refuses the call while
+        // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+        if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
             fallback = fromBits(qore_rt_dot_eval_object_method_direct_aot(
                 ctx, slot, base_bits, args, nargs, xsink));
         } else {
@@ -26406,7 +27192,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     }
 
     QoreObject* object = base.get<QoreObject>();
-    if (!object->isValid() || object->getClass() != target.qc) {
+    // an object that another thread destroys is called on the generic path, which refuses the call while
+    // the destructor runs, as a deleted one is (qore_object_private::startCall(), qore#7509)
+    if (qore_object_private::checkFastCallEntry(object) || object->getClass() != target.qc) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, args, nargs, xsink);
     }

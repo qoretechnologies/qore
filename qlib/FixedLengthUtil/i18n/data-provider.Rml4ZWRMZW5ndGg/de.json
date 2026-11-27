@@ -16,7 +16,7 @@
           "message": "Dateidaten mit fester Länge lesen und schreiben"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "Daten mit fester Länge lesen"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Die Zeitzonenregion, die beim Parsen von Datumsangaben verwendet werden soll (z. B.: `Europe/Prague`); siehe [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) für gültige Werte"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "Daten mit fester Länge schreiben"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

@@ -16,7 +16,7 @@
           "message": "Зчитування та запис даних файлів CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Читати файл CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "якщо `true` (за замовчуванням `false`), якщо рядок розібрано з іншою кількістю стовпців чи полів, ніж інші рядки, генерується виняток `CSVFILEITERATOR-DATA-ERROR`\n\nЗверніть увагу, що ввімкнення цієї опції призведе до зниження продуктивності"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Читати вбудовані дані CSV"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "якщо `true` (за замовчуванням `false`), якщо рядок розібрано з іншою кількістю стовпців чи полів, ніж інші рядки, генерується виняток `CSVFILEITERATOR-DATA-ERROR`\n\nЗверніть увагу, що ввімкнення цієї опції призведе до зниження продуктивності"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Профілювати дані CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Символ лапок полів (типово: `\"`); поля читаються з ним, а роздільники в полях у лапках не враховуються під час визначення роздільника"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Рядок заголовків"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Рядок із назвами стовпців або 0, якщо його немає"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "Рядок із назвами стовпців (нумерація з 1) або `0`, якщо в даних його немає; якщо не вказано, рядок заголовків визначається з даних. Використовуйте його, коли людина, яка знає файл, каже, де розташовані назви стовпців"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Максимальна кількість рядків"
@@ -972,7 +984,7 @@
           "message": "Якщо `True` (за замовчуванням), значення зразків і контрприклади редагуються до їхньої форми: літери стають `x` або `X`, а цифри `9`, тож профілем можна поділитися без даних"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Записати дані CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1208,7 @@
           "message": "Встановіть значення `false`, щоб придушити виведення заголовків; значення за замовчуванням — `true`, що означає виведення заголовків, якщо вони присутні"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Створити дані CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

@@ -158,6 +158,45 @@ they release its parameters, also for a call that gives the references of its ar
 (`qore_rt_check_function_return_value()`), as the AST interpreter checks the value in the
 return statement (`fast-call-return-check.qtest`).
 
+#### Call-reference entries of AOT functions
+
+AOT code calls a call reference whose target is not known at the call (a reference given as a parameter or kept in a
+local, `CallClosureDirect` and its invoke form) through the *call-reference entry* of the function first (qore#5578).
+qcc emits one for each plain function (not a method or a closure) with a single variant whose native fast entry is
+context-independent, takes its parameters in their native or NaN-boxed kinds without taking any argument over, and has
+no reference parameter (`qore_aot_callref_entry_eligible()` in `QoreAOT.cpp`): an adapter
+`<fast entry>_cref(const uint64_t* raw_args, QoreAOTContext* callee_ctx, ExceptionSink*)`
+(`QoreAOTCallRefFn`) that calls the fast entry with the raw arguments in the parameters' kinds (the bits of an int, a
+float or a bool, or a borrowed NaN-boxed value) and returns its value in the same raw form; the fast entry, which
+checks the stack for its frame, is never inlined into it.  Each image (executable, script object or module) emits a
+table of `QoreAOTCallRefEntry` records (standard entry, adapter, signature code `ret | kind_i << (2 + 2i)`, parameter
+count and kinds) that a constructor function of the image registers when it is loaded
+(`qore_aot_register_callref_entries_v1()`) and a destructor function unregisters when it is unloaded, keyed by the
+standard entry (`QoreAOTRuntime.cpp`); both reference the runtime functions weakly and call them only if present, so
+that an image loaded by an older library reaches its AOT runtime identity check.  The first call through a reference to the function looks the entry up by the
+standard entry that its variant holds and publishes it on the variant (`UserVariantBase::getAOTCallRefEntry()`: once,
+with a release store; a lookup that found nothing is made again only after more registrations), so the entry serves
+every reference to the function, whoever made it.
+
+The call site calls `qore_rt_call_ref_value_<a>_v1()` (no argument, or one native int, float or bool argument) or
+`qore_rt_call_ref_boxed_v1()` (NaN-boxed arguments; a call that gives the cleanup slots of temporaries or can pass
+references keeps the generic call path), which return 1 with the NaN-boxed value of the call, or 0 having done nothing,
+and then the site makes the generic call (`qore_rt_call_closure_fast()`, with a scalar argument boxed and released in
+that branch); the two values are joined.  `qore_rt_call_ref_<r>_<a>_v1()` give a native int, float or bool value
+instead.  The helper (`qore_rt_call_ref_t()` in `JITRuntime.cpp`) takes the call only if the checks of the runtime's
+fast call through a reference pass (`qore_rt_admit_function_reference()`, shared with it: exact reference class,
+cached facts, creator context, plain call Program context, background refusals, `pgm_deleted`, debugger), the function
+runs in the caller's Program (a call into another Program takes the generic path), its variant has the native code of
+the image with an entry whose kinds take the arguments (and, for NaN-boxed arguments, the parameters' types take them
+as they are), and no thread entry handler of the Program must run first; it then pushes the frame of the call in its
+own storage (`QoreAOTNativeCallStackLocation`, named by the function, at the caller's location, recording the caller's
+Program), calls the adapter with the AOT context of the variant (taken for each call: the variants of module code
+loaded into another Program have contexts of their own), and pops the frame.  The debugger check is made in the helper
+on every call, in every compilation mode.  `QORE_DISABLE_AOT_CALLREF_ENTRIES` disables the helpers,
+`QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION` and `QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS` the entries and their calls in
+generated code (testing only); debug builds count the calls (`dbg_function_reference_native_calls()`).
+`callref-native-entry.qtest` compares the results with the AST interpreter.
+
 ## Tiered Execution
 
 Tiered mode lowers `%modern` functions to IR when their Program is committed, so

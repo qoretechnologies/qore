@@ -278,6 +278,11 @@ public:
     DLLLOCAL AbstractQoreNode* takeDel();
 
 protected:
+    //! true while the keys of a module declaration that was rejected as a duplicate are parsed: they are ignored
+    /** see QoreUserModuleDefContextHelper::setNameInit() (qore#7794)
+    */
+    bool ignore_keys = false;
+
     DLLLOCAL int initClosure(const QoreProgramLocation* loc, QoreValue& c, const char* n);
 };
 
@@ -402,6 +407,14 @@ DLLLOCAL const QoreProgram* runtime_get_module_call_program();
     nothing (qore#5578)
 */
 DLLLOCAL bool runtime_call_context_is_plain(const QoreProgram* pgm);
+//! runtime_call_context_is_plain() with the current thread's data (qore_get_thread_data())
+DLLLOCAL bool runtime_call_context_is_plain(const ThreadData* td, const QoreProgram* pgm);
+
+//! returns the Program running on the thread (getProgram()), with the current thread's data (qore_get_thread_data())
+DLLLOCAL QoreProgram* runtime_get_program(const ThreadData* td);
+
+//! runtime_get_module_call_program() with the current thread's data (qore_get_thread_data())
+DLLLOCAL const QoreProgram* runtime_get_module_call_program(const ThreadData* td);
 
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
@@ -1001,6 +1014,9 @@ DLLLOCAL int qore_check_thread_callable(const ResolvedCallReferenceNode* code, i
 */
 DLLLOCAL int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed,
         ExceptionSink* xsink);
+//! qore_check_background_direct_entry() with the current thread's data (qore_get_thread_data())
+DLLLOCAL int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm,
+        bool callee_frame_pushed, ExceptionSink* xsink);
 
 //! Refuses a callable or object authored by code that may not control threads, called by the background expression
 /** As qore_check_background_direct_entry(), for a call reference or a method call on an object before its call: a
@@ -3532,7 +3548,9 @@ DLLLOCAL void set_module_context(QoreModuleContext* qmc);
 DLLLOCAL QoreModuleContext* get_module_context();
 DLLLOCAL QoreModuleDefContext* set_module_def_context(QoreModuleDefContext* qmd);
 DLLLOCAL QoreModuleDefContext* get_module_def_context();
-DLLLOCAL void parse_set_module_def_context_name(const char* name);
+//! declares the name of the module being defined at \a loc, the location of its declaration (see
+//! QoreUserModuleDefContextHelper::setNameInit())
+DLLLOCAL void parse_set_module_def_context_name(const QoreProgramLocation* loc, const char* name);
 DLLLOCAL const char* set_module_context_name(const char* n);
 DLLLOCAL const char* get_module_context_name();
 DLLLOCAL const char* set_module_context_path(const char* p);
@@ -3624,6 +3642,8 @@ DLLLOCAL void remove_constant(ConstantEntry* ce);
 
 DLLLOCAL QoreAbstractModule* set_reexport(QoreAbstractModule* m, bool current_reexport, bool& old_reexport);
 DLLLOCAL void set_reexport(QoreAbstractModule* m, bool reexport);
+//! returns the module that this thread is loading, whose directives are parsed (see ModuleReExportHelper), or nullptr
+DLLLOCAL QoreAbstractModule* get_reexport_module();
 
 DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
         const AbstractQoreFunctionVariant* variant, const char*& old_code, const QoreTypeInfo*& old_returnTypeInfo,

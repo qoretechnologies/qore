@@ -3,7 +3,7 @@
     {
       "action": "list-locations",
       "desc": "List locations available to this project.\n\nLists information about the supported locations for this service.\n\n**Details**\n\n- This method lists locations based on the resource scope provided in the ListLocationsRequest.name field:\n- **Global locations**: If `name` is empty, the method lists the public locations available to all projects.\n- **Project-specific locations**: If `name` follows the format `projects/{project}`, the method lists locations visible to that specific project. This includes public, private, or other project-specific locations enabled for the project. For gRPC and client library implementations, the resource name is passed as the `name` field. For direct service calls, the resource name is incorporated into the request path based on the specific service implementation and version.",
-      "display_name": "List Locations",
+      "display_name": "List locations",
       "fields": {
         "projectsId": {
           "desc": "Identifier or full resource name for the selected project id.",
@@ -27,7 +27,7 @@
     {
       "action": "get-location",
       "desc": "Read information about the connection's location.\n\nGets information about a location.",
-      "display_name": "Get Location",
+      "display_name": "Get location",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -57,7 +57,7 @@
     {
       "action": "list-processor-types",
       "desc": "List processor types available in this location.\n\nLists the processor types that exist.",
-      "display_name": "List Processor Types",
+      "display_name": "List processor types",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -87,7 +87,7 @@
     {
       "action": "get-processor-type",
       "desc": "Read a processor type and its supported capabilities.\n\nGets a processor type detail.",
-      "display_name": "Get Processor Type",
+      "display_name": "Get processor type",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -125,7 +125,7 @@
     {
       "action": "list-processors",
       "desc": "List processors in this project and location.\n\nLists all processors which belong to this project.",
-      "display_name": "List Processors",
+      "display_name": "List processors",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -155,7 +155,7 @@
     {
       "action": "get-processor",
       "desc": "Read a processor's configuration and state.\n\nGets a processor detail.",
-      "display_name": "Get Processor",
+      "display_name": "Get processor",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -193,7 +193,7 @@
     {
       "action": "create-processor",
       "desc": "Create a processor of an available type.\n\nCreates a processor from the ProcessorType provided. The processor will be at `ENABLED` state by default after its creation. Note that this method requires the `documentai.processors.create` permission on the project, which is highly privileged. A user or service account with this permission can create new processors that can interact with any gcs bucket in your project.",
-      "display_name": "Create Processor",
+      "display_name": "Create processor",
       "fields": {
         "displayName": {
           "display_name": "Display Name",
@@ -233,7 +233,7 @@
     {
       "action": "delete-processor",
       "desc": "Start deleting a processor and all its versions.\n\nDeletes the processor, unloads all deployed model artifacts if it was enabled and then deletes all artifacts associated with this processor.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Delete Processor",
+      "display_name": "Delete processor",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -271,7 +271,7 @@
     {
       "action": "enable-processor",
       "desc": "Start enabling a processor for document processing.\n\nEnables a processor\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Enable Processor",
+      "display_name": "Enable processor",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -309,7 +309,7 @@
     {
       "action": "disable-processor",
       "desc": "Start disabling a processor.\n\nDisables a processor\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Disable Processor",
+      "display_name": "Disable processor",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -347,7 +347,7 @@
     {
       "action": "set-default-version",
       "desc": "Select the version used when processing without a version ID.\n\nSet the default (active) version of a Processor that will be used in ProcessDocument and BatchProcessDocuments.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Set Default Version",
+      "display_name": "Set default version",
       "fields": {
         "defaultProcessorVersion": {
           "depends_on": [
@@ -486,7 +486,7 @@
     {
       "action": "start-batch-processing",
       "desc": "Submit documents in Cloud Storage for batch processing.\n\nLRO endpoint to batch process many documents. The output is written to Cloud Storage as JSON in the [Document] format.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Start Batch Processing",
+      "display_name": "Start batch processing",
       "fields": {
         "documentOutputConfig": {
           "required": true
@@ -534,7 +534,7 @@
     {
       "action": "start-version-batch-processing",
       "desc": "Submit a batch using a selected processor version.\n\nLRO endpoint to batch process many documents. The output is written to Cloud Storage as JSON in the [Document] format.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Start Version Batch Processing",
+      "display_name": "Start version batch processing",
       "fields": {
         "documentOutputConfig": {
           "required": true
@@ -593,7 +593,7 @@
     {
       "action": "list-processor-versions",
       "desc": "List the versions belonging to a processor.\n\nLists all versions of a processor.",
-      "display_name": "List Processor Versions",
+      "display_name": "List processor versions",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -631,7 +631,7 @@
     {
       "action": "get-processor-version",
       "desc": "Read a processor version and its document schema.\n\nGets a processor version detail.",
-      "display_name": "Get Processor Version",
+      "display_name": "Get processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -680,7 +680,7 @@
     {
       "action": "delete-processor-version",
       "desc": "Start deleting a processor version.\n\nDeletes the processor version, all artifacts under the processor version will be deleted.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Delete Processor Version",
+      "display_name": "Delete processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -729,7 +729,7 @@
     {
       "action": "train-processor-version",
       "desc": "Start training a version from a processor's training dataset.\n\nTrains a new processor version. Operation metadata is returned as TrainProcessorVersionMetadata.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Train Processor Version",
+      "display_name": "Train processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -767,7 +767,7 @@
     {
       "action": "deploy-processor-version",
       "desc": "Start deploying a version for document processing.\n\nDeploys the processor version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Deploy Processor Version",
+      "display_name": "Deploy processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -816,7 +816,7 @@
     {
       "action": "undeploy-processor-version",
       "desc": "Start removing a processor version from serving.\n\nUndeploys the processor version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Undeploy Processor Version",
+      "display_name": "Undeploy processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -865,7 +865,7 @@
     {
       "action": "evaluate-processor-version",
       "desc": "Start an evaluation using labeled documents.\n\nEvaluates a ProcessorVersion against annotated documents, producing an Evaluation.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Evaluate Processor Version",
+      "display_name": "Evaluate processor version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -914,7 +914,7 @@
     {
       "action": "list-evaluations",
       "desc": "List evaluation results for a processor version.\n\nRetrieves a set of evaluations for a given processor version.",
-      "display_name": "List Evaluations",
+      "display_name": "List evaluations",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -963,7 +963,7 @@
     {
       "action": "get-evaluation",
       "desc": "Read extraction quality metrics from an evaluation.\n\nRetrieves a specific evaluation.",
-      "display_name": "Get Evaluation",
+      "display_name": "Get evaluation",
       "fields": {
         "evaluationsId": {
           "depends_on": [
@@ -1024,7 +1024,7 @@
     {
       "action": "list-operations",
       "desc": "List processing and management jobs using an operation filter.\n\nLists operations that match the specified filter in the request. If the server doesn't support this method, it returns `UNIMPLEMENTED`.",
-      "display_name": "List Operations",
+      "display_name": "List operations",
       "fields": {
         "filter": {
           "desc": "Operation filter. A `Type` equality is required; for example `Type=\"BATCH_PROCESS_DOCUMENTS\"`.",
@@ -1060,7 +1060,7 @@
     {
       "action": "get-operation",
       "desc": "Read a job's status, metadata, result, and error.\n\nGets the latest state of a long-running operation. Clients can use this method to poll the operation result at intervals as recommended by the API service.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Get Operation",
+      "display_name": "Get operation",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1096,7 +1096,7 @@
     {
       "action": "cancel-operation",
       "desc": "Request cancellation of a running job.\n\nStarts asynchronous cancellation on a long-running operation.\n\n**Details**\n\n- The server makes a best effort to cancel the operation, but success is not guaranteed. If the server doesn't support this method, it returns `google.rpc.Code.UNIMPLEMENTED`. Clients can use Operations.GetOperation or other methods to check whether the cancellation succeeded or whether the operation completed despite cancellation. On successful cancellation, the operation is not deleted; instead, it becomes an operation with an Operation.error value with a google.rpc.Status.code of `1`, corresponding to `Code.CANCELLED`.\n\nCancellation is asynchronous and may not be supported. The operation is retained; inspect its final status.",
-      "display_name": "Cancel Operation",
+      "display_name": "Cancel operation",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1132,7 +1132,7 @@
     {
       "action": "list-schemas",
       "desc": "List document schemas in this project and location.\n\nLists Schemas.",
-      "display_name": "List Schemas",
+      "display_name": "List schemas",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1162,7 +1162,7 @@
     {
       "action": "get-schema",
       "desc": "Read a document schema's configuration.\n\nGets a schema.",
-      "display_name": "Get Schema",
+      "display_name": "Get schema",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1200,7 +1200,7 @@
     {
       "action": "create-schema",
       "desc": "Create a named collection of document schema versions.\n\nCreates a schema.",
-      "display_name": "Create Schema",
+      "display_name": "Create schema",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1230,7 +1230,7 @@
     {
       "action": "update-schema",
       "desc": "Update selected fields of a document schema.\n\nUpdates a schema. Editable fields are: - `display_name` - `labels`",
-      "display_name": "Update Schema",
+      "display_name": "Update schema",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1268,7 +1268,7 @@
     {
       "action": "delete-schema",
       "desc": "Delete a document schema.\n\nDeletes a schema.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Delete Schema",
+      "display_name": "Delete schema",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1306,7 +1306,7 @@
     {
       "action": "list-schema-versions",
       "desc": "List versions belonging to a document schema.\n\nLists SchemaVersions.",
-      "display_name": "List Schema Versions",
+      "display_name": "List schema versions",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1344,7 +1344,7 @@
     {
       "action": "get-schema-version",
       "desc": "Read a schema version and its extraction fields.\n\nGets a schema version.",
-      "display_name": "Get Schema Version",
+      "display_name": "Get schema version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1393,7 +1393,7 @@
     {
       "action": "create-schema-version",
       "desc": "Create a version of a document schema.\n\nCreates a schema version.",
-      "display_name": "Create Schema Version",
+      "display_name": "Create schema version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1431,7 +1431,7 @@
     {
       "action": "update-schema-version",
       "desc": "Update selected fields of a schema version.\n\nUpdates a schema version. Editable fields are: - `display_name` - `labels`",
-      "display_name": "Update Schema Version",
+      "display_name": "Update schema version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1480,7 +1480,7 @@
     {
       "action": "delete-schema-version",
       "desc": "Delete a document schema version.\n\nDeletes a schema version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Delete Schema Version",
+      "display_name": "Delete schema version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1529,7 +1529,7 @@
     {
       "action": "generate-schema-version",
       "desc": "Generate a schema version from example documents.\n\nGenerates a schema version.",
-      "display_name": "Generate Schema Version",
+      "display_name": "Generate schema version",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1569,7 +1569,7 @@
     {
       "action": "beta-update-dataset",
       "desc": "Update a processor's dataset storage configuration.\n\nUpdates metadata associated with a dataset.\n\n**Details**\n\n- Note that this method requires the `documentai.googleapis.com/datasets.update` permission on the project, which is highly privileged. A user or service account with this permission can create new processors that can interact with any gcs bucket in your project.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Update Dataset (Beta)",
+      "display_name": "Update dataset (beta)",
       "fields": {
         "documentWarehouseConfig": {
           "ignore": true
@@ -1610,7 +1610,7 @@
     {
       "action": "beta-get-dataset-schema",
       "desc": "Read the labeling schema of a processor's dataset.\n\nGets the `DatasetSchema` of a `Dataset`.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
-      "display_name": "Get Dataset Schema (Beta)",
+      "display_name": "Get dataset schema (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1648,7 +1648,7 @@
     {
       "action": "beta-update-dataset-schema",
       "desc": "Update the labeling schema of a processor's dataset.\n\nUpdates a `DatasetSchema`.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
-      "display_name": "Update Dataset Schema (Beta)",
+      "display_name": "Update dataset schema (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1686,7 +1686,7 @@
     {
       "action": "beta-get-dataset-document",
       "desc": "Read a selected dataset document and its annotations.\n\nReturns relevant fields present in the requested document.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
-      "display_name": "Get Dataset Document (Beta)",
+      "display_name": "Get dataset document (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1724,7 +1724,7 @@
     {
       "action": "beta-list-dataset-documents",
       "desc": "List documents in a selected processor's dataset.\n\nReturns a list of documents present in the dataset.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
-      "display_name": "List Dataset Documents (Beta)",
+      "display_name": "List dataset documents (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1762,7 +1762,7 @@
     {
       "action": "beta-import-dataset-documents",
       "desc": "Start importing labeled documents from Cloud Storage.\n\nImport documents into a dataset.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Import Dataset Documents (Beta)",
+      "display_name": "Import dataset documents (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1800,7 +1800,7 @@
     {
       "action": "beta-delete-dataset-documents",
       "desc": "Start deleting explicitly selected dataset documents.\n\nDeletes a set of documents.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Delete Dataset Documents (Beta)",
+      "display_name": "Delete dataset documents (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",
@@ -1838,7 +1838,7 @@
     {
       "action": "beta-import-processor-version",
       "desc": "Start importing a processor version from another processor.\n\nImports a processor version from source processor version.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
-      "display_name": "Import Processor Version (Beta)",
+      "display_name": "Import processor version (beta)",
       "fields": {
         "locationsId": {
           "desc": "Identifier or full resource name for the selected location.",

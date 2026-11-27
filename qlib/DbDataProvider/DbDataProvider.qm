@@ -77,7 +77,7 @@ module DbDataProvider {
             "path": "/",
             "action": "select-sql",
             "groups": ("SQL",),
-            "display_name": "Execute an SQL Select Statement",
+            "display_name": "Execute an SQL select statement",
             "short_desc": "Execute an SQL select statement",
             "desc": "Execute an SQL select statement",
             "action_code": DPAT_FIND,
@@ -91,7 +91,7 @@ module DbDataProvider {
             "path": "/exec-sql",
             "action": "exec-sql",
             "groups": ("SQL",),
-            "display_name": "Execute an SQL Statement",
+            "display_name": "Execute an SQL statement",
             "short_desc": "Execute an SQL statement",
             "desc": "Execute an SQL statement",
             "action_code": DPAT_API,
@@ -106,7 +106,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "create",
             "groups": ("Tables",),
-            "display_name": "Create Record",
+            "display_name": "Create record",
             "short_desc": "Create a record in the table",
             "desc": "Create a record in the table",
             "path_vars": {
@@ -126,7 +126,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "find_single",
             "groups": ("Tables",),
-            "display_name": "Find Single Record",
+            "display_name": "Find single record",
             "short_desc": "Find a single record in the table",
             "desc": "Find a single record in the table",
             "path_vars": {
@@ -146,7 +146,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "find",
             "groups": ("Tables",),
-            "display_name": "Find Matching Records",
+            "display_name": "Find matching records",
             "short_desc": "Find records in the table",
             "desc": "Find records in the table",
             "path_vars": {
@@ -166,7 +166,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "update",
             "groups": ("Tables",),
-            "display_name": "Update Records",
+            "display_name": "Update records",
             "short_desc": "Update records in the table",
             "desc": "Update records in the table",
             "path_vars": {
@@ -186,7 +186,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "upsert",
             "groups": ("Tables",),
-            "display_name": "Upsert Records",
+            "display_name": "Upsert records",
             "short_desc": "Upsert records in the table",
             "desc": "Upsert records in the table",
             "path_vars": {
@@ -206,7 +206,7 @@ module DbDataProvider {
             "path": "/tables/{table}",
             "action": "delete",
             "groups": ("Tables",),
-            "display_name": "Delete Records",
+            "display_name": "Delete records",
             "short_desc": "Delete records in the table",
             "desc": "Delete records in the table",
             "path_vars": {
@@ -226,7 +226,7 @@ module DbDataProvider {
             "path": "/views/{view}",
             "action": "find-view",
             "groups": ("Views",),
-            "display_name": "Find Matching View Records",
+            "display_name": "Find matching view records",
             "short_desc": "Find records in the view",
             "desc": "Finds the records of a database view that match the search criteria.\n\n"
                 "The view is **read-only**: its records cannot be created, updated or deleted.",
@@ -247,7 +247,7 @@ module DbDataProvider {
             "path": "/views/{view}",
             "action": "find-single-view",
             "groups": ("Views",),
-            "display_name": "Find Single View Record",
+            "display_name": "Find single view record",
             "short_desc": "Find a single record in the view",
             "desc": "Finds the single record of a database view that matches the search criteria; more than one "
                 "matching record is an error.\n\n"
@@ -269,7 +269,7 @@ module DbDataProvider {
             "path": "/materialized-views/{view}",
             "action": "find-materialized-view",
             "groups": ("Materialized Views",),
-            "display_name": "Find Matching Materialized View Records",
+            "display_name": "Find matching materialized view records",
             "short_desc": "Find records in the materialized view",
             "desc": "Finds the records of a materialized view that match the search criteria.\n\n"
                 "The stored data of the materialized view is read as it is, **without refreshing it**; use the "
@@ -292,7 +292,7 @@ module DbDataProvider {
             "path": "/materialized-views/{view}",
             "action": "find-single-materialized-view",
             "groups": ("Materialized Views",),
-            "display_name": "Find Single Materialized View Record",
+            "display_name": "Find single materialized view record",
             "short_desc": "Find a single record in the materialized view",
             "desc": "Finds the single record of a materialized view that matches the search criteria; more than "
                 "one matching record is an error.\n\n"
@@ -316,7 +316,7 @@ module DbDataProvider {
             "path": "/materialized-views/{view}",
             "action": "refresh-materialized-view",
             "groups": ("Materialized Views",),
-            "display_name": "Refresh Materialized View",
+            "display_name": "Refresh materialized view",
             "short_desc": "Refresh the stored data of a materialized view",
             "desc": "Refreshes the stored data of a materialized view from its defining query.\n\n"
                 "The options depend on the database:\n"

@@ -16,7 +16,7 @@
           "message": "MongoDB je dokumentově orientovaná databáze NoSQL pro ukládání velkých objemů dat"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
-          "source": "Insert Document",
+          "source": "Insert document",
           "message": "Vložit dokument"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.ZmluZA.display_name": {
-          "source": "Find Documents",
+          "source": "Find documents",
           "message": "Vyhledat dokumenty"
         },
         "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "Aktualizovat dokumenty"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "Smazat dokumenty"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
-          "source": "Aggregation Pipeline",
+          "source": "Aggregation pipeline",
           "message": "Agregační pipeline"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.YnVsaw.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Hromadné operace"
         },
         "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.display_name": {
-          "source": "Find One Document",
+          "source": "Find one document",
           "message": "Najít jeden dokument"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.short_desc": {
@@ -268,7 +268,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.display_name": {
-          "source": "Count Documents",
+          "source": "Count documents",
           "message": "Spočítat dokumenty"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Název kolekce MongoDB"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "Vektorové vyhledávání"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.short_desc": {

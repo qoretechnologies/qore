@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads, a live HTTP event stream and the destruction of its client in another thread
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The last reference to a ServerSentEventClient is released in another thread while its event thread is between two
+# iterations of its loop, holding the client only by a weak reference (held there by the debug hook of
+# ServerSentEventClient::dbgSetLoopHook()): the client's destructor waits for the event thread, which cannot call the
+# client any more (a method call on an object whose destructor runs in another thread is refused, qore#7509); the
+# thread records its end without calling the client, and the destructor ends.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServerSentEventClient
+
+%exec-class SseClientLastReferenceTest
+
+const HangTimeout = 30s;
+
+#! An event stream with one event that stays open until the test ends it
+class OpenInputStream inherits InputStream {
+    private {
+        binary data = binary("data: one\n\n");
+        int pos = 0;
+        Counter end;
+    }
+
+    constructor(Counter end) {
+        self.end = end;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+
+    *binary read(int limit) {
+        if (pos < data.size()) {
+            binary rv = data.substr(pos, min(limit, data.size() - pos));
+            pos += rv.size();
+            return rv;
+        }
+        end.waitForZero(HangTimeout);
+    }
+}
+
+#! answers with an event stream that stays open
+class OpenStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter end(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new OpenInputStream(end),
+        };
+    }
+}
+
+#! queues the notifications of the client
+class QueueObserver inherits Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push({"id": event_id, "data": data_});
+    }
+}
+
+#! tells when its destructor starts
+class TestClient inherits ServerSentEventClient {
+    public {
+        Counter test_in_dtor(1);
+    }
+
+    constructor(hash<auto> opts) : ServerSentEventClient(opts) {
+    }
+
+    destructor() {
+        test_in_dtor.dec();
+    }
+}
+
+class SseClientLastReferenceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SseClientLastReference", "1.0") {
+        addTestCase("the last reference is released while the event thread holds none", \lastReferenceTest());
+        set_return_value(main());
+    }
+
+    lastReferenceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for ServerSentEventClient::dbgSetLoopHook()");
+        }
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        OpenStreamHandler handler();
+        on_exit handler.end.dec();
+        server.setHandler("sse", "", NOTHING, handler);
+        server.setDefaultHandler("sse", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        Queue handoff();
+        Counter in_dtor;
+        QueueObserver observer();
+        {
+            TestClient client({
+                "url": "sse://localhost:" + port,
+                "data": "none",
+            });
+            client.registerObserver(observer);
+            client.observersReady();
+            in_dtor = client.test_in_dtor;
+            # the event is delivered: the event thread runs its loop
+            while (True) {
+                hash<auto> h = observer.q.get(HangTimeout);
+                if (h.id == EVENT_SSE_DATA) {
+                    break;
+                }
+            }
+            # the other thread releases the last reference: this thread hands its reference over and releases it
+            handoff.push(client);
+            remove client;
+        }
+
+        # the event thread is held before its next iteration, holding the client only by its weak reference
+        Counter first(1);
+        Queue held();
+        Counter go(1);
+        # called by name: the method exists only in a debug build of the library
+        call_static_method("ServerSentEventClient::ServerSentEventClient", "dbgSetLoopHook", sub () {
+            if (first.getCount()) {
+                first.dec();
+                held.push(True);
+                go.waitForZero(HangTimeout);
+            }
+        });
+        on_exit call_static_method("ServerSentEventClient::ServerSentEventClient", "dbgSetLoopHook");
+        assertEq(True, held.get(HangTimeout), "the event thread is held between two iterations");
+
+        # the client is released in another thread: its destructor waits for the event thread
+        Counter destroyed(1);
+        background sub () {
+            on_exit destroyed.dec();
+            TestClient client = handoff.get();
+            remove client;
+        }();
+        assertEq(0, in_dtor.waitForZero(HangTimeout), "the client's destructor started");
+
+        # the event thread goes on while the client is destroyed
+        go.dec();
+        assertEq(0, destroyed.waitForZero(HangTimeout), "the client's destructor ended");
+    }
+}

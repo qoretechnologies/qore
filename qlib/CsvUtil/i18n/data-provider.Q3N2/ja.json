@@ -16,7 +16,7 @@
           "message": "CSVファイルデータの読み書き"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "CSV ファイルの読み取り"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "`true`（デフォルト: `false`）の場合、他の行と列数またはフィールド数が異なる行が解析されると、`CSVFILEITERATOR-DATA-ERROR` 例外が発生します\n\nこのオプションを有効にするとパフォーマンスが低下することに注意してください"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "CSV インラインデータの読み取り"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "`true`（デフォルト: `false`）の場合、他の行と列数またはフィールド数が異なる行が解析されると、`CSVFILEITERATOR-DATA-ERROR` 例外が発生します\n\nこのオプションを有効にするとパフォーマンスが低下することに注意してください"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "CSV データをプロファイル"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "フィールドの引用符文字（デフォルト: `\"`）。フィールドはこの文字で読み取られ、区切り文字の検出では引用符で囲まれたフィールド内の区切り文字は数えられません"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "列名を含む行。ない場合は 0"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "列名を含む行 (1 から数える)。データにない場合は `0`。指定しない場合、ヘッダー行はデータから判定されます。ファイルを知っている人が列名の位置を示した場合に使用します"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "最大行数"
@@ -972,7 +984,7 @@
           "message": "`True` (既定) の場合、サンプル値と反例はその形に置き換えて伏せられます。文字は `x` または `X`、数字は `9` になるため、データを含めずにプロファイルを共有できます"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "CSV データの書き込み"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1208,7 @@
           "message": "ヘッダーの出力を抑制するには `false` に設定します。デフォルトは `true` で、ヘッダーが存在する場合は出力することを意味します"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "CSV データを作成"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

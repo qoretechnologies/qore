@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "인보이스 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "인보이스의 사용자 정의 필드 값"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "인보이스 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1172,7 +1172,7 @@
           "message": "인보이스의 사용자 정의 필드 값"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "인보이스 삭제"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "삭제할 인보이스"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "인보이스 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "조회할 송장"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "청구서 목록 조회"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "고객별 필터링"
         },
         "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "인보이스 이메일 전송"
         },
         "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "이메일 본문"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.display_name": {
-          "source": "Create Bill",
+          "source": "Create bill",
           "message": "청구서 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "지급 및 배송 조건"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.display_name": {
-          "source": "Update Bill",
+          "source": "Update bill",
           "message": "청구서 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "지급 및 배송 조건"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.display_name": {
-          "source": "Delete Bill",
+          "source": "Delete bill",
           "message": "청구서 삭제"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "삭제할 청구서"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.display_name": {
-          "source": "Get Bill",
+          "source": "Get bill",
           "message": "청구서 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "검색할 청구서"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.display_name": {
-          "source": "List Bills",
+          "source": "List bills",
           "message": "청구서 목록 조회"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "공급업체별 필터링"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "결제 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "결제 금액이 입금될 계정의 ID"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "결제 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "다음 필드가 포함된 인보이스 목록: `invoice_id`, `amount_applied`"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "결제 삭제"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "삭제할 결제"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "결제 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "조회할 결제"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "연락처 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "추가 메모"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "연락처 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "추가 메모"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "연락처 목록"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "공급업체 연락처만"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "연락처 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "가져올 연락처"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "비용 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "비용이 청구 가능한 경우 청구할 고객"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "비용 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "청구할 고객"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "경비 목록 나열"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "비용 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "검색할 경비"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "항목 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "적용할 세금"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "품목 목록"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "품목 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "가져올 항목"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "견적서 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -2744,7 +2744,7 @@
           "message": "참조 번호"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "견적서 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -2848,7 +2848,7 @@
           "message": "참조 번호"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "견적 목록"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "견적서 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "조회할 견적서"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "판매 주문 생성"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "배송 방법"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "판매 주문 업데이트"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "배송 방법"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "판매 주문 삭제"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "삭제할 판매 주문서"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "판매 주문 목록 조회"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "판매 주문 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "조회할 판매 주문서"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "구매 발주서 목록 조회"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "구매 주문 가져오기"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "조회할 구매 주문서"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "결제 목록 조회"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Zoho Books 조직"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "새 인보이스"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "새 인보이스를 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "새 청구서"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "새 청구서를 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "새 결제"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "새 결제를 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "새 고객"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -3368,7 +3368,7 @@
           "message": "새 고객을 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "새 비용"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "새 지출을 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "새 판매 주문"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "새 판매 주문서를 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "새 견적서"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "새 견적을 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "새 항목"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "새 품목을 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "새 구매 주문"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "새 구매 주문서를 확인하는 주기(초)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.display_name": {
-          "source": "New Vendor",
+          "source": "New vendor",
           "message": "새 공급업체"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.short_desc": {

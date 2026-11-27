@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
-          "message": "Create a Lead"
+          "source": "Create a lead",
+          "message": "Create a lead"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
           "source": "Create a new lead",
@@ -640,8 +640,8 @@
           "message": "The zip or postal code"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update a Lead",
-          "message": "Update a Lead"
+          "source": "Update a lead",
+          "message": "Update a lead"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
           "source": "Update an existing lead",
@@ -708,8 +708,8 @@
           "message": "The new website URL associated with the lead"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
-          "message": "Delete a Lead"
+          "source": "Delete a lead",
+          "message": "Delete a lead"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
           "source": "Delete a lead",
@@ -728,8 +728,8 @@
           "message": "The lead to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
-          "source": "List Leads",
-          "message": "List Leads"
+          "source": "List leads",
+          "message": "List leads"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
           "source": "List and search leads",
@@ -784,8 +784,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
-          "message": "Get a Lead"
+          "source": "Get a lead",
+          "message": "Get a lead"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
           "source": "Get a single lead by ID",
@@ -804,8 +804,8 @@
           "message": "The lead ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -956,8 +956,8 @@
           "message": "The URL value"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -1072,8 +1072,8 @@
           "message": "The type of phone number (e.g., `mobile`, `office`, `home`, `fax`)"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -1092,8 +1092,8 @@
           "message": "The contact to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
           "source": "List and search contacts",
@@ -1136,8 +1136,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -1156,8 +1156,8 @@
           "message": "The contact ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
-          "message": "Create an Opportunity"
+          "source": "Create an opportunity",
+          "message": "Create an opportunity"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Create a new opportunity",
@@ -1308,8 +1308,8 @@
           "message": "The date lost in YYYY-MM-DD format"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
-          "message": "Update an Opportunity"
+          "source": "Update an opportunity",
+          "message": "Update an opportunity"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Update an existing opportunity",
@@ -1400,8 +1400,8 @@
           "message": "The new text note for the opportunity"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
-          "message": "Delete an Opportunity"
+          "source": "Delete an opportunity",
+          "message": "Delete an opportunity"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Delete an opportunity",
@@ -1420,8 +1420,8 @@
           "message": "The opportunity to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
-          "message": "List Opportunities"
+          "source": "List opportunities",
+          "message": "List opportunities"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
           "source": "List and search opportunities",
@@ -1524,8 +1524,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
-          "message": "Get an Opportunity"
+          "source": "Get an opportunity",
+          "message": "Get an opportunity"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
           "source": "Get a single opportunity by ID",
@@ -1544,8 +1544,8 @@
           "message": "The opportunity ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
-          "message": "Create a Task"
+          "source": "Create a task",
+          "message": "Create a task"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a new task",
@@ -1620,8 +1620,8 @@
           "message": "The user ID to assign this task to"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
-          "message": "Update a Task"
+          "source": "Update a task",
+          "message": "Update a task"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update an existing task",
@@ -1688,8 +1688,8 @@
           "message": "The new text description or body of the task"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
-          "message": "Delete a Task"
+          "source": "Delete a task",
+          "message": "Delete a task"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a task",
@@ -1708,8 +1708,8 @@
           "message": "The task to delete"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
           "source": "List and search tasks",
@@ -1796,8 +1796,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
-          "message": "Get a Task"
+          "source": "Get a task",
+          "message": "Get a task"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -1816,8 +1816,8 @@
           "message": "The task ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
-          "source": "Create a Call",
-          "message": "Create a Call"
+          "source": "Create a call",
+          "message": "Create a call"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
           "source": "Log a new call",
@@ -1964,8 +1964,8 @@
           "message": "An HTML-formatted note for this call"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
-          "source": "Update a Call",
-          "message": "Update a Call"
+          "source": "Update a call",
+          "message": "Update a call"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
           "source": "Update an existing call",
@@ -2008,8 +2008,8 @@
           "message": "The new disposition or outcome of the call"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
-          "source": "Delete a Call",
-          "message": "Delete a Call"
+          "source": "Delete a call",
+          "message": "Delete a call"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
           "source": "Delete a call",
@@ -2028,8 +2028,8 @@
           "message": "The call to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
-          "source": "List Calls",
-          "message": "List Calls"
+          "source": "List calls",
+          "message": "List calls"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
           "source": "List and search calls",
@@ -2084,8 +2084,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
-          "source": "Get a Call",
-          "message": "Get a Call"
+          "source": "Get a call",
+          "message": "Get a call"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
           "source": "Get a single call by ID",
@@ -2104,8 +2104,8 @@
           "message": "The call ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
-          "source": "Create an Email",
-          "message": "Create an Email"
+          "source": "Create an email",
+          "message": "Create an email"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
           "source": "Log a new email",
@@ -2264,8 +2264,8 @@
           "message": "Outgoing email"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete an Email",
-          "message": "Delete an Email"
+          "source": "Delete an email",
+          "message": "Delete an email"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
           "source": "Delete an email",
@@ -2284,8 +2284,8 @@
           "message": "The email to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
-          "source": "List Emails",
-          "message": "List Emails"
+          "source": "List emails",
+          "message": "List emails"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
           "source": "List and search emails",
@@ -2340,8 +2340,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get an Email",
-          "message": "Get an Email"
+          "source": "Get an email",
+          "message": "Get an email"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
           "source": "Get a single email by ID",
@@ -2360,8 +2360,8 @@
           "message": "The email ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
-          "message": "Create a Note"
+          "source": "Create a note",
+          "message": "Create a note"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
           "source": "Create a new note",
@@ -2428,8 +2428,8 @@
           "message": "Set to `True` to pin this note to the top"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
-          "message": "Update a Note"
+          "source": "Update a note",
+          "message": "Update a note"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
           "source": "Update an existing note",
@@ -2472,8 +2472,8 @@
           "message": "The new HTML content of the note"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
-          "message": "Delete a Note"
+          "source": "Delete a note",
+          "message": "Delete a note"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
           "source": "Delete a note",
@@ -2492,8 +2492,8 @@
           "message": "The note to delete"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
-          "source": "List Notes",
-          "message": "List Notes"
+          "source": "List notes",
+          "message": "List notes"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
           "source": "List and search notes",
@@ -2548,8 +2548,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get a Note",
-          "message": "Get a Note"
+          "source": "Get a note",
+          "message": "Get a note"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
           "source": "Get a single note by ID",
@@ -2568,8 +2568,8 @@
           "message": "The note ID"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
-          "source": "List Meetings",
-          "message": "List Meetings"
+          "source": "List meetings",
+          "message": "List meetings"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
           "source": "List and search meetings",
@@ -2624,8 +2624,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
-          "source": "Get a Meeting",
-          "message": "Get a Meeting"
+          "source": "Get a meeting",
+          "message": "Get a meeting"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
           "source": "Get a single meeting by ID",
@@ -2820,8 +2820,8 @@
           "message": "The SMS ID"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
-          "source": "Lead Created",
-          "message": "Lead Created"
+          "source": "Lead created",
+          "message": "Lead created"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
           "source": "Fires when a lead is created",
@@ -2844,8 +2844,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
-          "source": "Lead Updated",
-          "message": "Lead Updated"
+          "source": "Lead updated",
+          "message": "Lead updated"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
           "source": "Fires when a lead is updated",
@@ -2868,8 +2868,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
-          "source": "Lead Deleted",
-          "message": "Lead Deleted"
+          "source": "Lead deleted",
+          "message": "Lead deleted"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
           "source": "Fires when a lead is deleted",
@@ -2892,8 +2892,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
-          "message": "Contact Created"
+          "source": "Contact created",
+          "message": "Contact created"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
           "source": "Fires when a contact is created",
@@ -2916,8 +2916,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
-          "message": "Contact Updated"
+          "source": "Contact updated",
+          "message": "Contact updated"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
           "source": "Fires when a contact is updated",
@@ -2940,8 +2940,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
-          "source": "Contact Deleted",
-          "message": "Contact Deleted"
+          "source": "Contact deleted",
+          "message": "Contact deleted"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
           "source": "Fires when a contact is deleted",
@@ -2964,8 +2964,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
-          "source": "Opportunity Created",
-          "message": "Opportunity Created"
+          "source": "Opportunity created",
+          "message": "Opportunity created"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
           "source": "Fires when an opportunity is created",
@@ -2988,8 +2988,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
-          "source": "Opportunity Updated",
-          "message": "Opportunity Updated"
+          "source": "Opportunity updated",
+          "message": "Opportunity updated"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
           "source": "Fires when an opportunity is updated",
@@ -3012,8 +3012,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
-          "source": "Opportunity Deleted",
-          "message": "Opportunity Deleted"
+          "source": "Opportunity deleted",
+          "message": "Opportunity deleted"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {
           "source": "Fires when an opportunity is deleted",

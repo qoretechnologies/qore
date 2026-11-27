@@ -152,9 +152,10 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-func.q` | `fc` `sc` `mf` | a function call, a static method call, `map` calling a function over 4 elements |
 | `bench-method.q` | `m` `cr` `mse` `ma` | a method call, a call reference call, a method call with a call as argument, with an untyped local as argument |
 | `bench-map.q` | `mp` `mm` `mmse` | `map` of an expression, of a method call, of a method call with a call as argument, over 4 elements |
-| `bench-pseudo.q` | `pv` `pl` `pt` `ps` `tr` `lw` `ix` `il` | pseudo-methods: without an intrinsic, `<string>::length()`, `<int>::typeCode()`; `<string>::split()` and `trim()` of a string local, which AOT code calls without an argument list (qore#5578); `<string>::lwr()` of a string local, a fast path, `index()` of a string local and of its `lwr()` (qore#7711) |
+| `bench-pseudo.q` | `pv` `pl` `pt` `ps` `tr` `lw` `ix` `il` `jl` `jf` `jm` | pseudo-methods: without an intrinsic, `<string>::length()`, `<int>::typeCode()`; `<string>::split()` and `trim()` of a string local, which AOT code calls without an argument list (qore#5578); `<string>::lwr()` of a string local, a fast path, `index()` of a string local and of its `lwr()` (qore#7711); `<list>::join()` and `join()` of a `list<string>` local and `<list>::join()` of a map of it, a fused join (qore#7731) |
 | `bench-member.q` | `mr` `mw` `pr` `pi` | a public member read and write, a private member read in the class's method, a base class's private member read on a subclass object (qore#6760) |
 | `bench-cf.q` | `cf` `cfa` | `call_function()` of a call reference, `call_function_args()` with one argument (qore#6052) |
+| `bench-funcref.q` | `fr` `fr0` | a call through a reference to a function of one int parameter, of no parameter, given to the loop's function as a typed parameter (qore#5578) |
 | `bench-instanceof.q` | `io` `iom` | two, six `instanceof` checks of objects of as many classes; in aot modes a hit of the type cache of the AOT runtime (qore#7416) |
 | `bench-enum.q` | `ok` `osz` `ofk` `oel` | an object's keys, `size()`, `firstKey()`, `elements` (qore#7048) |
 | `bench-lvalue.q` | `rl` `rh` `dh` `ri` `la` | `remove` of a list element, of a hash key, `delete` of a hash key, `remove` of a large int local, int assignment |

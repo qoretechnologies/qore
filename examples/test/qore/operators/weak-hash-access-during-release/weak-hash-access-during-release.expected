@@ -1,0 +1,32 @@
+shallow: read: size 0, keys [], member a: null
+shallow: weak read: size 0, member b: null, exists c: False
+shallow: iterated members: 0
+shallow: write: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow: merge: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow: remove: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow: after the changes: size 0, keys []
+shallow: released
+deep: read: size 0, keys [], member a: null
+deep: weak read: size 0, member b: null, exists c: False
+deep: iterated members: 0
+deep: write: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep: merge: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep: remove: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep: after the changes: size 0, keys []
+deep: released
+shallow first: read: size 0, keys [], member a: null
+shallow first: weak read: size 0, member b: null, exists c: False
+shallow first: iterated members: 0
+shallow first: write: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow first: merge: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow first: remove: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+shallow first: after the changes: size 0, keys []
+shallow first: released
+deep last: read: size 0, keys [], member a: null
+deep last: weak read: size 0, member b: null, exists c: False
+deep last: iterated members: 0
+deep last: write: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep last: merge: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep last: remove: HASH-ERROR: Cannot modify a hash that has already gone out of scope
+deep last: after the changes: size 0, keys []
+deep last: released

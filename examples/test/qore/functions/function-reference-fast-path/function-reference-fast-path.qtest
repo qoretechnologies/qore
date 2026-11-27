@@ -143,7 +143,10 @@ class FunctionReferenceFastPathTest inherits QUnit::Test {
         assertEq(DebuggerExpected, out);
         if (can_report) {
             out = ExecModeHarness::run(command(mode, debugger_fixture, "report"), ExecModeHarness::NativeCheck::None);
-            assertEq(DebuggerExpected + "fast calls after attach: 0\n", out);
+            # the warm-up takes the fast path in the compiled execution modes, so the test of the calls after the
+            # attach is not vacuous there
+            assertEq(DebuggerExpected + sprintf("fast path before attach: %s\n", mode == "ast" ? "no" : "yes")
+                + "fast calls after attach: 0\n", out);
         }
     }
 

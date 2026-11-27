@@ -16,7 +16,7 @@
           "message": "在任何 IMAP 伺服器上讀取與管理電子郵件。\n\n- 使用伺服器端條件搜尋信箱，僅傳輸相符的郵件\n- 擷取完整郵件，或在僅需單一附件時擷取單一 MIME 部分\n- 在新郵件送達時即時回應，並在伺服器支援時使用伺服器推送\n- 變更標記、在信箱間移動郵件，以及使用 `APPEND` 歸檔郵件\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) 是標準信箱通訊協定，對許多電子郵件提供商而言也是唯一提供的程式化存取方式。由於郵件保留在伺服器上，整合可以監控信箱並在有新郵件到達時採取相應操作，而無需接管帳戶的郵件。\n\n支援密碼與 OAuth2 bearer-token 驗證；會根據伺服器通告的機制進行選擇"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "搜尋郵件"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "使用 `EXAMINE` 而非 `SELECT` 開啟信箱，使擷取郵件時無法變更任何旗標"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "擷取郵件"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "在擷取郵件後於該郵件上設定 `\\Seen` 旗標。\n\n擷取本身絕不會變更旗標，因此請保留此設定為 `False`，以便在不讓寄件者的郵件用戶端顯示為已讀的情況下檢查郵件"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "擷取附件"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "要擷取的 MIME 部分指定元 (例如：`1`、`2.1`、`HEADER`、`TEXT`)。\n\n擷取單一部分可避免傳輸整封郵件，當郵件包含多個大型附件且只需要其中一個時，這非常重要"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "列出信箱"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "僅列出帳戶已訂閱的信箱，使用 `LSUB` 而非 `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "變更郵件旗標"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "將郵件上的所有旗標取代為指定的旗標"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "移動郵件"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "複製郵件而非移動，並保留原始郵件"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "儲存郵件"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "要為該郵件記錄的送達時間；預設為伺服器儲存該郵件的時間"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "新電子郵件"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "為每封回報的郵件加上 `\\Deleted` 旗標，並在觸發其事件後將其清除。\n\n**這將永久從伺服器中刪除郵件**；除非信箱是用於清空處理的佇列，否則建議使用 `mark_seen` 或移動至另一個信箱。\n\n郵件會在事件被**觸發**後立即清除，這與取用端已**處理**不同。觸發事件時擲出例外狀況會保留郵件以待下次掃描，但如果取用端收到事件後失敗、逾時或在處理途中重新啟動，則唯一的複本已經遺失。對於絕不能遺失來源郵件的工作負載，請不要設定此選項，並在取用端處理成功後再行處理：每個事件都包含其 `uid`，而 `set-flags` 與 `move-messages` 動作均可接收此資訊"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "新電子郵件附件"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

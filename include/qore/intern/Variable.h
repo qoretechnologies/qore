@@ -2782,6 +2782,12 @@ public:
         released here, after the lvalue's lock (qore#5675)
     */
     DLLLOCAL ~LValueRemoveHelper() {
+        releaseRemoved();
+    }
+
+    //! Releases what the removal removed and was not taken; also when memory that the removal needed could not be
+    //! allocated (std::bad_alloc) in the constructor, whose exception skips the destructor (qore#7763)
+    DLLLOCAL void releaseRemoved() {
         bool static_assignment = false;
         QoreValue v = rv.remove(static_assignment);
         if (!static_assignment) {

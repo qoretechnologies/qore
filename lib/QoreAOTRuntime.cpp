@@ -41,6 +41,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -10669,6 +10670,11 @@ struct AotModuleState {
     std::vector<std::string> reexport_deps;
     //! Every module that this module requires; this module is deleted before them at shutdown
     std::vector<std::string> deps;
+    //! The modules that the directives of this module's source required directly, in their order
+    /** the requirements that succeeded when the module was compiled (IMPORT_DEPENDENCIES); reported by
+        get_module_hash() (qore_aot_get_module_requirements(), #7796)
+    */
+    std::vector<std::string> direct_deps;
     //! Serialized metadata retained only when deferred init cannot reuse an open reader.
     std::shared_ptr<const std::vector<uint8_t>> metadata;
     //! Reader opened during module_init and reused by deferred ns_init work.
@@ -12750,7 +12756,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
-    // the "module Name" declaration, and calling it twice triggers an assertion.
+    // the "module Name" declaration, and a second call is a duplicate module declaration (qore#7794).
     // the module is a binary module: the user modules that its code loads are not recorded as its dependencies, only
     // the binary modules, which are released if the initialization fails (#5953)
     QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink, QMRL_BINARY);
@@ -12903,6 +12909,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.direct_deps = deps;
         state.deps = aotModuleDependencyNames(deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
@@ -13448,6 +13455,18 @@ DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std
     return true;
 }
 
+DLLLOCAL bool qore_aot_get_module_requirements(const char* name, std::vector<std::string>& required,
+        std::vector<std::string>& reexported) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    auto it = aot_module_map.find(name);
+    if (it == aot_module_map.end()) {
+        return false;
+    }
+    required = it->second.direct_deps;
+    reexported = it->second.reexport_deps;
+    return true;
+}
+
 DLLLOCAL bool qore_aot_module_has_dependent(const char* name) {
     AutoLocker aot_state_al(get_aot_module_state_lock());
     for (auto& entry : aot_module_map) {
@@ -13728,6 +13747,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        // metadata without the import list (written before it existed) has only the list of providers
+        state.direct_deps = import_deps_present ? import_deps : deps;
         state.deps = aotModuleDependencyNames(deps, &import_deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
@@ -15435,6 +15456,113 @@ void qore_aot_discard_pending_fast_entries(size_t mark) {
     aot_pending_fast_entries.resize(mark);
 }
 
+namespace {
+//! The registry of the call-reference entries of the loaded AOT images (qore#5578)
+/** Created by the first use, so that an image loaded before the library's other static objects are constructed (an
+    executable linked statically with it, whose constructor functions can run first) finds it constructed; its lock is
+    a leaf lock (no other lock is taken while it is held) with a fork handler.  Entries are keyed by the standard
+    native entry of their function, whose address is unique while its image is loaded; an image unregisters its
+    entries before it is unloaded, so a later image at the same addresses does not find them.
+*/
+struct QoreAOTCallRefRegistry {
+    QoreRWLock lock;
+    QoreForkRWLock fork_handler{lock, QFLR_LEAF, "aot_callref_entry_registry"};
+    std::unordered_map<AotFunctionPtr, const QoreAOTCallRefEntry*> entries;
+    //! incremented by every registration; starts at 1, so that 0 means "never looked up" for a variant
+    std::atomic<uint32_t> generation{1};
+
+    //! never destroyed: the destructor functions of the images, which unregister their entries, can run after the
+    //! static objects of the library are destroyed at exit
+    static QoreAOTCallRefRegistry& get() {
+        static QoreAOTCallRefRegistry* registry = new QoreAOTCallRefRegistry;
+        return *registry;
+    }
+};
+
+//! starts the next generation of the registrations: a variant whose lookup found nothing looks again; 0 means "never
+//! looked up" and is skipped when the count wraps
+void qore_aot_callref_next_generation(QoreAOTCallRefRegistry& reg) noexcept {
+    if (reg.generation.fetch_add(1, std::memory_order_acq_rel) + 1 == 0) {
+        reg.generation.fetch_add(1, std::memory_order_acq_rel);
+    }
+}
+
+//! returns true if the entry is well formed: a function, an entry and parameter and return kinds that exist
+bool qore_aot_callref_entry_valid(const QoreAOTCallRefEntry& e) {
+    if (!e.fn || !e.cref_fn || e.nparams > QORE_AOT_CALLREF_MAX_PARAMS) {
+        return false;
+    }
+    for (unsigned i = 0; i < e.nparams; ++i) {
+        if (e.kinds[i] > static_cast<uint8_t>(BatchCalleeParamKind::NativeBool)) {
+            return false;
+        }
+    }
+    // the kinds are given twice: in the signature code too
+    return e.sig_code == qore_aot_callref_sig_code(e.retKind(), e.kinds, e.nparams)
+        && (e.nparams == QORE_AOT_CALLREF_MAX_PARAMS || !(e.sig_code >> (2 + 2 * e.nparams)));
+}
+}
+
+extern "C" DLLEXPORT void qore_aot_register_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+        int32_t num_entries) {
+    if (!entries || num_entries <= 0) {
+        return;
+    }
+    // called by a constructor function of the image: nothing may escape (an entry that cannot be registered is not
+    // used, and its calls take the generic call path)
+    QoreAOTCallRefRegistry* registry = nullptr;
+    try {
+        registry = &QoreAOTCallRefRegistry::get();
+        QoreAOTCallRefRegistry& reg = *registry;
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (int32_t i = 0; i < num_entries; ++i) {
+            const QoreAOTCallRefEntry& e = entries[i];
+            if (qore_aot_callref_entry_valid(e)) {
+                reg.entries[e.fn] = &e;
+            }
+        }
+        qore_aot_callref_next_generation(reg);
+    } catch (...) {
+        // the entries registered before the failure are found by the next lookups
+        if (registry) {
+            qore_aot_callref_next_generation(*registry);
+        }
+    }
+}
+
+extern "C" DLLEXPORT void qore_aot_unregister_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+        int32_t num_entries) {
+    if (!entries || num_entries <= 0) {
+        return;
+    }
+    // called by a destructor function of the image: nothing may escape
+    try {
+        QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (int32_t i = 0; i < num_entries; ++i) {
+            auto it = reg.entries.find(entries[i].fn);
+            // only this image's own entry is removed
+            if (it != reg.entries.end() && it->second == &entries[i]) {
+                reg.entries.erase(it);
+            }
+        }
+    } catch (...) {
+    }
+}
+
+const QoreAOTCallRefEntry* qore_aot_find_callref_entry(AotFunctionPtr fn, uint32_t& generation) {
+    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    // read under the lock, so that a registration made after it increments it again
+    generation = reg.generation.load(std::memory_order_acquire);
+    auto it = reg.entries.find(fn);
+    return it == reg.entries.end() ? nullptr : it->second;
+}
+
+uint32_t qore_aot_callref_registration_generation() {
+    return QoreAOTCallRefRegistry::get().generation.load(std::memory_order_acquire);
+}
+
 const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol) {
     if (!fn || !fast_symbol) {
         return nullptr;
@@ -15951,6 +16079,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        // metadata without the import list (written before it existed) has only the list of providers
+        state.direct_deps = import_deps_present ? import_deps : deps;
         state.deps = aotModuleDependencyNames(deps, &import_deps);
         if (!init_descriptors.empty()) {
             state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(

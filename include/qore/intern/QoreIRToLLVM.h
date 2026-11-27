@@ -3276,6 +3276,86 @@ private:
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
 
+    //! Returns true if AOT code calls the call reference of \a inst (a CallClosureDirect or its invoke form, whose
+    //! target is not known) through the call-reference entry of its function first (qore#5578)
+    DLLLOCAL bool callRefEntryCallEligible(const QoreIRInstruction* inst) const;
+
+    //! Emits the call of \a inst through a call-reference entry with no argument or one native argument, if it has
+    //! that shape (qore#5578)
+    /** Calls qore_rt_call_ref_value_<a>_v1() with the native argument, and if it made no call, the generic call path
+        (qore_rt_call_closure_fast()) with the argument boxed in the fallback block, which releases it there; the two
+        NaN-boxed results, which the caller owns, are joined.
+
+        @param result set to the joined result, or left nullptr if the call does not have that shape (nothing is emitted)
+        @param closure_helpers true if the generic call path is made by qore_rt_call_closure_0() or
+        qore_rt_call_closure_1(), as the invoke form of the call makes it, instead of qore_rt_call_closure_fast()
+
+        @return false on error
+    */
+    DLLLOCAL bool emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llvm::Value* ref_boxed,
+            llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error,
+            bool closure_helpers = false);
+
+    //! Emits the call of \a inst through a call-reference entry with no argument or one native argument giving a native
+    //! value, when its value is stored into a native local of that kind (qore#5578)
+    /** Applies when \a next, the instruction after the call in its block, is the only use of the call's value: a plain
+        store into a native int, float or bool local of exactly that type.  Calls qore_rt_call_ref_<r>_<a>_v1(), and
+        if it made no call, the generic call path (qore_rt_call_closure_fast()), whose NaN-boxed value is then checked
+        and converted with the local's type there, as the store would check and convert it (the value of the kind
+        as it is, any other value with qore_rt_coerce_value_by_type_path_aot()), and released; the native values are
+        joined, so the store takes a native value, as from a direct call of a native fast entry.
+
+        @param result set to the joined native value, or left nullptr if the call does not have that shape (nothing
+        is emitted)
+        @param kind set to the kind of the native value
+
+        @return false on error
+    */
+    DLLLOCAL bool emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst, const QoreIRInstruction* next,
+            llvm::Value* ref_boxed, llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result,
+            BatchCalleeReturnKind& kind, std::string& error);
+
+    //! Emits the call of \a inst through a call-reference entry with NaN-boxed arguments (qore#5578)
+    /** Calls qore_rt_call_ref_boxed_v1() and, if it made no call, the generic call path (qore_rt_call_closure_fast())
+        with the same arguments, and returns the joined NaN-boxed result, which the caller owns.
+
+        @param arg_cleanups nullptr, or the cleanup slots of the temporaries that the call gives to the callee
+        (buildArgCleanupArray()): the helper (qore_rt_call_ref_boxed_given_v1()) releases them in the frame of the call
+        that it makes, and the generic call path (qore_rt_call_closure_fast_consume_args()) takes them over otherwise;
+        an array that the call gives only when a read through a reference holds its value (nullable_arg_cleanups) is
+        tested first, and the call is made as one that gives nothing without it
+        @param cleanups_given true if \a arg_cleanups is known to be given (the branch of emitGivenOrPlainCall() that
+        gives it)
+    */
+    DLLLOCAL llvm::Value* emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
+            llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func, bool cleanups_given = false);
+
+    //! Emits the test of a call site's last value that was not a function reference (qore#5578)
+    /** A call site keeps the last value with which a call-reference helper returned QORE_RT_CALL_REF_NOT_FUNCREF (a
+        closure, for example) in a slot of the function's entry block, which holds NOTHING when the function is
+        entered: a call with that value goes to \a generic_bb, the generic call path, without the helper, which costs a
+        closure called through the site one load and one compare.  The generic call path is always correct, so a value
+        that the slot keeps after it was released, and whose address a reference to a function took, only takes it
+        too.  Leaves the builder in the block of the helper's call.
+
+        @return the slot, which emitCallRefSiteNote() writes
+    */
+    DLLLOCAL llvm::AllocaInst* emitCallRefSiteSkip(llvm::Value* ref_boxed, llvm::Function* llvm_func,
+            llvm::BasicBlock* generic_bb);
+    //! Returns a block that keeps the value in the slot of emitCallRefSiteSkip() and goes to \a generic_bb
+    DLLLOCAL llvm::BasicBlock* emitCallRefSiteNote(llvm::AllocaInst* not_funcref, llvm::Value* ref_boxed,
+            llvm::Function* llvm_func, llvm::BasicBlock* generic_bb);
+
+    //! Returns the entry-block slot of the result of a call through a call-reference entry
+    DLLLOCAL llvm::AllocaInst* getCallRefEntryResultSlot(llvm::Function* llvm_func);
+    //! the slot of getCallRefEntryResultSlot(), or nullptr
+    llvm::AllocaInst* callref_entry_result_slot = nullptr;
+    //! Returns the entry-block slot that owns the value that the conversion of the generic call's value in
+    //! emitNativeStoreCallRefEntryCall() gives, which is released at once
+    DLLLOCAL llvm::AllocaInst* getCallRefEntryCoerceCleanupSlot(llvm::Function* llvm_func);
+    //! the slot of getCallRefEntryCoerceCleanupSlot(), or nullptr
+    llvm::AllocaInst* callref_entry_coerce_cleanup_slot = nullptr;
+
     // Emit the assigned branch of an argument-taking string pseudo-method
     // whose statically typed operands may still contain NOTHING.  Leaves the
     // builder on the generic fallback block when a fast path was emitted.

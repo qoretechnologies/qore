@@ -1,0 +1,11 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# a separated module whose other file declares the module again (qore#7794)
+
+module DupDeclSep {
+    version = "1.0";
+    desc = "duplicate module declaration test module";
+    author = "Qore Technologies, s.r.o.";
+}
+
+%modern

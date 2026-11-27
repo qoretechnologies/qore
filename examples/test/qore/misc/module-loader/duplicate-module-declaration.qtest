@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../.."
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ExecModeHarness
+
+%exec-class DuplicateModuleDeclarationTest
+
+#! A second module declaration in a module is a parse error at the second declaration (qore#7794)
+/** The scanner declares the module's name each time it reads <tt>module <i>name</i></tt> in the parse of a module,
+    and a second declaration aborted a debug build on an assertion; a release build replaced the module's name with
+    the second one and applied the restrictions of the module header again after the header.  The second declaration
+    is now a parse error at its own location that names the first declaration, wherever it is: in the same file
+    (also in the form <tt>module namespace X {}</tt>, which is read as a module named \c namespace), in another file of
+    a separated module, or in an included file.  The keys of the second declaration are ignored: they raise no errors
+    of their own, and its \c domains and \c init keys take no effect.
+
+    Each case loads the module in a child in every execution mode, which must report the error and then load another
+    module normally, and compiles the module with qcc, which must refuse it with the same error.
+*/
+class DuplicateModuleDeclarationTest inherits QUnit::Test {
+    public {
+        #! the qcc options of every compile here, which only parses and checks the module
+        const QccOpts = "-O0";
+
+        #! the cases: the module's path relative to the fixture dir, where the second and first declarations are, and
+        #! the number of errors that qcc reports
+        const Cases = {
+            "namespace form": {
+                "path": "DupDeclNs.qm",
+                "name": "namespace",
+                "first_name": "DupDeclNs",
+                "file": "DupDeclNs.qm",
+                "line": 19,
+                "first_file": "DupDeclNs.qm",
+                "first_line": 5,
+                # the rest of the declaration is a syntax error: "X" is read where "{" is expected
+                "errors": 2,
+            },
+            "same name in one file": {
+                "path": "DupDeclSame.qm",
+                "name": "DupDeclSame",
+                "first_name": "DupDeclSame",
+                "file": "DupDeclSame.qm",
+                "line": 13,
+                "first_file": "DupDeclSame.qm",
+                "first_line": 5,
+                # the second declaration also gives the keys of the first one, and domains and init, which are ignored
+                "errors": 1,
+            },
+            "separated module": {
+                "path": "DupDeclSep",
+                "name": "DupDeclSep",
+                "first_name": "DupDeclSep",
+                "file": "A.qc",
+                "line": 4,
+                "first_file": "DupDeclSep.qm",
+                "first_line": 5,
+                "errors": 1,
+            },
+            "included file": {
+                "path": "DupDeclInc.qm",
+                "name": "DupDeclInc",
+                "first_name": "DupDeclInc",
+                "file": "DupDeclInc.ql",
+                "line": 5,
+                "first_file": "DupDeclInc.qm",
+                "first_line": 5,
+                "errors": 1,
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture_dir;
+    }
+
+    constructor() : QUnit::Test("DuplicateModuleDeclarationTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the children run in the current directory: the fixtures are given with absolute paths
+        fixture_dir = realpath(get_script_dir() + "duplicate-module-decl");
+
+        addTestCase("a single declaration loads in every execution mode", \testGood());
+        map addCase($1), keys Cases;
+        set_return_value(main());
+    }
+
+    #! adds the module loader and qcc cases of the given case
+    private addCase(string label) {
+        addTestCase("module loader: " + label, sub () { testLoad(label); });
+        addTestCase("qcc: " + label, sub () { testQcc(label); });
+    }
+
+    #! the module with one declaration loads in every execution mode, in the child that the other cases use
+    testGood() {
+        string good = fixture_dir + DirSep + "DupDeclGood.qm";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the good module given twice: the second load finds it loaded
+            hash<ExecModeHarness::ModeRunResult> r = run(good, mode);
+            assertEq(0, r.rc, sprintf("%s: exit status; output: %s", mode, r.out));
+            assertEq("dup: loaded\ngood: 1\n", r.stdout, sprintf("%s: output", mode));
+        }
+    }
+
+    #! the module loader raises a parse exception at the second declaration and the process goes on normally
+    testLoad(string label) {
+        hash<auto> c = Cases{label};
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = run(fixture_dir + DirSep + c.path, mode);
+            string ctx = sprintf("%s, %s; output: %s", label, mode, r.out);
+            # an assertion failure ends the child with a signal
+            assertEq(0, r.rc, ctx + ": exit status");
+            list<string> lines = r.stdout.split("\n");
+            assertEq(2, lines.size(), ctx + ": output lines");
+            *list<*string> m = (lines[0] ?? "") =~ x/^dup: ([^|]*)\|([^|]*)\|([0-9]+)\|(.*)$/;
+            assertTrue(exists m, ctx + ": the load fails with an exception");
+            if (!m) {
+                continue;
+            }
+            assertEq("PARSE-EXCEPTION", m[0], ctx + ": error");
+            assertEq(c.file, m[1], ctx + ": file");
+            assertEq(c.line, m[2].toInt(), ctx + ": line");
+            # the module loader adds the module that it was loading to the description
+            *list<*string> dm = m[3] =~ x/^(.*) \(while loading user module "([^"]+)" from path "[^"]+"\)$/;
+            assertTrue(exists dm, ctx + ": the description names the module being loaded");
+            if (!dm) {
+                continue;
+            }
+            assertEq(c.first_name, dm[1], ctx + ": the module being loaded");
+            checkDesc(c, dm[0], ctx);
+            assertEq("good: 1", lines[1], ctx + ": the next module loads");
+        }
+    }
+
+    #! qcc refuses the module with the same error, at the second declaration
+    testQcc(string label) {
+        hash<auto> c = Cases{label};
+        TmpDir tmp("qore-duplicate-module-decl-");
+        string qmod = tmp.path + DirSep + c.first_name + ".qmod";
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s -m -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, QccOpts, qmod, fixture_dir + DirSep + c.path), \rc);
+        string ctx = sprintf("%s; output: %s", label, out);
+        assertNeq(0, rc, ctx + ": exit status");
+        assertFalse(is_file(qmod), ctx + ": no qmod is written");
+        # an assertion failure ends qcc with a signal before it reports anything
+        list<string> diags = select out.split("\n"), $1 =~ /: error: /;
+        # the keys of the second declaration are ignored: they add no errors of their own
+        assertEq(c.errors, diags.size(), ctx + ": the errors that qcc reports");
+        # qcc reports each one in a line: <file>:<line>[:<col>]: error: <code>: <message> (issue #6555)
+        *list<*string> m = (diags[0] ?? "") =~ x/^(.*?):([0-9]+)(?::[0-9]+)?: error: ([^:]+): (.*)$/;
+        assertTrue(exists m, ctx + ": diagnostic format");
+        if (!m) {
+            return;
+        }
+        assertEq(c.file, basename(m[0]), ctx + ": file");
+        assertEq(c.line, m[1].toInt(), ctx + ": line");
+        assertEq("PARSE-EXCEPTION", m[2], ctx + ": error");
+        checkDesc(c, m[3], ctx);
+    }
+
+    #! checks the description of the parse exception, which names the first declaration
+    private checkDesc(hash<auto> c, string desc, string ctx) {
+        string prefix = sprintf("duplicate module declaration '%s': module '%s' was already declared at ", c.name,
+            c.first_name);
+        assertEq(prefix, desc.substr(0, prefix.length()), ctx + ": description");
+        # the location of the first declaration: <path>:<line>
+        *list<*string> m = desc.substr(prefix.length()) =~ x/^(.*):([0-9]+)$/;
+        assertTrue(exists m, ctx + ": the description gives the location of the first declaration");
+        if (!m) {
+            return;
+        }
+        assertEq(c.first_file, basename(m[0]), ctx + ": file of the first declaration");
+        assertEq(c.first_line, m[1].toInt(), ctx + ": line of the first declaration");
+    }
+
+    #! runs the child script on the given module in the given execution mode
+    private hash<ExecModeHarness::ModeRunResult> run(string module_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b "
+            "--enable-debug --exec-mode=%s %s %s %s", libqore_dir, libqore_dir, libqore_dir, qore_bin, mode,
+            fixture_dir + DirSep + "load-dup.q", module_path, fixture_dir + DirSep + "DupDeclGood.qm"), True);
+    }
+}

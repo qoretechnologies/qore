@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
-          "message": "Create Embeddings"
+          "source": "Create embeddings",
+          "message": "Create embeddings"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
           "source": "Generate embedding vectors via the BGE-M3 FastAPI sidecar",
@@ -400,8 +400,8 @@
           "message": "Maximum number of texts the sidecar processes per internal encoder batch.  When unset, the sidecar's own default (`256`) is used.  Lower values reduce memory pressure at the cost of throughput."
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
-          "message": "Get Health"
+          "source": "Get health",
+          "message": "Get health"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
           "source": "Liveness and host memory pressure inspection",
@@ -412,8 +412,8 @@
           "message": "Returns the sidecar's liveness status (typically `\"ok\"`) and host memory pressure data.  Upstream routers can use the `pressure` field to drive backoff escalation between local and cloud routing."
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
-          "message": "Get Metrics"
+          "source": "Get metrics",
+          "message": "Get metrics"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {
           "source": "Prometheus text-format runtime metrics",

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
-          "source": "Search Contacts",
-          "message": "Search Contacts"
+          "source": "Search contacts",
+          "message": "Search contacts"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
           "source": "Find contacts matching a query",
@@ -624,8 +624,8 @@
           "message": "descending"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
-          "message": "Include Merge History"
+          "source": "Include merge history",
+          "message": "Include merge history"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
           "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
@@ -636,8 +636,8 @@
           "message": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
           "source": "List the contacts in the workspace",
@@ -672,8 +672,8 @@
           "message": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
-          "message": "Include Merge History"
+          "source": "Include merge history",
+          "message": "Include merge history"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
           "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
@@ -684,8 +684,8 @@
           "message": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
-          "message": "Create Note"
+          "source": "Create note",
+          "message": "Create note"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
           "source": "Add a note to a contact",
@@ -732,8 +732,8 @@
           "message": "The unique identifier of a given admin."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
           "source": "List the tags defined in the workspace",
@@ -744,8 +744,8 @@
           "message": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
-          "message": "List Tags on Contact"
+          "source": "List tags on contact",
+          "message": "List tags on contact"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
           "source": "List the tags applied to one contact",
@@ -768,8 +768,8 @@
           "message": "The unique identifier for the contact which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
-          "message": "Add Tag to Contact"
+          "source": "Add tag to contact",
+          "message": "Add tag to contact"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
           "source": "Apply an existing tag to a contact",
@@ -804,8 +804,8 @@
           "message": "The unique identifier for the tag which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
-          "message": "Remove Tag from Contact"
+          "source": "Remove tag from contact",
+          "message": "Remove tag from contact"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
           "source": "Remove a tag from a contact",
@@ -840,8 +840,8 @@
           "message": "The unique identifier for the tag which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
-          "source": "Create or Update Company",
-          "message": "Create or Update Company"
+          "source": "Create or update company",
+          "message": "Create or update company"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
           "source": "Create a company, or update the one with this company ID",
@@ -924,8 +924,8 @@
           "message": "The name of the plan you have associated with the company."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
-          "message": "Monthly Spend"
+          "source": "Monthly spend",
+          "message": "Monthly spend"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
           "source": "How much revenue the company generates for your business",
@@ -936,8 +936,8 @@
           "message": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647.."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
-          "message": "Custom Attributes"
+          "source": "Custom attributes",
+          "message": "Custom attributes"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
           "source": "A hash of key/value pairs containing any other data about the company you want…",
@@ -960,8 +960,8 @@
           "message": "The time the company was created by you.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
-          "source": "Update Last Request At",
-          "message": "Update Last Request At"
+          "source": "Update last request at",
+          "message": "Update last request at"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
           "source": "Set to true to update the company's last seen time to now",
@@ -972,8 +972,8 @@
           "message": "Set to true to update the company's last seen time to now."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
-          "source": "List Companies",
-          "message": "List Companies"
+          "source": "List companies",
+          "message": "List companies"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
           "source": "List the companies in the workspace",
@@ -1020,8 +1020,8 @@
           "message": "`asc` or `desc`. Return the companies in ascending or descending order. Defaults to desc"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
-          "source": "Create Conversation",
-          "message": "Create Conversation"
+          "source": "Create conversation",
+          "message": "Create conversation"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
           "source": "Start a conversation as a contact",
@@ -1100,8 +1100,8 @@
           "message": "The title of the email. Only applicable if the message type is email."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
-          "source": "Attachment Urls",
-          "message": "Attachment Urls"
+          "source": "Attachment urls",
+          "message": "Attachment urls"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
           "source": "A list of image URLs that will be added as attachments",
@@ -1112,8 +1112,8 @@
           "message": "A list of image URLs that will be added as attachments. You can include up to 10 URLs."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time the conversation was created as a UTC Unix timestamp",
@@ -1136,8 +1136,8 @@
           "message": "The unique identifier of the brand to associate with this conversation."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
-          "source": "Search Conversations",
-          "message": "Search Conversations"
+          "source": "Search conversations",
+          "message": "Search conversations"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
           "source": "Find conversations matching a query",
@@ -1376,8 +1376,8 @@
           "message": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
-          "source": "Include Monitors",
-          "message": "Include Monitors"
+          "source": "Include monitors",
+          "message": "Include monitors"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
           "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
@@ -1388,8 +1388,8 @@
           "message": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
-          "source": "Include Scorecards",
-          "message": "Include Scorecards"
+          "source": "Include scorecards",
+          "message": "Include scorecards"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
           "source": "If set to true, the response will include a 'scorecards' array on each…",
@@ -1400,8 +1400,8 @@
           "message": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
-          "source": "Create Message",
-          "message": "Create Message"
+          "source": "Create message",
+          "message": "Create message"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
           "source": "Send a message to a contact from a teammate",
@@ -1412,8 +1412,8 @@
           "message": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows it in the messenger, and `whatsapp` needs an approved `template`.\n\nUse **Reply to Conversation** to add to a conversation that already exists."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
-          "source": "Message Type",
-          "message": "Message Type"
+          "source": "Message type",
+          "message": "Message type"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
           "source": "The kind of message being created",
@@ -1584,8 +1584,8 @@
           "message": "The style of the outgoing message. Possible values `plain` or `personal`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time the message was created",
@@ -1732,8 +1732,8 @@
           "message": "lead"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
-          "source": "Create Conversation Without Contact Reply",
-          "message": "Create Conversation Without Contact Reply"
+          "source": "Create conversation without contact reply",
+          "message": "Create conversation without contact reply"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
           "source": "Whether a conversation should be opened in the inbox for the message without…",
@@ -1744,8 +1744,8 @@
           "message": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
-          "source": "Submit Data Event",
-          "message": "Submit Data Event"
+          "source": "Submit data event",
+          "message": "Submit data event"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
           "source": "Record that a contact did something",
@@ -1828,8 +1828,8 @@
           "message": "Optional metadata about the event."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List Data Events",
-          "message": "List Data Events"
+          "source": "List data events",
+          "message": "List data events"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
           "source": "Summarise the data events recorded for one contact",
@@ -1856,8 +1856,8 @@
           "message": "User ID"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjM2UxZDZmZGM2Y2I1MjI3ZTEwNGRkOGZkYmI2MjJhODAwNDM2NTVmN2YyMzAwNWQ3OGY1MjZlYWIzY2ViYTg0Yg.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
-          "source": "Intercom User ID",
-          "message": "Intercom User ID"
+          "source": "Intercom user ID",
+          "message": "Intercom user ID"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjNzVlNDdjMWNlM2FhMGZjOTc1YTM0ZGViZmM5MmE2NjI3YWNlMTE3MmEzZDNkN2JlYjdlMzQ3NjZmMjdhMWZlNg.field.ZW1haWw.display_name": {
           "source": "Email",
@@ -1892,8 +1892,8 @@
           "message": "summary flag"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
-          "source": "List Articles",
-          "message": "List Articles"
+          "source": "List articles",
+          "message": "List articles"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
           "source": "List the help center articles",
@@ -1928,8 +1928,8 @@
           "message": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
-          "source": "List Collections",
-          "message": "List Collections"
+          "source": "List collections",
+          "message": "List collections"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
           "source": "List the help center collections",
@@ -1964,8 +1964,8 @@
           "message": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Create Article",
-          "message": "Create Article"
+          "source": "Create article",
+          "message": "Create article"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
           "source": "Write a help center article",
@@ -2060,8 +2060,8 @@
           "message": "The id of the article's parent collection or section. An article without this field stands alone."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
-          "message": "Translated Content"
+          "source": "Translated content",
+          "message": "Translated content"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
           "source": "The Translated Content of an Article",
@@ -2084,8 +2084,8 @@
           "message": "The Content of an Article."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
-          "message": "AI Chatbot Availability"
+          "source": "AI chatbot availability",
+          "message": "AI chatbot availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
@@ -2096,8 +2096,8 @@
           "message": "Whether the article is available for AI Chatbot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
-          "message": "AI Copilot Availability"
+          "source": "AI copilot availability",
+          "message": "AI copilot availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
@@ -2108,8 +2108,8 @@
           "message": "Whether the article is available for AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
-          "message": "AI Sales Agent Availability"
+          "source": "AI sales agent availability",
+          "message": "AI sales agent availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
@@ -2120,8 +2120,8 @@
           "message": "Whether the article is available for AI Sales Agent."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
-          "message": "Audience Ids"
+          "source": "Audience ids",
+          "message": "Audience ids"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
@@ -2156,8 +2156,8 @@
           "message": "The body of the article in HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
-          "message": "Body Markdown"
+          "source": "Body markdown",
+          "message": "Body markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
@@ -2168,8 +2168,8 @@
           "message": "The body of the article in markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
@@ -2192,8 +2192,8 @@
           "message": "The description of the article."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
-          "message": "Draft Updated At"
+          "source": "Draft updated at",
+          "message": "Draft updated at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
@@ -2204,8 +2204,8 @@
           "message": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
-          "message": "Has Unpublished Changes"
+          "source": "Has unpublished changes",
+          "message": "Has unpublished changes"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
@@ -2264,8 +2264,8 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
-          "message": "Updated At"
+          "source": "Updated at",
+          "message": "Updated at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
@@ -2748,8 +2748,8 @@
           "message": "The description of the article. For multilingual articles, this will be the description of the default language's content."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
-          "message": "Body Markdown"
+          "source": "Body markdown",
+          "message": "Body markdown"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The content of the article in markdown",
@@ -2760,8 +2760,8 @@
           "message": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
-          "message": "Audience Ids"
+          "source": "Audience ids",
+          "message": "Audience ids"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
@@ -2772,8 +2772,8 @@
           "message": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
-          "message": "AI Chatbot Availability"
+          "source": "AI chatbot availability",
+          "message": "AI chatbot availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Chatbot (Fin)",
@@ -2784,8 +2784,8 @@
           "message": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
-          "message": "AI Copilot Availability"
+          "source": "AI copilot availability",
+          "message": "AI copilot availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Copilot",
@@ -2796,8 +2796,8 @@
           "message": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
-          "message": "AI Sales Agent Availability"
+          "source": "AI sales agent availability",
+          "message": "AI sales agent availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article should be available for AI Sales Agent",
@@ -2808,8 +2808,8 @@
           "message": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
-          "message": "Scheduled Publish At"
+          "source": "Scheduled publish at",
+          "message": "Scheduled publish at"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
           "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
@@ -2820,8 +2820,8 @@
           "message": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
-          "message": "Scheduled Unpublish At"
+          "source": "Scheduled unpublish at",
+          "message": "Scheduled unpublish at"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
           "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
@@ -2832,8 +2832,8 @@
           "message": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
-          "source": "List Teammates",
-          "message": "List Teammates"
+          "source": "List teammates",
+          "message": "List teammates"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
           "source": "List the teammates with access to the workspace",
@@ -2844,8 +2844,8 @@
           "message": "Lists the teammates who have access to the workspace.\n\nThis is exported so that the teammate dropdowns have an action to call - an article's author, a note's or a reply's teammate, a message's sender.\n\nThis listing is not paged: Intercom returns them all in one response, in an `admins` array."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
-          "source": "Display Avatar",
-          "message": "Display Avatar"
+          "source": "Display avatar",
+          "message": "Display avatar"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
           "source": "If set to true, the response will include the admin's avatar object containing…",
@@ -2856,8 +2856,8 @@
           "message": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
           "source": "Retrieve a contact by its identity",
@@ -2880,8 +2880,8 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
-          "message": "Include Merge History"
+          "source": "Include merge history",
+          "message": "Include merge history"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
           "source": "Pass 'true' to include the contact's merge history in the response",
@@ -2892,8 +2892,8 @@
           "message": "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
           "source": "Update an existing contact",
@@ -2952,8 +2952,8 @@
           "message": "The contacts email"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
-          "source": "Email Verified",
-          "message": "Email Verified"
+          "source": "Email verified",
+          "message": "Email verified"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
           "source": "Whether the contact's email address has been verified",
@@ -3000,8 +3000,8 @@
           "message": "An image URL containing the avatar of a contact"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
-          "source": "Signed Up At",
-          "message": "Signed Up At"
+          "source": "Signed up at",
+          "message": "Signed up at"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
           "source": "(Unix timestamp in seconds) The time specified for when a contact signed up",
@@ -3012,8 +3012,8 @@
           "message": "(Unix timestamp in seconds) The time specified for when a contact signed up.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
-          "source": "Last Seen At",
-          "message": "Last Seen At"
+          "source": "Last seen at",
+          "message": "Last seen at"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
           "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
@@ -3036,8 +3036,8 @@
           "message": "The id of an admin that has been assigned account ownership of the contact"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
-          "source": "Unsubscribed from Emails",
-          "message": "Unsubscribed from Emails"
+          "source": "Unsubscribed from emails",
+          "message": "Unsubscribed from emails"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
           "source": "Whether the contact is unsubscribed from emails",
@@ -3048,8 +3048,8 @@
           "message": "Whether the contact is unsubscribed from emails"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
-          "message": "Custom Attributes"
+          "source": "Custom attributes",
+          "message": "Custom attributes"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
           "source": "The custom attributes which are set for the contact",
@@ -3060,8 +3060,8 @@
           "message": "The custom attributes which are set for the contact"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
-          "message": "Include Merge History"
+          "source": "Include merge history",
+          "message": "Include merge history"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
           "source": "Pass 'true' to include the contact's merge history in the response",
@@ -3072,8 +3072,8 @@
           "message": "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
           "source": "Delete a contact",
@@ -3096,8 +3096,8 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
-          "message": "Get Conversation"
+          "source": "Get conversation",
+          "message": "Get conversation"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
           "source": "Retrieve a conversation by its identity",
@@ -3120,8 +3120,8 @@
           "message": "The id of the conversation to target"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
-          "source": "Display As",
-          "message": "Display As"
+          "source": "Display as",
+          "message": "Display as"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
           "source": "Set to plaintext to retrieve conversation messages in plain text",
@@ -3132,8 +3132,8 @@
           "message": "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
-          "source": "Include Translations",
-          "message": "Include Translations"
+          "source": "Include translations",
+          "message": "Include translations"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
           "source": "If set to true, conversation parts will be translated to the detected language…",
@@ -3144,8 +3144,8 @@
           "message": "If set to true, conversation parts will be translated to the detected language of the conversation."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
-          "message": "Get Company"
+          "source": "Get company",
+          "message": "Get company"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
           "source": "Retrieve a company by its identity",
@@ -3168,8 +3168,8 @@
           "message": "The unique identifier for the company which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
-          "message": "Update Company"
+          "source": "Update company",
+          "message": "Update company"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
           "source": "Update an existing company by its identity",
@@ -3252,8 +3252,8 @@
           "message": "The industry that this company operates in."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
-          "message": "Custom Attributes"
+          "source": "Custom attributes",
+          "message": "Custom attributes"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
           "source": "A hash of key/value pairs containing any other data about the company you want…",
@@ -3264,8 +3264,8 @@
           "message": "A hash of key/value pairs containing any other data about the company you want Intercom to store."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
-          "message": "Monthly Spend"
+          "source": "Monthly spend",
+          "message": "Monthly spend"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
           "source": "How much revenue the company generates for your business",
@@ -3276,8 +3276,8 @@
           "message": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647.."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
-          "message": "Delete Company"
+          "source": "Delete company",
+          "message": "Delete company"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
           "source": "Delete a company",
@@ -3300,8 +3300,8 @@
           "message": "The unique identifier for the company which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
-          "message": "Get Article"
+          "source": "Get article",
+          "message": "Get article"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
           "source": "Retrieve a help center article by its identity",
@@ -3324,8 +3324,8 @@
           "message": "The unique identifier for the article which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
-          "message": "Update Article"
+          "source": "Update article",
+          "message": "Update article"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
           "source": "Update an existing help center article",
@@ -3384,8 +3384,8 @@
           "message": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
-          "message": "Body Markdown"
+          "source": "Body markdown",
+          "message": "Body markdown"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The content of the article in markdown",
@@ -3440,8 +3440,8 @@
           "message": "The id of the article's parent collection or section. An article without this field stands alone."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
-          "source": "Parent Type",
-          "message": "Parent Type"
+          "source": "Parent type",
+          "message": "Parent type"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
           "source": "The type of parent, which can either be a 'collection' or 'section'",
@@ -3452,8 +3452,8 @@
           "message": "The type of parent, which can either be a `collection` or `section`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
-          "message": "Translated Content"
+          "source": "Translated content",
+          "message": "Translated content"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
           "source": "The Translated Content of an Article",
@@ -3476,8 +3476,8 @@
           "message": "The Content of an Article."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
-          "message": "AI Chatbot Availability"
+          "source": "AI chatbot availability",
+          "message": "AI chatbot availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
@@ -3488,8 +3488,8 @@
           "message": "Whether the article is available for AI Chatbot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
-          "message": "AI Copilot Availability"
+          "source": "AI copilot availability",
+          "message": "AI copilot availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
@@ -3500,8 +3500,8 @@
           "message": "Whether the article is available for AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
-          "message": "AI Sales Agent Availability"
+          "source": "AI sales agent availability",
+          "message": "AI sales agent availability"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
@@ -3512,8 +3512,8 @@
           "message": "Whether the article is available for AI Sales Agent."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
-          "message": "Audience Ids"
+          "source": "Audience ids",
+          "message": "Audience ids"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
@@ -3548,8 +3548,8 @@
           "message": "The body of the article in HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
-          "message": "Body Markdown"
+          "source": "Body markdown",
+          "message": "Body markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
@@ -3560,8 +3560,8 @@
           "message": "The body of the article in markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
@@ -3584,8 +3584,8 @@
           "message": "The description of the article."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
-          "message": "Draft Updated At"
+          "source": "Draft updated at",
+          "message": "Draft updated at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
@@ -3596,8 +3596,8 @@
           "message": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
-          "message": "Has Unpublished Changes"
+          "source": "Has unpublished changes",
+          "message": "Has unpublished changes"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
@@ -3656,8 +3656,8 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
-          "message": "Updated At"
+          "source": "Updated at",
+          "message": "Updated at"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
@@ -4128,8 +4128,8 @@
           "message": "The Content of an Article."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
-          "message": "Audience Ids"
+          "source": "Audience ids",
+          "message": "Audience ids"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
@@ -4140,8 +4140,8 @@
           "message": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
-          "message": "AI Chatbot Availability"
+          "source": "AI chatbot availability",
+          "message": "AI chatbot availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Chatbot (Fin)",
@@ -4152,8 +4152,8 @@
           "message": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
-          "message": "AI Copilot Availability"
+          "source": "AI copilot availability",
+          "message": "AI copilot availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Copilot",
@@ -4164,8 +4164,8 @@
           "message": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
-          "message": "AI Sales Agent Availability"
+          "source": "AI sales agent availability",
+          "message": "AI sales agent availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article should be available for AI Sales Agent",
@@ -4176,8 +4176,8 @@
           "message": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
-          "message": "Scheduled Publish At"
+          "source": "Scheduled publish at",
+          "message": "Scheduled publish at"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
           "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
@@ -4188,8 +4188,8 @@
           "message": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
-          "message": "Scheduled Unpublish At"
+          "source": "Scheduled unpublish at",
+          "message": "Scheduled unpublish at"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
           "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
@@ -4200,8 +4200,8 @@
           "message": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
-          "message": "Delete Article"
+          "source": "Delete article",
+          "message": "Delete article"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
           "source": "Delete a help center article",
@@ -4224,8 +4224,8 @@
           "message": "The unique identifier for the article which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
-          "message": "Get Collection"
+          "source": "Get collection",
+          "message": "Get collection"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
           "source": "Retrieve a help center collection by its identity",
@@ -4248,8 +4248,8 @@
           "message": "The unique identifier for the collection which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
-          "message": "Get Tag"
+          "source": "Get tag",
+          "message": "Get tag"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
           "source": "Retrieve a tag by its identity",
@@ -4272,8 +4272,8 @@
           "message": "The unique identifier of a given tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
-          "message": "Delete Tag"
+          "source": "Delete tag",
+          "message": "Delete tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
           "source": "Delete a tag",
@@ -4296,8 +4296,8 @@
           "message": "The unique identifier of a given tag"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
-          "message": "Search Records"
+          "source": "Search records",
+          "message": "Search records"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
           "source": "Search for matching records in the given table",
@@ -4320,8 +4320,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
-          "message": "Find a Single Record"
+          "source": "Find a single record",
+          "message": "Find a single record"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
           "source": "Search for a single matching record in the given table",
@@ -4344,8 +4344,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
-          "message": "Create Records"
+          "source": "Create records",
+          "message": "Create records"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
           "source": "Create new records in the given table",
@@ -4368,8 +4368,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
           "source": "Update the records matching the search criteria",
@@ -4392,8 +4392,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
           "source": "Delete the records matching the search criteria",
@@ -4416,8 +4416,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
-          "message": "Reply to Conversation"
+          "source": "Reply to conversation",
+          "message": "Reply to conversation"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
           "source": "Reply to a conversation as a teammate",
@@ -4524,8 +4524,8 @@
           "message": "Add the reply without notifying the contact about it"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Fires when a contact is created",
@@ -4536,8 +4536,8 @@
           "message": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
-          "message": "New Conversation"
+          "source": "New conversation",
+          "message": "New conversation"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Fires when a conversation is created",

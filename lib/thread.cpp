@@ -3778,6 +3778,11 @@ void set_reexport(QoreAbstractModule* m, bool reexport) {
         td->qmi |= 1;
 }
 
+QoreAbstractModule* get_reexport_module() {
+    // the low bit is the reexport flag of the module's own load
+    return (QoreAbstractModule*)(thread_data.get()->qmi & ~(uintptr_t)1);
+}
+
 // returns 1 if data structure is already on stack, 0 if not (=OK)
 int thread_push_container(const AbstractQoreNode* n) {
     std::pair<const_node_set_t::iterator, bool> rv = thread_data.get()->node_set.insert(n);
@@ -5320,12 +5325,12 @@ QoreModuleDefContext* get_module_def_context() {
     return get_module_def_context(thread_data.get());
 }
 
-void parse_set_module_def_context_name(const char* name) {
+void parse_set_module_def_context_name(const QoreProgramLocation* loc, const char* name) {
     ThreadData* td = thread_data.get();
     if (get_module_def_context(td)) {
         QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(td->qmd);
         // set name and setup for parsing any header closures / call references
-        uqmd->setNameInit(name);
+        uqmd->setNameInit(loc, name);
     }
 }
 
@@ -6286,7 +6291,7 @@ static const char* QORE_MODULE_PROGRAMS_CLOSED_DESC = "the Program of a module c
 
 static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* td, ExceptionSink* xsink) {
     ++td->module_entry_refusals;
-    xsink->raiseException("PROGRAM-ERROR", QORE_MODULE_PROGRAMS_CLOSED_DESC);
+    xsink->raiseException("PROGRAM-ERROR", "%s", QORE_MODULE_PROGRAMS_CLOSED_DESC);
 }
 
 //! returns true if the value is a string equal to the given one
@@ -6725,11 +6730,15 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us, 
 
 //! writes the warning that the cleanup no longer waits for the handles of work handed over to other threads
 static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names) {
-    char head[256];
-    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process waited " QLLD " ms after its "
-        "deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, which "
-        "did not end; the modules are left as they are:", qore_get_module_cleanup_handover_grace(), names.size(),
+    // a literal, so that the arguments are checked against it, and the size of the buffer follows from it
+#define QORE_DROPPED_HANDLES_HEAD "warning: the module cleanup at the end of the process waited " QLLD " ms after " \
+        "its deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, " \
+        "which did not end; the modules are left as they are:"
+    // the text, and the most that the two numbers (20 digits and a sign each) and the plural suffix can add
+    char head[sizeof(QORE_DROPPED_HANDLES_HEAD) + 2 * 21 + 1];
+    snprintf(head, sizeof head, QORE_DROPPED_HANDLES_HEAD, qore_get_module_cleanup_handover_grace(), names.size(),
         names.size() == 1 ? "" : "s");
+#undef QORE_DROPPED_HANDLES_HEAD
     // written with one call, so that the output of other threads does not split it
     try {
         std::string msg = head;
@@ -12370,13 +12379,27 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
 }
 
 bool runtime_call_context_is_plain(const QoreProgram* pgm) {
-    const ThreadData* td = thread_data.get();
+    return runtime_call_context_is_plain(thread_data.get(), pgm);
+}
+
+bool runtime_call_context_is_plain(const ThreadData* td, const QoreProgram* pgm) {
+    assert(td == thread_data.get());
     return (!td->call_program_context || td->call_program_context == pgm)
         && !(td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm);
 }
 
+QoreProgram* runtime_get_program(const ThreadData* td) {
+    assert(td == thread_data.get());
+    return td->current_pgm;
+}
+
 const QoreProgram* runtime_get_module_call_program() {
     return thread_data.get()->runtime_po_state.module_pgm;
+}
+
+const QoreProgram* runtime_get_module_call_program(const ThreadData* td) {
+    assert(td == thread_data.get());
+    return td->runtime_po_state.module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {
@@ -12736,8 +12759,21 @@ static void raise_background_expression_call(ExceptionSink* xsink) {
         "by code that may not control threads (PO_NO_THREAD_CONTROL), so it cannot be run in another thread");
 }
 
+// a body of its own, not a call of the overload with the thread's data, so that its callers are compiled as before
 int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed, ExceptionSink* xsink) {
     const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame
+            || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
+            || !qore_background_expression_call(td, callee_frame_pushed)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
+int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm, bool callee_frame_pushed,
+        ExceptionSink* xsink) {
+    assert(td == thread_data.get());
     if (!td->bg_expr_frame
             || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
             || !qore_background_expression_call(td, callee_frame_pushed)) {
@@ -13250,11 +13286,11 @@ namespace {
 class QoreProcessEndCallbacks {
 public:
     //! @param wait_ms the longest wait of a thread that reaches an end point while the callbacks run on another thread
-    DLLLOCAL explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
+    explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
     }
 
     //! Registers a callback of the process \a pid; returns its ID, or -1 if the process has started to end
-    DLLLOCAL int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
+    int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
         std::lock_guard<std::mutex> l(m);
         if (!isIdleLocked(pid)) {
             return -1;
@@ -13264,7 +13300,7 @@ public:
     }
 
     //! Deregisters a callback; never waits: 0 if it had not run, 1 if it ran or runs on another thread, -1 if unknown
-    DLLLOCAL int remove(int64 id) {
+    int remove(int64 id) {
         std::lock_guard<std::mutex> l(m);
         for (auto i = entries.begin(), e = entries.end(); i != e; ++i) {
             if (i->id == id) {
@@ -13282,7 +13318,7 @@ public:
 
         @return true if this call ran the callbacks
     */
-    DLLLOCAL bool run(qore_process_end_e reason, pid_t pid) {
+    bool run(qore_process_end_e reason, pid_t pid) {
         std::vector<Entry> snapshot;
         {
             std::unique_lock<std::mutex> l(m);
@@ -13340,19 +13376,19 @@ public:
 
 #ifdef DEBUG
     //! sets the wait bound
-    DLLLOCAL void setWaitMs(int64 ms) {
+    void setWaitMs(int64 ms) {
         std::lock_guard<std::mutex> l(m);
         wait_ms = ms;
     }
 
     //! waits until the callbacks have started to run, at most \a timeout_ms; returns true if they have
-    DLLLOCAL bool waitStarted(int64 timeout_ms) {
+    bool waitStarted(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return started_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return state != Idle; });
     }
 
     //! waits until a thread waits for the callbacks, at most \a timeout_ms; returns true if one does
-    DLLLOCAL bool waitWaiter(int64 timeout_ms) {
+    bool waitWaiter(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return waiter_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return waiters > 0; });
     }
@@ -13394,11 +13430,11 @@ private:
     int waiters = 0;
 #endif
 
-    DLLLOCAL bool isIdleLocked(pid_t pid) const {
+    bool isIdleLocked(pid_t pid) const {
         return state == Idle || state_pid != pid;
     }
 
-    DLLLOCAL Entry* findLocked(int64 id) {
+    Entry* findLocked(int64 id) {
         for (Entry& e : entries) {
             if (e.id == id) {
                 return &e;
@@ -13476,7 +13512,13 @@ bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms) {
 }
 #endif
 
-void qore_exit_process(int rc) {
+//! ends the process
+/** @param rc the exit status
+    @param last_thread true if called after the release of the TID of the last thread that runs Qore code in a child
+    process that has no main thread (qore_fork_child_threads_ended()): the calling thread has no TID and its thread
+    data are deleted, and its own share of the thread counters is not waited for
+*/
+static void qore_exit_process_intern(int rc, bool last_thread) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
     // call exit() in a single-threaded process; flushes file buffers, etc
@@ -13487,9 +13529,17 @@ void qore_exit_process(int rc) {
     // External workers remain in tp_thread_counter until their native join,
     // including TLS destruction after releasing their Qore TID. Do not wait for
     // them here: exit() can be called by a worker or while its cleanup is blocked.
-    bool single_threaded = thread_list.getNumThreads() <= 1
+    if (last_thread && qore_tp_thread_counter_share) {
+        // the calling thread, which has external lifecycle management, does not reach the end of its thread, where
+        // the reaper would release its count after joining it (ExternalThreadReaper::complete()): released here
+        qore_counter_ops(tp_thread_counter).dec();
+        qore_tp_thread_counter_share = 0;
+    }
+    // the last thread of a child process without a main thread has released its TID (qore#7613): it is not the signal
+    // thread, and it is the only thread left that ran Qore code
+    bool single_threaded = thread_list.getNumThreads() <= (last_thread ? 0u : 1u)
 #ifdef HAVE_SIGNAL_HANDLING
-        && q_gettid() > 0
+        && (last_thread || q_gettid() > 0)
 #endif
         && !tp_thread_counter.getCount()
         && !qore_exit_wait_finishing_threads();
@@ -13502,6 +13552,10 @@ void qore_exit_process(int rc) {
         // static destruction and access the destroyed manager mutex unless it has been joined.
         // A running callback can depend on this thread, so it requires immediate process exit.
         if (!QSM.stopForExit()) {
+            if (last_thread) {
+                // as below
+                fflush(nullptr);
+            }
             _Exit(rc);
         }
 #endif
@@ -13529,7 +13583,16 @@ void qore_exit_process(int rc) {
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
     // in multithreaded programs; call _Exit() instead
+    if (last_thread) {
+        // no thread that runs Qore code is left to write to the streams: their buffers are written as when the last
+        // thread of the process ends
+        fflush(nullptr);
+    }
     _Exit(rc);
+}
+
+void qore_exit_process(int rc) {
+    qore_exit_process_intern(rc, false);
 }
 
 #ifdef DEBUG
@@ -13809,7 +13872,7 @@ int q_deregister_foreign_thread() {
     assert(xsink.isException() || !td->active_exceptions);
 
     // delete internal thread data structure and release TID entry
-    thread_list.deleteDataRelease(tid);
+    thread_list.deleteDataRelease(tid, true);
 
     qore_thread_cleanup();
 
@@ -14013,7 +14076,8 @@ public:
             return false;
         }
         AutoLocker al(mutex);
-        if (!started || stopping) {
+        // the record of the thread that called fork() is used whether or not the reaper runs (see isForkThreadLocked())
+        if (isForkThreadLocked() || !started || stopping) {
             delete t;
             return false;
         }
@@ -14041,7 +14105,9 @@ public:
         arg->native_id = pthread_self();
         {
             AutoLocker al(mutex);
-            if (started) {
+            // the record of the thread that called fork() is used whether or not the reaper runs (see
+            // isForkThreadLocked())
+            if (!isForkThreadLocked() && started) {
                 assert(!stopping && !arg->next);
                 if (tail) {
                     tail->next = arg;
@@ -14056,8 +14122,10 @@ public:
         // the thread started before a fork() that it made, and ends in the child, where the reaper of the parent
         // does not exist (see forkChild()) and no thread can join it: it detaches itself and releases what the reaper
         // would have released after joining it (qore#7579); a reaper is not started for it, as it would keep the child
-        // alive after its last thread has ended.  The count is released before the thread's thread-local destructors
-        // run, as in completeCounted()
+        // alive after its last thread has ended.  It does so also when a thread of the child started a reaper, which
+        // cannot join it (see isForkThreadLocked()).  The count is released before the thread's thread-local
+        // destructors run, as in completeCounted(): exit() does not wait for them (issue #6412), which cannot be
+        // avoided for a thread that no thread can join
         assert(forked);
         pthread_detach(pthread_self());
         delete arg;
@@ -14116,6 +14184,9 @@ public:
     void forkChild() {
         started = stopping = false;
         forked = true;
+        // called in the thread that called fork() (see isForkThreadLocked())
+        fork_thread = pthread_self();
+        fork_thread_set = true;
         // the reapers do not exist in the child
         reapers.clear();
         ended.clear();
@@ -14128,6 +14199,26 @@ public:
     }
 
 private:
+    //! in a child process, the thread that called fork() (see isForkThreadLocked())
+    pthread_t fork_thread{};
+    //! true until the thread that called fork() has ended (see isForkThreadLocked())
+    bool fork_thread_set = false;
+
+    //! returns true in a child process for the thread that called fork(), which no other thread can join (qore#7613)
+    /** That thread is the child's thread-group leader: on Linux (glibc 2.43, kernel 7.0), pthread_join() of it does not
+        return after it has ended while other threads of the child run, so a reaper would wait for it for ever and
+        keep its count in thread_counter, which exit() waits for.  It detaches itself instead.  The record is used
+        once, by that thread as it ends, so that a later thread that gets its pthread_t (where a platform reuses them)
+        is joined.
+    */
+    bool isForkThreadLocked() {
+        if (forked && fork_thread_set && pthread_equal(pthread_self(), fork_thread)) {
+            fork_thread_set = false;
+            return true;
+        }
+        return false;
+    }
+
     //! a thread counted in thread_counter that is waiting to be joined
     struct CountedThread {
         pthread_t native_id;
@@ -15757,7 +15848,7 @@ void QoreThreadList::deleteData(int tid) {
     thread_data.set(nullptr);
 }
 
-void QoreThreadList::deleteDataRelease(int tid) {
+void QoreThreadList::deleteDataRelease(int tid, bool foreign) {
     // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
     qore_robject_hazard_unregister();
     {
@@ -15769,11 +15860,15 @@ void QoreThreadList::deleteDataRelease(int tid) {
     delete thread_data.get();
     thread_data.set(nullptr);
 
+    bool last;
     {
         AutoLocker al(lck);
-        releaseIntern(tid);
+        last = releaseIntern(tid, !foreign);
     }
     notifyJoiners();
+    if (last) {
+        afterLastRelease();
+    }
 }
 
 int QoreThreadList::joinThread(int tid, int64 timeout_ms, ExceptionSink* xsink) {
@@ -16388,6 +16483,10 @@ void QoreThreadList::forkChild(int tid) {
         }
     }
     num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
+    // the main thread ends the process when it ends; a child that another thread created has no main thread and ends
+    // when its last thread that runs Qore code ends (qore#7613)
+    fork_child_without_main = fork_thread_not_main;
+    fork_child_ending.store(false, std::memory_order_relaxed);
     // held by this thread since forkPrepare(): released, so that the release is seen (by ThreadSanitizer, which
     // otherwise considers it held by this thread for the rest of the child's life; issue #6817), as
     // QoreForkThreadLock::child() does
@@ -16400,6 +16499,18 @@ void QoreThreadList::forkChild(int tid) {
     dbg_wait_lck.reinitAfterFork();
     qore_condition_ops(dbg_wait_cond).reinitAfterFork();
 #endif
+}
+
+void qore_fork_child_threads_ended() {
+    // as with exit() in a process whose only thread runs Qore code
+    qore_exit_process_intern(0, true);
+}
+
+bool qore_fork_thread_is_not_main(bool process_without_main) {
+    ThreadData* td = thread_data.get();
+    // a foreign thread goes on with the code of the application that it belongs to; the main thread is the thread that
+    // initialized the library, which its application (the qore binary, an embedding application) ends the process in
+    return td && td->tid > 0 && !td->foreign && (process_without_main || td->tid != initial_thread);
 }
 
 int qore_fork_get_tid() {

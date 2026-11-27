@@ -434,6 +434,8 @@ class ObsHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # debug-builtin-guard: only a StalledH3 client requests a stall path over HTTP/3, which getStalled() creates only
+        # with library debugging
         if (hdr.path =~ /stall/ && cx."header-info".http3) {
             call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
         }
@@ -883,6 +885,7 @@ class SseBufferBoundTest inherits QUnit::Test {
         switch (proto) {
             case "h1": return new StalledH1(h1_small, path);
             case "h2": return new StalledH2(h2c_small, path);
+            # debug-builtin-guard: HTTP/3 is skipped above without library debugging
             case "h3": return new StalledH3(tls_small, path);
         }
         throw "SSE-TEST-ERROR", proto;

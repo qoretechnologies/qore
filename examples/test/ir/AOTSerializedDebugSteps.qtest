@@ -130,7 +130,7 @@ printf("serialized-debug-steps: ok");
         foreach string level in (("-O0", "-O3")) {
             foreach bool stripped in ((False, True)) {
                 string executable = dir.path + "/fixture";
-                list<string> args = (qcc, "--parse-option=PO_ALLOW_DEBUGGER", level);
+                list<string> args = (qcc, "--parse-option=PO_ALLOW_DEBUGGER", "-g", level);
                 if (stripped) { push args, "--strip-source"; }
                 run(args + ("-o", executable, source));
                 foreach bool native in ((False, True)) {

@@ -50,6 +50,11 @@ static inline uint64_t toBitsNB(const QoreValue& v) {
 }
 
 // Forward declarations for JIT runtime functions used by QoreIRInterpreter
+class QoreIRInstruction;
+//! list.string.join (\a identity false) or list.string.join.identity-map for the IR interpreter: the join of
+//! <list>::join(), or of join() if the instruction is a call of join(), which is found only for an exception (qore#7731)
+DLLLOCAL uint64_t qore_rt_list_string_join_inst(const QoreIRInstruction* inst, bool identity, uint64_t separator_bits,
+    uint64_t list_bits, ExceptionSink* xsink);
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
     uint64_t* args, int nargs, ExceptionSink* xsink,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);

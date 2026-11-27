@@ -3000,7 +3000,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {
-            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), location (v26), return type
+            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), locations (v26, v54), return type
             if (!dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)) {
                 return false;
@@ -3010,6 +3010,11 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 return false;
             }
             if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                return false;
+            }
+            // the location of the closure's signature (qore#7787), after the location of its block
+            if (reader.getHeader().version >= QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION
                     && !dump_skip_source_location(reader, p, end)) {
                 return false;
             }

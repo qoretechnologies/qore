@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
+          "source": "Retrieve order items",
           "message": "Bestellpositionen abrufen"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Datensätze"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
+          "source": "Retrieve payment information",
           "message": "Zahlungsinformationen abrufen"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Datensätze"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
+          "source": "Retrieve customer information",
           "message": "Kundeninformationen abrufen"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {

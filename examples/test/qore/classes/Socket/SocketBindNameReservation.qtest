@@ -71,7 +71,8 @@ class SocketBindNameReservationTest inherits QUnit::Test {
             f.close();
             call_function("dbg_cares_set_hosts_file", hosts_file);
         }
-        on_exit if (hosts_file) {
+        # the hosts file is written only with library debugging
+        on_exit if (Option::HAVE_LIBRARY_DEBUGGING && hosts_file) {
             call_function("dbg_cares_set_hosts_file", "");
             unlink(hosts_file);
         }

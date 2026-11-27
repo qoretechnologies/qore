@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - AOT code generation and loading of call-reference entries (image constructor functions), threads, module loading and Program entry
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class CallRefNativeEntryTest
+
+#! Calls through references to functions with call-reference entries give the results of the generic call path
+/** A program compiled with qcc emits a call-reference entry for each plain function that has a context-independent
+    native fast entry with parameters and a return of native or NaN-boxed kinds, and a table of the entries that its
+    image registers when it is loaded (qore_aot_register_callref_entries_v1()); a call through a reference whose
+    target is not known at the call calls the entry through a runtime helper (qore_rt_call_ref_<r>_<a>_v1(),
+    qore_rt_call_ref_boxed_v1()) when the reference and the call allow it, and the generic call path otherwise
+    (qore#5578).
+
+    CallRefNativeEntry.q calls references with native int, float and bool arguments and results, with NaN-boxed
+    arguments and results, with values that need a node, references whose callee raises exceptions or returns a value
+    of the wrong type, calls with named arguments, with too few or too many arguments or arguments of the wrong type,
+    references made by the runtime, references in a hash, recursion through references, and the first calls of
+    references made by many threads at once.  Its output must be the AST interpreter's (CallRefNativeEntry.expected) in
+    every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3, also with the entries or the
+    helpers disabled; in a debug build, the cases whose calls take the entries must be the ones that
+    CallRefNativeEntry.report-aot.expected lists.  The generated code must have the entries and the helper calls.
+
+    CallRefNativeEntryHost.q loads CallRefNativeEntryModule compiled with qcc into a .qmod, in its Program and in another
+    one: the module's code calls references to its own functions through their entries, and the references that cross
+    Programs take the generic call path; its output must be the one with the module's source and the AST interpreter.
+
+    CallRefNativeEntryConcurrent.q, compiled with qcc, makes the first calls through references to 32 functions in 8
+    threads at once while a thread loads the module, whose image registers its entries; every thread must get every
+    result.
+
+    The debugger fixture of function-reference-fast-path.qtest, compiled with qcc -g (code that a debugger attaches to
+    is compiled with debugging, qore#7676), attaches a debugger while a loop calls a function through a reference:
+    every call made after it attached must give the debugger the function's entry, and none may take an entry.
+*/
+class CallRefNativeEntryTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = realpath(get_script_dir());
+        string fixture = dir + "/CallRefNativeEntry.q";
+        string host_fixture = dir + "/CallRefNativeEntryHost.q";
+        string module_source = dir + "/CallRefNativeEntryModule.qm";
+        string concurrent_fixture = dir + "/CallRefNativeEntryConcurrent.q";
+        string debugger_fixture = dir + "/../function-reference-fast-path/FunctionReferenceDebugger.q";
+        string expected = ReadOnlyFile::readTextFile(dir + "/CallRefNativeEntry.expected");
+        string report_aot_expected = ReadOnlyFile::readTextFile(dir + "/CallRefNativeEntry.report-aot.expected");
+        string host_expected = ReadOnlyFile::readTextFile(dir + "/CallRefNativeEntryHost.expected");
+        string host_report_expected = ReadOnlyFile::readTextFile(dir + "/CallRefNativeEntryHost.report.expected");
+        string concurrent_expected = ReadOnlyFile::readTextFile(dir + "/CallRefNativeEntryConcurrent.expected");
+        #! True if the library has the debug functions of the report
+        bool can_report;
+
+        #! the output of FunctionReferenceDebugger.q
+        const DebuggerExpected = "warm 125250 result 5050 entries after attach 62\n";
+
+        #! the functions of CallRefNativeEntry.q that must have a call-reference entry
+        const EntryFunctions = ("step", "wide", "fstep", "tagged", "negb", "i2f", "f2i", "izero", "fzero", "bzero",
+            "mixed", "three");
+    }
+
+    constructor() : QUnit::Test("call-reference entries", "1.0", \ARGV) {
+        can_report = backquote(sprintf("%s --enable-debug -e 'printf(\"%%y\", "
+            "exists_function(\"dbg_function_reference_native_calls\"));' 2>/dev/null", shellQuote(qore_bin)))
+            == "True";
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode, fixture)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered", fixture)));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("generated code", \checkGeneratedCode());
+        addTestCase("module compiled with qcc", \checkModule());
+        addTestCase("concurrent first use and registration", \checkConcurrent());
+        addTestCase("debugger attached after warm-up", \checkDebugger());
+
+        set_return_value(main());
+    }
+
+    private string command(string mode, string script, *string arg) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s%s", shellQuote(qore_bin), mode, shellQuote(script),
+            arg ? " " + arg : "");
+    }
+
+    #! returns the qcc compiler, or skips the test
+    private string qcc() {
+        if (!qcc_bin) {
+            testSkip("qcc not found");
+        }
+        return qcc_bin;
+    }
+
+    #! compiles a script with qcc and returns the path of the program
+    private string compile(string tmp, string script, int opt, *string env, *string opts) {
+        string program = tmp + "/" + basename(script) + ".O" + opt;
+        string output = backquote(sprintf("cd %s && %s%s -O%d %s-o %s %s 2>&1", shellQuote(dir), env ? env + " " : "",
+            shellQuote(qcc()), opt, opts ? opts + " " : "", shellQuote(program), shellQuote(script)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        return program;
+    }
+
+    #! runs a compiled program in the fixtures' directory and returns its output
+    private string runProgram(string program, *string args, *string env) {
+        return backquote(sprintf("cd %s && %s%s%s 2>&1", shellQuote(dir), env ? env + " " : "", shellQuote(program),
+            args ? " " + args : ""));
+    }
+
+    private checkQcc(int opt) {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string program = compile(tmp, fixture, opt);
+        assertEq(expected, runProgram(program), "entries");
+        # the runtime's helpers make no call: the generic call path makes them all
+        assertEq(expected, runProgram(program, NOTHING, "QORE_DISABLE_AOT_CALLREF_ENTRIES=1"), "helpers disabled");
+        if (can_report) {
+            assertEq(report_aot_expected, runProgram(program, "--enable-debug report"), "entries taken");
+            string generic = (map regex_subst($1, ": native$", ": fast"), report_aot_expected.split("\n"), $1 != "")
+                .join("\n") + "\n";
+            assertEq(generic, runProgram(program, "--enable-debug report", "QORE_DISABLE_AOT_CALLREF_ENTRIES=1"),
+                "no entry taken with the helpers disabled");
+        }
+        # code compiled without the entries or without their calls, and with C++ exception handling
+        foreach string env in (("QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION=1", "QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1",
+                "QORE_AOT_EH=1")) {
+            program = compile(tmp, fixture, opt, env);
+            assertEq(expected, runProgram(program), env);
+            if (can_report) {
+                if (env == "QORE_AOT_EH=1") {
+                    assertEq(report_aot_expected, runProgram(program, "--enable-debug report"),
+                        env + ": entries taken");
+                } else {
+                    string generic = (map regex_subst($1, ": native$", ": fast"), report_aot_expected.split("\n"),
+                        $1 != "").join("\n") + "\n";
+                    assertEq(generic, runProgram(program, "--enable-debug report"), env + ": no entry taken");
+                }
+            }
+        }
+    }
+
+    #! the code that qcc generates (before optimization) has the entries, their registration and the helper calls
+    private checkGeneratedCode() {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 %s -O0 -o %s %s 2>&1", shellQuote(dir),
+            shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+        foreach string name in (EntryFunctions) {
+            assertTrue(regex(ir, "define internal i64 @" + name + "_[^ ]*_fast[^ ]*_cref\\(ptr"), "entry of " + name);
+        }
+        # a variant with a default argument needs the generic call path, and a body that concatenates strings is not
+        # context-independent
+        assertFalse(regex(ir, "define internal i64 @with_default_[^ ]*_cref\\("), "no entry of with_default");
+        assertFalse(regex(ir, "define internal i64 @greet_[^ ]*_cref\\("), "no entry of greet");
+        assertTrue(ir =~ /@llvm.global_ctors = [^\n]*qore_aot_callref_register/, "registration");
+        assertTrue(ir =~ /@llvm.global_dtors = [^\n]*qore_aot_callref_unregister/, "unregistration");
+        # NaN-boxed results, native results stored into native locals, NaN-boxed arguments
+        foreach string helper in (("qore_rt_call_ref_value_int_v1", "qore_rt_call_ref_value_float_v1",
+                "qore_rt_call_ref_value_bool_v1", "qore_rt_call_ref_value_0_v1", "qore_rt_call_ref_int_int_v1",
+                "qore_rt_call_ref_float_float_v1", "qore_rt_call_ref_float_int_v1", "qore_rt_call_ref_bool_bool_v1",
+                "qore_rt_call_ref_boxed_v1")) {
+            assertTrue(ir.find("call i32 @" + helper + "(") >= 0, "call of " + helper);
+        }
+
+        ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION=1 %s -O0 -o %s %s "
+            "2>&1", shellQuote(dir), shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+        assertFalse(regex(ir, "_cref\\(ptr"), "no entries");
+        assertFalse(ir =~ /qore_aot_callref_register/, "no registration");
+        ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1 %s -O0 -o %s %s "
+            "2>&1", shellQuote(dir), shellQuote(qcc()), shellQuote(tmp + "/program"), shellQuote(fixture)));
+        assertFalse(ir =~ /call i32 @qore_rt_call_ref_/, "no helper calls");
+    }
+
+    private checkModule() {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        # the module from its source
+        assertEq(host_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=ast %s 2>&1", shellQuote(dir),
+            shellQuote(qore_bin), shellQuote(host_fixture))), "source module");
+        foreach int opt in ((0, 3)) {
+            string output = backquote(sprintf("cd %s && %s -O%d -m -o %s %s 2>&1", shellQuote(tmp), shellQuote(qcc()),
+                opt, shellQuote(tmp + "/CallRefNativeEntryModule.qmod"), shellQuote(module_source)));
+            assertTrue(is_file(tmp + "/CallRefNativeEntryModule.qmod"), "the module compiled: " + output);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(host_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+                    shellQuote(tmp), shellQuote(qore_bin), mode, shellQuote(host_fixture))), mode + " -O" + opt);
+            }
+            if (can_report) {
+                assertEq(host_report_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --enable-debug "
+                    "--exec-mode=ast %s report 2>&1", shellQuote(tmp), shellQuote(qore_bin),
+                    shellQuote(host_fixture))), "entries taken -O" + opt);
+            }
+            unlink(tmp + "/CallRefNativeEntryModule.qmod");
+        }
+    }
+
+    private checkConcurrent() {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        assertEq(concurrent_expected, backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=ast %s 2>&1",
+            shellQuote(dir), shellQuote(qore_bin), shellQuote(concurrent_fixture))), "AST");
+        string output = backquote(sprintf("cd %s && %s -O3 -m -o %s %s 2>&1", shellQuote(tmp), shellQuote(qcc()),
+            shellQuote(tmp + "/CallRefNativeEntryModule.qmod"), shellQuote(module_source)));
+        assertTrue(is_file(tmp + "/CallRefNativeEntryModule.qmod"), "the module compiled: " + output);
+        string program = compile(tmp, concurrent_fixture, 3);
+        # several runs: the threads race differently each time
+        for (int i = 0; i < 5; ++i) {
+            assertEq(concurrent_expected, runProgram(program, NOTHING, "QORE_MODULE_DIR=" + shellQuote(tmp)),
+                "run " + i);
+        }
+    }
+
+    private checkDebugger() {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        # compiled with debugging (qcc -g), as code that a debugger attaches to must be (qore#7676)
+        string program = compile(tmp, debugger_fixture, 3, NOTHING, "-g");
+        assertEq(DebuggerExpected, runProgram(program));
+        if (can_report) {
+            # the warm-up takes the entry, so the test of the calls after the attach is not vacuous
+            assertEq(DebuggerExpected + "fast path before attach: yes\nfast calls after attach: 0\n",
+                runProgram(program, "--enable-debug report"));
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

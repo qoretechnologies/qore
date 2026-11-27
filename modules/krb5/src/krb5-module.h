@@ -202,6 +202,12 @@ public:
 class QoreGssCredential : public AbstractPrivateData {
 public:
     gss_cred_id_t cred = GSS_C_NO_CREDENTIAL;
+    //! the prefix of the isolation domain of the code that a sandbox governs that acquired the credential from a
+    //! keytab, naming the replay cache of the domain, or empty (qore#7756)
+    std::string accept_prefix;
+    //! the replay cache directory and file of a credential with \c accept_prefix (qore#7756)
+    std::string rcache_dir;
+    std::string rcache_path;
 
     DLLLOCAL QoreGssCredential(const QoreKrb5CredentialCache& cache, ExceptionSink* xsink);
     DLLLOCAL QoreGssCredential(const QoreKrb5Keytab& keytab, const QoreKrb5Principal* principal,
@@ -216,6 +222,9 @@ class QoreKrb5CredentialCache : public AbstractPrivateData {
 public:
     krb5_context ctx = nullptr;
     krb5_ccache cache = nullptr;
+    //! the prefix of the names of the caches of the isolation domain of the code that a sandbox governs that opened
+    //! the cache, which the names that it gives leave out (qore#7671)
+    std::string visible_prefix;
 
     DLLLOCAL QoreKrb5CredentialCache(const char* cache_name, bool use_default, ExceptionSink* xsink);
     DLLLOCAL ~QoreKrb5CredentialCache() override;
@@ -279,6 +288,9 @@ class QoreKrb5Keytab : public AbstractPrivateData {
 public:
     krb5_context ctx = nullptr;
     krb5_keytab keytab = nullptr;
+    //! the prefix of the names of the keytabs of the isolation domain of the code that a sandbox governs that opened
+    //! the keytab, which the names that it gives leave out (qore#7736)
+    std::string visible_prefix;
 
     DLLLOCAL QoreKrb5Keytab(const char* keytab_name, bool use_default, ExceptionSink* xsink);
     DLLLOCAL ~QoreKrb5Keytab() override;

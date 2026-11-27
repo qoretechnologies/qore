@@ -1,0 +1,1277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, HTTP/2 over TLS and HTTP/3 (QUIC) connections drained and closed by listener stops
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7692: the stop of a listener refuses new connections (qore#7690), lets the requests and responses in
+    progress on the listener complete (at most the server's drain_timeout), then closes every connection of the
+    listener that is left; when the stop returns, no connection of the listener is open.
+
+    The response of a request is held after its handler has returned, before the server has written it: the server's
+    async target is wrapped, and the wrapper returns the request's result only when the test releases it.  The stop
+    of a listener counted a request only while its handler ran, and canceled the connection's operations then, so
+    such a response was cut off or never sent.  The tests synchronize on the wrapper, on the listener's stop hooks
+    (debug builds of the library) and on the clients, never on time; timeouts only bound a failing run.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerListenerStopDrainTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 30s;
+
+#! A drain timeout that a correct drain never reaches
+const LongDrain = 60s;
+
+#! The size of the body of a held response, so that its delivery is checked whole
+const BodySize = 256 * 1024;
+
+#! Answers each request at once; the body of the held paths is large
+class DrainTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! requests on /block and /info wait for this to reach zero in the handler
+        Counter block_release(1);
+        #! receives the path of each request on /block and /info when it enters the handler
+        Queue blocked();
+        #! the server, for the requests that call it
+        *HttpServer srv;
+        #! the listener that a request on /stopself stops
+        int stop_lid;
+        #! receives "returned" when the stop that a request on /stopself runs has returned
+        Queue self_stops();
+        #! receives the port when the server's answer to a request on /info has returned
+        Queue info_returned();
+        #! receives "returned" when the stop that an inline request on /inlinestop runs has returned
+        Queue inline_stops();
+    }
+
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return hdr.path =~ /inlinestop/;
+    }
+
+    #! an inline request (run on a callback dispatcher worker) stops its own listener
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        srv.stopListenerID(stop_lid);
+        inline_stops.push("returned");
+        return <HttpResponseInfo>{"code": 200, "body": "inline"};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block" || hdr.path == "info") {
+            blocked.push(hdr.path);
+            block_release.waitForZero();
+        }
+        if (hdr.path == "info") {
+            # a handler of the draining listener calls the server, which takes the server's lock of its listeners
+            int port = srv.getListenerInfo(stop_lid).port;
+            info_returned.push(port);
+            return makeResponse(200, sprintf("%d", port), {"Content-Type": MimeTypeText});
+        }
+        if (hdr.path == "stopself") {
+            # the request stops its own listener
+            srv.stopListenerID(stop_lid);
+            self_stops.push("returned");
+        }
+        if (hdr.path =~ /^(hold|next|block)/) {
+            return makeResponse(200, strmul("x", BodySize), {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+
+    releaseBlocked() {
+        if (block_release.getCount()) {
+            block_release.dec();
+        }
+    }
+}
+
+#! Holds the result of a request on a held path after its handler has returned, until the test releases it
+class HoldTarget inherits HttpAsyncTarget {
+    public {
+        HttpAsyncTarget d;
+        #! receives the path of each held request when its handler has returned
+        Queue held();
+        #! held results are returned when this reaches zero
+        Counter release(1);
+    }
+
+    constructor(HttpAsyncTarget d) {
+        self.d = d;
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        hash<HttpRequestResultInfo> rv = d.onHttpRequest(info);
+        if (info.hdr.path =~ /^\/(hold|next)/) {
+            held.push(info.hdr.path);
+            if (release.waitForZero(HangTimeout)) {
+                throw "TEST-ERROR", "the held result was not released";
+            }
+        }
+        return rv;
+    }
+
+    releaseHeld() {
+        if (release.getCount()) {
+            release.dec();
+        }
+    }
+
+    #! inline requests are run by the server's target (see DrainTestHandler::handleInlineRequest())
+    *hash<HttpRequestResultInfo> tryInlineRequest(hash<HttpConnectionInfo> info) {
+        return d.tryInlineRequest(info);
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        d.onIdleTimeout(sock, listener, cx);
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+        d.onError(sock, ex, listener, cx);
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        d.onSseDisconnect(sock, listener, cx);
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        d.onWebSocketFrame(sock, frame, listener, cx);
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        d.onWebSocketClose(sock, code, reason, listener, cx);
+    }
+
+    auto saveDispatchContext() {
+        return d.saveDispatchContext();
+    }
+
+    restoreDispatchContext(auto save_data) {
+        d.restoreDispatchContext(save_data);
+    }
+}
+
+#! A server whose async target is a HoldTarget
+class HoldServer inherits HttpServer {
+    public {
+        HoldTarget hold;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        hold = new HoldTarget(asyncTarget);
+        asyncTarget = hold;
+    }
+}
+
+#! A controller that gives the test its handler pool and reports the submission of each task
+class PoolController inherits HttpAsyncSocketIoController {
+    public {
+        #! receives "submitted" when a task has been submitted to the handler pool
+        Queue submitted();
+    }
+
+    constructor(AsyncSocketIoController ctrl, *LoggerInterface logger, hash<auto> opts)
+            : HttpAsyncSocketIoController(ctrl, logger, opts) {
+    }
+
+    ThreadPool getPool() {
+        return handler_pool;
+    }
+
+    private submitHandlerTask(ThreadPool pool, code task) {
+        HttpAsyncSocketIoController::submitHandlerTask(pool, task);
+        submitted.push("submitted");
+    }
+}
+
+#! Pushes the start of the server's drain from the server's log
+class DrainStartSignal inherits LoggerAppenderWithLayout {
+    public {
+        Queue started();
+    }
+
+    constructor() : LoggerAppenderWithLayout("drain-start-signal", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /^Async HTTP drain started/) {
+            started.push(params);
+        }
+    }
+}
+
+#! A WebSocket connection that echoes the messages that it receives
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! A WebSocket handler whose connections echo
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+#! A server whose async I/O controller is a PoolController
+class PoolServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        asyncIo.stop();
+        asyncIo = new PoolController(AsyncSocketIo::getGlobalAsyncIoController(), opts.logger,
+            {"quic_drain_timeout": opts.drain_timeout});
+        asyncIo.start();
+    }
+
+    ThreadPool getPool() {
+        return cast<PoolController>(asyncIo).getPool();
+    }
+}
+
+#! Records the events of the stop of a listener in order
+class StopEvents {
+    public {
+        Queue events();
+        #! the listener objects whose stop hooks ran, by listener ID
+        hash<string, HttpListener> listeners = {};
+        #! the events seen
+        list<string> seen = ();
+        #! called in the stopping hook of the listener, if set
+        *code stopping_action;
+    }
+
+    private {
+        Mutex lck();
+        int lid;
+        #! the ID of the QUIC listener paired with the listener, whose phases are pushed with a "partner-" prefix
+        *int partner_lid;
+    }
+
+    constructor(int lid, *int partner_lid) {
+        self.lid = lid;
+        self.partner_lid = partner_lid;
+    }
+
+    #! Sets the stop hooks of the listeners; the phase hook only exists with qore#7692
+    setHooks() {
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            remember(l);
+            if (l.getID() == lid) {
+                push("stopping");
+                if (stopping_action) {
+                    stopping_action();
+                }
+            }
+        });
+        try {
+            call_static_method("HttpServer::HttpListener", "dbgSetStopPhaseHook", sub (HttpListener l, string phase) {
+                remember(l);
+                if (l.getID() == lid) {
+                    push(phase);
+                } else if (partner_lid && l.getID() == partner_lid) {
+                    push("partner-" + phase);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # a library without qore#7692: the stop does not drain
+            stderr.printf("no stop phase hook: %s: %s\n", ex.err, ex.desc);
+        }
+    }
+
+    static clearHooks() {
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+        try {
+            call_static_method("HttpServer::HttpListener", "dbgSetStopPhaseHook");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    push(string ev) {
+        {
+            AutoLock al(lck);
+            seen += ev;
+        }
+        events.push(ev);
+    }
+
+    private remember(HttpListener l) {
+        AutoLock al(lck);
+        listeners{l.getID()} = l;
+    }
+
+    #! Returns the next event that is one of the given events
+    string waitFor(list<string> evs) {
+        while (True) {
+            string ev = events.get(HangTimeout);
+            if (evs.contains(ev)) {
+                return ev;
+            }
+        }
+    }
+}
+
+class HttpServerListenerStopDrainTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HTTP server: the stop of a listener drains its connections", "1.0", \ARGV) {
+        addTestCase("the feature option", \featureTest());
+        foreach string proto in ("h1", "h2", "h3") {
+            addTestCase(sprintf("%s: a response in progress at the stop is delivered completely", proto),
+                \responseInProgressTest(), proto);
+            addTestCase(sprintf("%s: the next request of a persistent connection during the stop is answered", proto),
+                \nextRequestTest(), proto);
+        }
+        addTestCase("h1: the connections are closed at the drain timeout", \drainTimeoutTest());
+        addTestCase("h1: the connections of another listener are not drained", \isolationTest());
+        addTestCase("h1: a stop of the server during the drain of a listener", \serverStopTest());
+        addTestCase("h1: a request whose task the handler pool cancels ends the wait of a listener's stop",
+            \canceledDispatchTest());
+        foreach string proto in ("h1", "h3") {
+            addTestCase(sprintf("%s: a handler of the draining listener calls the server", proto),
+                \handlerCallsServerTest(), proto);
+        }
+        addTestCase("h1: a second stop of a listener waits for the first one", \concurrentStopTest());
+        addTestCase("h1: a second stop in an inline request of the listener does not wait", \inlineSecondStopTest());
+        foreach string how in ("nowait", "removehandler", "partner") {
+            addTestCase(sprintf("h1: a blocking stop waits for a stop started by %s", how), \laterStopWaitsTest(), how);
+        }
+        addTestCase("h1: a stop in a stop notification under the server's lock does not wait",
+            \notificationUnderLockTest());
+        foreach string proto in ("h1", "h2", "h3") {
+            addTestCase(sprintf("%s: a request stops its own listener", proto), \ownStopTest(), proto);
+        }
+        addTestCase("h1: an accept that completes during the stop", \lateAcceptTest());
+        addTestCase("h1: a WebSocket connection of the listener is closed by its stop", \webSocketTest());
+        set_return_value(main());
+    }
+
+    featureTest() {
+        bool have;
+%ifdef HAVE_HTTPSERVER_LISTENER_STOP_DRAIN
+        have = True;
+%endif
+        assertTrue(have, "HAVE_HTTPSERVER_LISTENER_STOP_DRAIN is defined");
+        assertTrue(Option::HAVE_HTTPSERVER_LISTENER_STOP_DRAIN);
+    }
+
+    #! Starts a server with a listener of the given protocol and a second HTTP/1.1 listener
+    private hash<auto> startServer(string proto, DrainTestHandler h, timeout drain_timeout = LongDrain,
+            *LoggerAppender appender, *AbstractHttpRequestHandler ws) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the stop hooks of HttpListener");
+        }
+        Logger logger("listener-stop-drain", appender ? LoggerLevel::getLevelInfo() : LoggerLevel::getLevelError());
+        if (appender) {
+            logger.addAppender(appender);
+        }
+        HoldServer srv(<HttpServerOptionInfo>{"logger": logger, "drain_timeout": drain_timeout});
+        if (ws) {
+            srv.setHandler("ws", "^ws", NOTHING, ws);
+        }
+        srv.setHandler("drain", "", NOTHING, h);
+        srv.setDefaultHandler("drain", h);
+        h.srv = srv;
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
+        if (proto != "h1") {
+            lopts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+                "enable_h3": proto == "h3",
+            };
+        }
+        hash<auto> li;
+        try {
+            li = srv.addListener(lopts);
+        } catch (hash<ExceptionInfo> ex) {
+            srv.stopImmediate();
+            testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+        }
+        hash<auto> other = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        srv.waitForAsyncIo();
+        h.stop_lid = li.id;
+        return {"srv": srv, "li": li, "other": other};
+    }
+
+    #! Returns a client of the given protocol
+    private HttpClientIo::HttpClientConnectionManager getClient(string proto) {
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> copts =
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "request_timeout": HangTimeout,
+                "connect_timeout": 10s,
+                "logger": new Logger("listener-stop-drain-client", LoggerLevel::getLevelError()),
+            };
+        if (proto != "h1") {
+            copts.protocol = proto;
+        }
+        return new HttpClientIo::HttpClientConnectionManager(copts);
+    }
+
+    #! Sends a request in the background; the response or the exception is pushed to the queue
+    private sendRequest(HttpClientIo::HttpClientConnectionManager mgr, string url, string path, Queue responses) {
+        background sub () {
+            try {
+                responses.push(mgr.request(url, "GET", path));
+            } catch (hash<ExceptionInfo> ex) {
+                responses.push(ex);
+            }
+        }();
+    }
+
+    #! Reads an HTTP/1.1 response with a Content-Length body
+    private hash<auto> readResponse(Socket s) {
+        hash<auto> h = s.readHTTPHeader(HangTimeout);
+        int len = h."content-length".toInt();
+        h.body = len ? s.recv(len, HangTimeout) : "";
+        return h;
+    }
+
+    #! Returns the error with which a read on the socket ends, or NOTHING if data arrived
+    private *string readEnd(Socket s) {
+        try {
+            s.recvBinary(1, HangTimeout);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Stops the listener in the background; "stop-returned" is pushed to the events when the stop returns
+    private Counter stopListener(HttpServer srv, int lid, StopEvents ev) {
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                srv.stopListenerID(lid);
+            } catch (hash<ExceptionInfo> ex) {
+                ev.push("stop-error: " + ex.err);
+            }
+            ev.push("stop-returned");
+        }();
+        return done;
+    }
+
+    #! Checks that no connection of the listener (and of its paired QUIC listener) is left
+    private checkNoConnections(HttpServer srv, StopEvents ev) {
+        HttpAsyncSocketIoController io = srv.getHttpAsyncIo();
+        foreach HttpListener l in (ev.listeners.iterator()) {
+            # a WebSocket connection's entry refers to the listener's view for its handlers
+            assertEq(0, io.getListenerConnectionCount(l) + io.getListenerConnectionCount(l.getHandlerView()),
+                sprintf("no connection of listener %d is open", l.getID()));
+        }
+    }
+
+    #! Returns the index of the first element of the list equal to the value, or -1
+    private static int indexOf(list<string> l, string v) {
+        for (int i = 0; i < l.size(); ++i) {
+            if (l[i] == v) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    #! Checks that the other listener of the server serves requests
+    private checkOtherListener(hash<auto> s) {
+        Socket c();
+        c.connect("localhost:" + s.other.port, HangTimeout);
+        on_exit c.close();
+        c.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code, "the other listener serves requests");
+    }
+
+    #! Waits for the drain of the listener to start while a response is held, then releases the response
+    private runHeldResponse(hash<auto> s, StopEvents ev, Counter stop_done) {
+        HoldServer srv = s.srv;
+        # the stop drains while the response is held: it does not return first
+        string first = ev.waitFor(("drain-started", "stop-returned"));
+        assertEq("drain-started", first, "the stop drains before it returns");
+        assertEq(1, stop_done.getCount(), "the stop waits for the held response");
+        srv.hold.releaseHeld();
+    }
+
+    responseInProgressTest(string proto) {
+        DrainTestHandler h();
+        hash<auto> s = startServer(proto, h);
+        HoldServer srv = s.srv;
+        on_exit {
+            srv.hold.releaseHeld();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        Socket sock();
+        on_exit sock.close();
+        HttpClientIo::HttpClientConnectionManager mgr = getClient(proto);
+        on_exit mgr.closeAll();
+        Queue responses();
+        string url = sprintf("https://localhost:%d", s.li.port);
+        if (proto == "h1") {
+            sock.connect("localhost:" + s.li.port, HangTimeout);
+            sock.send("GET /hold HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        } else {
+            sendRequest(mgr, url, "/hold", responses);
+        }
+        # the handler has returned; the response is held
+        assertEq("/hold", srv.hold.held.get(HangTimeout), "the handler returned");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        runHeldResponse(s, ev, stop_done);
+
+        if (proto == "h1") {
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, "the response is delivered");
+            assertEq(BodySize, resp.body.size(), "the response is delivered completely");
+            assertEq("close", resp.connection, "the response closes the connection");
+            assertEq("SOCKET-CLOSED", readEnd(sock), "the connection is closed after the response");
+        } else {
+            auto resp = responses.get(HangTimeout);
+            assertEq(200, resp.status_code, sprintf("the response is delivered: %y", resp));
+            assertEq(BodySize, resp.body.size(), "the response is delivered completely");
+        }
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        assertTrue(ev.seen.contains("drain-ended"), sprintf("the drain ended before its timeout: %y", ev.seen));
+        assertFalse(ev.seen.contains("drain-timeout"), "the drain did not time out");
+        checkNoConnections(srv, ev);
+        checkOtherListener(s);
+    }
+
+    nextRequestTest(string proto) {
+        DrainTestHandler h();
+        hash<auto> s = startServer(proto, h);
+        HoldServer srv = s.srv;
+        on_exit {
+            srv.hold.releaseHeld();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        Socket sock();
+        on_exit sock.close();
+        HttpClientIo::HttpClientConnectionManager mgr = getClient(proto);
+        on_exit mgr.closeAll();
+        Queue responses();
+        string url = sprintf("https://localhost:%d", s.li.port);
+        # a persistent connection with a first request answered
+        if (proto == "h1") {
+            sock.connect("localhost:" + s.li.port, HangTimeout);
+            sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, "the first request is answered");
+            assertFalse(resp.connection =~ /close/i, "the connection is kept");
+        } else {
+            assertEq(200, mgr.request(url, "GET", "/quick").status_code, "the first request is answered");
+        }
+        # the next request is sent on the connection once the stop has started (it accepts no new connection then),
+        # and its response is held; an HTTP/3 session is sent a GOAWAY notice when the listener stops accepting
+        # (qore#7690), after which the client sends no new request on it (RFC 9114 section 5.2), so its next request
+        # is sent just before the stop
+        code send_next = sub () {
+            if (proto == "h1") {
+                sock.send("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            } else {
+                sendRequest(mgr, url, "/next", responses);
+            }
+            srv.hold.held.get(HangTimeout);
+        };
+        if (proto == "h3") {
+            send_next();
+        } else {
+            ev.stopping_action = send_next;
+        }
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        runHeldResponse(s, ev, stop_done);
+
+        if (proto == "h1") {
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, "the next request is answered");
+            assertEq(BodySize, resp.body.size(), "the response is delivered completely");
+            assertEq("close", resp.connection, "the response closes the connection");
+            assertEq("SOCKET-CLOSED", readEnd(sock), "the connection is closed after the response");
+        } else {
+            auto resp = responses.get(HangTimeout);
+            assertEq(200, resp.status_code, sprintf("the next request is answered: %y", resp));
+            assertEq(BodySize, resp.body.size(), "the response is delivered completely");
+        }
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        assertFalse(ev.seen.contains("drain-timeout"), sprintf("the drain did not time out: %y", ev.seen));
+        checkNoConnections(srv, ev);
+    }
+
+    drainTimeoutTest() {
+        DrainTestHandler h();
+        # the request is held until the drain has timed out and the connections are closed, so the length of the
+        # timeout does not matter
+        hash<auto> s = startServer("h1", h, 100ms);
+        HoldServer srv = s.srv;
+        on_exit {
+            h.releaseBlocked();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        # an idle keep-alive connection and a connection with a request in its handler
+        Socket idle();
+        on_exit idle.close();
+        idle.connect("localhost:" + s.li.port, HangTimeout);
+        idle.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(200, readResponse(idle).status_code, "the idle connection's request is answered");
+        Socket busy();
+        on_exit busy.close();
+        busy.connect("localhost:" + s.li.port, HangTimeout);
+        busy.send("GET /block HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("block", h.blocked.get(HangTimeout), "the request is in its handler");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq("drain-started", ev.waitFor(("drain-started", "stop-returned")), "the drain starts");
+        assertEq("SOCKET-CLOSED", readEnd(idle), "the idle connection is closed when the drain starts");
+        assertEq("drain-timeout", ev.waitFor(("drain-ended", "drain-timeout", "stop-returned")),
+            "the drain times out");
+        assertEq("connections-closed", ev.waitFor(("connections-closed", "stop-returned")),
+            "the connections are closed");
+        # the stop waits for the handler, and the connection of its request is closed
+        assertEq(1, stop_done.getCount(), "the stop waits for the handler");
+        h.releaseBlocked();
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        checkNoConnections(srv, ev);
+        # the request's connection is closed: with or without the response, which was sent when its handler returned
+        # after the connections were closed
+        try {
+            hash<auto> resp = readResponse(busy);
+            assertEq("close", resp.connection, "a response closes the connection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^SOCKET-", ex.err, "the connection is closed");
+        }
+        assertRegex("^SOCKET-", readEnd(busy), "the connection is closed");
+    }
+
+    isolationTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h);
+        HoldServer srv = s.srv;
+        on_exit {
+            h.releaseBlocked();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        # a request in progress on the other listener
+        Socket busy();
+        on_exit busy.close();
+        busy.connect("localhost:" + s.other.port, HangTimeout);
+        busy.send("GET /block HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("block", h.blocked.get(HangTimeout), "the request is in its handler");
+
+        # the stop of the listener does not wait for the other listener's request
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        assertEq("drain-ended", ev.waitFor(("drain-ended", "drain-timeout")), "the drain ended at once");
+
+        h.releaseBlocked();
+        hash<auto> resp = readResponse(busy);
+        assertEq(200, resp.status_code, "the other listener's request is answered");
+        assertFalse(resp.connection =~ /close/i, "the other listener's connection is kept");
+        busy.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(200, readResponse(busy).status_code, "the other listener's connection serves another request");
+    }
+
+    serverStopTest() {
+        DrainTestHandler h();
+        DrainStartSignal signal();
+        hash<auto> s = startServer("h1", h, LongDrain, signal);
+        HoldServer srv = s.srv;
+        on_exit {
+            h.releaseBlocked();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        Socket busy();
+        on_exit busy.close();
+        busy.connect("localhost:" + s.li.port, HangTimeout);
+        busy.send("GET /block HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("block", h.blocked.get(HangTimeout), "the request is in its handler");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq("drain-started", ev.waitFor(("drain-started", "stop-returned")), "the drain of the listener starts");
+        # the server is stopped while the listener drains: both stops wait for the request in progress
+        Counter server_done(1);
+        background sub () {
+            on_exit server_done.dec();
+            srv.stop();
+        }();
+        # the server's drain has started before the request is released
+        signal.started.get(HangTimeout);
+        assertEq(1, server_done.getCount(), "the stop of the server waits for the request in progress");
+        h.releaseBlocked();
+        hash<auto> resp = readResponse(busy);
+        assertEq(200, resp.status_code, "the request is answered");
+        assertEq("close", resp.connection, "the response closes the connection");
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        assertEq(0, server_done.waitForZero(HangTimeout), "the stop of the server returns");
+    }
+
+    canceledDispatchTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the stop hooks of HttpListener");
+        }
+        DrainTestHandler h();
+        # the request is queued in the handler pool until the pool is stopped, so the length of the drain timeout does
+        # not matter
+        PoolServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("listener-stop-drain", LoggerLevel::getLevelError()),
+            "drain_timeout": 100ms,
+        });
+        on_exit srv.stop();
+        srv.setHandler("drain", "", NOTHING, h);
+        hash<auto> li = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        srv.waitForAsyncIo();
+        ThreadPool pool = srv.getPool();
+        if (!qore_test_thread_pool_hold_dispatch(pool, True)) {
+            testSkip("needs a debug build of the library to hold the dispatch of a thread pool");
+        }
+        on_exit qore_test_thread_pool_hold_dispatch(pool, False);
+        StopEvents ev(li.id);
+        ev.setHooks();
+        on_exit StopEvents::clearHooks();
+
+        # the request is dispatched to the handler pool, whose dispatch is held: its task stays queued
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + li.port, HangTimeout);
+        sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("submitted", cast<PoolController>(srv.getHttpAsyncIo()).submitted.get(HangTimeout),
+            "the request's task is queued in the handler pool");
+
+        # the stop of the listener waits for the queued request after it closed the connections
+        Counter stop_done = stopListener(srv, li.id, ev);
+        assertEq("connections-closed", ev.waitFor(("connections-closed", "stop-returned")),
+            "the stop closes the connections");
+        assertEq(1, stop_done.getCount(), "the stop waits for the queued request");
+        # the pool is stopped: it cancels the queued task, whose body, which ends the request's count, never runs
+        pool.stop();
+        assertEq(1, stop_done.getCount(), "the stop waits for the canceled request");
+        # the stop of the server ends the counts of the canceled requests, so the stop of the listener ends
+        Counter server_done(1);
+        background sub () {
+            on_exit server_done.dec();
+            srv.stop();
+        }();
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        assertEq(0, server_done.waitForZero(HangTimeout), "the stop of the server returns");
+        assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the canceled request is closed");
+    }
+
+    handlerCallsServerTest(string proto) {
+        DrainTestHandler h();
+        # HTTP/3: the request is held until the drain of the QUIC listener has timed out, so the length of the timeout
+        # does not matter
+        hash<auto> s = startServer(proto, h, proto == "h3" ? 100ms : LongDrain);
+        HoldServer srv = s.srv;
+        on_exit {
+            h.releaseBlocked();
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        *int partner_lid;
+        if (proto == "h3") {
+            partner_lid = (select keys srv.getListeners(), $1.toInt() != s.li.id && $1.toInt() != s.other.id)[0]
+                .toInt();
+        }
+        StopEvents ev(s.li.id, partner_lid);
+        ev.setHooks();
+
+        Socket sock();
+        on_exit sock.close();
+        HttpClientIo::HttpClientConnectionManager mgr = getClient(proto);
+        on_exit mgr.closeAll();
+        Queue responses();
+        if (proto == "h1") {
+            sock.connect("localhost:" + s.li.port, HangTimeout);
+            sock.send("GET /info HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        } else {
+            sendRequest(mgr, sprintf("https://localhost:%d", s.li.port), "/info", responses);
+        }
+        assertEq("info", h.blocked.get(HangTimeout), "the request is in its handler");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        if (proto == "h1") {
+            assertEq("drain-started", ev.waitFor(("drain-started", "stop-returned")), "the drain starts");
+        } else {
+            # the stop of the QUIC listener waits for the request; it does not hold the server's lock of its
+            # listeners
+            assertEq("partner-closing-connections", ev.waitFor(("partner-closing-connections", "stop-returned")),
+                "the QUIC listener closes its connections");
+        }
+        # the handler calls the server while the stop waits for it: it does not wait for the stop
+        h.releaseBlocked();
+        assertEq(s.li.port, h.info_returned.get(HangTimeout), "the server answered the handler's call");
+        if (proto == "h1") {
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, "the request that calls the server is answered");
+            assertEq(string(s.li.port), resp.body, "the response has the server's answer");
+        }
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        if (proto == "h1") {
+            assertEq("drain-ended", ev.waitFor(("drain-ended", "drain-timeout")), "the drain ended before its timeout");
+        }
+    }
+
+    concurrentStopTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h);
+        HoldServer srv = s.srv;
+        Queue waiting();
+        call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook",
+            *bool sub (HttpServer server, int id) {
+            if (server == srv && id == s.li.id) {
+                waiting.push(id);
+            }
+        });
+        Counter stop_release(1);
+        on_exit {
+            call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook");
+            if (stop_release.getCount()) {
+                stop_release.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        # the first stop is held after it has stopped accepting
+        ev.stopping_action = sub () {
+            stop_release.waitForZero(HangTimeout);
+        };
+        ev.setHooks();
+
+        Counter first_done = stopListener(srv, s.li.id, ev);
+        assertEq("stopping", ev.waitFor(("stopping", "stop-returned")), "the first stop has started");
+        # a second stop of the listener waits for the first one
+        Counter second_done(1);
+        *hash<ExceptionInfo> second_ex;
+        # whether the listener was still registered when the second stop returned
+        bool registered_at_return = True;
+        background sub () {
+            on_exit second_done.dec();
+            try {
+                srv.stopListenerID(s.li.id);
+            } catch (hash<ExceptionInfo> ex) {
+                second_ex = ex;
+            }
+            registered_at_return = exists srv.getListeners(){s.li.id};
+            ev.push("second-returned");
+        }();
+        assertEq(s.li.id, waiting.get(HangTimeout), "the second stop waits for the first one");
+        stop_release.dec();
+        assertEq(0, second_done.waitForZero(HangTimeout), "the second stop returns");
+        assertEq(0, first_done.waitForZero(HangTimeout), "the first stop returns");
+        assertNothing(second_ex, "the second stop raised no exception");
+        # the first stop has closed the connections and removed the listener when the second one returns (the "stopped"
+        # phase is reported after the server's notification, which ends the wait)
+        int closed = indexOf(ev.seen, "connections-closed");
+        int second = indexOf(ev.seen, "second-returned");
+        assertTrue(closed >= 0 && second > closed,
+            sprintf("the second stop returns after the first one has closed the connections: %y", ev.seen));
+        assertFalse(registered_at_return, "the listener was removed when the second stop returned");
+    }
+
+    inlineSecondStopTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h);
+        HoldServer srv = s.srv;
+        Counter stop_release(1);
+        # a wait of the stop in the inline request, which must not wait, is recorded and skipped, so that the test
+        # fails instead of hanging
+        Queue waits();
+        call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook",
+            *bool sub (HttpServer server, int id) {
+            if (server == srv && id == s.li.id) {
+                waits.push(id);
+                return True;
+            }
+        });
+        on_exit {
+            call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook");
+            if (stop_release.getCount()) {
+                stop_release.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        # the first stop is held after it has stopped accepting, before its drain
+        ev.stopping_action = sub () {
+            stop_release.waitForZero(HangTimeout);
+        };
+        ev.setHooks();
+
+        # a persistent connection
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(200, readResponse(sock).status_code, "the first request is answered");
+
+        Counter first_done = stopListener(srv, s.li.id, ev);
+        assertEq("stopping", ev.waitFor(("stopping", "stop-returned")), "the first stop has started");
+        # an inline request of the listener stops it too: it does not wait for the first stop, which waits for it
+        sock.send("GET /inlinestop HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("returned", h.inline_stops.get(HangTimeout), "the stop in the inline request returns");
+        assertEq(0, waits.size(), "the stop in the inline request did not wait for the first stop");
+        stop_release.dec();
+        assertEq(0, first_done.waitForZero(HangTimeout), "the first stop returns");
+    }
+
+    laterStopWaitsTest(string how) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the stop hooks");
+        }
+        DrainTestHandler h();
+        HttpServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("listener-stop-drain", LoggerLevel::getLevelError()),
+        });
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
+        if (how == "removehandler") {
+            # the listener is stopped when its last handler is removed
+            lopts.own_handlers_only = True;
+            lopts.handler_info = {"own": <HttpHandlerConfigInfo>{"path": "", "handler": h}};
+        } else {
+            srv.setHandler("drain", "", NOTHING, h);
+        }
+        if (how == "partner") {
+            # a TLS listener with a paired QUIC listener, whose stop the TCP listener's stop runs
+            lopts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+                "enable_h3": True,
+            };
+        }
+        hash<auto> li;
+        try {
+            li = srv.addListener(lopts);
+        } catch (hash<ExceptionInfo> ex) {
+            srv.stopImmediate();
+            testSkip(sprintf("no listener: %s: %s", ex.err, ex.desc));
+        }
+        srv.waitForAsyncIo();
+        # the listener that the blocking stop stops: the QUIC listener for "partner"
+        int wait_lid = li.id;
+        if (how == "partner") {
+            *list<string> others = select keys srv.getListeners(), $1.toInt() != li.id;
+            if (!others) {
+                srv.stopImmediate();
+                testSkip("no paired QUIC listener");
+            }
+            wait_lid = others[0].toInt();
+        }
+        Queue waits();
+        call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook",
+            *bool sub (HttpServer server, int id) {
+            if (server == srv && id == wait_lid) {
+                waits.push(id);
+            }
+        });
+        Counter stop_release(1);
+        on_exit {
+            call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook");
+            if (stop_release.getCount()) {
+                stop_release.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(li.id);
+        # the first stop is held after it has stopped accepting
+        ev.stopping_action = sub () {
+            stop_release.waitForZero(HangTimeout);
+        };
+        ev.setHooks();
+
+        # the first stop is started without waiting for it
+        if (how == "removehandler") {
+            background sub () {
+                try {
+                    srv.removeHandlerFromListenerID(li.id, "own");
+                } catch (hash<ExceptionInfo> ex) {
+                    ev.push("first-error: " + ex.err);
+                }
+            }();
+        } else {
+            srv.stopListenerIDNoWait(li.id);
+        }
+        assertEq("stopping", ev.waitFor(("stopping",)), "the first stop has started");
+
+        # a blocking stop of the listener (of its paired QUIC listener, whose stop the first one runs, for "partner")
+        # waits for the first one
+        Counter second_done(1);
+        *hash<ExceptionInfo> second_ex;
+        bool registered_at_return = True;
+        background sub () {
+            on_exit second_done.dec();
+            try {
+                srv.stopListenerID(wait_lid);
+            } catch (hash<ExceptionInfo> ex) {
+                second_ex = ex;
+            }
+            registered_at_return = exists srv.getListeners(){wait_lid};
+        }();
+        assertEq(wait_lid, waits.get(HangTimeout), "the blocking stop waits for the first one");
+        stop_release.dec();
+        assertEq(0, second_done.waitForZero(HangTimeout), "the blocking stop returns");
+        assertNothing(second_ex, "the blocking stop raised no exception");
+        assertFalse(registered_at_return, "the listener was removed when the blocking stop returned");
+    }
+
+    notificationUnderLockTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the stop hooks");
+        }
+        DrainTestHandler h();
+        HttpServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("listener-stop-drain", LoggerLevel::getLevelError()),
+        });
+        srv.setHandler("drain", "", NOTHING, h);
+        hash<auto> a = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        # the stop notification of listener B stops listener A, whose stop runs elsewhere; the server's stop calls it
+        # with the server's lock of its listeners held
+        Queue notified();
+        srv.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "stopc": sub (string name) {
+                try {
+                    srv.stopListenerID(a.id);
+                    notified.push("returned");
+                } catch (hash<ExceptionInfo> ex) {
+                    notified.push(ex.err);
+                }
+            },
+        });
+        srv.waitForAsyncIo();
+        # a wait in the notification, which must not wait, is recorded and skipped, so that the test fails instead of
+        # hanging
+        Queue waits();
+        call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook",
+            *bool sub (HttpServer server, int id) {
+            if (server == srv && id == a.id) {
+                waits.push(id);
+                return True;
+            }
+        });
+        Counter stop_release(1);
+        on_exit {
+            call_static_method("HttpServer::HttpServer", "dbgSetListenerStopWaitHook");
+            if (stop_release.getCount()) {
+                stop_release.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(a.id);
+        ev.stopping_action = sub () {
+            stop_release.waitForZero(HangTimeout);
+        };
+        ev.setHooks();
+
+        # the stop of listener A is held after it has stopped accepting
+        srv.stopListenerIDNoWait(a.id);
+        assertEq("stopping", ev.waitFor(("stopping",)), "the stop of listener A has started");
+        # the server's stop stops listener B with its lock of the listeners held; B's notification stops A
+        Counter server_done(1);
+        background sub () {
+            on_exit server_done.dec();
+            srv.stop();
+        }();
+        assertEq("returned", notified.get(HangTimeout), "the stop in the notification returns");
+        assertEq(0, waits.size(), "the stop in the notification did not wait for the stop of listener A");
+        stop_release.dec();
+        assertEq(0, server_done.waitForZero(HangTimeout), "the stop of the server returns");
+    }
+
+    ownStopTest(string proto) {
+        DrainTestHandler h();
+        hash<auto> s = startServer(proto, h);
+        HoldServer srv = s.srv;
+        on_exit {
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        Socket sock();
+        on_exit sock.close();
+        HttpClientIo::HttpClientConnectionManager mgr = getClient(proto);
+        on_exit mgr.closeAll();
+        Queue responses();
+        if (proto == "h1") {
+            sock.connect("localhost:" + s.li.port, HangTimeout);
+            sock.send("GET /stopself HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        } else {
+            sendRequest(mgr, sprintf("https://localhost:%d", s.li.port), "/stopself", responses);
+        }
+        # the request's stop of its own listener does not wait for the request's own connection: it ends with the
+        # drain, not at the drain timeout (which is longer than the bound of this wait)
+        assertEq("returned", h.self_stops.get(HangTimeout), "the stop in the request returns");
+        assertEq("drain-ended", ev.waitFor(("drain-ended", "drain-timeout")), "the drain does not wait for itself");
+        if (proto == "h1") {
+            # an HTTP/1.1 request that stops its own listener is answered after the stop
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, "the request is answered");
+            assertEq("close", resp.connection, "the response closes the connection");
+        } else {
+            # the connection of an HTTP/2 or HTTP/3 request that stops its own listener is closed with the others:
+            # its response is not sent (see HttpServer::stopListenerID())
+            auto resp = responses.get(HangTimeout);
+            # the client's request ends with an exception (sendRequest() pushes it), not a response
+            assertEq("hash<ExceptionInfo>", resp.fullType(), sprintf("the request fails without a response: %y",
+                resp));
+        }
+    }
+
+    lateAcceptTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h);
+        HoldServer srv = s.srv;
+        HttpAsyncSocketIoController io = srv.getHttpAsyncIo();
+        Counter accept_release(1);
+        Queue accepts();
+        call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetAcceptHook",
+            sub (HttpAsyncSocketIoController c, string uh) {
+                if (c == io) {
+                    accepts.push(uh);
+                    accept_release.waitForZero(HangTimeout);
+                }
+            });
+        on_exit {
+            call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetAcceptHook");
+            if (accept_release.getCount()) {
+                accept_release.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        # the completion of an accept is held after it has checked that the listener accepts connections
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        accepts.get(HangTimeout);
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq("closing-connections", ev.waitFor(("closing-connections", "stop-returned")),
+            "the stop closes the connections");
+        # the accept completes while the stop closes the connections: the close waits for it
+        ev.push("accept-released");
+        accept_release.dec();
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        int released = indexOf(ev.seen, "accept-released");
+        int closed = indexOf(ev.seen, "connections-closed");
+        assertTrue(released >= 0 && closed >= 0 && released < closed,
+            sprintf("the connections are closed after the accept completed: %y", ev.seen));
+        assertEq("SOCKET-CLOSED", readEnd(sock), "the accepted connection is closed");
+        checkNoConnections(srv, ev);
+    }
+
+    webSocketTest() {
+        DrainTestHandler h();
+        EchoWsHandler ws();
+        hash<auto> s = startServer("h1", h, LongDrain, NOTHING, ws);
+        HoldServer srv = s.srv;
+        on_exit {
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        # a WebSocket connection of the listener, registered with the async I/O controller: its first message is
+        # echoed
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        sock.send(sprintf("GET /ws HTTP/1.1\r\nHost: localhost:%d\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", s.li.port));
+        hash<auto> resp = sock.readHTTPHeader(HangTimeout);
+        assertEq(101, resp.status_code, "the WebSocket upgrade is answered");
+        sock.send(ws_encode_message("hello", WSOP_Text, True));
+        hash<WsMsgInfo> msg = ws_read_message(sock, HangTimeout);
+        assertEq("hello", msg.msg, "the connection's message is echoed");
+
+        # the connection is counted with its listener when the stop starts
+        int count_at_stop = -1;
+        ev.stopping_action = sub () {
+            count_at_stop = srv.getHttpAsyncIo().getListenerConnectionCount(ev.listeners{s.li.id});
+        };
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop returns");
+        assertEq(1, count_at_stop, "the WebSocket connection is a connection of the listener");
+        checkNoConnections(srv, ev);
+        # the client is sent a close frame, or the connection is closed
+        bool closed;
+        try {
+            while (True) {
+                msg = ws_read_message(sock, HangTimeout);
+                if (msg.op == WSOP_Close) {
+                    closed = True;
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            closed = True;
+        }
+        assertTrue(closed, "the WebSocket connection is closed");
+    }
+}

@@ -51,12 +51,15 @@ mkdir -p "${QORE_SRC_DIR}/crash-dumps"
 # run only performance tests
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${QORE_SRC_DIR}
+# the job's suites run to their ends and the job ends with the summary of the failing ones (see ci-suites.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-suites.sh"
 TEST_RC=0
-./run_tests.sh -P || TEST_RC=$?
+qore_ci_suite "performance tests (run_tests.sh -P)" ./run_tests.sh -P
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "${QORE_SRC_DIR}/crash-dumps"
 # the runner ends the job only when no process the job started still holds its output
+qore_ci_suites_summary || TEST_RC=1
 if ! qore_ci_end_job_processes && [ "${TEST_RC}" = "0" ]; then
     TEST_RC=1
 fi

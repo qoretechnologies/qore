@@ -3039,11 +3039,11 @@ namespace {
 //! collects the objects of the Program's own classes in a value of a cleared constant, also in its lists and hashes
 class QoreOwnedConstantObjectCollector {
 public:
-    DLLLOCAL QoreOwnedConstantObjectCollector(const QoreProgram* pgm, std::vector<QoreObject*>& objs)
+    QoreOwnedConstantObjectCollector(const QoreProgram* pgm, std::vector<QoreObject*>& objs)
             : pgm(pgm), objs(objs) {
     }
 
-    DLLLOCAL void visit(QoreValue v) {
+    void visit(QoreValue v) {
         switch (v.getType()) {
             case NT_OBJECT: {
                 QoreObject* o = v.get<QoreObject>();

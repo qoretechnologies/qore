@@ -264,6 +264,35 @@ endforeach()
 target_compile_definitions(pluginordera PRIVATE PLUGINORDER_NS="PluginOrderA" PLUGINORDER_OFFSET=1000)
 target_compile_definitions(pluginorderb PRIVATE PLUGINORDER_NS="PluginOrderB" PLUGINORDER_OFFSET=2000)
 
+# --- the modules that declare dependencies in their module description ----------------------------
+# (see module-deps/moddep-module.cpp and module-deps/module-deps-hash.qtest): one source built twice; moddepuser
+# declares moddepbase as a dependency (qore#7796)
+
+foreach(_moddep_module moddepbase moddepuser)
+    add_library(${_moddep_module} MODULE module-deps/moddep-module.cpp)
+    add_dependencies(${_moddep_module} libqore)
+    target_include_directories(${_moddep_module} PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${_moddep_module} PRIVATE
+        BUILDING_DLL=1
+        HAVE_UNIX_CONFIG_H
+        PACKAGE_VERSION="${VERSION}"
+        MODDEP_ID=${_moddep_module}
+        MODDEP_NAME="${_moddep_module}"
+        $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+    set_target_properties(${_moddep_module} PROPERTIES
+        PREFIX ""
+        SUFFIX "${_cppapi_test_module_suffix}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/${_moddep_module}")
+    if (CMAKE_HOST_APPLE)
+        target_link_options(${_moddep_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+    endif()
+endforeach()
+target_compile_definitions(moddepbase PRIVATE MODDEP_NS="ModDepBase")
+target_compile_definitions(moddepuser PRIVATE MODDEP_NS="ModDepUser" MODDEP_DEPENDENCY="moddepbase")
+
 # --- the modules that declare a module API version -----------------------------------------------
 # (see module-api/apiprobe-module.cpp and module-api/module-api-version.qtest): one source built twice, declaring
 # the module API of the headers (apicur) and its preceding minor (apiold); the latter has the file name
@@ -373,6 +402,6 @@ target_compile_definitions(aotv1ok PRIVATE AOTV1_FAIL=0)
 foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe dbitargetprobe
         restrictedbuiltinprobe
         tlpdprobe forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb
-        ancestryprobe)
+        ancestryprobe moddepbase moddepuser)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()

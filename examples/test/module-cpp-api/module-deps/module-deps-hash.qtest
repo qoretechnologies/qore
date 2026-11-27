@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - dlopen of binary modules and of qcc-built AOT qmods that require them
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "moddepbase" and "moddepuser" test modules are built into the build tree and are not installed, so
+# QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class ModuleDepsHashTest
+
+#! Tests the \c required-modules key of get_module_hash() for binary modules (issue #7796)
+/** \c moddepuser declares \c moddepbase as a dependency in its module description; a user module that requires
+    \c moddepuser with reexport reports it as a direct requirement and as a reexport, loaded from its source and from
+    the qmod that qcc compiled from it, in child processes in each execution mode.
+*/
+class ModuleDepsHashTest inherits QUnit::Test {
+    public {
+        #! the user module requiring the binary module
+        const ModuleSource = "%modern
+%requires(reexport) moddepuser
+
+module ModDepSrc {
+    version = \"1.0\";
+    desc = \"module hash dependency test: a user module requiring a binary module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ModDepSrc {
+public string sub src_name() {
+    return \"src:\" + Qore::ModDepUser::Name;
+}
+}
+";
+
+        #! the child that loads the binary modules only
+        const BinaryChildSource = "%modern
+%requires moddepuser
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"%s\\n\", Qore::ModDepUser::Name);
+foreach string m in (\"moddepuser\", \"moddepbase\") {
+    printf(\"%s user: %y reexported: %y required: %y\\n\", m, mh{m}.user, mh{m}.\"reexported-modules\",
+        mh{m}.\"required-modules\");
+}
+";
+
+        #! the child that loads the user module
+        const UserChildSource = "%modern
+%requires ModDepSrc
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"%s\\n\", src_name());
+printf(\"ModDepSrc %s reexported: %y required: %y\\n\", (basename(mh.ModDepSrc.filename) =~ x/\\.(qmod|qm)$/)[0],
+    mh.ModDepSrc.\"reexported-modules\", mh.ModDepSrc.\"required-modules\");
+foreach string m in (\"moddepuser\", \"moddepbase\") {
+    printf(\"%s required: %y\\n\", m, mh{m}.\"required-modules\");
+}
+";
+
+        #! the execution modes the children run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string module_dir;
+    }
+
+    constructor() : QUnit::Test("ModuleDepsHashTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        module_dir = ENV.QORE_MODULE_DIR ?? "";
+        addTestCase("declared dependencies of a binary module", \binaryTest());
+        # the source and the AOT cases are separate so that a failure of one does not hide the other
+        addTestCase("a binary module required by a source module", \userSourceTest());
+        addTestCase("a binary module required by an AOT module", \userAotTest());
+        set_return_value(main());
+    }
+
+    binaryTest() {
+        TmpDir tmp("qore-module-deps-hash-");
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, BinaryChildSource);
+        string expected = "moddepuser\n"
+            "moddepuser user: False reexported: null required: [\"moddepbase\"]\n"
+            "moddepbase user: False reexported: null required: null\n";
+        foreach string mode in (ExecModes) {
+            assertEq(expected, runChild(child, mode, module_dir), mode);
+        }
+    }
+
+    userSourceTest() {
+        TmpDir tmp("qore-module-deps-hash-");
+        string src_dir = writeUserFixtures(tmp);
+        checkUserModes(tmp, "qm", src_dir);
+    }
+
+    userAotTest() {
+        TmpDir tmp("qore-module-deps-hash-");
+        string src_dir = writeUserFixtures(tmp);
+        string aot_dir = tmp.path + DirSep + "aot";
+        mkdir(aot_dir);
+        string qmod = aot_dir + DirSep + "ModDepSrc.qmod";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
+            "%s --module -o %s %s 2>&1", libqore_dir, libqore_dir, src_dir + ":" + module_dir, qcc_bin, qmod,
+            src_dir + DirSep + "ModDepSrc.qm"));
+        assertTrue(is_file(qmod), "qcc compiled ModDepSrc: " + out);
+        checkUserModes(tmp, "qmod", aot_dir);
+    }
+
+    #! writes the user module and the child; returns the directory of the module
+    private string writeUserFixtures(TmpDir tmp) {
+        string src_dir = tmp.path + DirSep + "src";
+        mkdir(src_dir);
+        writeFile(src_dir + DirSep + "ModDepSrc.qm", ModuleSource);
+        writeFile(tmp.path + DirSep + "child.q", UserChildSource);
+        return src_dir;
+    }
+
+    #! runs the child of the user module in each execution mode and checks its output
+    private checkUserModes(TmpDir tmp, string ext, string mod_dir) {
+        string expected = sprintf("src:moddepuser\n"
+            "ModDepSrc %s reexported: [\"moddepuser\"] required: [\"moddepuser\"]\n"
+            "moddepuser required: [\"moddepbase\"]\n"
+            "moddepbase required: null\n", ext);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, runChild(tmp.path + DirSep + "child.q", mode, mod_dir + ":" + module_dir),
+                sprintf("%s: %s", ext, mode));
+        }
+    }
+
+    private string runChild(string child, string mode, string mod_dir) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s "
+            "2>&1", libqore_dir, mod_dir, qore_bin, mode, child));
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

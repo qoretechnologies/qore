@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "建立記錄"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Dynamics 資料表的名稱，例如：`account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "尋找單筆記錄"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Dynamics 資料表的名稱，例如：`account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "尋找記錄"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Dynamics 資料表的名稱，例如：`account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "更新記錄"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Dynamics 資料表的名稱，例如：`account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "刪除記錄"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Dynamics 資料表的名稱，例如：`account`"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
-          "source": "New or Updated Account",
+          "source": "New or updated account",
           "message": "新增或更新客戶"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
@@ -472,7 +472,7 @@
           "message": "在組織中建立每個客戶時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
-          "source": "New or Updated Case",
+          "source": "New or updated case",
           "message": "新增或更新案例"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
@@ -484,7 +484,7 @@
           "message": "在組織中建立每個案例時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。\n\nDataverse 將此資料表稱為 `incident`。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
-          "source": "New or Updated Contact",
+          "source": "New or updated contact",
           "message": "新增或更新聯絡人"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "在組織中建立每個聯絡人時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
-          "source": "New or Updated Invoice",
+          "source": "New or updated invoice",
           "message": "新增或更新發票"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
@@ -508,7 +508,7 @@
           "message": "在組織中建立每張發票時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
-          "source": "New or Updated Lead",
+          "source": "New or updated lead",
           "message": "新增或更新潛在客戶"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
@@ -520,7 +520,7 @@
           "message": "在組織中建立每筆潛在客戶時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
-          "source": "New or Updated Opportunity",
+          "source": "New or updated opportunity",
           "message": "新增或更新商機"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
@@ -532,7 +532,7 @@
           "message": "在組織中建立每個商機時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
-          "source": "New or Updated Order",
+          "source": "New or updated order",
           "message": "新增或更新訂單"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
@@ -544,7 +544,7 @@
           "message": "在組織中建立每筆訂單時觸發，當條件為 `updated` 時，會在後續每次變更時再次觸發。\n\nDataverse 將此資料表稱為 `salesorder`。"
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
-          "source": "New or Updated Custom Entity",
+          "source": "New or updated custom entity",
           "message": "新增或更新自訂實體"
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {

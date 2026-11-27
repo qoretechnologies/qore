@@ -52,7 +52,28 @@ summaries and the call result consumer fusions, whose runtime functions make the
 it.  An instruction read from serialized IR (the debug IR of AOT code) has no expression and is made as the
 pseudo-method (qore#7733).
 
-The fast paths of `<list>::join()` and `join()`, and the fused joins of folds, are not covered yet (qore#7731).
+## List joins
 
-`StringFastPathFrames.qtest` compares each exception and its whole call stack with the AST interpreter's in every
-execution mode, on the IR tier and in AOT executables, also without prelinked calls.
+`<list>::join()` and `join()` of a list (`list.string.join`, `list.string.join.identity-map`) raise
+`ENCODING-CONVERSION-ERROR` for a value that cannot be converted to the encoding of the separator.  Their fast paths
+(`qore_rt_list_string_join_checked()`, `qore_rt_list_string_join_identity_map_checked()`, and for `join()`
+`qore_fast_join_list()` and `qore_fast_join_list_identity_map()`) make the ordinary call when the join returns no
+string, which it does only for an exception (`join_intern()`); the code generator and the IR interpreter tell the forms
+apart by the expression of the instruction (`qore_ir_is_list_join_function_form()`), as above (qore#7731).
+
+`<list>::join()` of a map is fused with the map (`string.method.join.start`): the AST interpreter evaluates the whole
+map, and then the join raises for the first value that it cannot convert, while the fused loop joins each value as the
+map gives it.  So the join of a value that cannot be converted gives the failed join, a list of the join of the values
+before it and the value, and drops the exception; the map gives its other values, which are added to it (an exception
+that it raises then is the exception, as the join never runs in the AST interpreter), and the finish of the join, after
+the loop, makes the ordinary call of `<list>::join()` with the value and the values after it, which raises the exception
+of that value in the frame of the join; should the call join them, the result is the join of all the values.  The join
+converts each value on its own and in order, so the exception is the one that the join of all the values raises
+(`qore_rt_string_method_join_start()`).  The partial join is never visible: the fused loop's accumulator is internal.
+
+The folds of a concatenation (`foldl $1 + sep + $2`, fused or not) are operators, whose exceptions have no frame of
+their own, and are evaluated lazily by the AST interpreter too, so their fast paths raise as the AST interpreter does.
+
+`StringFastPathFrames.qtest` and `ListJoinFastPathFrames.qtest` compare each exception and its whole call stack (and
+the output of the joined map) with the AST interpreter's in every execution mode, on the IR tier and in AOT
+executables, also without prelinked calls.

@@ -1,0 +1,84 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the module of CallRefNativeEntryHost.q: compiled with qcc into a .qmod, its code calls references to its own
+# functions through their call-reference entries, in the module's Program (qore#5578)
+
+%modern
+
+module CallRefNativeEntryModule {
+    version = "1.0";
+    desc = "functions called through references to their call-reference entries for the tests of qore#5578";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+# a function that only the module's code calls
+int sub mod_step(int value) {
+    return (value * 33 + 17) & 65535;
+}
+
+float sub mod_fstep(float value) {
+    return 65535.0 - value;
+}
+
+int sub mod_throw(int x) {
+    throw "MODULE-CALLREF-ERROR", sprintf("module x=%d", x), x;
+}
+
+int sub mod_run(code<int(int)> f, int n, int seed) {
+    int sum = 0;
+    for (int i = 0; i < n; ++i) {
+        seed = f(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+float sub mod_run_float(code<float(float)> f, int n, float seed) {
+    float sum = 0.0;
+    for (int i = 0; i < n; ++i) {
+        seed = f(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+#! loops over a reference to the module's own function, which the module's code made
+public int sub mod_loop(int n, int seed) {
+    return mod_run(\mod_step(), n, seed);
+}
+
+#! as mod_loop() with floats
+public float sub mod_loop_float(int n, float seed) {
+    return mod_run_float(\mod_fstep(), n, seed);
+}
+
+#! loops over a reference that the caller gives
+public int sub mod_apply(code<int(int)> f, int n, int seed) {
+    return mod_run(f, n, seed);
+}
+
+#! returns a reference to the module's own function
+public code<int(int)> sub mod_ref() {
+    return \mod_step();
+}
+
+#! calls a reference to the module's function that raises an exception, and returns the exception's description and
+#! the module's functions on its call stack
+public string sub mod_exception(int x) {
+    code<int(int)> f = \mod_throw();
+    try {
+        f(x);
+        return "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        list<string> l = ();
+        foreach hash<auto> frame in (ex.callstack) {
+            if (frame.function =~ /^mod_/) {
+                push l, frame.function;
+            }
+        }
+        return sprintf("%s: %s at %s", ex.err, ex.desc, l.join(" <- "));
+    }
+}

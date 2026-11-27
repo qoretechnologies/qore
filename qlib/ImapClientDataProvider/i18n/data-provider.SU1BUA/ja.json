@@ -16,7 +16,7 @@
           "message": "任意のIMAPサーバー上でメールを閲覧および管理します。\n\n- サーバー側の条件でメールボックスを検索し、一致するメッセージのみを転送\n- メッセージ全体、または1つの添付ファイルのみが必要な場合は単一のMIMEパーツを取得\n- サーバーがサポートしている場合はサーバープッシュを使用して、メールの到着時にリアルタイムで反応\n- フラグの変更、メールボックス間のメッセージの移動、`APPEND` によるメッセージの整理\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) は標準的なメールボックスプロトコルであり、多くのメールプロバイダーにとって唯一提供されているプログラムによるアクセス手段です。メッセージはサーバー上に保持されるため、インテグレーションはアカウントのメールを占有することなくメールボックスを監視し、届いた内容に応じてアクションを実行できます。\n\nパスワード認証とOAuth2ベアラートークン認証の両方がサポートされています。メカニズムはサーバーがアドバタイズするものから選択されます"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "メッセージの検索"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "メッセージの取得によってフラグが変更されないよう、`SELECT` の代わりに `EXAMINE` でメールボックスを開きます"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "メッセージの取得"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "メッセージ取得後に`\\Seen`フラグを設定します。\n\n取得自体はフラグを変更しないため、送信者のメールクライアントで既読にすることなく確認したい場合は`False`のままにしてください"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "添付ファイルの取得"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "取得するMIMEパート指定子 (例: `1`、`2.1`、`HEADER`、`TEXT`)。\n\n単一パートの取得によりメッセージ全体の転送を防ぐことができ、複数の大きな添付ファイルから1つだけが必要な場合に役立ちます"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "メールボックスを一覧表示"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "`LIST`の代わりに`LSUB`を使用して、アカウントが購読しているメールボックスのみを一覧表示します"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "メッセージフラグの変更"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "メッセージ上のすべてのフラグを指定されたフラグで置換します"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "メッセージを移動"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "メッセージを移動する代わりにコピーし、元のメッセージをそのまま残します"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "メッセージを保存"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "メッセージに記録する受信日時。デフォルトはサーバーが保存した時刻です"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "新しいメール"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "通知された各メッセージに `\\Deleted` フラグを設定し、イベントが発生した時点で完全に削除 (expunge) します。\n\n**これによりサーバーからメールが完全に削除されます**。メールボックスが空にすることを目的としたキューでない限り、`mark_seen` または別のメールボックスへの移動を優先してください。\n\nメッセージはイベントが**発生**した時点ですぐに完全削除されます。これはコンシューマーがそれを**処理**したこととは異なります。イベント発生時に例外がスローされた場合は次のスイープまでメッセージが保持されますが、イベントを受信した後にコンシューマーが失敗したり、タイムアウトしたり、処理の途中で再起動されたりした場合、唯一のコピーはすでに失われています。ソースメッセージを失ってはならないワークロードの場合は、このオプションを未設定のままにし、処理が成功した後にコンシューマーから操作を行ってください。すべてのイベントには `uid` が含まれており、`set-flags` および `move-messages` アクションでそれを受け取ることができます"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "新しいメールの添付ファイル"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

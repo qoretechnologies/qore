@@ -102,6 +102,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Data Provider Labels Are in Sentence Case
+    @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" renders a display name
+    in sentence case in English and without a locale (ex: \c "max_tokens_per_request" -> \c "Max tokens per request"),
+    and the data provider modules' action names follow; code that compares a display name with a literal in title
+    case must change (<a href="https://github.com/qoretechnologies/qore/issues/6784">issue 6784</a>).
+
     @par Closures Run in the Program That Compiled Them
     A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
     that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
@@ -114,6 +120,7 @@
     @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
     sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
     <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+
     @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
     The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
     tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
@@ -1534,6 +1541,11 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Direct Module Requirements in the Module Hash
+    @ref Qore::get_module_hash() "get_module_hash()" reports the direct requirements of each module as
+    \c required-modules, and the reexports of a compiled module as \c reexported-modules as for its source
+    (<a href="https://github.com/qoretechnologies/qore/issues/7796">issue 7796</a>).
+
     @par Shared Objects in Binary Modules
     Binary modules mark the objects that they keep for every %Program as shared, check changes and callbacks and
     update them in an update scope with a C++ API (\c qore_share_object(), \c qore_update_shared_object() and their
@@ -1781,7 +1793,7 @@
 
     @par Debug Support of AOT-Compiled Code Is Compiled with qcc -g
     AOT-compiled code gets the debug support that costs performance (call events for a debugger attached at any time,
-    stepping of every function) only with @ref aot_debugging "qcc -g", which standard modules get only with
+    stepping into calls at -O0) only with @ref aot_debugging "qcc -g", which standard modules get only with
     \c QORE_QMOD_DEBUGGING; a debugger attached to a Program with code compiled without it gets a warning once
     (<a href="https://github.com/qoretechnologies/qore/issues/7676">issue 7676</a>).
 
@@ -2509,6 +2521,10 @@
         option serves only its own handlers, never those of the server, and the stop of a listener refuses new
         connections before it waits for the requests in progress
         (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
+      - the stop of a listener lets its requests and responses in progress complete (at most the \c drain_timeout
+        option), then closes its connections that are left before it returns (see
+        @ref HttpServer::HttpServer::stopListenerID() "stopListenerID()";
+        <a href="https://github.com/qoretechnologies/qore/issues/7692">issue 7692</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
@@ -3136,6 +3152,19 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
+      thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
+      running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
+      through links to directories), such as those in data, no longer add a time zone each without bound
+      (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
+    - a second @ref user_module_declarations "module declaration" in a user module is a parse error at that
+      declaration instead of aborting a debug build, or replacing the module's name in a release build
+      (<a href="https://github.com/qoretechnologies/qore/issues/7794">issue 7794</a>)
+    - a binary module file that was cut short (a partial write or a bad copy) is refused on Linux with
+      \c LOAD-MODULE-ERROR, or replaced by its source module, before it is mapped, and no longer ends the process with
+      \c SIGBUS in \c dlopen() (see @ref aot_module_source_fallback;
+      <a href="https://github.com/qoretechnologies/qore/issues/7804">issue 7804</a>)
     - fixed a memory-safety issue with a class injected with @ref Qore::Program::importClass() "Program::importClass()",
       which now keeps the class that it replaces for as long as it exists; a compiled program or module in which a
       class is injected in place of itself, directly or through other classes, is no longer loaded
@@ -3157,6 +3186,16 @@
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
+    - @ref Qore::split() "split()", @ref <string>::split() and @ref <binary>::split() with an empty separator return
+      the whole subject when it contains a NUL character instead of never ending
+      (<a href="https://github.com/qoretechnologies/qore/issues/7710">issue 7710</a>)
+    - keys chosen to share the internal hash value of hash keys can no longer make the key lookups of a hash slow: a
+      hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
+      @ref hash_key_hardening;
+      <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
+    - an operand of an operator keeps the value of the variable that it read when a later operand changes the
+      variable in place, as in <tt>a == (a += x)</tt>, in the AST interpreter as in the other execution modes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7722">issue 7722</a>)
     - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
       extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)
@@ -3230,6 +3269,10 @@
       @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7546">issue 7546</a>)
     - a method called through a weak reference while another thread releases the last strong reference to its object
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
+      (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
+    - a method that another thread calls on an object whose destructor runs after its last strong reference was
+      released is refused with \c OBJECT-ALREADY-DELETED instead of running while the object's members are deleted
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
     - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
@@ -5140,6 +5183,10 @@
       \c SHARED-OBJECT-ERROR for it, as for an object marked with
       @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
       affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
+    - fixed a memory leak when a deleted object, held by a strong or a
+      @ref weak_assignment_operator "weak reference", is converted to \c softlist or \c softlist<T>; the converted
+      value is unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/7759">issue 7759</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

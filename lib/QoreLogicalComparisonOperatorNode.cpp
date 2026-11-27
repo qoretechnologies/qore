@@ -53,7 +53,7 @@ static void set_binary_analysis_cmp(QoreParseContext& parse_context,
 }
 
 QoreValue QoreLogicalComparisonOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder l(left, xsink);
+    QoreOperandEvalHolder l(left, xsink, this->snapshotLeft());
     if (*xsink)
         return QoreValue();
 

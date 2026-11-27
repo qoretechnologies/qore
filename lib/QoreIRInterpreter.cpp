@@ -2770,6 +2770,30 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
     }
 }
 
+//! list.string.join or list.string.join.identity-map: sets the result of the join of <list>::join(), or of join() if
+//! the instruction is a call of join(), in its slot; returns false for an exception (qore#7731)
+/** Out of line, so that the interpreter loop has only its call (see qore_ir_push_temp_mark_pair())
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_exec_list_join(const QoreIRInstruction* inst, IRValueSlots& values,
+        IRCleanupSlots& cleanup, ExceptionSink* xsink) {
+    // the interpreter always has a sink; an instruction without its operands, which the verifier rejects, raises its
+    // error as an exception of the instruction, which a handler in the frame catches
+    assert(xsink);
+    if (inst->operands.size() < 2) {
+        xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
+        return false;
+    }
+    QoreValue res = fromBits(qore_rt_list_string_join_inst(inst,
+        inst->opcode == QoreIROpcode::ListStringJoinIdentityMap, toBits(getIRValue(values, inst->operands[0])),
+        toBits(getIRValue(values, inst->operands[1])), xsink));
+    if (xsink && *xsink) {
+        res.discard(xsink);
+        return false;
+    }
+    setOwnedValueSlot(values, cleanup, inst->result.id, res, xsink);
+    return true;
+}
+
 //! Pushes the marks of the two nested temp scopes of a QoreIROpcode::PushTempMarkPair (qore#6444)
 /** Out of line, as only the return statements whose expression has a temp scope run it, and without
     std::vector::push_back() of the marks: GCC inlines the push of a mark into the interpreter loop only while the
@@ -7634,7 +7658,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return false;
     }
 
-    if (!self->isValid()) {
+    if (int entry = qore_object_private::checkFastCallEntry(self)) [[unlikely]] {
+        if (entry > 0) {
+            // another thread destroys the object: the regular call path refuses the call while the destructor runs,
+            // as the AST interpreter does (qore_object_private::startCall(), qore#7509)
+            return false;
+        }
         // as the AST interpreter raises it (issue #5784)
         qore_raise_deleted_method_call(xsink, self, method_name, inst->qc, inst->method, inst->variant);
         result = QoreValue();
@@ -8605,6 +8634,15 @@ static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
     return QoreValue();
 }
 
+//! list.string.join or list.string.join.identity-map: the join of <list>::join() or, if the instruction is a call of
+//! join(), of join(), so that an exception has the frame of the builtin that the code calls (qore#7731)
+static QoreValue qore_ir_eval_list_join(const QoreIRInstruction* inst, QoreIROpcode op, QoreValue separator,
+        QoreValue list, ExceptionSink* xsink) {
+    assert(op == QoreIROpcode::ListStringJoin || op == QoreIROpcode::ListStringJoinIdentityMap);
+    return fromBits(qore_rt_list_string_join_inst(inst, op == QoreIROpcode::ListStringJoinIdentityMap,
+        toBits(separator), toBits(list), xsink));
+}
+
 // Evaluate an invoke instruction by dispatching to the appropriate eval method.
 // Unary/binary computation opcodes use evalUnary/evalBinary with the IR operand
 // values.  Expression opcodes (Call, DotEval, LoadLValue, etc.) use evalExpr
@@ -8837,8 +8875,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
         case QoreIROpcode::FoldlStringJoin:
         case QoreIROpcode::FoldrStringJoin:
-        case QoreIROpcode::ListStringJoin:
-        case QoreIROpcode::ListStringJoinIdentityMap:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -8849,6 +8885,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 return fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink));
             }
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
+        }
+        case QoreIROpcode::ListStringJoin:
+        case QoreIROpcode::ListStringJoinIdentityMap: {
+            QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
+            QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            return qore_ir_eval_list_join(inv, op, left, right, xsink);
         }
         // Ternary computation opcodes.  These can be emitted as Invoke
         // instructions inside try/on_error regions so exceptions branch to the
@@ -16339,6 +16381,9 @@ load_local_done:
                             // cannot be reported to a catch block, so the instruction aborts
                             return new_h || (xsink && *xsink);
                         }
+                        // the hash was created for this store only, so a store that is rejected, or whose member
+                        // cannot be created (std::bad_alloc), leaves no value behind (qore#7763)
+                        ReferenceHolder<QoreHashNode> new_h_holder(new_h, xsink);
                         if (hks_inst->result.isValid()) {
                             qore_ir_store_new_hash_key_result(new_h, hks_inst->key_name.c_str(), val, xsink, values,
                                 cleanup, hks_inst->result.id);
@@ -16347,14 +16392,12 @@ load_local_done:
                                 xsink);
                         }
                         if (xsink && *xsink) {
-                            // the hash was created for this store only, so the rejected store leaves no value behind
-                            new_h->deref(xsink);
                             return true;
                         }
                         if (is_closure) {
-                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         } else {
-                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         }
                         if (xsink && *xsink) {
                             return true;
@@ -16497,8 +16540,9 @@ load_local_done:
                         if (!new_h || (xsink && *xsink)) {
                             return;
                         }
+                        // released if the store is rejected or its member cannot be created (qore#7763)
+                        ReferenceHolder<QoreHashNode> new_h_holder(new_h, xsink);
                         if (qore_hash_private::get(*new_h)->checkLValueKey(key_str.c_str(), xsink)) {
-                            new_h->deref(xsink);
                             return;
                         }
                         if (hksd_inst->result.isValid()) {
@@ -16508,13 +16552,12 @@ load_local_done:
                             qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key_str.c_str(), val, xsink);
                         }
                         if (xsink && *xsink) {
-                            new_h->deref(xsink);
                             return;
                         }
                         if (is_closure) {
-                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         } else {
-                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         }
                         if (xsink && *xsink) {
                             return;
@@ -21144,8 +21187,6 @@ load_local_done:
             case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
             case QoreIROpcode::FoldlStringJoin:
             case QoreIROpcode::FoldrStringJoin:
-            case QoreIROpcode::ListStringJoin:
-            case QoreIROpcode::ListStringJoinIdentityMap:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -21224,6 +21265,18 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ListStringJoin:
+            case QoreIROpcode::ListStringJoinIdentityMap:
+                if (!qore_ir_exec_list_join(inst, values, cleanup, xsink)) [[unlikely]] {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
+                ++ip;
+                break;
             case QoreIROpcode::PluginUnary:
             case QoreIROpcode::PluginBinary:
             case QoreIROpcode::PluginSubscript:

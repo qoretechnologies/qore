@@ -266,6 +266,9 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     if (unrestricted) {
         return false;
     }
+#ifdef DEBUG
+    assertFrame();
+#endif
     if (!class_ctx_known) {
         class_ctx = qore_serialization_caller_class();
         class_ctx_known = true;
@@ -283,6 +286,22 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     }
     return chain_sandboxed;
 }
+
+#ifdef DEBUG
+void QoreSerializationCaller::recordFrame() {
+    dbg_stack_loc = get_runtime_stack_location();
+    dbg_class = runtime_get_class();
+    dbg_caller_class = runtime_get_caller_class();
+    dbg_pgm = getProgram();
+}
+
+void QoreSerializationCaller::assertFrame() const {
+    assert(get_runtime_stack_location() == dbg_stack_loc);
+    assert(runtime_get_class() == dbg_class);
+    assert(runtime_get_caller_class() == dbg_caller_class);
+    assert(getProgram() == dbg_pgm);
+}
+#endif
 
 bool QoreSerializationCaller::withholds(const qore_class_private& decl, bool internal) {
     return decl.sandboxSerializationProtected() && restricts(decl, internal);

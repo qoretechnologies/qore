@@ -91,7 +91,7 @@ module VertexAiDataProvider {
             "app": VertexAiDataProvider::AppName,
             "path": "/generate-content",
             "action": "generate-content",
-            "display_name": "Generate Content",
+            "display_name": "Generate content",
             "short_desc": "Generate a Gemini response via Vertex AI",
             "desc": "Generate a Gemini response via Vertex AI's regional "
                 "`:generateContent` endpoint. The model name in the request "
@@ -119,7 +119,7 @@ module VertexAiDataProvider {
             "app": VertexAiDataProvider::AppName,
             "path": "/embed",
             "action": "embed",
-            "display_name": "Embed Text",
+            "display_name": "Embed text",
             "short_desc": "Generate text embeddings via Vertex AI :predict",
             "desc": "Generate dense vector embeddings via Vertex AI's regional "
                 "`:predict` endpoint on a Gecko / Text-Embedding publisher "

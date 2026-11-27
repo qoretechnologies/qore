@@ -16,7 +16,7 @@
           "message": "Servidor FTP genérico para intercambiar archivos con FTP y FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "Archivo FTP recibido"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

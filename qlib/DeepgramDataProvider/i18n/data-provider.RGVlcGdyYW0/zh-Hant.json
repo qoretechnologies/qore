@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
-          "source": "Transcribe File",
+          "source": "Transcribe file",
           "message": "轉錄檔案"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
@@ -520,7 +520,7 @@
           "message": "若提供，Deepgram 會立即傳回，並在完成時將最終逐字稿 POST 至此 URL。適用於長音訊檔案。"
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
-          "source": "Synthesize Speech",
+          "source": "Synthesize speech",
           "message": "語音合成"
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {
