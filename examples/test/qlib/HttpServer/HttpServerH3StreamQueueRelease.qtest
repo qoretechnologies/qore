@@ -9,6 +9,10 @@
 # stream until its session closed, also after the stream and its handler had ended; each registration copied the hash
 # of all of them.  A stream's registrations are now released once its tunnel has closed and its dispatch has returned,
 # or its session has closed, so that their numbers are bounded by the streams in use.
+#
+# qoretechnologies/qore#7836: the Queue of a stream whose session closed before the Queue was registered (after the
+# server had read the CONNECT request) was registered all the same and kept for the life of the listener, as the
+# close of the session had been delivered already; the stream's handler never got the end of the stream.
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -28,6 +32,10 @@
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! The bound on the wait for the end of a connection whose session closed before its Queue was registered (the
+#! registration waits 1.5 s in the test hook): a hang guard only
+const StartGuard = 20s;
+
 #! The number of WebSocket connections that a case opens and closes on one QUIC session
 const Connections = 50;
 
@@ -37,6 +45,23 @@ const Connections = 50;
 #! on the same QUIC session, so the earlier streams are closed.  The releases that are recorded and not yet applied
 #! are counted by the operation (\c released_queues, \c released_listeners, \c releasing).
 const LastStreams = 2;
+
+#! Reports the server's debug message of an extended CONNECT request, which the server logs when it has read it
+class ConnectSeen inherits LoggerAppenderWithLayout {
+    public {
+        Queue connect();
+    }
+
+    constructor() : LoggerAppenderWithLayout("connect-seen", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /HTTP\/3 extended CONNECT/) {
+            connect.push(True);
+        }
+    }
+}
 
 #! Echoes each message and reports its close code when it has closed
 class EchoConnection inherits WebSocketConnection {
@@ -95,6 +120,8 @@ class HttpServerH3StreamQueueReleaseTest inherits QUnit::Test {
             \testReleasedAtSessionClose());
         addTestCase("HTTP/3: the registrations of open WebSocket streams are released when the client drops their "
             "session", \testReleasedAtSessionDrop());
+        addTestCase("HTTP/3: the Queue of a WebSocket stream whose session closed before it was registered is not kept",
+            \testQueueAfterSessionClose());
         set_return_value(main());
     }
 
@@ -257,5 +284,51 @@ class HttpServerH3StreamQueueReleaseTest inherits QUnit::Test {
             assertTrue(exists ws_handler.closed.get(HangGuard), "the server's connection closed");
         }
         checkReleased(getRegistrations(hs), 0);
+    }
+
+    #! A WebSocket connection whose session the client closes after the server has read its CONNECT request and
+    #! before the server has registered the stream's Queue (qore#7836)
+    /** The window is widened by the QORE_H3_CONNECT_QUEUE_DELAY_MS hook of HttpAsyncSocketIoController, which is
+        compiled out without --enable-debug; the client closes the session once the server has logged the request,
+        which it does before the hook.  Without the hook, or if the close arrives after the registration, the close of
+        the session ends the stream as for the other cases.
+    */
+    testQueueAfterSessionClose() {
+        ConnectSeen seen();
+        Logger server_logger("h3-queue-release-connect", LoggerLevel::getLevelDebug());
+        server_logger.addAppender(seen);
+        if (m_options.verbose > 2) {
+            server_logger.addAppender(new StdoutAppender());
+        }
+        HttpServer hs(<HttpServerOptionInfo>{"logger": server_logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        setenv("QORE_H3_CONNECT_QUEUE_DELAY_MS", "1500");
+        on_exit unsetenv("QORE_H3_CONNECT_QUEUE_DELAY_MS");
+        {
+            HttpClientIo::HttpClientConnectionManager mgr = getManager();
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/ws", port));
+            stream.startStreaming("CONNECT", "/ws", {
+                ":protocol": "websocket",
+                "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+                "Sec-WebSocket-Version": "13",
+            }, True);
+            # the server has read the request: the client closes its QUIC session while the server waits before it
+            # registers the stream's Queue
+            assertEq(True, seen.connect.get(StartGuard), "the server reads the CONNECT request");
+            delete mgr;
+        }
+        # the stream's handler gets the end of the stream: without the fix, it never did, and waited until the hang
+        # guard
+        assertTrue(exists ws_handler.closed.get(StartGuard), "the server's connection closed");
+        hash<auto> r = getRegistrations(hs);
+        # a Queue registered before the close (the window missed) is released after the notification of its end
+        assertLe(r.released_queues + r.releasing, r.queue_objs, sprintf("the Queue object of the stream is not "
+            "kept: %y", r));
+        assertEq(0, r.queues, sprintf("the Queue of the stream is not registered: %y", r));
+        # the listener registers after the session closed and is released after its replay (qore#7802), which has
+        # pushed the close of the connection
+        assertLe(r.released_listeners + r.releasing + 1, r.listeners, sprintf("the listener of the stream: %y", r));
     }
 }

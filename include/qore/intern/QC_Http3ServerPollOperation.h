@@ -153,33 +153,41 @@ public:
     // --- Stream data dispatch ---
 
     //! Registers a Queue for stream data delivery
-    /** @param stream_key composite key "session_id:stream_id"
-        @param queue the C++ QoreQueue pointer (not ref'd — QoreObject ref held in QPP layer)
+    /** Closes the H3 op's shutdown race for extended-CONNECT (RFC 9220) tunnels: if the H3 op was already aborted (so
+        @c stream_queues_closed is set) the caller's Queue would otherwise be stranded with no I/O thread to drain it,
+        and an entry of a stream whose session has closed would never be erased (qore#7836).  In those cases a NOTHING
+        sentinel is pushed directly to the Queue so the caller's read loop unblocks immediately, and the map insert is
+        skipped.
 
-        Closes the H3 op's shutdown race for extended-CONNECT (RFC 9220) tunnels:
-        if the H3 op was already aborted (so @c stream_queues_closed is set) the
-        caller's Queue would otherwise be stranded with no I/O thread to drain
-        it.  In that case we push a NOTHING sentinel directly to the Queue so
-        the caller's read loop unblocks immediately, and skip the map insert
-        (the closed Queue won't receive any more data).
+        @param session_id the QUIC session of the stream
+        @param stream_key composite key "session_id:stream_id"
+        @param queue the C++ QoreQueue pointer (not ref'd — QoreObject ref held in QPP layer)
+        @param tunnel true if the stream is a CONNECT tunnel that carries raw data
+
+        @return true if the Queue is registered; false if the operation's Queues are closed or the stream's session
+        has closed, in which case the end of the stream is pushed to the Queue and nothing is kept for it: the close
+        of a session is delivered once (closeSessionStreams()), so an entry registered after it would never be
+        erased (qore#7836)
     */
-    DLLLOCAL void registerStreamQueue(const std::string& stream_key, Queue* queue, bool tunnel = false) {
+    DLLLOCAL bool registerStreamQueue(int64_t session_id, const std::string& stream_key, Queue* queue,
+            bool tunnel = false) {
         AutoLocker al(op_lock);
-        if (tunnel) {
-            tunnel_stream_keys.insert(stream_key);
-        }
-        if (stream_queues_closed) {
-            // Push the NOTHING sentinel so the handler thread's read loop
-            // exits cleanly.  Don't deref the Queue — the QoreObject ref is
-            // held in the QPP layer's `stream_queue_objs` member hash and
-            // is released by the standard internal_members deref path.  Pushed
-            // without waiting, even if the Queue is bounded and full (issue #5859).
+        // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents(); a session that closes
+        // after this check has its close delivered under op_lock after the registration, which then erases it
+        if (stream_queues_closed
+                || (sock_obj && qore_socket_object_private(sock_obj).isQuicSessionClosedOrGone(session_id))) {
+            // Push the NOTHING sentinel so the handler thread's read loop exits cleanly.  Pushed without waiting,
+            // even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
             qore_queue_ops(queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
-            return;
+            return false;
+        }
+        if (tunnel) {
+            tunnel_stream_keys.insert(stream_key);
         }
         stream_queues[stream_key] = queue;
+        return true;
     }
 
     //! Records stream data that arrived before a listener was registered
