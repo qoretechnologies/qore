@@ -560,7 +560,9 @@ authenticate();
     As the trusted forms give all state, they also give the non-public members of an object that has the provenance
     of a sandbox, such as one that trusted code created while sandboxed code called it, which the plain forms withhold
     from a caller that the object's sandbox did not create (as do @ref Qore::Program::serialize() "Program::serialize()"
-    and @ref Qore::Program::serializeToData() "Program::serializeToData()").  The shared-object rule (see
+    and @ref Qore::Program::serializeToData() "Program::serializeToData()"; see @ref sandbox_object_ownership); the
+    data keeps no provenance, so trusted code treats data that it produced while serving a sandbox as that sandbox's
+    data.  The shared-object rule (see
     @ref sandbox_shared_objects) is applied as for the plain forms.
 
     A class that a %Program parsed before it got its sandbox manager counts as
@@ -990,7 +992,14 @@ authenticate();
     \c SERIALIZATION-ERROR if a non-public member has a value, as for the non-public state of the classes that trusted
     code declared (see @ref sandbox_serialization); the \c serializeMembers() method of a class is not called for such
     code, whose serialization has the automatic members only (a transient member is not serialized), and the
-    serializers of builtin classes, whose state is their own, are not affected.  A copy of an object (\c copy()) keeps the
+    serializers of builtin classes, whose state is their own, are not affected.  The trusted serialization APIs
+    (@ref Qore::Program::serialize() "Program::serialize()", @ref Qore::Program::serializeToData()
+    "Program::serializeToData()" and the trusted forms of @ref Qore::Serializable "Serializable", see
+    @ref sandbox_trusted_serialization) are exempt: they give the non-public members of any object, as only trusted
+    code can call them and their output must never reach sandboxed code.  Serialized data keeps no provenance: an
+    object deserialized from it later by trusted code that no sandboxed code calls is an ordinary object of trusted
+    code, so trusted code must treat data that it produced while serving a sandbox as that sandbox's data.  A copy of an
+    object (\c copy()) keeps the
     creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
     an object of its own with the state of an object that its sandbox did not create.
 

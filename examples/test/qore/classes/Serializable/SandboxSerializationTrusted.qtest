@@ -8,6 +8,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./SandboxSerializationTrustedLib.qm
 
 %exec-class SandboxSerializationTrustedTest
 
@@ -87,6 +89,29 @@ class StCache {
         } catch (hash<ExceptionInfo> ex) {
             return ex.err;
         }
+    }
+
+    #! serializes the given object with the trusted form and returns whether its non-public state is in the data
+    static string serTrustedObj(object o) {
+        try {
+            return sprintf("%N", Serializable::serializeTrustedToData(o)) =~ /ORDER-STATE/ ? "STATE" : "NO-STATE";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! serializes the given object with the plain form
+    static string serPlainObj(object o) {
+        try {
+            return sprintf("%N", Serializable::serializeToData(o)) =~ /ORDER-STATE/ ? "STATE" : "NO-STATE";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! formats the given object
+    static string formatObj(object o) {
+        return sprintf("%y", o) =~ /ORDER-STATE/ ? "STATE" : "NO-STATE";
     }
 
     #! deserializes the stored data, which the trusted code wrote, with the plain form
@@ -173,6 +198,8 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
             "    }\n"
             "}\n"
             "string sub call_shared(object o) { return StCache::serializeShared(o); }\n"
+            "string sub lib_class() { return StLibCache::roundTrip(); }\n"
+            "string sub lib_function() { return st_lib_round_trip(); }\n"
             "string sub by_name() {\n"
             "    try {\n"
             "        call_static_method(\"Serializable\", \"serializeTrusted\", 1);\n"
@@ -191,6 +218,8 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         addTestCase("trusted code without a sandbox", \noSandboxTest());
         addTestCase("a governed sandbox", \governedTest());
         addTestCase("shared objects", \sharedObjectTest());
+        addTestCase("objects of tenants", \tenantObjectTest());
+        addTestCase("library module code", \libraryTest());
         addTestCase("parse define", \defineTest());
         set_return_value(main());
     }
@@ -278,5 +307,51 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         d.parse("bool sub has() {\n%ifdef QORE_HAS_SERIALIZE_TRUSTED\nreturn True;\n%else\nreturn False;\n%endif\n}\n",
             "define");
         assertEq(True, d.callFunction("has"));
+    }
+
+    #! the trusted forms give the non-public members of an object with the provenance of a tenant, also to trusted code
+    #! that serves another tenant; the plain forms and formatting withhold them there (see sandbox_object_ownership)
+    tenantObjectTest() {
+        # tenant A: trusted code creates an object while the tenant calls it
+        Program a = newTenant();
+        StOrderData oa = a.callFunction("call", sub () { return new StOrderData(); });
+        # tenant B: trusted code that serves it
+        Program b = newTenant();
+        b.parse("string sub trusted_obj(object o) { return StCache::serTrustedObj(o); }\n"
+            "string sub plain_obj(object o) { return StCache::serPlainObj(o); }\n"
+            "string sub format_obj(object o) { return StCache::formatObj(o); }\n", "b");
+
+        # trusted code that no sandboxed code calls
+        assertEq("STATE", StCache::serTrustedObj(oa));
+        assertRegex("ORDER-STATE", sprintf("%N", a.serializeToData(oa)));
+        # trusted code that serves tenant A, and trusted code that serves tenant B
+        assertEq("STATE", a.callFunction("call", sub () { return StCache::serTrustedObj(oa); }));
+        assertEq("STATE", b.callFunction("trusted_obj", oa));
+        # the plain form and formatting while serving tenant B withhold it
+        assertRegex("^SERIALIZATION-ERROR|^NO-STATE", b.callFunction("plain_obj", oa));
+        assertEq("NO-STATE", b.callFunction("format_obj", oa));
+        # a deserialized copy is an ordinary object of trusted code: while serving tenant B, its non-public state is
+        # still withheld from the plain form
+        StOrderData copy = Serializable::deserializeTrusted(Serializable::serializeTrusted(oa));
+        assertEq("ORDER-STATE", copy.getSecret());
+        assertRegex("^SERIALIZATION-ERROR|^NO-STATE", b.callFunction("plain_obj", copy));
+    }
+
+    #! the code of a library module's class acts for itself; its code outside a class acts for its caller
+    libraryTest() {
+        assertEq("LIB-STATE", p.callFunction("lib_class"));
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("lib_function"));
+        # without a sandboxed caller
+        assertEq("LIB-STATE", st_lib_round_trip());
+    }
+
+    #! returns a new sandboxed Program of a tenant with the trusted classes and a function that calls a closure
+    private Program newTenant() {
+        Program t(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        t.setSandboxManager(new SandboxManager());
+        t.importClass("StOrderData");
+        t.importClass("StCache");
+        t.parse("auto sub call(code c) { return c(); }\n", "tenant");
+        return t;
     }
 }
