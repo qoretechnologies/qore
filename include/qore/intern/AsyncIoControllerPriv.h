@@ -3063,6 +3063,18 @@ private:
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink,
         AsyncIoSyncRelease* sync_release);
 
+    //! Releases the poll info that a pending operation waited with, off the async I/O thread, and clears it
+    /** Called when a step returns the operation's next poll info: the previous one can hold the last references to
+        objects (as a socket object that a step created), whose destructors must not run on the I/O thread, where an
+        exception that one raised would also keep the I/O thread from waiting for the operation's new poll info
+        (qore#7713).  The release runs with a reference to the operation, in its Program, as that of an unused step
+        result.
+
+        @param pinfo the operation; its poll info is nullptr on return
+        @param xsink exception sink for immediate releases
+    */
+    DLLLOCAL void releaseOpPollInfo(PollInfo& pinfo, ExceptionSink* xsink);
+
 #ifdef DEBUG
 public:
     //! Debug-only: holds the references that the I/O threads of every controller release off the I/O thread

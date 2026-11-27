@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "필드 따옴표 문자(기본값: `\"`)입니다. 필드는 이 문자로 읽히며, 구분 기호를 감지할 때 따옴표로 묶인 필드 안의 구분 기호는 세지 않습니다"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "열 이름이 있는 행, 없으면 0"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "열 이름이 있는 행(1부터 셈)이며, 데이터에 열 이름이 없으면 `0`입니다. 지정하지 않으면 헤더 행을 데이터에서 찾습니다. 파일을 아는 사람이 열 이름의 위치를 알려 줄 때 사용합니다"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "최대 행 수"

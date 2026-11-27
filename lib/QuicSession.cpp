@@ -5811,6 +5811,10 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // Clean up body data
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
+        {
+            std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+            session->endSendRateWaitUnlocked(stream_id);
+        }
         session->responded_streams_.erase(stream_id);
         // a body that the I/O thread sends from an InputStream ends with its stream, so that it is released and
         // nothing more is sent to the closed stream (qore#7434; HTTP/2 does the same in onStreamCloseCallback())
@@ -7546,6 +7550,124 @@ void QuicSession::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, i
     }
 }
 
+void QuicSession::setSendRateUnlocked(int64_t min_rate, int64_t window_ms) {
+    // the bounds of the connection, its listener's default or its own, include the rate
+    if (pump_bound_set_ || pump_rate_set_) {
+        return;
+    }
+    pump_rate_set_ = true;
+    if (min_rate > 0 && window_ms > 0) {
+        pump_send_rate_ = SendRateWindow(min_rate, window_ms);
+        // acknowledgements come in steps of the client's flow-control window; the I/O thread and the waiting senders
+        // check at least every check interval, so a longer time between checks is their own delay
+        pump_send_rate_.enableProgressSteps();
+        pump_send_rate_.setMaxWaitCharge(2 * pump_send_rate_.getCheckIntervalMs());
+    }
+}
+
+bool QuicSession::isConnectionWaitingUnlocked(int64_t except) const {
+    for (int64_t id : send_rate_waiters_) {
+        if (id != except) {
+            return true;
+        }
+    }
+    for (auto& [stream_id, b] : bound_bodies_) {
+        if (isBoundBodyWaiting(stream_id, b)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool QuicSession::updateSendRateUnlocked(int64_t now_ms, std::vector<int64_t>& ended, int64_t leaving) {
+    if (!pump_send_rate_.enabled()) {
+        return false;
+    }
+    // a send that ends its wait with this update waited until now
+    bool was_waiting = leaving >= 0 && send_rate_waiters_.count(leaving);
+    // waiting from now on: the other sends of handler threads, and the bodies that the bounds charge
+    bool waiting = isConnectionWaitingUnlocked(was_waiting ? leaving : -1);
+    if (!pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), waiting, now_ms)) {
+        return false;
+    }
+    // a debt that no waiting body ends is not left for a later, unrelated wait
+    if (!(waiting || was_waiting)) {
+        pump_send_rate_.restart();
+        return false;
+    }
+    for (auto& [stream_id, b] : bound_bodies_) {
+        if (!isBoundBodyWaiting(stream_id, b) || std::find(ended.begin(), ended.end(), stream_id) != ended.end()) {
+            continue;
+        }
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: session %lld: HTTP/3 response body on stream %lld ended: the "
+            "client took less than the minimum rate of %lld bytes/s", (long long)session_id_, (long long)stream_id,
+            (long long)pump_send_rate_.getMinRate());
+        ended.push_back(stream_id);
+    }
+    // the waiting sends of handler threads end when they check next
+    send_rate_ended_.insert(send_rate_waiters_.begin(), send_rate_waiters_.end());
+    send_rate_waiters_.clear();
+    // the next waits start a new measurement: they are not charged for the ended bodies
+    pump_send_rate_.restart();
+    return true;
+}
+
+void QuicSession::endBoundBodiesUnlocked(const std::vector<int64_t>& ended) {
+    for (int64_t stream_id : ended) {
+        // a pumped body reads nothing more
+        auto iit = stream_input_streams_.find(stream_id);
+        if (iit != stream_input_streams_.end()) {
+            iit->second.eof = true;
+        }
+        // cancelStream() removes the body from the bounds; it is removed here as well for a stream that is gone
+        eraseBoundBody(stream_id);
+        ExceptionSink cancel_xsink;
+        cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &cancel_xsink);
+        cancel_xsink.clear();
+    }
+}
+
+bool QuicSession::checkStreamSendRate(int64_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    verdict = false;
+    setSendRateUnlocked(min_rate, window_ms);
+    if (send_rate_ended_.erase(stream_id)) {
+        return true;
+    }
+    // only an open stream waits: a wait registered for another one would never be ended by its close
+    if (waiting && open_bidi_streams_.count(stream_id)) {
+        send_rate_waiters_.insert(stream_id);
+    }
+    std::vector<int64_t> ended;
+    verdict = updateSendRateUnlocked(q_clock_getmicros_monotonic() / 1000, ended, waiting ? -1 : stream_id);
+    if (!waiting) {
+        send_rate_waiters_.erase(stream_id);
+    }
+    // a send that is done is told of a verdict that it waited for as well
+    bool rv = send_rate_ended_.erase(stream_id);
+    // on the I/O thread: the bodies that the verdict ends are cancelled now
+    endBoundBodiesUnlocked(ended);
+    return rv;
+}
+
+void QuicSession::endSendRateWaitUnlocked(int64_t stream_id) {
+    send_rate_ended_.erase(stream_id);
+    if (!send_rate_waiters_.count(stream_id)) {
+        return;
+    }
+    if (pump_send_rate_.enabled()) {
+        bool waiting = isConnectionWaitingUnlocked(stream_id);
+        // a verdict is not reached here; with other waits it is reached by their next check, and without one the
+        // debt is not left for a later, unrelated wait
+        if (pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), waiting,
+                q_clock_getmicros_monotonic() / 1000) && !waiting) {
+            pump_send_rate_.restart();
+        }
+    }
+    send_rate_waiters_.erase(stream_id);
+}
+
 void QuicSession::updateActiveInputStreams() {
     has_active_input_streams_.store(!stream_input_streams_.empty() || !bound_bodies_.empty(),
         std::memory_order_release);
@@ -7618,11 +7740,10 @@ int QuicSession::getInputStreamPollTimeoutMs() const {
 }
 
 void QuicSession::checkInputStreamSendBound() {
-    if (!pump_bound_set_) {
+    if (!pump_bound_set_ && send_rate_waiters_.empty()) {
         return;
     }
     int64_t now = q_clock_getmicros_monotonic() / 1000;
-    bool waiting = false;
     // the streams whose bodies end, which are cancelled after the iterations
     std::vector<int64_t> ended;
     // a pumped body whose client acknowledged all its data before its source ended gets no more acknowledgements:
@@ -7644,7 +7765,6 @@ void QuicSession::checkInputStreamSendBound() {
             b.bound_progress_ms = 0;
             continue;
         }
-        waiting = true;
         int64_t acked = static_cast<int64_t>(getBoundBodyAcked(stream_id, b));
         if (!b.bound_progress_ms || acked > b.bound_acked) {
             b.bound_acked = acked;
@@ -7658,33 +7778,10 @@ void QuicSession::checkInputStreamSendBound() {
             ended.push_back(stream_id);
         }
     }
-    // the minimum rate of the connection, across its streams, while a body waits for the client
-    if (pump_send_rate_.enabled()
-            && pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), waiting, now) && waiting) {
-        for (auto& [stream_id, b] : bound_bodies_) {
-            if (!isBoundBodyWaiting(stream_id, b) || std::find(ended.begin(), ended.end(), stream_id) != ended.end()) {
-                continue;
-            }
-            qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: session %lld: HTTP/3 response body on stream %lld ended: "
-                "the client took less than the minimum rate of %lld bytes/s", (long long)session_id_,
-                (long long)stream_id, (long long)pump_send_rate_.getMinRate());
-            ended.push_back(stream_id);
-        }
-        // the next waits start a new measurement: they are not charged for the ended bodies
-        pump_send_rate_.restart();
-    }
-    for (int64_t stream_id : ended) {
-        // a pumped body reads nothing more
-        auto iit = stream_input_streams_.find(stream_id);
-        if (iit != stream_input_streams_.end()) {
-            iit->second.eof = true;
-        }
-        // cancelStream() removes the body from the bounds; it is removed here as well for a stream that is gone
-        eraseBoundBody(stream_id);
-        ExceptionSink cancel_xsink;
-        cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &cancel_xsink);
-        cancel_xsink.clear();
-    }
+    // the minimum rate of the connection, across its streams, while a body or a send of a handler thread waits for
+    // the client
+    updateSendRateUnlocked(now, ended);
+    endBoundBodiesUnlocked(ended);
 }
 
 // errors are the streams' own: none is raised to the caller (qore#7434)

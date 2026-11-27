@@ -336,7 +336,9 @@ qore_aot_runtime_identity_targets(STAMP "${{CMAKE_BINARY_DIR}}/qcc-format.stamp"
         self.assertRegex((BUILD / "qcc-format.stamp").read_text(), r"(?m)^@builtin-domains\t[0-9]+\t[0-9a-f]{64}$")
         # the table is read from the sources of every configuration, not from the optional ones, so that the identity
         # does not depend on the configuration
-        sources = (BUILD / "qore-builtin-domain-sources.txt").read_text().splitlines()
+        # the build writes the paths as CMake sees the build directory, which may name it through a symbolic link
+        # (/var is /private/var on macOS), while BUILD is resolved, so both sides are compared resolved
+        sources = [str(Path(s).resolve()) for s in (BUILD / "qore-builtin-domain-sources.txt").read_text().splitlines()]
         self.assertIn(str(BUILD / "ql_misc.cpp"), sources)
         self.assertNotIn(str(BUILD / "ql_alloc_tracking.cpp"), sources)
 

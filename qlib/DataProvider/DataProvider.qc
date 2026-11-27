@@ -1112,6 +1112,8 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @param type the new data provider type
 
         @throw PROVIDER-ERROR the given provider has already been registered
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the type holds a type or field that code a sandbox governs created,
+        which cannot be marked as a shared object (qore#7740)
 
         @note
         - types are stored based on the path provided which may differ from their type names (which may be generic

@@ -1312,12 +1312,17 @@ AbstractDataProviderType output_type = action.output_type;
     (setSchemeLookupCallback(), setGenericApiCallActionBuilder()), and the listeners, which belong to trusted code,
     never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
     thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
-    registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
-    way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
-    loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
-    registered.
+    loading the module by path): then every deferred registration runs when it is registered.
+    registerLazyValue() builds other shared values, such as types built from a vendored API description, on their
+    first use, with @ref Qore::Thread::LazySharedValue "LazySharedValue", on the thread of the first reader, also a
+    sandboxed one, with or without a worker: as trusted code for a module from the module path, and as the module's
+    own code, with its provenance, for a module that sandboxed code loaded by its path, whose value is private.  Such
+    a value is the exception to the rule above: the builder that a module loaded under a sandbox registered runs
+    later, on the thread of its first reader, which can be another tenant or trusted code, and the other readers wait
+    for it.
 
     The deferred initialization of an application, pending or lazy, runs on one thread at a time: a thread that
     uses the application while another thread initializes it waits until the initialization has ended.  A thread
@@ -1606,8 +1611,8 @@ public class DataProviderActionCatalog {
         static int init_pid = 0;
 
         #! The queue of the catalog worker, which runs lazy registrations for sandboxed readers; see runOnWorker()
-        /** Created when the module is loaded; each job is a hash with the job's \c id and either the \c app whose
-            lazy action registrations run, or the \c value ID of a lazy value to build (see registerLazyValue())
+        /** Created when the module is loaded; each job is a hash with the job's \c id and the \c app whose lazy action
+            registrations run, or a delivery of catalog changes
         */
         static Queue lazy_jobs();
 
@@ -1663,10 +1668,15 @@ public class DataProviderActionCatalog {
         */
         static *code lazy_worker_start = DataProviderActionCatalog::initLazyWorker();
 
-        #! Lazy values: ID -> \c builder, \c value and \c built; see buildLazyValue()
-        /** See registerLazyValue()
+        #! Lazy values: ID -> the value; see registerLazyValue()
+        static hash<string, LazySharedValue> lazy_values = {};
+
+        #! The lazy values that each thread reads and that were not built when it started to: TID -> value IDs
+        /** The innermost read is last; set under @ref init_lck, and removed without a lock.  A thread reading a value
+            that is not built waits for the thread building it, which is one of the other threads reading it; the
+            cycle check of the waits for the initialization of apps follows these waits too (see waitReaches())
         */
-        static hash<string, hash<auto>> lazy_values = {};
+        static hash<string, list<string>> value_reads = {};
 
         #! The last lazy value ID
         static int lazy_value_seq = 0;
@@ -1677,6 +1687,10 @@ public class DataProviderActionCatalog {
 
         #! Signalled when a job is queued for the catalog worker; for tests (debug builds only)
         static Condition lazy_queue_cond();
+
+        #! Signalled under @ref init_lck when a thread starts to wait for the initialization of an app; for tests
+        #! (debug builds only)
+        static Condition init_wait_cond();
 %endif
 
 
@@ -1750,9 +1764,6 @@ public class DataProviderActionCatalog {
         #! Deferred initialization of an app: everything deferred
         const InitAll = InitPendingApp | InitPendingActions | InitLazyActions;
 
-        #! The build of a lazy value, in @ref init_owners: no getter of an app initializes it
-        const InitValue = (1 << 6);
-
         #! runGated(): run every deferred registration
         const RunAll = 0;
         #! runGated(): run only the deferred registrations that trusted code made (on the catalog worker)
@@ -1762,6 +1773,9 @@ public class DataProviderActionCatalog {
 
         #! The most catalog workers that run at once: a slow registration does not delay the others
         const MaxLazyWorkers = 4;
+
+        #! The most catalog workers that run at once: @ref MaxLazyWorkers, or fewer for a test (debug builds only)
+        static int max_lazy_workers = MaxLazyWorkers;
 
         #! What a thread waiting for a catalog worker waits for in @ref init_waits, followed by the job's ID; it is
         #! never the beginning of an application name
@@ -1780,6 +1794,11 @@ public class DataProviderActionCatalog {
             # the reader's restrictions refused a registration that it ran: the registration belongs to the next
             # reader (qore#6337)
             "INVALID-FUNCTION-ACCESS": True,
+            # a wait for a lazy value (or a LazySharedValue or LazySharedMap) that would close a cycle of waits
+            # (qore#7712): which thread gets the error depends on the order of the threads; the next reader runs the
+            # registration again.  SHARED-INIT-ERROR (a builder that needs its own value, a value refused before it
+            # is published, a LazySharedMap at its maximum size) repeats on every read: it is retained
+            "SHARED-INIT-CYCLE": True,
         };
 
         #! Valid file API write formats
@@ -2028,19 +2047,29 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
         registers its builder when it is loaded and gets the value with getLazyValue() when it needs it, so that
         loading the module does not build it.
 
-        The value is built where the registering module would have built it when it was loaded: on the reading
-        thread for a reader that no sandbox governs, and on the catalog worker for a sandboxed reader, so that what
-        the builder creates, which every reader shares afterwards, does not keep the reader's sandbox, including its
-        interrupts, and the module's own resources are not denied to it (see @ref dataprovider_lazy_actions).  A
-        module whose initialization a sandbox governs (one that sandboxed code loaded by path; a module from the
-        module path is initialized with no sandbox provenance) gets its value built at once, as before values were
-        lazy: no code registered under a sandbox runs later on another thread.
+        The value is a @ref Qore::Thread::LazySharedValue "LazySharedValue" of the builder: it is built once, on the
+        thread of its first reader, as trusted code, also for a sandboxed reader (whose interrupts do not end the
+        build, but whose time and stack budgets count it), so that what the builder creates, which every reader
+        shares afterwards, does not keep the reader's sandbox, and the module's own resources are not denied to it;
+        other readers wait for it.  A value of a module whose initialization a sandbox governs (one that sandboxed code
+        loaded by its path; a module from the module path is initialized with no sandbox provenance) is private: it
+        is built as that module's code, with its provenance.  The value is built on its first read in every case, so
+        an exception that the builder raises is raised to that reader, not when the module is loaded, and the next
+        reader builds the value again (qore#7712).
+
+        A builder that needs its own value, directly or through other values, raises \c SHARED-INIT-ERROR, which
+        repeats on every read.  A read of a value whose builder waits, directly or through others, for the
+        initialization of an app that the reading thread runs, or for a value that it builds, raises
+        \c SHARED-INIT-CYCLE, and so does a builder that needs its own value through the initialization of an app:
+        which thread gets it depends on the order of the threads, so a lazy registration that fails with it runs
+        again for the next reader, where a registration that fails with \c SHARED-INIT-ERROR is retained (see
+        getInitializationFailures()).
 
         The API is for modules: a value can only be registered while a module is being loaded, and lives until the
         end of the process, as the module's Program does.
 
         @param builder the code that builds the value; it takes no arguments.  An exception that it raises is raised
-        to the reader, and the next reader builds the value again
+        to the reader that built it, and the next reader builds the value again
 
         @return the ID of the value, for getLazyValue()
 
@@ -2073,16 +2102,8 @@ class MyProvider {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "a lazy value can only be registered while a module is being "
                 "loaded";
         }
-        # a hash of any values: the value replaces the builder's entry when it is built
-        hash<auto> v;
-        # without a catalog worker, and for a module that sandboxed code loaded by path, the value is built now, as it was when
-        # it was not lazy: no code registered under a sandbox runs later, on another thread
-        if (!lazy_worker_start || DataProviderActionCatalog::isGoverned()) {
-            v.value = builder();
-            v.built = True;
-        } else {
-            v.builder = builder;
-        }
+        # built on its first read; private for a module that sandboxed code loaded by its path (see LazySharedValue)
+        LazySharedValue v(builder);
         int id;
         {
             AutoLock al(lazy_worker_lck);
@@ -2095,7 +2116,9 @@ class MyProvider {
         return id;
     }
 
-    #! Removes a lazy value of a module whose load failed; a build running ends without storing its value
+    #! Removes a lazy value of a module whose load failed
+    /** A build running for a reader ends into the value removed, which no other reader reaches any more
+    */
     private:internal static removeLazyValue(string key) {
         AutoLock al(lazy_worker_lck);
         remove lazy_values{key};
@@ -2106,32 +2129,30 @@ class MyProvider {
 
         @return the value
 
+        @note A reader waits for a value that another thread builds, also when it is loading a module: a builder must
+        not load a module that one of its readers can be loading
+
         @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID
-        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader, the value is not built, and there is no
-        catalog worker, or the reader is loading a module
+        @throw SHARED-INIT-ERROR the value is needed by its own builder, directly or through other values; this
+        error repeats on every read (see @ref Qore::Thread::LazySharedValue::get() "LazySharedValue::get()" for the
+        other errors of the build)
+        @throw SHARED-INIT-CYCLE the read would close a cycle of waits of other threads: of builders of values, or
+        of initializations of apps, or the value is needed by its own builder through the initialization of an app;
+        another order of the same reads can succeed, and a lazy registration that fails with it runs again for the
+        next reader
 
         @since %DataProvider 3.11
     */
     static auto getLazyValue(int id) {
         string key = id.toString();
-        *hash<auto> v = lazy_values{key};
+        *LazySharedValue v = lazy_values{key};
         if (!v) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d", id);
         }
-        if (v.built) {
-            return v.value;
+        if (v.isBuilt()) {
+            return v.get();
         }
-        if (!DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
-            return DataProviderActionCatalog::buildLazyValue(key);
-        } else {
-            # as for lazy registrations (see initPending()): a sandboxed thread loading a module cannot wait for the worker,
-            # whose builder can load the module that this thread is loading
-            if (get_module_context_path()) {
-                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("lazy value %d has not been built, and a sandboxed "
-                    "thread that is loading a module cannot build it or wait for it to be built", id);
-            }
-            return DataProviderActionCatalog::runOnWorker({"value": id});
-        }
+        return DataProviderActionCatalog::readLazyValue(key, v);
     }
 
     #! Returns @ref True if the application has lazy action registrations that have not run yet
@@ -6266,6 +6287,10 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         on_exit if (done) {
             DataProviderActionCatalog::exitInit(app, done);
         }
+        # the cycle check of a lazy value that the initialization reads (see readLazyValue()); exitInit() removes it
+        if (done) {
+            DataProviderActionCatalog::pushFrame("a:" + app);
+        }
         if (what & InitPendingApp) {
             if (initmap{app} && DataProviderActionCatalog::selects(filter, initmap{app})) {
                 if (*hash<auto> h = remove initmap{app}) {
@@ -6328,46 +6353,86 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         }
     }
 
-    #! Builds a lazy value unless it is built, and returns it; see getLazyValue()
-    /** One thread builds a value at a time, as one thread initializes an app (see enterInit()): another thread that
-        needs the value meanwhile waits for it, unless it is loading a module, or the wait would close a cycle of
-        waits; such a thread builds a copy of the value for itself, which is not kept.  A value whose builder needs
-        the value itself, directly or through other values, cannot be built.
+    #! Reads a lazy value that was not built when the read started; see getLazyValue()
+    /** The read is recorded for the cycle check of the waits for the initialization of apps: a thread that builds the
+        value can wait for an app that another thread initializes, whose initialization reads the value, and the two
+        threads would wait for each other, the one in LazySharedValue::get(), the other in the catalog (see
+        enterInit())
 
-        @throw DATA-PROVIDER-LAZY-VALUE-ERROR the value is needed while this thread builds it
+        @throw SHARED-INIT-CYCLE the thread building the value waits, directly or through others, for this thread, or
+        this thread builds the value and needs it through the initialization of an app that it started since
     */
-    private:internal static auto buildLazyValue(string key) {
-        if (lazy_values{key}.built) {
-            return lazy_values{key}.value;
-        }
-        string owner_key = "<value:" + key + ">";
-        if (init_owners{owner_key}.tid == gettid()) {
-            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("lazy value %s is needed by its own builder", key);
-        }
-        *Counter done = DataProviderActionCatalog::enterInit(owner_key, InitValue);
-        # ending the build cannot fail
-        on_exit if (done) {
-            DataProviderActionCatalog::exitInit(owner_key, done);
-        }
-        *hash<auto> v = lazy_values{key};
-        if (v.built) {
-            return v.value;
-        }
-        if (!v) {
-            throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("lazy value %s was removed: the module that registered it "
-                "failed to load", key);
-        }
-        auto value = v.builder();
-        if (done) {
-            AutoLock al(lazy_worker_lck);
-            # not stored if the value was removed while it was built
-            if (lazy_values{key}) {
-                lazy_values{key}.value = value;
-                lazy_values{key}.built = True;
-                remove lazy_values{key}.builder;
+    private:internal static auto readLazyValue(string key, LazySharedValue v) {
+        DataProviderActionCatalog::checkFork();
+        # this thread builds the value, and needs it again through the initialization of an app that it started
+        # since: the cycle runs through the app, which another order of the same reads initializes before the value
+        if (*list<string> own = Priv::_lazy_frames) {
+            *int start = DataProviderActionCatalog::lastIndex(own, "v:" + key);
+            if (exists start && (select own[(start + 1)..], $1 =~ /^a:/)) {
+                throw "SHARED-INIT-CYCLE", sprintf("lazy value %s cannot be read: it is needed, through the "
+                    "initialization of an app, by its own builder", key);
             }
         }
-        return value;
+        string tkey = gettid().toString();
+        list<string> frames;
+        {
+            AutoLock al(init_lck);
+            if (DataProviderActionCatalog::waitReaches(DataProviderActionCatalog::valueReaders(key, gettid()),
+                    gettid())) {
+                throw "SHARED-INIT-CYCLE", sprintf("lazy value %s cannot be read: the thread that builds it waits, "
+                    "directly or through others, for the initialization of an app that this thread runs", key);
+            }
+            frames = (value_reads{tkey} ?? ()) + key;
+            value_reads{tkey} = frames;
+        }
+        # removing the read takes no lock and cannot fail, however the read ends
+        on_exit {
+            pop frames;
+            if (frames) {
+                value_reads{tkey} = frames;
+            } else {
+                remove value_reads{tkey};
+            }
+            DataProviderActionCatalog::popFrame("v:" + key);
+        }
+        DataProviderActionCatalog::pushFrame("v:" + key);
+        return v.get();
+    }
+
+    #! Records a lazy value that this thread reads, or an app that it initializes, in its own frames
+    private:internal static pushFrame(string frame) {
+        if (Priv::_lazy_frames) {
+            push Priv::_lazy_frames, frame;
+        } else {
+            Priv::_lazy_frames = (frame,);
+        }
+    }
+
+    #! Removes the last frame of this thread that is the given one; raises no exception
+    private:internal static popFrame(string frame) {
+        try {
+            *int i = DataProviderActionCatalog::lastIndex(Priv::_lazy_frames, frame);
+            if (exists i) {
+                splice Priv::_lazy_frames, i, 1;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a frame left behind can only make a later read of the same value raise SHARED-INIT-CYCLE on this thread
+        }
+    }
+
+    #! Returns the last index of the string in the list, or @ref NOTHING
+    private:internal static *int lastIndex(*list<string> l, string s) {
+        for (int i = l.size() - 1; i >= 0; --i) {
+            if (l[i] == s) {
+                return i;
+            }
+        }
+    }
+
+    #! Returns the threads other than the given one that read the given lazy value; init_lck is held
+    private:internal static list<int> valueReaders(string key, int tid) {
+        string tkey = tid.toString();
+        return map $1.key.toInt(), value_reads.pairIterator(), $1.key != tkey && inlist(key, $1.value);
     }
 
     #! Returns @ref True if the current thread is the catalog worker
@@ -6380,6 +6445,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         end, so that the registration it runs ends for every reader
 
         @throw DATA-PROVIDER-LAZY-INIT-ERROR there is no worker and none can be started
+        @throw SHARED-INIT-CYCLE a catalog worker waits, directly or through others, for this thread
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it ran the job
     */
     private:internal static auto runOnWorker(hash<auto> job) {
@@ -6394,9 +6460,10 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         # directly or through others, for an app that this thread initializes would never run the job
         {
             AutoLock al(init_lck);
+            # a cycle of waits, which another order of the threads avoids (qore#7712)
             if (DataProviderActionCatalog::lazyWorkerWaitsFor(gettid())) {
-                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized: a catalog worker waits "
-                    "for an initialization that this thread runs", DataProviderActionCatalog::describeJob(job));
+                throw "SHARED-INIT-CYCLE", sprintf("%s cannot be initialized: a catalog worker waits, directly or "
+                    "through others, for this thread", DataProviderActionCatalog::describeJob(job));
             }
             init_waits{tkey} = LazyWorkerKey + id;
         }
@@ -6451,9 +6518,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         if (job.deliver) {
             return "the delivery of catalog changes";
         }
-        return exists job.app
-            ? sprintf("the actions of application %y", job.app)
-            : sprintf("lazy value %d", job.value);
+        return sprintf("the actions of application %y", job.app);
     }
 
 %ifdef QoreDebug
@@ -6487,6 +6552,60 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         return True;
     }
 
+    #! Waits until a thread waits for the initialization of an app (debug builds only)
+    /** For tests of the cycles of waits: a test knows that a thread waits for an app that another thread initializes
+
+        @param tid the thread
+        @param app the app
+        @param timeout_ms the most to wait, in milliseconds
+
+        @return @ref True if the thread waits for the app, @ref False if the time ran out
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL or is sandboxed
+    */
+    static bool waitForInitWait(int tid, string app, timeout timeout_ms) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot wait for the catalog's initializations from a context with restricted "
+                "process control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
+        }
+        string tkey = tid.toString();
+        AutoLock al(init_lck);
+        while (init_waits{tkey} != app) {
+            if (init_wait_cond.wait(init_lck, timeout_ms)) {
+                return init_waits{tkey} == app;
+            }
+        }
+        return True;
+    }
+
+    #! Sets the most catalog workers that run at once, from 1 to @ref MaxLazyWorkers (debug builds only)
+    /** For tests that need every worker busy: the workers running already are not stopped
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL or is sandboxed
+        @throw DATA-PROVIDER-LAZY-WORKER-ERROR the number is out of range
+    */
+    static setMaxLazyWorkers(int count) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the catalog workers from a context with restricted process control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the catalog's test hooks";
+        }
+        if (count < 1 || count > MaxLazyWorkers) {
+            throw "DATA-PROVIDER-LAZY-WORKER-ERROR", sprintf("the number of catalog workers must be from 1 to %d; got %d",
+                MaxLazyWorkers, count);
+        }
+        AutoLock al(lazy_worker_lck);
+        max_lazy_workers = count;
+    }
+
     #! Returns the number of jobs queued for the catalog worker since the process started (debug builds only)
     static int getLazyInitsQueued() {
         return lazy_jobs_submitted;
@@ -6507,8 +6626,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         any Program): from the module path, the module is initialized with no sandbox provenance, also when sandboxed
         code loads it first, and has a worker; when it is loaded first by code restricted with
         @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", or by sandboxed code by path, there is no worker,
-        and every deferred registration runs, and every lazy value is built, when it is registered, as before
-        registrations were deferred.
+        and every deferred registration runs when it is registered, as before registrations were deferred.
 
         @return the capability, or @ref NOTHING if there is no worker
     */
@@ -6556,7 +6674,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             lazy_worker_pid = pid;
         }
         int count = lazy_workers.size() + lazy_workers_starting;
-        if (first ? count : (lazy_pending <= count || count >= MaxLazyWorkers)) {
+        if (first ? count : (lazy_pending <= count || count >= max_lazy_workers)) {
             return count > 0;
         }
         if (lazy_worker_shutdown || !lazy_worker_start) {
@@ -6577,7 +6695,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
     #! The catalog worker: runs the jobs queued until it is stopped
     /** Started by the capability that the module created when it was loaded, so it runs only this fixed code; its
         work arrives only through the module's own queue: an app, whose lazy registrations made by trusted modules it
-        runs, or a lazy value registered by a trusted module, which it builds.  When it ends, also when a
+        runs, or a delivery of catalog changes.  When it ends, also when a
         registration ends its thread, every job still queued ends with \c DATA-PROVIDER-LAZY-WORKER-STOPPED, so that
         no reader waits for it.
     */
@@ -6591,7 +6709,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 return;
             }
             --lazy_workers_starting;
-            if (lazy_workers.size() >= MaxLazyWorkers) {
+            if (lazy_workers.size() >= max_lazy_workers) {
                 return;
             }
             lazy_workers{tid.toString()} = True;
@@ -6622,12 +6740,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 continue;
             }
             try {
-                if (exists job.app) {
-                    DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
-                    result = {};
-                } else {
-                    result = {"value": DataProviderActionCatalog::buildLazyValue(job.value.toString())};
-                }
+                DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
+                result = {};
             } catch (hash<ExceptionInfo> ex) {
                 result = {"error": ex};
             }
@@ -6725,6 +6839,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             }
             init_owners = map {$1.key: $1.value}, init_owners.pairIterator(), $1.value.pid == pid;
             init_waits = {};
+            # only this thread runs here
+            value_reads = map {$1.key: $1.value}, value_reads.pairIterator(), $1.key == gettid().toString();
             # the parent's worker does not run here; the first sandboxed reader starts one (see startLazyWorker())
         }
         init_pid = pid;
@@ -6784,6 +6900,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                     return;
                 }
                 init_waits{tkey} = app;
+%ifdef QoreDebug
+                init_wait_cond.broadcast();
+%endif
                 wait_for = owner.done;
             }
             # removing the entry cannot fail
@@ -6792,47 +6911,63 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         }
     }
 
-    #! Returns @ref True if the worker waits, directly or through others, for an app the thread inits; init_lck is held
+    #! Returns @ref True if a worker waits, directly or through others, for the thread; init_lck is held
+    /** A worker waits for an app that another thread initializes, for a job of another worker, or for a lazy value
+        that another thread builds (see waitReaches())
+    */
     private:internal static bool lazyWorkerWaitsFor(int tid) {
         if (lazy_worker_pid != getpid()) {
             return False;
         }
-        foreach string worker in (keys lazy_workers) {
-            *string app = init_waits{worker};
-            if (exists app && !app.equalPartial(LazyWorkerKey) && DataProviderActionCatalog::initWaitCycle(app, tid)) {
-                return True;
-            }
-        }
-        return False;
+        return DataProviderActionCatalog::waitReaches((map $1.toInt(), keys lazy_workers), tid);
     }
 
     #! Returns @ref True if waiting for the initialization of the app would close a cycle of waits; init_lck is held
     private:internal static bool initWaitCycle(string app, int tid) {
-        hash<string, bool> seen = {};
         *int owner = init_owners{app}.tid;
-        while (exists owner) {
-            if (owner == tid) {
+        return exists owner && DataProviderActionCatalog::waitReaches((owner,), tid);
+    }
+
+    #! Returns @ref True if one of the given threads waits, directly or through others, for the given thread
+    /** init_lck is held.  A thread waits for the initialization of an app (for the thread running it), for a job of
+        a catalog worker (for the worker running it), or, if it waits for neither, it reads a lazy value of the catalog
+        that is not built (the innermost one: it waits for the thread building it, which is one of the other threads
+        reading it).  The waits for other LazySharedValue or LazySharedMap objects, which a builder can use, are not
+        followed
+    */
+    private:internal static bool waitReaches(list<int> start, int tid) {
+        hash<string, bool> seen = {};
+        list<int> todo = start;
+        while (todo) {
+            int t = shift todo;
+            if (t == tid) {
                 return True;
             }
-            string okey = owner.toString();
-            if (seen{okey}) {
-                return False;
+            string tkey = t.toString();
+            if (seen{tkey}) {
+                continue;
             }
-            seen{okey} = True;
-            *string next = init_waits{okey};
-            if (!exists next) {
-                return False;
-            }
-            if (next.equalPartial(LazyWorkerKey)) {
-                # a thread waiting for a job waits for the worker running it; for a job that no worker runs yet, any
-                # worker could be the one: a worker waiting for it closes a cycle
-                *int worker = lazy_job_running{next.substr(LazyWorkerKey.size())};
-                if (!exists worker) {
-                    return DataProviderActionCatalog::isLazyWorker() && gettid() == tid;
+            seen{tkey} = True;
+            *string next = init_waits{tkey};
+            if (exists next) {
+                if (next.equalPartial(LazyWorkerKey)) {
+                    # a thread waiting for a job waits for the worker running it; for a job that no worker runs yet,
+                    # any worker could be the one: a worker waiting for it closes a cycle
+                    *int worker = lazy_job_running{next.substr(LazyWorkerKey.size())};
+                    if (!exists worker) {
+                        if (DataProviderActionCatalog::isLazyWorker() && gettid() == tid) {
+                            return True;
+                        }
+                        continue;
+                    }
+                    push todo, worker;
+                } else if (exists (*int owner = init_owners{next}.tid)) {
+                    push todo, owner;
                 }
-                owner = worker;
-            } else {
-                owner = init_owners{next}.tid;
+                continue;
+            }
+            if (*list<string> reads = value_reads{tkey}) {
+                todo += DataProviderActionCatalog::valueReaders(reads.last(), t);
             }
         }
         return False;
@@ -6847,6 +6982,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             remove init_owners{app};
         }
         done.dec();
+        DataProviderActionCatalog::popFrame("a:" + app);
     }
 
     #! Returns the code that runs a deferred registration in the context of the module that makes it
@@ -7013,4 +7149,8 @@ thread_local *int _lazy_reg_id;
 
 #! True while the current thread runs a deferred initialization that trusted code registered; module-private
 thread_local *bool _trusted_deferred_init;
+
+#! The lazy values that the current thread reads (\c "v:" + ID) and the apps that it initializes (\c "a:" + app),
+#! innermost last; see DataProviderActionCatalog::readLazyValue()
+thread_local *list<string> _lazy_frames;
 }

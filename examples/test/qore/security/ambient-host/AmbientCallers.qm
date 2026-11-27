@@ -55,6 +55,11 @@ public namespace AmbientCallers {
         return KindInfo{kind(key)}.read;
     }
 
+    #! returns True if the Program of the given key is sandboxed
+    public bool sub sandboxed(string key) {
+        return KindInfo{kind(key)}.sandboxed;
+    }
+
     #! returns True if code of the Program of the given key may receive the host's secrets
     public bool sub may_receive(string key) {
         return KindInfo{kind(key)}.secrets;

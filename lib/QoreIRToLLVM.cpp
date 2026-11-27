@@ -614,19 +614,6 @@ static std::string qore_store_helper_name(const char* name, bool foreach_assignm
     return name;
 }
 
-// LLVM 23 made getTerminator() assert that the block is already well formed;
-// getTerminatorOrNull() preserves the nullable contract used while lowering.
-static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
-#if LLVM_VERSION_MAJOR >= 23
-    return block->getTerminatorOrNull();
-#else
-    return block->getTerminator();
-#endif
-}
-
-static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
-    return qoreGetTerminator(&block);
-}
 
 static const llvm::Instruction* qoreGetTerminator(const llvm::BasicBlock* block) {
     return qoreGetTerminator(const_cast<llvm::BasicBlock*>(block));
@@ -16124,7 +16111,7 @@ void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_fun
                 continue;
             }
             // an unconditional branch to the block (every block has its terminator here)
-            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(pred->getTerminator());
+            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(qoreGetTerminator(pred));
             if (pred == &bb || !br || !br->isUnconditional() || br->getSuccessor(0) != &bb) {
                 ok = false;
                 break;
@@ -20141,7 +20128,9 @@ bool QoreIRToLLVM::lowerPairedAutoAddStore(const QoreIRInstruction* inst, llvm::
     if (!ok) {
         return false;
     }
-    if (!builder->GetInsertBlock()->getTerminator()) {
+    // the lowering of the store can end its block (a raised exception); LLVM 23's getTerminator() does not return
+    // null for a block that has no terminator yet (see qoreGetTerminator())
+    if (!qoreGetTerminator(builder->GetInsertBlock())) {
         builder->CreateBr(done_bb);
     }
     builder->SetInsertPoint(done_bb);
