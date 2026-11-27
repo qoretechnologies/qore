@@ -213,8 +213,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
         #   in qcc executables
-        # - empty-string-order (#6090): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
         # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
@@ -252,10 +250,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
-        # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
-        #   executables
-        # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
         #   in a child process with --exec-mode=ast
         # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
@@ -294,8 +288,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   their own --exec-mode, in qcc executables and in a qcc-compiled module
         # - generic-static-intermediate (#6447, #6448): its probes run in child processes that set their own
         #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
-        #   executables and in a qcc-compiled module
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables, which arm a debug hook
         # - private-internal-redeclared-member (#6393): its probes run in child processes in the default mode and that
@@ -425,12 +417,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
                                  "examples/test/qore/classes/deleted-object-generic-variant.qtest",
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
-                                 "examples/test/qore/operators/empty-string-order.qtest",
-                                 "examples/test/qore/operators/float-int-conversion.qtest",
-                                 "examples/test/qore/operators/hash-equality.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",

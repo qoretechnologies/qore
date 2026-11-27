@@ -127,7 +127,12 @@ class CharBoolEqualsTest inherits QUnit::Test {
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
             qcc_bin, exe, getWorker()));
         assertTrue(is_file(exe), "compiled program: " + compile_out);
-        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        # the output on stdout followed by the output on stderr, as of the execution modes, apart from the module
+        # loader's warnings and the native compilation trace, which are not output of the program
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+            sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", "aot", res.out));
+        checkWorkerOutput("aot", res.out);
     }
 
     private string getWorker() {
