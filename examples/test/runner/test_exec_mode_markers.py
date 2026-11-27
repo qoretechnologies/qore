@@ -217,8 +217,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
-        # - foreach-enum-element-release (#6091): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
         # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
         #   ISO-8859-1
         # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
@@ -246,10 +244,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - hashdecl-member-default-typeparam (#6240): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - hashdecl-default-closure-typeparam (#6269): its probes run in child processes that set their own
         #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
@@ -450,7 +444,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
-                                 "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest",
                                  "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest",
@@ -461,12 +454,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
-                                 "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest",
-                                 "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
                                  "examples/test/qore/classes/generic-static-call-type-params.qtest",
