@@ -2653,16 +2653,7 @@ public class DataProviderPipeline {
     private:internal submitIntern(auto _data) {
         DataProviderShape shape = AbstractDataProcessor::detectShape(_data);
         if (canProcessSynchronouslyIntern()) {
-            int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
-            if (shape == DataProviderShape::DataFrameBlock) {
-                logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
-            } else if (shape == DataProviderShape::HashOfLists && rec_cnt > 1) {
-                logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
-            }
-            synchronous_processing = True;
-            pmap."0".processSynchronously(_data);
-            # only records that the queue accepted are counted
-            record_count += rec_cnt;
+            submitSynchronousIntern(_data, shape);
             return;
         }
 
@@ -2685,8 +2676,28 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitDataIntern(auto _data) {
+        # a synchronous pipeline processes the records of an iterator on the caller's thread, as it has no queue
+        # threads (qore#7793)
+        if (canProcessSynchronouslyIntern()) {
+            submitSynchronousIntern(_data, AbstractDataProcessor::detectShape(_data));
+            return;
+        }
         int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data);
         submitQueueIntern(_data);
+        # only records that the queue accepted are counted
+        record_count += rec_cnt;
+    }
+
+    #! Processes data on the caller's thread in a synchronous pipeline; the lock must be held
+    private:internal submitSynchronousIntern(auto _data, DataProviderShape shape) {
+        int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
+        if (shape == DataProviderShape::DataFrameBlock) {
+            logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
+        } else if (shape == DataProviderShape::HashOfLists && rec_cnt > 1) {
+            logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+        }
+        synchronous_processing = True;
+        pmap."0".processSynchronously(_data);
         # only records that the queue accepted are counted
         record_count += rec_cnt;
     }
@@ -2710,6 +2721,11 @@ public class DataProviderPipeline {
     private:internal submitBulkIntern(AbstractDataProviderBulkRecordInterface i) {
         while (*auto recs = i.getShapedValue()) {
             DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+            # a synchronous pipeline processes the blocks on the caller's thread (qore#7793)
+            if (canProcessSynchronouslyIntern()) {
+                submitSynchronousIntern(recs, shape);
+                continue;
+            }
             int rec_cnt = AbstractDataProcessor::shapeRecordCount(recs, shape);
             logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
             submitQueueIntern(recs);

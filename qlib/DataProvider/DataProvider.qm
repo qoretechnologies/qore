@@ -1839,6 +1839,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::PipelineOptionInfo::thread_callback "thread_callback" raised an error; the error is now
       raised by the call that starts the run
       (<a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
+    - fixed a bug where a synchronous @ref DataProvider::DataProviderPipeline "DataProviderPipeline" given an iterator
+      queued its records for a queue thread that it does not start, so that
+      @ref DataProvider::DataProviderPipeline::waitDone() "waitDone()" never returned; the records are now processed
+      on the caller's thread (<a href="https://github.com/qoretechnologies/qore/issues/7793">issue 7793</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
