@@ -73,7 +73,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/search",
             "action": "search",
-            "display_name": "Search for Messages",
+            "display_name": "Search for messages",
             "short_desc": "Search a mailbox for messages",
             "desc": "Search a mailbox with server-side IMAP criteria and return the UIDs of the "
                 "matching messages.\n\n"
@@ -91,7 +91,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/get-message",
             "action": "get-message",
-            "display_name": "Retrieve a Message",
+            "display_name": "Retrieve a message",
             "short_desc": "Retrieve a message by UID",
             "desc": "Retrieve a complete message by UID, including its headers, decoded body text, and "
                 "a summary of its attachments.\n\n"
@@ -111,7 +111,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/get-attachment",
             "action": "get-attachment",
-            "display_name": "Retrieve an Attachment",
+            "display_name": "Retrieve an attachment",
             "short_desc": "Retrieve a single MIME part of a message",
             "desc": "Retrieve a single MIME part of a message without transferring the whole message.\n\n"
                 "This matters when one attachment is needed from a message carrying several large "
@@ -128,7 +128,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/list-mailboxes",
             "action": "list-mailboxes",
-            "display_name": "List Mailboxes",
+            "display_name": "List mailboxes",
             "short_desc": "List the mailboxes in the account",
             "desc": "List the mailboxes in the account, optionally restricted to those the account is "
                 "subscribed to.\n\n"
@@ -144,7 +144,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/set-flags",
             "action": "set-flags",
-            "display_name": "Change Message Flags",
+            "display_name": "Change message flags",
             "short_desc": "Add, remove, or replace message flags",
             "desc": "Add, remove, or replace the flags on a set of messages.\n\n"
                 "Flags are how IMAP records state such as read (`\\Seen`), flagged (`\\Flagged`), and "
@@ -160,7 +160,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/move-messages",
             "action": "move-messages",
-            "display_name": "Move Messages",
+            "display_name": "Move messages",
             "short_desc": "Move or copy messages to another mailbox",
             "desc": "Move or copy messages to another mailbox.\n\n"
                 "Moving processed mail into an archive mailbox keeps the working mailbox small and "
@@ -176,7 +176,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/append-message",
             "action": "append-message",
-            "display_name": "Store a Message",
+            "display_name": "Store a message",
             "short_desc": "Store a message in a mailbox",
             "desc": "Store a complete RFC 822 message in a mailbox.\n\n"
                 "Use this to file a copy of a message that was sent by other means, or to import mail "
@@ -191,7 +191,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/watch",
             "action": "watch",
-            "display_name": "New Email",
+            "display_name": "New email",
             "short_desc": "React to new emails",
             "desc": "React to new emails arriving in a mailbox.\n\n"
                 "When a message matching the search criteria arrives, the whole message — headers, "
@@ -216,7 +216,7 @@ module ImapClientDataProvider {
             "app": ImapClientDataProvider::AppName,
             "path": "/watch-attachment",
             "action": "watch-attachment",
-            "display_name": "New Email Attachments",
+            "display_name": "New email attachments",
             "short_desc": "React to new email attachments",
             "desc": "React to attachments on new emails arriving in a mailbox.\n\n"
                 "One event is raised per matching attachment, so a message carrying several files "

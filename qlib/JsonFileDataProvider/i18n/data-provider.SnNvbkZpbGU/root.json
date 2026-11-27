@@ -16,8 +16,8 @@
           "message": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files containing an array of objects (iterated as individual records) or a single object (returned as one record). Provides configurable pretty-print output for writing."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
-          "message": "Read JSON File"
+          "source": "Read JSON file",
+          "message": "Read JSON file"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
           "source": "Read standard JSON file data from a file location",
@@ -120,8 +120,8 @@
           "message": "Keep the text in the input encoding as read, without a check"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
-          "message": "Read JSON Inline Data"
+          "source": "Read JSON inline data",
+          "message": "Read JSON inline data"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
           "source": "Read standard JSON inline data",
@@ -188,8 +188,8 @@
           "message": "US-ASCII encoding"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
-          "message": "Write JSON File"
+          "source": "Write JSON file",
+          "message": "Write JSON file"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
           "source": "Write standard JSON file data to a file location",
@@ -292,8 +292,8 @@
           "message": "Write compact JSON output with no extra whitespace"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
-          "message": "Write JSON Data"
+          "source": "Write JSON data",
+          "message": "Write JSON data"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
           "source": "Generate standard JSON data from records",

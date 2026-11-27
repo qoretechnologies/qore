@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Zobrazit seznam bucketů"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Vypíše všechny buckety vlastněné ověřeným účtem spolu s datem vytvoření každého z nich."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "Vytvořit bucket"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Povolit uzamčení objektů v novém bucketu; uzamčení objektů nelze povolit po vytvoření a vyžaduje verzování, které se při nastavení této možnosti povolí automaticky"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Vypsat objekty"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Hodnota `next_continuation_token` vrácená předchozím zkráceným výpisem; slouží k načtení následující stránky"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "Získat objekt"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Konkrétní verze objektu, na kterou se má odkazovat; má smysl pouze u bucketů s povoleným verzováním. Pokud není nastavena, použije se aktuální verze"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stáhnout soubor"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Konkrétní verze objektu, na kterou se má odkazovat; má smysl pouze u bucketů s povoleným verzováním. Pokud není nastavena, použije se aktuální verze"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Nahrát soubor"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Klíč AWS KMS pro zašifrování objektu jako ID klíče, alias nebo ARN.\n\nPoužívá se pouze v případě, že `server_side_encryption` vybere schéma KMS; pokud není nastaven, použije se výchozí klíč KMS bucketu"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "Vytvořit textový objekt"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Klíč AWS KMS pro zašifrování objektu jako ID klíče, alias nebo ARN.\n\nPoužívá se pouze v případě, že `server_side_encryption` vybere schéma KMS; pokud není nastaven, použije se výchozí klíč KMS bucketu"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Smazat objekt"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Konkrétní verze objektu, na kterou se má odkazovat; má smysl pouze u bucketů s povoleným verzováním. Pokud není nastavena, použije se aktuální verze"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Kopírovat objekt"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Dlouhodobá archivní data načítaná v řádu hodin; cenově nejvýhodnější třída úložiště"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Vytvořit předem podepsanou adresu URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Hlavička `Content-Disposition`, se kterou by měl Amazon S3 stahování poskytnout; použijte k tomu, aby prohlížeč objekt uložil pod zvoleným názvem namísto jeho zobrazení"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "Smazat objekty"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Odstranit objekty, které jsou pod uzamčením uchování v režimu governance.\n\nPřihlašovací údaje musí mít povoleno `s3:BypassGovernanceRetention`; objekty pod zámkem v režimu **compliance** nemůže nikdo odstranit, dokud platnost zámku nevyprší"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "Přesunout objekt"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Dlouhodobá archivní data načítaná v řádu hodin; cenově nejvýhodnější třída úložiště"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "Získat štítky objektu"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Konkrétní verze objektu, na kterou se má odkazovat; má smysl pouze u bucketů s povoleným verzováním. Pokud není nastavena, použije se aktuální verze"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "Nastavit značky objektu"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Konkrétní verze objektu, na kterou se má odkazovat; má smysl pouze u bucketů s povoleným verzováním. Pokud není nastavena, použije se aktuální verze"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "Vypsat verze objektů"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "Hodnota `next_version_id_marker` vrácená předchozím zkráceným výpisem; používá se společně s `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "Smazat bucket"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Název bucketu ke smazání; již musí být prázdný"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "Najít objekty"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Kolik klíčů načíst na jeden požadavek; Amazon S3 toto omezuje na `1000`.\n\nToto ovlivňuje, jak je procházení rozděleno do požadavků, nikoli celkový počet vrácených záznamů – iterátor načítá další stránky podle potřeby"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "Nový bucket"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Nehlásit nic staršího než toto datum.\n\nPokud není nastaveno, sledování hlásí pouze to, co se objeví po jeho spuštění, takže existující bucket při prvním spuštění nevyvolá záplavu událostí."
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "Nový nebo aktualizovaný soubor"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

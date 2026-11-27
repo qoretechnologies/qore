@@ -339,7 +339,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.display_name": {
-          "source": "List Indexes",
+          "source": "List indexes",
           "message": "インデックスを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.short_desc": {
@@ -351,7 +351,7 @@
           "message": "API キーが属するプロジェクト内のすべてのインデックスを、それぞれのホスト、スキーマ、現在の状態とともに一覧表示します。\n\nこれはキーが有効であることを確認できる最も低コストな呼び出しでもあり、接続の ping はこれを使用します。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.display_name": {
-          "source": "Describe Index",
+          "source": "Describe index",
           "message": "インデックスの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.short_desc": {
@@ -375,7 +375,7 @@
           "message": "対象のインデックス（名前で指定）。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.display_name": {
-          "source": "Create Index",
+          "source": "Create index",
           "message": "インデックスを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.short_desc": {
@@ -471,7 +471,7 @@
           "message": "Microsoft Azure。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "デプロイメントタイプ"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -563,7 +563,7 @@
           "message": "Azure `eastus2`（バージニア）。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "デプロイメントタイプ"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -731,7 +731,7 @@
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "ノードタイプ"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
@@ -783,7 +783,7 @@
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.display_name": {
-          "source": "Create Index with Integrated Embedding",
+          "source": "Create index with integrated embedding",
           "message": "統合埋め込み付きインデックスを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.short_desc": {
@@ -1131,7 +1131,7 @@
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "ノードタイプ"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
@@ -1219,7 +1219,7 @@
           "message": "埋め込みモデルの書き込みパラメータ。"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.display_name": {
-          "source": "Configure Index",
+          "source": "Configure index",
           "message": "インデックスを構成"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.short_desc": {
@@ -1295,7 +1295,7 @@
           "message": "pod ベースのインデックス向けのデプロイ更新パラメータ。`replicas`、`pod_type`、またはその両方を指定します。デプロイの種類、クラウド/リージョン、環境は作成後に変更できません。`deployment_type` フィールドは含めないでください。受け付けられません。"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.display_name": {
-          "source": "Pod Type",
+          "source": "Pod type",
           "message": "ポッドタイプ"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.short_desc": {
@@ -1431,7 +1431,7 @@
           "message": "シャードの数。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "ノードタイプ"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
@@ -1483,7 +1483,7 @@
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.display_name": {
-          "source": "Delete Index",
+          "source": "Delete index",
           "message": "インデックスを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.short_desc": {
@@ -1507,7 +1507,7 @@
           "message": "対象のインデックス（名前で指定）。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.display_name": {
-          "source": "List Backups",
+          "source": "List backups",
           "message": "バックアップを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.short_desc": {
@@ -1543,7 +1543,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.display_name": {
-          "source": "List Index Backups",
+          "source": "List index backups",
           "message": "インデックスのバックアップを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.short_desc": {
@@ -1603,7 +1603,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.display_name": {
-          "source": "Create Backup",
+          "source": "Create backup",
           "message": "バックアップを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.short_desc": {
@@ -1651,7 +1651,7 @@
           "message": "バックアップの説明。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.display_name": {
-          "source": "Describe Backup",
+          "source": "Describe backup",
           "message": "バックアップの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.short_desc": {
@@ -1675,7 +1675,7 @@
           "message": "詳細を取得するバックアップの ID。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.display_name": {
-          "source": "Delete Backup",
+          "source": "Delete backup",
           "message": "バックアップを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.short_desc": {
@@ -1699,7 +1699,7 @@
           "message": "削除するバックアップの ID。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.display_name": {
-          "source": "Create Index from Backup",
+          "source": "Create index from backup",
           "message": "バックアップからインデックスを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.short_desc": {
@@ -1863,7 +1863,7 @@
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "ノードタイプ"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
@@ -1915,7 +1915,7 @@
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.display_name": {
-          "source": "List Backup Schedules",
+          "source": "List backup schedules",
           "message": "バックアップスケジュールを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.short_desc": {
@@ -1963,7 +1963,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Create Backup Schedule",
+          "source": "Create backup schedule",
           "message": "バックアップスケジュールを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2079,7 +2079,7 @@
           "message": "各バックアップを保持する期間。`{\"expire_after_days\": 30}` の形式で指定します。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "日数後に期限切れ"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2091,7 +2091,7 @@
           "message": "このスケジュールで作成された各バックアップの保持日数。少なくとも1以上、サービス設定最大値以下である必要があります。範囲外の値は`400`で拒否されます。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.display_name": {
-          "source": "Describe Backup Schedule",
+          "source": "Describe backup schedule",
           "message": "バックアップスケジュールの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.short_desc": {
@@ -2115,7 +2115,7 @@
           "message": "バックアップスケジュールの ID。所属するインデックスに対する **バックアップスケジュールを一覧表示** が返す値です。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Update Backup Schedule",
+          "source": "Update backup schedule",
           "message": "バックアップスケジュールを更新"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2199,7 +2199,7 @@
           "message": "各バックアップを保持する期間。`{\"expire_after_days\": 30}` の形式で指定します。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "日数後に期限切れ"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2211,7 +2211,7 @@
           "message": "このスケジュールで作成された各バックアップの保持日数。少なくとも1以上、サービス設定最大値以下である必要があります。範囲外の値は`400`で拒否されます。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Delete Backup Schedule",
+          "source": "Delete backup schedule",
           "message": "バックアップスケジュールを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2235,7 +2235,7 @@
           "message": "バックアップスケジュールの ID。所属するインデックスに対する **バックアップスケジュールを一覧表示** が返す値です。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.display_name": {
-          "source": "List Backup Schedule History",
+          "source": "List backup schedule history",
           "message": "バックアップスケジュールの履歴を一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.short_desc": {
@@ -2283,7 +2283,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.display_name": {
-          "source": "List Restore Jobs",
+          "source": "List restore jobs",
           "message": "復元ジョブを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.short_desc": {
@@ -2319,7 +2319,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.display_name": {
-          "source": "Describe Restore Job",
+          "source": "Describe restore job",
           "message": "復元ジョブの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.short_desc": {
@@ -2343,7 +2343,7 @@
           "message": "詳細を取得する復元ジョブの ID。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "コレクションの一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -2355,7 +2355,7 @@
           "message": "プロジェクト内のコレクションを一覧表示します。\n\n**コレクションはレガシー機能です。**  pod ベースのインデックスでのみサポートされますが、この API バージョンでは pod ベースのインデックスを作成できません。したがって、以前のバージョンから残っているプロジェクトにのみ該当します。  現行の用途には代わりに **バックアップ** を使用してください。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "コレクションの作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -2391,7 +2391,7 @@
           "message": "コレクションのソースとして使用するインデックスの名前。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.display_name": {
-          "source": "Describe Collection",
+          "source": "Describe collection",
           "message": "コレクションの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.short_desc": {
@@ -2415,7 +2415,7 @@
           "message": "詳細を取得するコレクションの名前。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "コレクションを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -2439,7 +2439,7 @@
           "message": "コレクションの名前。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.display_name": {
-          "source": "Get Index Statistics",
+          "source": "Get index statistics",
           "message": "インデックスの統計を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.short_desc": {
@@ -2475,7 +2475,7 @@
           "message": "対象となるレコードを選択するメタデータフィルター。Pinecone 独自のフィルター言語で記述します — フィールド名から条件へのハッシュです:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\n演算子は `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$in`、`$nin`、`$exists`、および `$and` / `$or` です。  [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata) を参照してください。"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "ベクトルで検索"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {
@@ -2643,7 +2643,7 @@
           "message": "再ランク付けの対象となる候補の密ベクトル数の上限を制御する最適化パラメータ。再ランク付けは正確な距離を計算して再現率を高めますが、クエリのレイテンシは増加します。範囲: top_k ～ 100000。\n再現率とレイテンシのバランスを取るには既定値のままにしてください。再現率が低すぎる場合は値を上げ、精度と引き換えにレイテンシを下げたい場合は値を下げます。このパラメータは専用（DRN）の密インデックスでのみサポートされます。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.display_name": {
-          "source": "Upsert Vectors",
+          "source": "Upsert vectors",
           "message": "ベクトルをアップサート"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.short_desc": {
@@ -2715,7 +2715,7 @@
           "message": "リクエストに含まれるメタデータ。フィールド名は`$`で始まってはいけません。これはフィルタ演算子用に予約されています。その他の名前はすべて受け入れられ、空、非ASCII、または`_`で始まる名前も含みます。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "スパース値"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.short_desc": {
@@ -2763,7 +2763,7 @@
           "message": "ベクトルデータ。リクエストでは空でなく、少なくとも1つの値の大きさが`1e-8`以上でなければなりません。すべての値がそれ未満のベクトルはゼロのみを含むと判断され、拒否されます。\n\nレスポンスでは、レコードに密集データが存在しない場合（スパースインデックス、または値が要求されていない場合）は空の配列になります。このスキーマは両方向を記述しているため、ここでは制約がありません。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.display_name": {
-          "source": "Update Vectors",
+          "source": "Update vectors",
           "message": "ベクトルを更新"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.short_desc": {
@@ -2895,7 +2895,7 @@
           "message": "スパースデータに対応する値。インデックスと同一の長さである必要があります。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.display_name": {
-          "source": "Delete Vectors",
+          "source": "Delete vectors",
           "message": "ベクトルを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.short_desc": {
@@ -2967,7 +2967,7 @@
           "message": "名前空間内のすべてのレコードを削除します。  **レコード ID** や **メタデータフィルター** と併用することはできません。"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.display_name": {
-          "source": "Fetch Vectors",
+          "source": "Fetch vectors",
           "message": "ベクトルを取得"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.short_desc": {
@@ -3015,7 +3015,7 @@
           "message": "取得するベクトルの ID。"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.display_name": {
-          "source": "Fetch Vectors by Metadata",
+          "source": "Fetch vectors by metadata",
           "message": "メタデータでベクトルを取得"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.short_desc": {
@@ -3087,7 +3087,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.display_name": {
-          "source": "List Record IDs",
+          "source": "List record IDs",
           "message": "レコード ID を一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.short_desc": {
@@ -3159,7 +3159,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.display_name": {
-          "source": "List Namespaces",
+          "source": "List namespaces",
           "message": "名前空間を一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.short_desc": {
@@ -3219,7 +3219,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Create Namespace",
+          "source": "Create namespace",
           "message": "名前空間を作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3279,7 +3279,7 @@
           "message": "メタデータフィールド名とその構成のマップ。フィールド名は有効なメタデータフィールド名でなければなりません。フィールド名は一意でなければなりません。最大50個のフィールドを宣言できます。フィールド名は`$`で始まってはいけません（フィルターオペレータを導入するため）。インデックス作成時に宣言された場合、`_`で始まる名前も拒否されます（内部使用用に予約）。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.display_name": {
-          "source": "Describe Namespace",
+          "source": "Describe namespace",
           "message": "名前空間の詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.short_desc": {
@@ -3315,7 +3315,7 @@
           "message": "操作対象の名前空間。  名前空間を指定しないリクエストが対象とする名前空間には `__default__` を使用します。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Delete Namespace",
+          "source": "Delete namespace",
           "message": "名前空間を削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3351,7 +3351,7 @@
           "message": "操作対象の名前空間。  名前空間を指定しないリクエストが対象とする名前空間には `__default__` を使用します。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.display_name": {
-          "source": "Upsert Text",
+          "source": "Upsert text",
           "message": "テキストをアップサート"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.short_desc": {
@@ -3411,7 +3411,7 @@
           "message": "アップサートするレコードのユニークID。サービスは`id`をエイリアスとして受け入れるが、このスキーマではモデル化していない。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.display_name": {
-          "source": "Search with Text",
+          "source": "Search with text",
           "message": "テキストで検索"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.short_desc": {
@@ -3543,7 +3543,7 @@
           "message": "ドキュメントの再ランク付けに使用するクエリ。特定の再ランククエリが指定されている場合、トップレベルで提供されたクエリテキストを上書きします。`vector` または `id` を使用する検索では必須です。この場合、省略すると `400` で拒否されます。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.display_name": {
-          "source": "Rank Fields",
+          "source": "Rank fields",
           "message": "ランク付けフィールド"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.short_desc": {
@@ -3555,7 +3555,7 @@
           "message": "再ランク付けに考慮するフィールド。返されるすべてのレコードには、リストされた各フィールドが含まれている必要があります。それ以外の場合、リクエストは `400` で拒否されます。\n\nサポートされるフィールド数は [モデル固有](https://docs.pinecone.io/guides/search/rerank-results#reranking-models) です。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Top N"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.short_desc": {
@@ -3579,7 +3579,7 @@
           "message": "テキストの代わりに検索に使用するベクトル。統合埋め込みを備えていないインデックス、または埋め込みを別の場所で計算する場合に使用します。\n\n密なベクトルの値は `values` に、疎ベクトルは `sparse_values` と対応する `sparse_indices` に指定します。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.display_name": {
-          "source": "Sparse Indices",
+          "source": "Sparse indices",
           "message": "スパースインデックス"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.short_desc": {
@@ -3591,7 +3591,7 @@
           "message": "スパース埋め込みインデックス。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "スパース値"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -3671,7 +3671,7 @@
           "message": "指定された戦略に基づき、各検索ヒットのテキストに必須存在する語句のリスト。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.display_name": {
-          "source": "Upsert Documents",
+          "source": "Upsert documents",
           "message": "ドキュメントをアップサート"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.short_desc": {
@@ -3731,7 +3731,7 @@
           "message": "ドキュメントのユニーク識別子。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "ドキュメントを検索"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.short_desc": {
@@ -3815,7 +3815,7 @@
           "message": "`text`および`query_string`スコアリングタイプに使用するテキストクエリ。先頭および末尾の空白はトリムされ、トリム後のクエリが空の場合、拒否される。最大10KB。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "スパース値"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -3943,7 +3943,7 @@
           "message": "各ヒットで返すドキュメントのフィールド。  空にするとすべてのフィールドが返されます。`[\"*\"]` も同様です。"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.display_name": {
-          "source": "Fetch Documents",
+          "source": "Fetch documents",
           "message": "ドキュメントを取得"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.short_desc": {
@@ -4039,7 +4039,7 @@
           "message": "前回のレスポンスのページネーショントークン。  **メタデータフィルター** と併用する場合にのみ有効です。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "ドキュメントの更新"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.short_desc": {
@@ -4099,7 +4099,7 @@
           "message": "更新するドキュメントの一意の識別子。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "フィールドを削除"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.short_desc": {
@@ -4147,7 +4147,7 @@
           "message": "フィルターに一致するすべてのドキュメントから削除するフィールド。  **メタデータフィルター** と併用する場合にのみ有効です。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "ドキュメントの削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.short_desc": {
@@ -4219,7 +4219,7 @@
           "message": "`true` の場合、名前空間内のすべてのドキュメントを削除します。`ids` および `filter` とは排他的です。`false` はフィールドを省略した場合と同じ扱いになります。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.display_name": {
-          "source": "List Documents",
+          "source": "List documents",
           "message": "ドキュメントを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.short_desc": {
@@ -4291,7 +4291,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.display_name": {
-          "source": "List Imports",
+          "source": "List imports",
           "message": "インポートを一覧表示"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.short_desc": {
@@ -4339,7 +4339,7 @@
           "message": "前回のレスポンスの `pagination.next` の値。  `pagination` を含まないレスポンスが最後のページです。"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.display_name": {
-          "source": "Start Import",
+          "source": "Start import",
           "message": "インポートを開始"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.short_desc": {
@@ -4427,7 +4427,7 @@
           "message": "最初のレコードが失敗した時点で、インポートをすべて停止します。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.display_name": {
-          "source": "Describe Import",
+          "source": "Describe import",
           "message": "インポートの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.short_desc": {
@@ -4463,7 +4463,7 @@
           "message": "インポート操作の一意の識別子。"
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.display_name": {
-          "source": "Cancel Import",
+          "source": "Cancel import",
           "message": "インポートをキャンセル"
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.short_desc": {
@@ -4499,7 +4499,7 @@
           "message": "インポート操作の一意の識別子。"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.display_name": {
-          "source": "Generate Embeddings",
+          "source": "Generate embeddings",
           "message": "埋め込みを生成"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.short_desc": {
@@ -4559,7 +4559,7 @@
           "message": "モデル固有のパラメータ（例: `{\"input_type\": \"query\", \"truncate\": \"END\"}`）。  どのパラメータを受け付けるかは **モデルの詳細を取得** が報告します。\n\n`input_type` は重要です。多くのモデルは **クエリ** と **パッセージ** で埋め込み方法が異なり、誤った値を使うと関連性が静かに低下します。"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.display_name": {
-          "source": "Rerank Results",
+          "source": "Rerank results",
           "message": "検索結果を再ランク付け"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.short_desc": {
@@ -4655,7 +4655,7 @@
           "message": "モデル固有の追加パラメータ。利用可能なモデルパラメータについては [モデルガイド](https://docs.pinecone.io/guides/search/rerank-results#reranking-models) を参照してください。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "モデルのリスト"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4723,7 +4723,7 @@
           "message": "語ごとに値を持つ、ほとんどがゼロのベクトル。キーワード型のマッチングに使用します。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.display_name": {
-          "source": "Describe Model",
+          "source": "Describe model",
           "message": "モデルの詳細を取得"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.short_desc": {
@@ -4747,7 +4747,7 @@
           "message": "検索するモデルの名前。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "レコードの検索"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.short_desc": {
@@ -4771,7 +4771,7 @@
           "message": "使用するテーブル: `indexes`、`collections`、`backups`、`backup-schedules`、`restore-jobs`、`models`、`namespaces`、 `imports`、`vectors` または `documents`"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "単一レコードの検索"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4795,7 +4795,7 @@
           "message": "使用するテーブル: `indexes`、`collections`、`backups`、`backup-schedules`、`restore-jobs`、`models`、`namespaces`、 `imports`、`vectors` または `documents`"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "レコードを作成"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.short_desc": {
@@ -4819,7 +4819,7 @@
           "message": "使用するテーブル: `indexes`、`collections`、`backups`、`backup-schedules`、`restore-jobs`、`models`、`namespaces`、 `imports`、`vectors` または `documents`"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.short_desc": {
@@ -4843,7 +4843,7 @@
           "message": "使用するテーブル: `indexes`、`collections`、`backups`、`backup-schedules`、`restore-jobs`、`models`、`namespaces`、 `imports`、`vectors` または `documents`"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "レコードを削除"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.short_desc": {

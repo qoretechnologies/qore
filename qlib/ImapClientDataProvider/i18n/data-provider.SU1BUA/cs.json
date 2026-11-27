@@ -16,7 +16,7 @@
           "message": "Čtení a správa e-mailů na libovolném IMAP serveru.\n\n- vyhledávání ve schránce pomocí kritérií na straně serveru, takže se přenášejí pouze odpovídající zprávy\n- načtení celé zprávy nebo jedné části MIME, pokud je potřeba pouze jedna příloha\n- reakce na nové e-maily při jejich doručení pomocí server push tam, kde to server podporuje\n- změna příznaků, přesouvání zpráv mezi schránkami a zařazování zpráv pomocí `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) je standardní protokol poštovních schránek a pro mnoho poskytovatelů e-mailu představuje jediný nabízený programový přístup. Vzhledem k tomu, že zprávy zůstávají na serveru, může integrace sledovat schránku a reagovat na příchozí zprávy, aniž by převzala poštu účtu.\n\nPodporováno je ověřování heslem i bearer tokenem OAuth2; mechanismus je vybrán podle toho, co server inzeruje"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Hledat zprávy"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Otevřít poštovní schránku pomocí `EXAMINE` namísto `SELECT`, aby načítání zpráv nemohlo změnit žádné příznaky"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Získat zprávu"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Nastavit příznak `\\Seen` na zprávě po jejím načtení.\n\nSamotné načtení nikdy příznaky nemění, takže ponechte `False`, chcete-li zprávu zkontrolovat, aniž by poštovní klient odesílatele zobrazil zprávu jako přečtenou"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Získat přílohu"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Specifikátor části MIME, který se má načíst (např.: `1`, `2.1`, `HEADER`, `TEXT`).\n\nNačtení jediné části zamezuje přenosu celé zprávy, což je užitečné, pokud potřebujete pouze jednu přílohu ze zprávy s několika velkými přílohami"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Zobrazit seznam poštovních schránek"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Zobrazit pouze poštovní schránky, k nimž je účet přihlášen k odběru, pomocí `LSUB` namísto `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Změnit příznaky zpráv"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Nahradit všechny příznaky u zpráv zadanými příznaky"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Přesunout zprávy"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Zkopírovat zprávy namísto jejich přesunutí a ponechat originály na místě"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Uložit zprávu"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Čas doručení, který se má u zprávy zaznamenat; výchozí hodnota je čas, kdy ji server uloží"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nový e-mail"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Označit každou nahlášenou zprávu příznakem `\\Deleted` a po vyvolání její události ji trvale odstranit (expunge).\n\n**Tím se pošta ze serveru trvale smaže**; pokud poštovní schránka není fronta určená k vyprázdnění, dejte přednost `mark_seen` nebo přesunutí do jiné poštovní schránky.\n\nZpráva je odstraněna ihned po **vyvolání** její události, což není totéž jako její **zpracování** konzumentem. Pokud vyvolání události vyvolá výjimku, zpráva zůstane na místě pro další průchod, ale konzument, který událost přijme a poté selže, vyprší jeho časový limit nebo je během zpracování restartován, již ztratil jedinou kopii. Pro úlohy, u kterých nesmí dojít ke ztrátě zdrojové zprávy, nechte tuto možnost nenastavenou a akci proveďte z konzumenta až po úspěšném zpracování: každá událost nese své `uid` a akce `set-flags` a `move-messages` je přijímají"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nové přílohy e-mailu"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

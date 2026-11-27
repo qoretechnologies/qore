@@ -16,7 +16,7 @@
           "message": "Generischer FTP-Server für den Dateiaustausch über FTP und FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "FTP-Datei empfangen"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

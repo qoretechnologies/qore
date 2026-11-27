@@ -16,7 +16,7 @@
           "message": "Lire et écrire des messages de santé délimités [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) pour les flux d'intégration et de transformation.\n\n**Fonctionnalités** :\n- Préserver la structure des messages et les segments `Z` personnalisés sans nécessiter de schéma fixe\n- Lire les délimiteurs personnalisés à partir de `MSH` et gérer les séquences d'échappement HL7\n- Exposer un segment analysé par enregistrement via l'API DataProvider\n- Sérialiser les messages analysés ou les enregistrements de segments simples en texte HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "Lire le message HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Conserver le texte dans l'encodage d'entrée tel qu'il a été lu, sans vérification"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "Lire les données en ligne HL7 v2"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Données de message HL7 v2 en ligne. Utilisez cette option lorsque le message est déjà en mémoire."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "Écrire le message HL7 v2"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Chemin d'accès pour écrire le message HL7 v2 sérialisé."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "Charger le schéma HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Si `True`, ignore le cache de schéma en mémoire et recharge l'artefact de schéma."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "Résumé du schéma HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

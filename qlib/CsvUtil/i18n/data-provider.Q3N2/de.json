@@ -16,7 +16,7 @@
           "message": "CSV-Dateidaten lesen und schreiben"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "CSV-Datei lesen"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "Wenn `true` (Standard `false`), wird eine `CSVFILEITERATOR-DATA-ERROR`-Ausnahme ausgelöst, wenn eine Zeile mit einer anderen Spalten- oder Feldanzahl als andere Zeilen geparst wird\n\nBeachten Sie, dass die Aktivierung dieser Option Leistungseinbußen mit sich bringt"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "CSV-Inline-Daten lesen"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Wenn `true` (Standard `false`), wird eine `CSVFILEITERATOR-DATA-ERROR`-Ausnahme ausgelöst, wenn eine Zeile mit einer anderen Spalten- oder Feldanzahl als andere Zeilen geparst wird\n\nBeachten Sie, dass die Aktivierung dieser Option Leistungseinbußen mit sich bringt"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "CSV-Daten profilieren"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Wenn `True` (Standard), werden Beispielwerte und Gegenbeispiele auf ihre Form reduziert: Buchstaben werden zu `x` oder `X` und Ziffern zu `9`, sodass ein Profil ohne die Daten weitergegeben werden kann"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "CSV-Daten schreiben"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "Auf `false` setzen, um die Ausgabe von Headern zu unterdrücken; der Standardwert ist `true`, was bedeutet, dass Header ausgegeben werden, falls vorhanden"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "CSV-Daten erstellen"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

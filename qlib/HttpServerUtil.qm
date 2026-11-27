@@ -241,6 +241,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::HttpListenerInterface::dispatch_counter "HttpListenerInterface::dispatch_counter": the
+      requests of a listener are counted, so that its stop waits for them (issue #7692)
     - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses neither the hostname nor the
       addresses of the network interfaces for code restricted from external information (see
       @ref sandbox_ambient_host_data)
@@ -2282,6 +2284,17 @@ public class AbstractLogger {
     the same for the whole life of the listener, so a handler can keep it and use it later, also on another thread.
 */
 public class HttpListenerInterface inherits AbstractLogger {
+    public {
+        #! The Counter that counts the HTTP/1.1 requests of the listener that the async I/O controller dispatches
+        /** The stop of a listener waits for them (qore#7692); a listener without one has its requests counted with
+            those of the other listeners without one.  A member rather than a method, as the controller reads it for
+            every request
+
+            @since HttpServerUtil 1.6
+        */
+        *Counter dispatch_counter;
+    }
+
     #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses in bytes per second; 0 means no check
     /** @since HttpServerUtil 1.6
     */

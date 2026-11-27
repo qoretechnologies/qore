@@ -8,7 +8,7 @@
           "message": "特定のファイル場所から YAML ドキュメントデータを読み取ります。\n\nYAML ファイルには、`---` マーカーで区切られた 1 つ以上のドキュメントを含めることができます。各ドキュメントは個別のレコードとして反復処理されます。\n\n**主要オプション**\n- `path`: 読み取り元のファイルの場所 (必須)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n- `skip_empty_documents`: 空のドキュメントをスキップ (デフォルト: `True`)\n- `max_documents`: 読み取るドキュメントの最大数 (`0` = 無制限)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "YAML ドキュメントファイルの読み取り"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "文字列として直接提供された YAML インラインデータを読み取ります。\n\nYAML データには、`---` マーカーで区切られた 1 つ以上のドキュメントを含めることができます。各ドキュメントは個別のレコードとして反復処理されます。\n\n**主要オプション**\n- `data`: パースする YAML 文字列 (必須)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n- `skip_empty_documents`: 空のドキュメントをスキップ (デフォルト: `True`)\n- `max_documents`: 読み取るドキュメントの最大数 (`0` = 無制限)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "YAML インラインデータの読み取り"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして特定のファイル場所に書き込みます。\n\nレコードは蓄積され、アクションの完了時に `---` ドキュメント区切りを付けて書き込まれます。\n\n**主要オプション**\n- `path`: 出力ファイルの場所 (必須)\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "YAML ドキュメントファイルの書き込み"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "レコードから複数ドキュメントの YAML ストリームを生成し、データとして返します。たとえば、メールに添付したり、別のアクションでアップロードしたりできます。\n\n各レコードは `---` マーカーで区切られた 1 つの YAML ドキュメントになります。アクションは生成されたデータを `data` に、ドキュメント数を `record_count` に返します。\n\n**主要オプション**\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "YAML インラインデータの書き込み"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

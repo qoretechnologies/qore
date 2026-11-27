@@ -16,7 +16,7 @@
           "message": "Všeobecný FTP server na výmenu súborov pomocou FTP a FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "Prijatý súbor FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

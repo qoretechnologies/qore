@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
+          "source": "Detect document text",
           "message": "Rozpoznať text dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Voliteľné ID verzie S3 objektu pre verzované buckety."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "Analyzovať dokument"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
@@ -576,7 +576,7 @@
           "message": "Nastavenia kontroly človekom iba pre existujúcich zákazníkov Amazon A2I."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.display_name": {
-          "source": "Data Attributes",
+          "source": "Data attributes",
           "message": "Atribúty údajov"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.short_desc": {
@@ -588,7 +588,7 @@
           "message": "Deklarácie obsahu používané na smerovanie dokumentu na kontrolu človekom."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
-          "source": "Flow Definition Arn",
+          "source": "Flow definition arn",
           "message": "Definícia Flowu Arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.short_desc": {
@@ -600,7 +600,7 @@
           "message": "ARN existujúceho pracovného postupu ľudskej kontroly Amazon A2I."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.display_name": {
-          "source": "Human Loop Name",
+          "source": "Human loop name",
           "message": "Meno ľudskej slučky"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Verzia vybratého zdroja."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
+          "source": "Analyze expense",
           "message": "Analyzujte náklady"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Extrahujte polia totožnosti z amerických pasov a vodičských preukazov. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html)."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.display_name": {
-          "source": "Document Pages",
+          "source": "Document pages",
           "message": "Stránky dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
+          "source": "Create adapter",
           "message": "Vytvoriť adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
@@ -772,7 +772,7 @@
           "message": "Vytvorte vlastný adaptér dotazov. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html)."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
-          "source": "Adapter Name",
+          "source": "Adapter name",
           "message": "Názov adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Popisný názov pre vlastný adaptér dotazov."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Popis vysvetľujúci účel adaptéra."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.display_name": {
-          "source": "Feature Types",
+          "source": "Feature types",
           "message": "Typy prvkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Dopyty"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
-          "source": "Auto Update",
+          "source": "Auto update",
           "message": "Automatická aktualizácia"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
+          "source": "Create adapter version",
           "message": "Vytvoriť verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Token idempotencie na bezpečné opakovanie rovnakej požiadavky."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.display_name": {
-          "source": "Dataset Config",
+          "source": "Dataset config",
           "message": "Nastavenie množiny údajov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Verzia vybratého zdroja."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
+          "source": "KMS key ID",
           "message": "ID kľúča KMS"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.short_desc": {
@@ -956,7 +956,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
+          "source": "Output config",
           "message": "Konfigurácia výstupu"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
@@ -996,7 +996,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
+          "source": "Delete adapter",
           "message": "Odstrániť adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
+          "source": "Delete adapter version",
           "message": "Odstrániť verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
-          "source": "Adapter Version",
+          "source": "Adapter version",
           "message": "Verzia adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Verzia patriaca k vybranému adaptéru."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
+          "source": "Get adapter",
           "message": "Získajte adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
+          "source": "Get adapter version",
           "message": "Získajte verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
-          "source": "Adapter Version",
+          "source": "Adapter version",
           "message": "Verzia adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Verzia patriaca k vybranému adaptéru."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
+          "source": "Get document analysis",
           "message": "Získajte analýzu dokumentov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
+          "source": "Get document text detection",
           "message": "Získajte detekciu textu dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.short_desc": {
@@ -1212,7 +1212,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
+          "source": "Get expense analysis",
           "message": "Získajte analýzu nákladov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
+          "source": "Get lending analysis",
           "message": "Získajte analýzu pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
+          "source": "Get lending analysis summary",
           "message": "Získajte súhrn analýzy pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
+          "source": "List adapter versions",
           "message": "Zoznam verzií adaptérov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
-          "source": "After Creation Time",
+          "source": "After creation time",
           "message": "Po Čase stvorenia"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Vrátiť zdroje vytvorené po tomto čase."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
-          "source": "Before Creation Time",
+          "source": "Before creation time",
           "message": "Pred časom stvorenia"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "Vrátiť zdroje vytvorené pred týmto časom."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
+          "source": "List adapters",
           "message": "Zoznam adaptérov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Uveďte vlastné adaptéry dotazov v tomto účte a regióne. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Ak chcete získať ďalšiu stránku, prejdite `NextToken` na rovnakú akciu."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
-          "source": "After Creation Time",
+          "source": "After creation time",
           "message": "Po Čase stvorenia"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "Vrátiť zdroje vytvorené po tomto čase."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
-          "source": "Before Creation Time",
+          "source": "Before creation time",
           "message": "Pred časom stvorenia"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Vrátiť zdroje vytvorené pred týmto časom."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
+          "source": "Max results",
           "message": "Maximálny počet výsledkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Maximálny počet výsledkov na tejto stránke odpovede."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
+          "source": "Next token",
           "message": "Ďalší token"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
+          "source": "List tags for resource",
           "message": "Zoznam značiek pre zdrojovú položku"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Zdroj Textract ARN v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
+          "source": "Start document analysis",
           "message": "Spustite analýzu dokumentov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Spustite asynchrónnu extrakciu štruktúry dokumentu. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Ponechajte si `JobId` a použite akciu získania zhody na kontrolu stavu a načítanie každej stránky s výsledkami."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
+          "source": "Document location",
           "message": "Umiestnenie dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
-          "source": "Feature Types",
+          "source": "Feature types",
           "message": "Typy prvkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Rozloženie"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Token idempotencie na bezpečné opakovanie rovnakej požiadavky."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
+          "source": "Job tag",
           "message": "Štítok úlohy"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "Štítok zahrnutý v oznámení o dokončení úlohy."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
+          "source": "Notification channel",
           "message": "Kanál upozornení"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "Téma SNS a rola IAM pre upozornenia asynchrónneho dokončenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
+          "source": "Role arn",
           "message": "ARN roly"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Rola IAM ARN umožňujúca Textractu publikovať k téme SNS."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
+          "source": "SNS topic arn",
           "message": "Téma SNS Arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "ARN témy SNS v regióne pripojenia pre upozornenia na dokončenie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
+          "source": "Output config",
           "message": "Konfigurácia výstupu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "Predpona kľúča objektu pre výstupné súbory v cieľovom segmente."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
+          "source": "KMS key ID",
           "message": "ID kľúča KMS"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.display_name": {
-          "source": "Queries Config",
+          "source": "Queries config",
           "message": "Konfigurácia dotazov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.field.UXVlcmllcw.display_name": {
@@ -1708,7 +1708,7 @@
           "message": "Otázka na zodpovedanie, napríklad `What is the invoice total?`."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.display_name": {
-          "source": "Adapters Config",
+          "source": "Adapters config",
           "message": "Konfigurácia adaptérov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Verzia vybratého zdroja."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
+          "source": "Start document text detection",
           "message": "Spustite detekciu textu dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Spustite asynchrónnu extrakciu textu dokumentu. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Ponechajte si `JobId` a použite akciu získania zhody na kontrolu stavu a načítanie každej stránky s výsledkami."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
+          "source": "Document location",
           "message": "Umiestnenie dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Token idempotencie na bezpečné opakovanie rovnakej požiadavky."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
+          "source": "Job tag",
           "message": "Štítok úlohy"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Štítok zahrnutý v oznámení o dokončení úlohy."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
+          "source": "Notification channel",
           "message": "Kanál upozornení"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Téma SNS a rola IAM pre upozornenia asynchrónneho dokončenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
+          "source": "Role arn",
           "message": "ARN roly"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Rola IAM ARN umožňujúca Textractu publikovať k téme SNS."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
+          "source": "SNS topic arn",
           "message": "Téma SNS Arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "ARN témy SNS v regióne pripojenia pre upozornenia na dokončenie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
+          "source": "Output config",
           "message": "Konfigurácia výstupu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Predpona kľúča objektu pre výstupné súbory v cieľovom segmente."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
+          "source": "KMS key ID",
           "message": "ID kľúča KMS"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
+          "source": "Start expense analysis",
           "message": "Spustite analýzu výdavkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
@@ -1924,7 +1924,7 @@
           "message": "Spustite asynchrónnu analýzu faktúr a príjmov. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Ponechajte si `JobId` a použite akciu získania zhody na kontrolu stavu a načítanie každej stránky s výsledkami."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
+          "source": "Document location",
           "message": "Umiestnenie dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Token idempotencie na bezpečné opakovanie rovnakej požiadavky."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
+          "source": "Job tag",
           "message": "Štítok úlohy"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Štítok zahrnutý v oznámení o dokončení úlohy."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
+          "source": "Notification channel",
           "message": "Kanál upozornení"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Téma SNS a rola IAM pre upozornenia asynchrónneho dokončenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
+          "source": "Role arn",
           "message": "ARN roly"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Rola IAM ARN umožňujúca Textractu publikovať k téme SNS."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
+          "source": "SNS topic arn",
           "message": "Téma SNS Arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "ARN témy SNS v regióne pripojenia pre upozornenia na dokončenie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
+          "source": "Output config",
           "message": "Konfigurácia výstupu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Predpona kľúča objektu pre výstupné súbory v cieľovom segmente."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
+          "source": "KMS key ID",
           "message": "ID kľúča KMS"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
+          "source": "Start lending analysis",
           "message": "Spustite analýzu pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "Spustite asynchrónnu klasifikáciu a extrakciu dokumentov požičiavania. Pozrite si [odkaz na rozhranie AWS API] (https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Ponechajte si `JobId` a použite akciu získania zhody na kontrolu stavu a načítanie každej stránky s výsledkami."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
+          "source": "Document location",
           "message": "Umiestnenie dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
@@ -2084,7 +2084,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
+          "source": "Client request token",
           "message": "Žiadlo Klienta"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Token idempotencie na bezpečné opakovanie rovnakej požiadavky."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
+          "source": "Job tag",
           "message": "Štítok úlohy"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
@@ -2108,11 +2108,11 @@
           "message": "Štítok zahrnutý v oznámení o dokončení úlohy."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
+          "source": "Notification channel",
           "message": "Kanál upozornení"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
+          "source": "Role arn",
           "message": "ARN roly"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Rola IAM ARN umožňujúca Textractu publikovať k téme SNS."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
+          "source": "SNS topic arn",
           "message": "Téma SNS Arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
@@ -2136,7 +2136,7 @@
           "message": "ARN témy SNS v regióne pripojenia pre upozornenia na dokončenie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
+          "source": "Output config",
           "message": "Konfigurácia výstupu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
@@ -2164,7 +2164,7 @@
           "message": "Predpona kľúča objektu pre výstupné súbory v cieľovom segmente."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
+          "source": "KMS key ID",
           "message": "ID kľúča KMS"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
+          "source": "Tag resource",
           "message": "ID testovacieho prípadu"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
+          "source": "Untag resource",
           "message": "Odstrániť značku z zdroja"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "Zdroj Textract ARN v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.display_name": {
-          "source": "Tag Keys",
+          "source": "Tag keys",
           "message": "Kľúče značiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Názvy značiek prostriedkov, ktoré sa majú odstrániť."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
+          "source": "Update adapter",
           "message": "Aktualizovať adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Popis vysvetľujúci účel adaptéra."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
-          "source": "Adapter Name",
+          "source": "Adapter name",
           "message": "Názov adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
@@ -2296,7 +2296,7 @@
           "message": "Popisný názov pre vlastný adaptér dotazov."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
-          "source": "Auto Update",
+          "source": "Auto update",
           "message": "Automatická aktualizácia"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Zakázané"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
-          "source": "Content Classifiers",
+          "source": "Content classifiers",
           "message": "Klasifikátory obsahu"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
@@ -2328,11 +2328,11 @@
           "message": "Deklarácie obsahu pre pracovný postup kontroly človekom."
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
-          "source": "Free of Personally Identifiable Information",
+          "source": "Free of personally identifiable information",
           "message": "Bez osobných identifikačných údajov"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
-          "source": "Free of Adult Content",
+          "source": "Free of adult content",
           "message": "Bez obsahu pre dospelých"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.display_name": {

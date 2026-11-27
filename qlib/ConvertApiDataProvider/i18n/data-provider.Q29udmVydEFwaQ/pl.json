@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Konwertuj plik"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Limit czasu konwersji w sekundach, od `10` do `1200`; jeśli nie jest ustawiony, obowiązuje wartość domyślna konwertera, na przykład `900` dla dokumentów Office i `120` dla stron internetowych."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Pobierz informacje o konwerterze"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Pozostałe parametry konwertera, jako hash nazw parametrów ConvertAPI na wartości.\n\nParametry każdego konwertera są wymienione w [dokumentacji ConvertAPI](https://docs.convertapi.com) i zwracane przez akcję `get-converter-info`.\n\n- Wartości skalarne są wysyłane bez zmian\n- Hash pliku (`name` i `content`) jest wysyłany jako plik\n- Lista hashów plików jest wysyłana jako lista plików\n\n**Przykład**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "Konwertuj PDF do obrazów"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Pozostałe parametry konwertera, jako hash nazw parametrów ConvertAPI na wartości.\n\nParametry każdego konwertera są wymienione w [dokumentacji ConvertAPI](https://docs.convertapi.com) i zwracane przez akcję `get-converter-info`.\n\n- Wartości skalarne są wysyłane bez zmian\n- Hash pliku (`name` i `content`) jest wysyłany jako plik\n- Lista hashów plików jest wysyłana jako lista plików\n\n**Przykład**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "Połącz pliki PDF"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

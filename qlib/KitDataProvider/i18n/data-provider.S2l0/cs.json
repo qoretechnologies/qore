@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Create a Subscriber",
+          "source": "Create a subscriber",
           "message": "Vytvořit odběratele"
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Hash hodnot vlastních polí k nastavení pro odběratele"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Update a Subscriber",
+          "source": "Update a subscriber",
           "message": "Aktualizovat odběratele"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Hash hodnot vlastních polí k nastavení pro odběratele"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
-          "source": "Unsubscribe a Subscriber",
+          "source": "Unsubscribe a subscriber",
           "message": "Odhlásit odběratele"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Jedinečný identifikátor odběratele k odhlášení"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Create Subscribers",
+          "source": "Bulk create subscribers",
           "message": "Hromadně vytvořit odběratele"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
@@ -576,7 +576,7 @@
           "message": "URL adresa, která po dokončení hromadné operace obdrží webhook"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Subscribers",
+          "source": "List subscribers",
           "message": "Zobrazit odběratele"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
@@ -676,7 +676,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
-          "source": "Get a Subscriber",
+          "source": "Get a subscriber",
           "message": "Získat odběratele"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
@@ -696,7 +696,7 @@
           "message": "ID odběratele"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Vytvořit štítek"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Název vytvářeného štítku"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "Aktualizovat štítek"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -756,7 +756,7 @@
           "message": "Nový název pro štítek"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
-          "source": "Tag a Subscriber",
+          "source": "Tag a subscriber",
           "message": "Označit odběratele štítkem"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
@@ -792,7 +792,7 @@
           "message": "E-mailová adresa odběratele k označení štítkem"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
-          "source": "Untag a Subscriber",
+          "source": "Untag a subscriber",
           "message": "Odebrat štítek odběrateli"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
@@ -828,7 +828,7 @@
           "message": "Jedinečný identifikátor odběratele, kterému se má odebrat štítek"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Tag Subscribers",
+          "source": "Bulk tag subscribers",
           "message": "Hromadně označit odběratele štítkem"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Seznam e-mailových adres odběratelů k označení štítkem"
         },
         "app.S2l0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Seznam štítků"
         },
         "app.S2l0.action.bGlzdC10YWdz.short_desc": {
@@ -900,7 +900,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "List Tag Subscribers",
+          "source": "List tag subscribers",
           "message": "Zobrazit odběratele podle štítku"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "Vytvořit vlastní pole"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Zobrazovaný popisek vytvářeného vlastního pole"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "Aktualizovat vlastní pole"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Nový zobrazovaný popisek vlastního pole"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "Odstranit vlastní pole"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Jedinečný identifikátor vlastního pole ke smazání"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "Seznam uživatelských polí"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Create a Broadcast",
+          "source": "Create a broadcast",
           "message": "Vytvořit broadcast"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Text náhledu zobrazený v e-mailových klientech před otevřením e-mailu"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Update a Broadcast",
+          "source": "Update a broadcast",
           "message": "Aktualizovat broadcast"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Text náhledu zobrazený v e-mailových klientech před otevřením e-mailu"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Delete a Broadcast",
+          "source": "Delete a broadcast",
           "message": "Smazat vysílání"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Jedinečný identifikátor vysílání ke smazání"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
-          "source": "Get Broadcast Stats",
+          "source": "Get broadcast stats",
           "message": "Získat statistiky vysílání"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Jedinečný identifikátor vysílání, pro které se mají získat statistiky"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "Vypsat vysílání"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get a Broadcast",
+          "source": "Get a broadcast",
           "message": "Získat vysílání"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "ID vysílání"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
-          "source": "Add Subscriber to Form",
+          "source": "Add subscriber to form",
           "message": "Přidat odběratele do formuláře"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "Křestní jméno odběratele"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "Seznam formulářů"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
-          "source": "List Form Subscribers",
+          "source": "List form subscribers",
           "message": "Zobrazit odběratele podle formuláře"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
-          "source": "Add Subscriber to Sequence",
+          "source": "Add subscriber to sequence",
           "message": "Přidat odběratele do sekvence"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "E-mailová adresa odběratele, který má být přidán do sekvence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
-          "source": "List Sequences",
+          "source": "List sequences",
           "message": "Zobrazit sekvence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Sequence Subscribers",
+          "source": "List sequence subscribers",
           "message": "Zobrazit odběratele sekvence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
-          "source": "Create a Purchase",
+          "source": "Create a purchase",
           "message": "Vytvořit nákup"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Aktuální stav nákupu"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
-          "source": "List Purchases",
+          "source": "List purchases",
           "message": "Zobrazit nákupy"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
-          "source": "Get a Purchase",
+          "source": "Get a purchase",
           "message": "Získat nákup"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "ID nákupu"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
-          "source": "Subscriber Activated",
+          "source": "Subscriber activated",
           "message": "Odběratel aktivován"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Spustí se při aktivaci odběratele v Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
-          "source": "Subscriber Unsubscribed",
+          "source": "Subscriber unsubscribed",
           "message": "Odběratel odhlášen"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Spustí se při odhlášení odběratele v Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
-          "source": "Subscriber Bounced",
+          "source": "Subscriber bounced",
           "message": "Nedoručený e-mail odběratele"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Spustí se, když je e-mail odběratele vrácen jako nedoručitelný v Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
-          "source": "Subscriber Complained",
+          "source": "Subscriber complained",
           "message": "Stížnost odběratele na spam"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Spustí se, když odběratel označí e-mail jako spam v Kit"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
-          "source": "Form Subscription",
+          "source": "Form subscription",
           "message": "Přihlášení formulářem"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Spustí se, když se odběratel zaregistruje prostřednictvím formuláře v Kit"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
-          "source": "Course Subscription",
+          "source": "Course subscription",
           "message": "Zápis do kurzu"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {

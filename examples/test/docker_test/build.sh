@@ -54,7 +54,9 @@ QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
 cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} \
     "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
     ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
-make -j${MAKE_JOBS}
+# the compiler output is kept in build.log for check-build-warnings (see ci-build-log.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"
+qore_ci_build_logged build.log make -j${MAKE_JOBS}
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
 # Remove intermediate object files to reduce artifact size

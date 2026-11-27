@@ -2538,7 +2538,9 @@ if (x || y)
     do not extend the life of the value and also do not participate in object graph cycles (i.e. recursive
     references) and therefore can be used to break up large graphs of objects to improve garbage collector
     performance with such graphs, however the programmer must ensure that the value has a valid
-    strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
+    strong reference elsewhere or the value will go out of scope.  A callback that an object holds and that uses the
+    object captures it weakly, so that the object can be destroyed: for example, a datasource mutation observer that
+    queries the datasource that it observes (see @ref sql_mutation_observer_capture).  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
     reference raises \c HASH-ERROR or \c LIST-ERROR.  A @ref new "new" expression made from it, and a value made
     from it with another type, by a @ref cast "cast" or the conversion of a variable, a parameter, a member or a return
@@ -2592,7 +2594,12 @@ if (x || y)
     statement, as any temporary value is.  This holds also while another thread releases the last strong reference
     to the object: a method called through a weak reference to it, or on a value read from one, before that thread
     has started to destroy the object keeps it, and the object is destroyed when the call releases it, not while the
-    call runs.\n<br>
+    call runs.  Once that thread has started to destroy the object (its destructor runs, also for an object collected
+    with a cycle, and its members are deleted when the destructor returns), a method that another thread calls on the
+    object, through a weak reference or on a value read from one, is refused with \c OBJECT-ALREADY-DELETED, as a call
+    on a deleted object is, so that it never uses the members while they are deleted; a reference read from a weak
+    reference then does not keep the object either.  The destructor's own calls on the object are made, and so are
+    the calls that the holders of strong references make while an explicit @ref delete "delete" runs the destructor.\n<br>
     When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the

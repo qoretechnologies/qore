@@ -1,16 +1,28 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - fork() and the fork handlers of the leaf locks of the generic caches and name tables
+# test-platform: macos - fork() and the fork handlers of the leaf locks, generic caches and name tables
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() while another thread holds a process-wide leaf lock of the library can take the
+# lock: the library registers a fork handler for it (see design/fork-handlers.md).  Without one, the child got the lock
+# held by a thread that does not exist in it and waited forever for it (the test runner's time limit is only a guard).
 
 %modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
 %requires QUnit
 
 %exec-class ForkLeafLocksTest
+
+#! a public class, which the child Programs of the test inherit as copies (see testClassCopyConstruction())
+public class ForkLeafLocksPub inherits Serializable {
+    public {
+        int v = 1;
+    }
+}
 
 #! A child of fork() can use the caches of generics and the name tables after another thread held their locks (qore#7554)
 /** The lock of the cache of the concrete declarations of a generic hashdecl, the lock of the cache of the specialized
@@ -41,6 +53,21 @@ class ForkLeafLocksTest inherits QUnit::Test {
 
         const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION;
 
+        #! the other process-wide leaf locks of design/fork-handlers.md (rank 1000) that have a fork handler of their
+        #! own, by its name; the locks of objects that are created on demand (aot_fast_entry_registry,
+        #! module_cleanup_work, module_program_pins, module_uncounted_entries) and the macOS-only fifo_end_read have no
+        #! handler until they exist
+        const OtherLeafLocks = (
+            "aot_deferred_types", "aot_method_dispatch_reclaim", "aot_pending_constants", "aot_regex_cache",
+            "app_registry", "async_io_logger", "breakpoints", "builtin_locations", "cipher_cache", "class_ids",
+            "complex_types", "constant_value_locks", "dbg_detached_async_io_sockets", "dbi_objects", "encodings",
+            "external_thread_reaper", "external_types", "jit_bg_queue", "jit_cache", "left_programs", "module_options",
+            "node_watches", "opaque_target_shards", "parse_options_values", "program_cleanup", "program_registry",
+            "program_thread_containers", "quic_test_settings", "quic_ticket_cache", "sandbox_binary_charges",
+            "sandbox_watchdog", "scan_wait_notify", "scan_waits", "thread_local_vars", "tpd_live_count", "u_tld_seq",
+            "utc_offset_zones"
+        );
+
         #! the source of the generic declaration whose caches the child uses
         const GenericSrc = "class ForkLeafC {} hashdecl ForkLeafH<T> { T v; } "
             "int sub f() { hash<ForkLeafH<ForkLeafC>> h(); return exists h.v ? 1 : 0; } "
@@ -48,16 +75,134 @@ class ForkLeafLocksTest inherits QUnit::Test {
             "int sub run() { int s = 0; for (int i = 0; i < 20; ++i) { s += i; } return s; }";
     }
 
-    constructor() : QUnit::Test("ForkLeafLocksTest", "1.0") {
+    constructor() : QUnit::Test("fork leaf locks", "1.0", \ARGV) {
+        addTestCase("fork() while another thread holds the lock of the QUIC idle-close test hook",
+            \testQuicIdleCloseHook());
+        addTestCase("fork() while another thread holds the lock of the AOT module source hashes",
+            \testAotModuleSourceHashes());
+        addTestCase("fork() while another thread holds the lock of the exit hooks", \testExitHooks());
+        addTestCase("fork() while another thread holds the lock of the thread start debug hold",
+            \testThreadStartHold());
+        addTestCase("fork() while another thread holds the lock of the thread finish debug hold",
+            \testThreadFinishHold());
+        addTestCase("fork() while another thread holds the class data locks", \testClassDataLocks());
+        addTestCase("fork() while another thread holds the lock of the secret key of the keyed hashes",
+            \testHashProcessKey());
+        addTestCase("fork() while another thread holds the lock of the debug registry of keyed hash sites",
+            \testKeyedHashSites());
+        addTestCase("a child constructs an object with the copied handle of a class whose data lock another thread "
+            "held at fork()", \testClassCopyConstruction());
+        addTestCase("fork() while another thread holds each other leaf lock", \testOtherLeafLocks());
         addTestCase("the process-wide locks", \processLocksTest());
         addTestCase("the per-object cache locks", \stripesTest());
         addTestCase("an unknown stripe", \unknownStripeTest());
         set_return_value(main());
     }
 
+    testQuicIdleCloseHook() {
+        forkWhileHeld("quic_test_idle_close_at_submit");
+    }
+
+    testAotModuleSourceHashes() {
+        forkWhileHeld("aot_module_source_hashes");
+    }
+
+    testExitHooks() {
+        # the lock is held while a system thread is reserved; a child that inherited it held would hang at its end
+        forkWhileHeld("exit_hooks");
+    }
+
+    testHashProcessKey() {
+        # the lock is held while the secret key of the keyed hashes is created (qore#7750)
+        forkWhileHeld("hash_process_key");
+    }
+
+    testKeyedHashSites() {
+        # the lock is held while a container with a keyed hash records its site (debug builds, qore#7750)
+        forkWhileHeld("dbg_keyed_hash_sites");
+    }
+
+    testOtherLeafLocks() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        foreach string name in (OtherLeafLocks) {
+            # all of them are registered on Linux; another platform can lack the feature of one (QUIC, for example)
+            if (PlatformOS != "Linux") {
+                try {
+                    forkWhileHeld(name);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "DBG-FORK-ERROR" || ex.desc !~ /no fork handler named/) {
+                        rethrow;
+                    }
+                }
+                continue;
+            }
+            forkWhileHeld(name);
+        }
+    }
+
+    testThreadStartHold() {
+        # every thread that started took the lock of the debug hold of a starting thread; a child made while one held
+        # it waited forever for it at its next thread start (qore#6543)
+        forkWhileHeld("dbg_start_hold");
+    }
+
+    testThreadFinishHold() {
+        # every thread that finished took the lock of the debug hold of a finishing thread, as above (qore#6543)
+        forkWhileHeld("dbg_finish_hold");
+    }
+
+    testClassDataLocks() {
+        # every construction of an object through a copied class handle takes the lock of the class's data; a child
+        # made while another thread held it waited forever for it (qore#6732): the child constructs an object of a
+        # class in a Program of its own
+        forkWhileHeld("class_data_locks", \ForkLeafLocksTest::constructInProgram());
+    }
+
+    testClassCopyConstruction() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        # a child Program inherits copies of the public classes; an object deserialized in it is constructed with the
+        # copy (QoreProgram::findClass()), as C++ callers such as module-python construct objects, which takes the
+        # class's data lock (qore#6732); the child of fork() deserializes one while another thread of the parent held
+        # the lock at fork()
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("int sub deser(binary b) { object o = Serializable::deserialize(b); return o.v == 1 ? 0 : 1; }",
+            "fork-leaf-locks-copies");
+        ForkLeafLocksPub pub();
+        binary data = Serializable::serialize(pub);
+        hash<auto> r = call_function("dbg_fork_while_class_lock_held", pub, p, "ForkLeafLocksPub",
+            int sub () { return p.callFunction("deser", data); });
+        assertTrue(r.copy, "the child Program has a copy of the class");
+        assertFalse(r.hang, "the child deserialized an object of the class");
+        assertEq(0, r.status, "the child deserialized an object of the class");
+
+        # the child constructs the object with QoreClass::execConstructor() and the copy as the object's class, as
+        # module-python does
+        r = call_function("dbg_fork_while_class_lock_held", pub, p, "ForkLeafLocksPub");
+        assertTrue(r.copy, "the child Program has a copy of the class");
+        assertFalse(r.hang, "the child constructed an object of the class as module-python does");
+        assertEq(0, r.status, "the child constructed an object of the class as module-python does");
+    }
+
+    #! constructs an object in a new Program and returns 0 if it was constructed
+    static int constructInProgram() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("Mutex sub f() { return new Mutex(); }", "fork-leaf-locks-child");
+        return p.callFunction("f") instanceof Mutex ? 0 : 1;
+    }
+
     processLocksTest() {
         foreach string name in (ProcessLocks) {
-            hash<auto> r = forkWhileHeld(name);
+            hash<auto> r = forkWhileTypeLockHeld(name);
             assertNeq(98, r.status, sprintf("the child did not inherit the %y lock held", name));
             assertEq(0, r.status, sprintf("the child used the %y lock", name));
             assertTrue(r.waited, sprintf("fork() waited for the thread holding the %y lock", name));
@@ -75,7 +220,7 @@ class ForkLeafLocksTest inherits QUnit::Test {
             string name = sprintf("cache_stripe:%d", i);
             # the child instantiates another concrete declaration of the generic of the Program of the parent, and
             # finds the one of the parent
-            hash<auto> r = forkWhileHeld(name, int sub () {
+            hash<auto> r = forkWhileTypeLockHeld(name, int sub () {
                 if (p.callFunction("g") || p.callFunction("f")) {
                     return 2;
                 }
@@ -99,8 +244,22 @@ class ForkLeafLocksTest inherits QUnit::Test {
         });
     }
 
-    #! forks while another thread holds the lock named; the child runs \a child, if given
-    private hash<auto> forkWhileHeld(string name, *code child) {
+    private forkWhileHeld(string name, *code child) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        # the child takes the lock as the fork handler does
+        hash<auto> r = call_function("dbg_fork_while_handler_held", name, child);
+        assertTrue(r.waited, sprintf("fork() waited for the thread holding the %y lock", name));
+        assertEq(0, r.status, sprintf("the child took the %y lock", name));
+    }
+
+    #! forks while another thread holds the type retirement lock or cache stripe named (qore#7554)
+    /** the child runs \a child, if given */
+    private hash<auto> forkWhileTypeLockHeld(string name, *code child) {
         if (!Option::HAVE_FORK) {
             testSkip("fork() is not available");
         }

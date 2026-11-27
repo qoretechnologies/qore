@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "取得模型"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -364,7 +364,7 @@
           "message": "選擇要檢視或管理的現有資源。"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "建立回應"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -868,7 +868,7 @@
           "message": "不儲存"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "轉錄音訊"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "段落"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.display_name": {
-          "source": "Translate Audio",
+          "source": "Translate audio",
           "message": "翻譯音訊"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "取值範圍為 `0` 到 `1` 的取樣溫度。"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.display_name": {
-          "source": "Generate Speech",
+          "source": "Generate speech",
           "message": "產生語音"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "語音速度，範圍為 `0.5` 到 `5`，僅在模型支援時適用。"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "上傳檔案"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "LoRA 适配器"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "列出檔案"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "查找已上傳的檔案和批次結果檔案。\n\n回傳由已驗證的清單端點提供的資源。"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "取得檔案"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "選擇要檢視或管理的現有資源。"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "下載檔案"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "選擇要檢視或管理的現有資源。"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "刪除檔案"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "選擇現有的資源以檢視或管理。"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "建立批次"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "用於追蹤此批次的自訂鍵/值元資料。"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "列出批次"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "尋找批次並檢視其目前的處理狀態。\n\n回傳由已驗證的清單端點提供的資源。"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "取得批次"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "選擇現有的資源以檢視或管理。"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "取消批次"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "選擇現有的資源以檢視或管理。"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Register LoRA Adapter",
+          "source": "Register LoRA adapter",
           "message": "註冊 LoRA 适配器"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.display_name": {
-          "source": "List LoRA Adapters",
+          "source": "List LoRA adapters",
           "message": "列出 LoRA 適配器"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "尋找組織可用的適配器。\n\n**企業版存取權限需求。** 上傳外部訓練的 LoRA 適配器，並設定 `purpose` 為 `fine_tuning`。Groq 會主機適配器，但不訓練模型。詳見 [LoRA 指南](https://console.groq.com/docs/lora)。\n\n傳回由已驗證的清單端點提供的資源。"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.display_name": {
-          "source": "Get LoRA Adapter",
+          "source": "Get LoRA adapter",
           "message": "取得 LoRA 適配器"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "選擇現有的資源以檢視或管理。"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Delete LoRA Adapter",
+          "source": "Delete LoRA adapter",
           "message": "刪除 LoRA 适配器"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "選擇現有的資源以檢視或管理。"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "對話補全"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "代表終端使用者的不透明識別碼。在伺服器端記錄以用於濫用追蹤和用量歸屬；不影響生成。"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "列出模型"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {

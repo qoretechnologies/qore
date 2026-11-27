@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Create a Subscriber",
-          "message": "Create a Subscriber"
+          "source": "Create a subscriber",
+          "message": "Create a subscriber"
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
           "source": "Create or update a subscriber",
@@ -400,8 +400,8 @@
           "message": "A hash of custom field values to set on the subscriber"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Update a Subscriber",
-          "message": "Update a Subscriber"
+          "source": "Update a subscriber",
+          "message": "Update a subscriber"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
           "source": "Update an existing subscriber",
@@ -460,8 +460,8 @@
           "message": "A hash of custom field values to set on the subscriber"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
-          "source": "Unsubscribe a Subscriber",
-          "message": "Unsubscribe a Subscriber"
+          "source": "Unsubscribe a subscriber",
+          "message": "Unsubscribe a subscriber"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
           "source": "Unsubscribe a subscriber",
@@ -484,8 +484,8 @@
           "message": "The unique identifier of the subscriber to unsubscribe"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Create Subscribers",
-          "message": "Bulk Create Subscribers"
+          "source": "Bulk create subscribers",
+          "message": "Bulk create subscribers"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
           "source": "Create multiple subscribers at once",
@@ -576,8 +576,8 @@
           "message": "A URL that will receive a webhook when the bulk operation completes"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Subscribers",
-          "message": "List Subscribers"
+          "source": "List subscribers",
+          "message": "List subscribers"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
           "source": "List all subscribers",
@@ -676,8 +676,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
-          "source": "Get a Subscriber",
-          "message": "Get a Subscriber"
+          "source": "Get a subscriber",
+          "message": "Get a subscriber"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
           "source": "Get a single subscriber by ID",
@@ -696,8 +696,8 @@
           "message": "The subscriber ID"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
-          "message": "Create a Tag"
+          "source": "Create a tag",
+          "message": "Create a tag"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a new tag",
@@ -720,8 +720,8 @@
           "message": "The name of the tag to create"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
-          "message": "Update a Tag"
+          "source": "Update a tag",
+          "message": "Update a tag"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
           "source": "Update a tag name",
@@ -756,8 +756,8 @@
           "message": "The new name for the tag"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
-          "source": "Tag a Subscriber",
-          "message": "Tag a Subscriber"
+          "source": "Tag a subscriber",
+          "message": "Tag a subscriber"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
           "source": "Apply a tag to a subscriber",
@@ -792,8 +792,8 @@
           "message": "The email address of the subscriber to tag"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
-          "source": "Untag a Subscriber",
-          "message": "Untag a Subscriber"
+          "source": "Untag a subscriber",
+          "message": "Untag a subscriber"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
           "source": "Remove a tag from a subscriber",
@@ -828,8 +828,8 @@
           "message": "The unique identifier of the subscriber to untag"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Tag Subscribers",
-          "message": "Bulk Tag Subscribers"
+          "source": "Bulk tag subscribers",
+          "message": "Bulk tag subscribers"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
           "source": "Apply a tag to multiple subscribers",
@@ -864,8 +864,8 @@
           "message": "A list of subscriber email addresses to tag"
         },
         "app.S2l0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.S2l0.action.bGlzdC10YWdz.short_desc": {
           "source": "List all tags",
@@ -900,8 +900,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "List Tag Subscribers",
-          "message": "List Tag Subscribers"
+          "source": "List tag subscribers",
+          "message": "List tag subscribers"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
           "source": "List subscribers for a tag",
@@ -936,8 +936,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
-          "message": "Create a Custom Field"
+          "source": "Create a custom field",
+          "message": "Create a custom field"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Create a new custom field",
@@ -960,8 +960,8 @@
           "message": "The display label of the custom field to create"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
-          "message": "Update a Custom Field"
+          "source": "Update a custom field",
+          "message": "Update a custom field"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Update a custom field label",
@@ -996,8 +996,8 @@
           "message": "The new display label for the custom field"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
-          "message": "Delete a Custom Field"
+          "source": "Delete a custom field",
+          "message": "Delete a custom field"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Delete a custom field",
@@ -1020,8 +1020,8 @@
           "message": "The unique identifier of the custom field to delete"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
-          "message": "List Custom Fields"
+          "source": "List custom fields",
+          "message": "List custom fields"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
           "source": "List all custom fields",
@@ -1040,8 +1040,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Create a Broadcast",
-          "message": "Create a Broadcast"
+          "source": "Create a broadcast",
+          "message": "Create a broadcast"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
           "source": "Create a new broadcast or draft",
@@ -1184,8 +1184,8 @@
           "message": "The preview text shown in email clients before the email is opened"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Update a Broadcast",
-          "message": "Update a Broadcast"
+          "source": "Update a broadcast",
+          "message": "Update a broadcast"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
           "source": "Update an existing broadcast",
@@ -1340,8 +1340,8 @@
           "message": "The preview text shown in email clients before the email is opened"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Delete a Broadcast",
-          "message": "Delete a Broadcast"
+          "source": "Delete a broadcast",
+          "message": "Delete a broadcast"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
           "source": "Delete a broadcast",
@@ -1364,8 +1364,8 @@
           "message": "The unique identifier of the broadcast to delete"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
-          "source": "Get Broadcast Stats",
-          "message": "Get Broadcast Stats"
+          "source": "Get broadcast stats",
+          "message": "Get broadcast stats"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
           "source": "Get statistics for a broadcast",
@@ -1388,8 +1388,8 @@
           "message": "The unique identifier of the broadcast to get stats for"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
-          "message": "List Broadcasts"
+          "source": "List broadcasts",
+          "message": "List broadcasts"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
           "source": "List all broadcasts",
@@ -1416,8 +1416,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get a Broadcast",
-          "message": "Get a Broadcast"
+          "source": "Get a broadcast",
+          "message": "Get a broadcast"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
           "source": "Get a single broadcast by ID",
@@ -1436,8 +1436,8 @@
           "message": "The broadcast ID"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
-          "source": "Add Subscriber to Form",
-          "message": "Add Subscriber to Form"
+          "source": "Add subscriber to form",
+          "message": "Add subscriber to form"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
           "source": "Add a subscriber to a form",
@@ -1484,8 +1484,8 @@
           "message": "The first name of the subscriber"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
-          "message": "List Forms"
+          "source": "List forms",
+          "message": "List forms"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
           "source": "List all forms",
@@ -1520,8 +1520,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
-          "source": "List Form Subscribers",
-          "message": "List Form Subscribers"
+          "source": "List form subscribers",
+          "message": "List form subscribers"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
           "source": "List subscribers for a form",
@@ -1556,8 +1556,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
-          "source": "Add Subscriber to Sequence",
-          "message": "Add Subscriber to Sequence"
+          "source": "Add subscriber to sequence",
+          "message": "Add subscriber to sequence"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
           "source": "Add a subscriber to a sequence",
@@ -1592,8 +1592,8 @@
           "message": "The email address of the subscriber to add to the sequence"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
-          "source": "List Sequences",
-          "message": "List Sequences"
+          "source": "List sequences",
+          "message": "List sequences"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
           "source": "List all sequences",
@@ -1620,8 +1620,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Sequence Subscribers",
-          "message": "List Sequence Subscribers"
+          "source": "List sequence subscribers",
+          "message": "List sequence subscribers"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
           "source": "List subscribers for a sequence",
@@ -1656,8 +1656,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
-          "source": "Create a Purchase",
-          "message": "Create a Purchase"
+          "source": "Create a purchase",
+          "message": "Create a purchase"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
           "source": "Create a new purchase record",
@@ -1872,8 +1872,8 @@
           "message": "The current status of the purchase"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
-          "source": "List Purchases",
-          "message": "List Purchases"
+          "source": "List purchases",
+          "message": "List purchases"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
           "source": "List all purchases",
@@ -1900,8 +1900,8 @@
           "message": "Maximum results"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
-          "source": "Get a Purchase",
-          "message": "Get a Purchase"
+          "source": "Get a purchase",
+          "message": "Get a purchase"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
           "source": "Get a single purchase by ID",
@@ -1920,8 +1920,8 @@
           "message": "The purchase ID"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
-          "source": "Subscriber Activated",
-          "message": "Subscriber Activated"
+          "source": "Subscriber activated",
+          "message": "Subscriber activated"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
           "source": "Watch for new subscriber activations",
@@ -1932,8 +1932,8 @@
           "message": "Triggers when a subscriber is activated in Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
-          "source": "Subscriber Unsubscribed",
-          "message": "Subscriber Unsubscribed"
+          "source": "Subscriber unsubscribed",
+          "message": "Subscriber unsubscribed"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
           "source": "Watch for subscriber unsubscribes",
@@ -1944,8 +1944,8 @@
           "message": "Triggers when a subscriber unsubscribes in Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
-          "source": "Subscriber Bounced",
-          "message": "Subscriber Bounced"
+          "source": "Subscriber bounced",
+          "message": "Subscriber bounced"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
           "source": "Watch for subscriber bounces",
@@ -1956,8 +1956,8 @@
           "message": "Triggers when a subscriber's email bounces in Kit"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
-          "source": "Subscriber Complained",
-          "message": "Subscriber Complained"
+          "source": "Subscriber complained",
+          "message": "Subscriber complained"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
           "source": "Watch for subscriber complaints",
@@ -1968,8 +1968,8 @@
           "message": "Triggers when a subscriber marks an email as spam in Kit"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
-          "source": "Form Subscription",
-          "message": "Form Subscription"
+          "source": "Form subscription",
+          "message": "Form subscription"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
           "source": "Watch for form subscriptions",
@@ -1980,8 +1980,8 @@
           "message": "Triggers when a subscriber signs up through a form in Kit"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
-          "source": "Course Subscription",
-          "message": "Course Subscription"
+          "source": "Course subscription",
+          "message": "Course subscription"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
           "source": "Watch for course subscriptions",

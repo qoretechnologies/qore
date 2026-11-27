@@ -273,7 +273,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-workflows",
                 "method": "GET",
                 "path": "/api/v1/workflows/",
-                "display_name": "List Workflows",
+                "display_name": "List workflows",
                 "short_desc": "List the workflows in this Unstructured account",
                 "desc": "Lists workflows, with optional filtering by state, by the connectors they "
                     "use, and by when they were created.\n\n"
@@ -356,7 +356,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-workflow",
                 "method": "GET",
                 "path": "/api/v1/workflows/{workflow_id}",
-                "display_name": "Get Workflow",
+                "display_name": "Get workflow",
                 "short_desc": "Get one workflow by ID",
                 "desc": "Returns one workflow, including its processing nodes, its schedule and the "
                     "connectors it is wired to.",
@@ -374,7 +374,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-workflow",
                 "method": "POST",
                 "path": "/api/v1/workflows/",
-                "display_name": "Create Workflow",
+                "display_name": "Create workflow",
                 "short_desc": "Create a workflow",
                 "desc": "Creates a workflow that reads from a source connector, processes documents "
                     "through a chain of nodes, and writes to a destination connector.\n\n"
@@ -458,7 +458,7 @@ public class UnstructuredPlatformManifest {
                 "action": "update-workflow",
                 "method": "PUT",
                 "path": "/api/v1/workflows/{workflow_id}",
-                "display_name": "Update Workflow",
+                "display_name": "Update workflow",
                 "short_desc": "Update a workflow",
                 "desc": "Updates a workflow.  Use `state` to activate or deactivate it without "
                     "deleting it: an `inactive` workflow keeps its definition but does not run on its "
@@ -508,7 +508,7 @@ public class UnstructuredPlatformManifest {
                 "action": "delete-workflow",
                 "method": "DELETE",
                 "path": "/api/v1/workflows/{workflow_id}",
-                "display_name": "Delete Workflow",
+                "display_name": "Delete workflow",
                 "short_desc": "Delete a workflow",
                 "desc": "Deletes a workflow.  The connectors it used are not deleted.",
                 "groups": (GroupWorkflows,),
@@ -525,7 +525,7 @@ public class UnstructuredPlatformManifest {
                 "action": "run-workflow",
                 "method": "POST",
                 "path": "/api/v1/workflows/{workflow_id}/run",
-                "display_name": "Run Workflow",
+                "display_name": "Run workflow",
                 "short_desc": "Run a workflow now and return the job it started",
                 "desc": "Runs a workflow immediately, whatever its schedule says, and returns the "
                     "job that was started.\n\n"
@@ -553,7 +553,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-jobs",
                 "method": "GET",
                 "path": "/api/v1/jobs/",
-                "display_name": "List Jobs",
+                "display_name": "List jobs",
                 "short_desc": "List workflow runs",
                 "desc": "Lists jobs, optionally narrowed to one workflow or one status.\n\n"
                     "A job is one run of a workflow, scheduled or explicit.",
@@ -580,7 +580,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-job",
                 "method": "GET",
                 "path": "/api/v1/jobs/{job_id}",
-                "display_name": "Get Job",
+                "display_name": "Get job",
                 "short_desc": "Get one job by ID",
                 "desc": "Returns one job, including its status and runtime.",
                 "groups": (GroupJobs,),
@@ -597,7 +597,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-job-details",
                 "method": "GET",
                 "path": "/api/v1/jobs/{job_id}/details",
-                "display_name": "Get Job Details",
+                "display_name": "Get job details",
                 "short_desc": "Get a job's per-node processing detail",
                 "desc": "Returns how far each processing node in the workflow has got for this job.  "
                     "Use it to see where a long-running job is spending its time, and which node "
@@ -616,7 +616,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-job-failed-files",
                 "method": "GET",
                 "path": "/api/v1/jobs/{job_id}/failed-files",
-                "display_name": "Get Job Failed Files",
+                "display_name": "Get job failed files",
                 "short_desc": "List the files a job could not process",
                 "desc": "Lists the files this job could not process, with the error for each.\n\n"
                     "A job that completes with errors still writes everything that succeeded, so this "
@@ -635,7 +635,7 @@ public class UnstructuredPlatformManifest {
                 "action": "download-job-output",
                 "method": "GET",
                 "path": "/api/v1/jobs/{job_id}/download",
-                "display_name": "Download Job Output",
+                "display_name": "Download job output",
                 "short_desc": "Download a processed file from a job",
                 "desc": "Downloads one output file produced by a job.\n\n"
                     "A job reports the files it produced as `output_node_files`, so choosing the "
@@ -671,7 +671,7 @@ public class UnstructuredPlatformManifest {
                 "action": "cancel-job",
                 "method": "POST",
                 "path": "/api/v1/jobs/{job_id}/cancel",
-                "display_name": "Cancel Job",
+                "display_name": "Cancel job",
                 "short_desc": "Cancel a running job",
                 "desc": "Cancels a job that is scheduled or in progress.  Documents already written "
                     "to the destination stay there.",
@@ -691,7 +691,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-sources",
                 "method": "GET",
                 "path": "/api/v1/sources/",
-                "display_name": "List Source Connectors",
+                "display_name": "List source connectors",
                 "short_desc": "List the source connectors in this account",
                 "desc": "Lists source connectors, optionally narrowed to one connector type.\n\n"
                     "A source connector is where a workflow reads documents from.",
@@ -711,7 +711,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-source",
                 "method": "GET",
                 "path": "/api/v1/sources/{source_id}",
-                "display_name": "Get Source Connector",
+                "display_name": "Get source connector",
                 "short_desc": "Get one source connector by ID",
                 "desc": "Returns one source connector and its configuration.  Secrets in the "
                     "configuration are returned redacted.",
@@ -729,7 +729,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-source",
                 "method": "POST",
                 "path": "/api/v1/sources/",
-                "display_name": "Create Source Connector",
+                "display_name": "Create source connector",
                 "short_desc": "Create a source connector",
                 "desc": "Creates a source connector for a workflow to read documents from.\n\n"
                     "`config` is specific to the connector type chosen in `type` - an S3 connector "
@@ -773,7 +773,7 @@ public class UnstructuredPlatformManifest {
                 "action": "update-source",
                 "method": "PUT",
                 "path": "/api/v1/sources/{source_id}",
-                "display_name": "Update Source Connector",
+                "display_name": "Update source connector",
                 "short_desc": "Update a source connector's configuration",
                 "desc": "Updates a source connector's configuration.  The connector type cannot be "
                     "changed; create a new connector instead.",
@@ -796,7 +796,7 @@ public class UnstructuredPlatformManifest {
                 "action": "delete-source",
                 "method": "DELETE",
                 "path": "/api/v1/sources/{source_id}",
-                "display_name": "Delete Source Connector",
+                "display_name": "Delete source connector",
                 "short_desc": "Delete a source connector",
                 "desc": "Deletes a source connector.  A workflow still using it will fail on its "
                     "next run.",
@@ -814,7 +814,7 @@ public class UnstructuredPlatformManifest {
                 "action": "check-source",
                 "method": "POST",
                 "path": "/api/v1/sources/{source_id}/connection-check",
-                "display_name": "Check Source Connector",
+                "display_name": "Check source connector",
                 "short_desc": "Start a connection check for a source connector",
                 "desc": "Asks Unstructured to try connecting to the source and report whether the "
                     "credentials and location work.  The check runs asynchronously; read the result "
@@ -833,7 +833,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-source-check",
                 "method": "GET",
                 "path": "/api/v1/sources/{source_id}/connection-check",
-                "display_name": "Get Source Connector Check",
+                "display_name": "Get source connector check",
                 "short_desc": "Read the latest connection check for a source connector",
                 "desc": "Returns the most recent connection check for the connector, with its status "
                     "and any error reported.",
@@ -853,7 +853,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-destinations",
                 "method": "GET",
                 "path": "/api/v1/destinations/",
-                "display_name": "List Destination Connectors",
+                "display_name": "List destination connectors",
                 "short_desc": "List the destination connectors in this account",
                 "desc": "Lists destination connectors, optionally narrowed to one connector type.\n\n"
                     "A destination connector is where a workflow writes its processed output - "
@@ -874,7 +874,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-destination",
                 "method": "GET",
                 "path": "/api/v1/destinations/{destination_id}",
-                "display_name": "Get Destination Connector",
+                "display_name": "Get destination connector",
                 "short_desc": "Get one destination connector by ID",
                 "desc": "Returns one destination connector and its configuration.  Secrets in the "
                     "configuration are returned redacted.",
@@ -892,7 +892,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-destination",
                 "method": "POST",
                 "path": "/api/v1/destinations/",
-                "display_name": "Create Destination Connector",
+                "display_name": "Create destination connector",
                 "short_desc": "Create a destination connector",
                 "desc": "Creates a destination connector for a workflow to write its output to.\n\n"
                     "`config` is specific to the connector type chosen in `type` - a Pinecone "
@@ -935,7 +935,7 @@ public class UnstructuredPlatformManifest {
                 "action": "update-destination",
                 "method": "PUT",
                 "path": "/api/v1/destinations/{destination_id}",
-                "display_name": "Update Destination Connector",
+                "display_name": "Update destination connector",
                 "short_desc": "Update a destination connector's configuration",
                 "desc": "Updates a destination connector's configuration.  The connector type cannot "
                     "be changed; create a new connector instead.",
@@ -958,7 +958,7 @@ public class UnstructuredPlatformManifest {
                 "action": "delete-destination",
                 "method": "DELETE",
                 "path": "/api/v1/destinations/{destination_id}",
-                "display_name": "Delete Destination Connector",
+                "display_name": "Delete destination connector",
                 "short_desc": "Delete a destination connector",
                 "desc": "Deletes a destination connector.  A workflow still using it will fail on "
                     "its next run.",
@@ -976,7 +976,7 @@ public class UnstructuredPlatformManifest {
                 "action": "check-destination",
                 "method": "POST",
                 "path": "/api/v1/destinations/{destination_id}/connection-check",
-                "display_name": "Check Destination Connector",
+                "display_name": "Check destination connector",
                 "short_desc": "Start a connection check for a destination connector",
                 "desc": "Asks Unstructured to try connecting to the destination and report whether "
                     "the credentials and location work.  The check runs asynchronously; read the "
@@ -995,7 +995,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-destination-check",
                 "method": "GET",
                 "path": "/api/v1/destinations/{destination_id}/connection-check",
-                "display_name": "Get Destination Connector Check",
+                "display_name": "Get destination connector check",
                 "short_desc": "Read the latest connection check for a destination connector",
                 "desc": "Returns the most recent connection check for the connector, with its status "
                     "and any error reported.",
@@ -1015,7 +1015,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-notification-channels",
                 "method": "GET",
                 "path": "/api/v1/notifications/channels",
-                "display_name": "List Notification Channels",
+                "display_name": "List notification channels",
                 "short_desc": "List the notification channels in this account",
                 "desc": "Lists notification channels of one kind.  A channel is where Unstructured "
                     "sends job notifications: a webhook URL, or an email address.",
@@ -1036,7 +1036,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-notification-channel",
                 "method": "GET",
                 "path": "/api/v1/notifications/channels/{channel_id}",
-                "display_name": "Get Notification Channel",
+                "display_name": "Get notification channel",
                 "short_desc": "Get one notification channel by ID",
                 "desc": "Returns one notification channel and the events it is subscribed to.",
                 "groups": (GroupNotifications,),
@@ -1053,7 +1053,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-notification-channel",
                 "method": "POST",
                 "path": "/api/v1/notifications/channels",
-                "display_name": "Create Notification Channel",
+                "display_name": "Create notification channel",
                 "short_desc": "Create a notification channel",
                 "desc": "Creates a channel Unstructured sends job notifications to.\n\n"
                     "The settings depend on the kind of channel: a webhook channel takes a `url` "
@@ -1097,7 +1097,7 @@ public class UnstructuredPlatformManifest {
                 "action": "update-notification-channel",
                 "method": "PATCH",
                 "path": "/api/v1/notifications/channels/{channel_id}",
-                "display_name": "Update Notification Channel",
+                "display_name": "Update notification channel",
                 "short_desc": "Update a notification channel",
                 "desc": "Updates a notification channel's destination or the events it is subscribed "
                     "to.",
@@ -1166,7 +1166,7 @@ public class UnstructuredPlatformManifest {
                 "action": "delete-notification-channel",
                 "method": "DELETE",
                 "path": "/api/v1/notifications/channels/{channel_id}",
-                "display_name": "Delete Notification Channel",
+                "display_name": "Delete notification channel",
                 "short_desc": "Delete a notification channel",
                 "desc": "Deletes a notification channel.  Workflows subscribed through it stop being "
                     "notified.",
@@ -1184,7 +1184,7 @@ public class UnstructuredPlatformManifest {
                 "action": "verify-notification-channel",
                 "method": "POST",
                 "path": "/api/v1/notifications/channels/{channel_id}/verify",
-                "display_name": "Verify Notification Channel",
+                "display_name": "Verify notification channel",
                 "short_desc": "Send a verification message to a notification channel",
                 "desc": "Confirms a channel with the code Unstructured sent to it.  A channel does "
                     "not receive job notifications until it has been verified.",
@@ -1210,7 +1210,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-templates",
                 "method": "GET",
                 "path": "/api/v1/templates/",
-                "display_name": "List Workflow Templates",
+                "display_name": "List workflow templates",
                 "short_desc": "List the workflow templates available to this account",
                 "desc": "Lists workflow templates - Unstructured's ready-made processing chains, "
                     "which a workflow can be built from instead of describing its nodes by hand.",
@@ -1223,7 +1223,7 @@ public class UnstructuredPlatformManifest {
                 "action": "get-template",
                 "method": "GET",
                 "path": "/api/v1/templates/{template_id}",
-                "display_name": "Get Workflow Template",
+                "display_name": "Get workflow template",
                 "short_desc": "Get one workflow template by ID",
                 "desc": "Returns one workflow template and the processing chain it describes.",
                 "groups": (GroupWorkflows,),

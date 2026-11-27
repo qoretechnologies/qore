@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
-          "message": "Create an Order"
+          "source": "Create an order",
+          "message": "Create an order"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -952,8 +952,8 @@
           "message": "The monetary amount as a string (e.g., \"9.99\")"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
-          "source": "Fulfill an Order",
-          "message": "Fulfill an Order"
+          "source": "Fulfill an order",
+          "message": "Fulfill an order"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
           "source": "Fulfill an existing order",
@@ -1060,8 +1060,8 @@
           "message": "The URL for tracking the shipment"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List all orders",
@@ -1144,8 +1144,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
-          "message": "Get an Order"
+          "source": "Get an order",
+          "message": "Get an order"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -1164,8 +1164,8 @@
           "message": "The order ID"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
-          "message": "Create a Product"
+          "source": "Create a product",
+          "message": "Create a product"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -1552,8 +1552,8 @@
           "message": "Whether the variant has unlimited stock"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
-          "message": "Update a Product"
+          "source": "Update a product",
+          "message": "Update a product"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -1684,8 +1684,8 @@
           "message": "List of variant attribute names (e.g., Size, Color)"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
-          "message": "Delete a Product"
+          "source": "Delete a product",
+          "message": "Delete a product"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
           "source": "Delete a product",
@@ -1708,8 +1708,8 @@
           "message": "The product ID to delete"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List all products",
@@ -1780,8 +1780,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
-          "message": "Get a Product"
+          "source": "Get a product",
+          "message": "Get a product"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -1800,8 +1800,8 @@
           "message": "The product ID"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Create a Product Variant",
-          "message": "Create a Product Variant"
+          "source": "Create a product variant",
+          "message": "Create a product variant"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
           "source": "Create a new product variant",
@@ -2080,8 +2080,8 @@
           "message": "The weight value"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Update a Product Variant",
-          "message": "Update a Product Variant"
+          "source": "Update a product variant",
+          "message": "Update a product variant"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
           "source": "Update an existing product variant",
@@ -2372,8 +2372,8 @@
           "message": "The weight value"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Delete a Product Variant",
-          "message": "Delete a Product Variant"
+          "source": "Delete a product variant",
+          "message": "Delete a product variant"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
           "source": "Delete a product variant",
@@ -2408,8 +2408,8 @@
           "message": "The variant ID to delete"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
-          "source": "List Product Variants",
-          "message": "List Product Variants"
+          "source": "List product variants",
+          "message": "List product variants"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
           "source": "List variants for a product",
@@ -2444,8 +2444,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Upload a Product Image",
-          "message": "Upload a Product Image"
+          "source": "Upload a product image",
+          "message": "Upload a product image"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
           "source": "Upload an image for a product",
@@ -2492,8 +2492,8 @@
           "message": "Alternative text for the image"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Assign a Product Image",
-          "message": "Assign a Product Image"
+          "source": "Assign a product image",
+          "message": "Assign a product image"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
           "source": "Assign an image to a variant",
@@ -2540,8 +2540,8 @@
           "message": "The ID of the variant to assign the image to"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Update a Product Image",
-          "message": "Update a Product Image"
+          "source": "Update a product image",
+          "message": "Update a product image"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
           "source": "Update image alt text",
@@ -2588,8 +2588,8 @@
           "message": "The alt text to set for the product image"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Delete a Product Image",
-          "message": "Delete a Product Image"
+          "source": "Delete a product image",
+          "message": "Delete a product image"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
           "source": "Delete a product image",
@@ -2624,8 +2624,8 @@
           "message": "The ID of the image to delete"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
-          "source": "Update Stock Quantities",
-          "message": "Update Stock Quantities"
+          "source": "Update stock quantities",
+          "message": "Update stock quantities"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
           "source": "Adjust inventory stock for a variant",
@@ -2680,8 +2680,8 @@
           "message": "Remove stock"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
-          "message": "List Inventory"
+          "source": "List inventory",
+          "message": "List inventory"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
           "source": "List inventory items",
@@ -2724,8 +2724,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
-          "source": "Get Inventory",
-          "message": "Get Inventory"
+          "source": "Get inventory",
+          "message": "Get inventory"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
           "source": "Get inventory for a variant",
@@ -2744,8 +2744,8 @@
           "message": "The variant ID"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
-          "message": "List Transactions"
+          "source": "List transactions",
+          "message": "List transactions"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
           "source": "List all transactions",
@@ -2788,8 +2788,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get a Transaction",
-          "message": "Get a Transaction"
+          "source": "Get a transaction",
+          "message": "Get a transaction"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
           "source": "Get a single transaction by ID",
@@ -2808,8 +2808,8 @@
           "message": "The transaction ID"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Created/Updated",
-          "message": "Order Created/Updated"
+          "source": "Order created/updated",
+          "message": "Order created/updated"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when an order is created or updated",
@@ -2832,8 +2832,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Created/Updated",
-          "message": "Product Created/Updated"
+          "source": "Product created/updated",
+          "message": "Product created/updated"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
           "source": "Trigger when a product is created or updated",
@@ -2856,8 +2856,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
-          "source": "Transaction Created/Updated",
-          "message": "Transaction Created/Updated"
+          "source": "Transaction created/updated",
+          "message": "Transaction created/updated"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {
           "source": "Trigger when a transaction is created or updated",

@@ -134,7 +134,7 @@ namespace Priv {
             "path": "/",
             "action": "read",
             "subtype": "jsonread",
-            "display_name": "Read JSON File",
+            "display_name": "Read JSON file",
             "short_desc": "Read standard JSON file data from a file location",
             "desc": "Read standard JSON file data from a specific file location.\n\n"
                 "The JSON file may contain:\n"
@@ -163,7 +163,7 @@ namespace Priv {
             "path": "/",
             "action": "read-data",
             "subtype": "jsonread",
-            "display_name": "Read JSON Inline Data",
+            "display_name": "Read JSON inline data",
             "short_desc": "Read standard JSON inline data",
             "desc": "Read standard JSON inline data provided directly as a string.\n\n"
                 "The JSON data may contain:\n"
@@ -193,7 +193,7 @@ namespace Priv {
             "path": "/",
             "action": "write",
             "subtype": "jsonwrite",
-            "display_name": "Write JSON File",
+            "display_name": "Write JSON file",
             "short_desc": "Write standard JSON file data to a file location",
             "desc": "Write records as a standard JSON array to a specific file location.\n\n"
                 "Records are accumulated and written as a JSON array when the action completes.\n\n"
@@ -220,7 +220,7 @@ namespace Priv {
             "path": "/",
             "action": "write-data",
             "subtype": "jsonwrite",
-            "display_name": "Write JSON Data",
+            "display_name": "Write JSON data",
             "short_desc": "Generate standard JSON data from records",
             "desc": "Generate a standard JSON array from records and return it as data, for example to attach it "
                 "to an email or upload it with another action.\n\n"

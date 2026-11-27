@@ -16,7 +16,7 @@
           "message": "Čtení a zápis dat souborů CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Přečíst CSV soubor"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "Pokud je `true` (výchozí `false`) a je naparsován řádek s jiným počtem sloupců či polí než ostatní řádky, vyvolá se výjimka `CSVFILEITERATOR-DATA-ERROR`\n\nPovolení této možnosti sníží výkon"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Přečíst inline CSV data"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Pokud je `true` (výchozí `false`) a je naparsován řádek s jiným počtem sloupců či polí než ostatní řádky, vyvolá se výjimka `CSVFILEITERATOR-DATA-ERROR`\n\nPovolení této možnosti sníží výkon"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Profilovat data CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Pokud je `True` (výchozí), ukázkové hodnoty a protipříklady se redigují na svůj tvar: písmena se změní na `x` nebo `X` a číslice na `9`, takže profil lze sdílet bez dat"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Zapsat CSV data"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "Nastavte na `false` pro potlačení výstupu záhlaví; výchozí hodnota je `true`, což znamená vypsat záhlaví, pokud existují"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Vytvořit data CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

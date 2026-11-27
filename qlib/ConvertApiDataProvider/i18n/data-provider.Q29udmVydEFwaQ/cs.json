@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Převést soubor"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Časový limit konverze v sekundách, od `10` do `1200`; pokud není nastaven, použije se výchozí hodnota konvertoru, například `900` pro dokumenty Office a `120` pro webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Získat informace o konvertoru"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Další parametry konvertoru jako haš názvů parametrů ConvertAPI na hodnoty.\n\nParametry každého konvertoru jsou uvedeny v [dokumentaci ConvertAPI](https://docs.convertapi.com) a vrací je akce `get-converter-info`.\n\n- Skalární hodnoty se odešlou beze změny\n- Haš souboru (`name` a `content`) se odešle jako soubor\n- Seznam hašů souborů se odešle jako seznam souborů\n\n**Příklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "Převést PDF do obrázků"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Další parametry konvertoru jako haš názvů parametrů ConvertAPI na hodnoty.\n\nParametry každého konvertoru jsou uvedeny v [dokumentaci ConvertAPI](https://docs.convertapi.com) a vrací je akce `get-converter-info`.\n\n- Skalární hodnoty se odešlou beze změny\n- Haš souboru (`name` a `content`) se odešle jako soubor\n- Seznam hašů souborů se odešle jako seznam souborů\n\n**Příklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "Sloučit soubory PDF"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
-          "message": "Retrieve Order Items"
+          "source": "Retrieve order items",
+          "message": "Retrieve order items"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
           "source": "Retrieve order item information from Mews",
@@ -604,8 +604,8 @@
           "message": "Maximum number of records to return"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
-          "message": "Retrieve Payment Information"
+          "source": "Retrieve payment information",
+          "message": "Retrieve payment information"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
           "source": "Retrieve payment information from Mews",
@@ -832,8 +832,8 @@
           "message": "Maximum number of records to return"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
-          "message": "Retrieve Customer Information"
+          "source": "Retrieve customer information",
+          "message": "Retrieve customer information"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {
           "source": "Retrieve customer information from Mews",

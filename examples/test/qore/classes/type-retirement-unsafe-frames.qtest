@@ -34,6 +34,8 @@ class Box<T> {
         return frames();
     }
 
+    # debug-builtin-guard: not called; the test calls the class's other methods only in unsafeFrames(), which skips
+    # without library debugging
     static int staticFrames() {
         return call_function("dbg_type_unsafe_frames");
     }

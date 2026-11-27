@@ -8,7 +8,7 @@
           "message": "Čítanie dát dokumentov YAML z konkrétneho umiestnenia súboru.\n\nSúbor YAML môže obsahovať jeden alebo viac dokumentov oddelených značkami `---`. Každý dokument sa iteruje ako samostatný záznam.\n\n**Kľúčové možnosti**\n- `path`: umiestnenie súboru, z ktorého sa má čítať (povinné)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n- `skip_empty_documents`: preskočiť prázdne dokumenty (predvolené: `True`)\n- `max_documents`: maximálny počet dokumentov na čítanie (`0` = neobmedzené)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "Čítať súbor s dokumentmi YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "Čítanie inline dát YAML poskytnutých priamo ako reťazec.\n\nDáta YAML môžu obsahovať jeden alebo viac dokumentov oddelených značkami `---`. Každý dokument sa iteruje ako samostatný záznam.\n\n**Kľúčové možnosti**\n- `data`: reťazec YAML na spracovanie (povinné)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n- `skip_empty_documents`: preskočiť prázdne dokumenty (predvolené: `True`)\n- `max_documents`: maximálny počet dokumentov na čítanie (`0` = neobmedzené)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "Čítať inline dáta YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "Zápis záznamov dokumentov YAML ako viacdokumentového streamu do konkrétneho umiestnenia súboru.\n\nZáznamy sa zhromažďujú a zapisujú s oddeľovačmi dokumentov `---` po dokončení akcie.\n\n**Kľúčové možnosti**\n- `path`: umiestnenie výstupného súboru (povinné)\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "Zapísať súbor s dokumentmi YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "Vygeneruje zo záznamov viacdokumentový prúd YAML a vráti ho ako údaje, napríklad na priloženie k e-mailu alebo nahratie inou akciou.\n\nKaždý záznam sa stane jedným dokumentom YAML, oddeleným značkami `---`; akcia vráti vygenerované údaje v `data` a počet dokumentov v `record_count`.\n\n**Kľúčové možnosti**\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "Zapísať inline dáta YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

@@ -16,7 +16,7 @@
           "message": "Wykrywaj oszustwa, prognozuj sprzedaż, segmentuj klientów i upraszczaj złożone dane — wszystko w ramach Twojego potoku danych bez zewnętrznych zależności. Obejmuje wykrywanie anomalii (oznaczanie nietypowych transakcji lub awarii czujników), klasteryzację (odkrywanie segmentów klientów lub gorących punktów geograficznych), prognozowanie (przewidywanie przychodów z uwzględnieniem wzorców sezonowych), regresję (szacowanie cen na podstawie cech) oraz redukcję wymiarowości (kompresję 50 pól do 3 kluczowych wartości)."
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
+          "source": "Detect unusual data points",
           "message": "Wykrywanie nietypowych punktów danych"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Wartość z zakresu od `0.0` do `1.0` określająca, kiedy rekord jest oznaczany jako anomalia; rekordy z wynikiem równym lub wyższym od tego progu są klasyfikowane jako anomalie; niższe wartości oznaczają więcej rekordów jako anomalie, wyższe wartości oznaczają ich mniej.\n\n**Typowe wartości**: `0.5` (standardowa), `0.6`–`0.7` (konserwatywne — tylko oczywiste anomalie); domyślnie: `0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
+          "source": "Find natural groups in data",
           "message": "Znajdź naturalne grupy w danych"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
@@ -184,7 +184,7 @@
           "message": "Mierzy kąt między punktami danych zamiast wielkości; najlepsza, gdy kierunek ma większe znaczenie niż wielkość wartości"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
+          "source": "Divide data into groups",
           "message": "Podziel dane na grupy"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
@@ -288,7 +288,7 @@
           "message": "Gdy parametr `output_mode` ma wartość `dataframe`, dołącz kolumny `centroid_distance_<n>` dla każdego centroidu klastra. Wyłącz tę opcję, gdy kolejne kroki wymagają tylko zwycięskich wartości `cluster` i najbliższych `distance`; domyślnie: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
+          "source": "Simplify complex data",
           "message": "Uprość złożone dane"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
@@ -380,7 +380,7 @@
           "message": "Gdy `output_mode` ma wartość `dataframe`, uwzględniaj oryginalne pola wejściowe obok kolumn `component_<n>`. Wyłącz to, gdy kolejne kroki potrzebują tylko głównych składowych, aby zmniejszyć rozmiar danych wyjściowych i zwiększyć przepustowość; domyślnie: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
+          "source": "Forecast future values",
           "message": "Prognozuj przyszłe wartości"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
@@ -528,7 +528,7 @@
           "message": "Wartość od `0.0` do `1.0` kontrolująca, jak szybko trend wypłaszcza się w prognozach długoterminowych; wartości bliższe `1.0` pozwalają trendowi utrzymywać się dłużej; wartości bliższe `0.0` szybciej wypłaszczają trend; używane tylko przy włączonym trendzie tłumionym.\n\n**Typowe wartości**: `0.8`–`0.98` (częsty zakres); pozostaw puste, aby algorytm wybrał automatycznie"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
+          "source": "Predict values from input data",
           "message": "Przewidywanie wartości na podstawie danych wejściowych"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Gdy włączone, pola wejściowe są skalowane do podobnych zakresów przed dopasowaniem modelu; może to poprawić dokładność, gdy pola wejściowe mają bardzo różne jednostki lub rzędy wielkości (np. łączenie powierzchni w metrach i liczby pokoi); domyślnie: `False` (wyłączone)"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
+          "source": "Detect local outliers",
           "message": "Wykrywanie lokalnych wartości odstających"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
@@ -660,7 +660,7 @@
           "message": "Wartość graniczna wskaźnika anomalii; wynik `1.0` oznacza, że punkt ma taką samą gęstość jak jego sąsiedzi (norma); wyniki znacznie powyżej `1.0` wskazują, że punkt znajduje się w obszarze o mniejszej gęstości niż jego sąsiedzi (anomalia); niższe progi oznaczają więcej rekordów.\n\n**Typowe wartości**: `1.5` (standardowa — wykrywa umiarkowane wartości odstające), `2.0` (konserwatywna — tylko silne wartości odstające); domyślnie: `1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
+          "source": "Group data with probabilities",
           "message": "Grupuj dane z prawdopodobieństwami"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Klastry są elipsami wyrównanymi do osi; szybsze i bardziej stabilne przy ograniczonej liczbie danych, ale nie uwzględniają korelacji między polami"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
+          "source": "Run pre-trained model",
           "message": "Uruchom wstępnie wytrenowany model"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Gdy parametr `output_mode` ma wartość `columns` lub `dataframe`, uwzględnia oryginalne kolumny cech wejściowych obok kolumn wyjściowych ONNX. Wyłącz tę opcję, jeśli kolejne kroki wymagają jedynie wyników modelu, aby zmniejszyć rozmiar danych wyjściowych i zwiększyć przepustowość. Domyślnie: `False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
+          "source": "Run registered model",
           "message": "Uruchom zarejestrowany model"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "Opcjonalna nazwa artefaktu `tokenizer.json` do załadowania z rejestru modeli na potrzeby wykonywania `causal-lm`. Pomiń tę opcję, jeśli manifest pakietu identyfikuje już artefakt tokenizatora."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
+          "source": "Separate trends and seasonal patterns",
           "message": "Rozdziel trendy i wzorce sezonowe"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Wahania sezonowe skalują się wraz z ogólnym poziomem; najlepsze, gdy wzorzec sezonowy rośnie wraz ze wzrostem wartości danych"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
+          "source": "Put all fields on the same scale",
           "message": "Ustaw wszystkie pola w tej samej skali"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Gdy `output_mode` ma wartość `dataframe`, uwzględniaj oryginalne pola wejściowe obok kolumn `scaled_<field>`. Wyłącz to, gdy kolejne kroki potrzebują tylko przeskalowanych kolumn, aby zmniejszyć rozmiar danych wyjściowych i zwiększyć przepustowość; domyślnie: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
+          "source": "Normalize values to a range",
           "message": "Normalizuj wartości do zakresu"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Gdy `output_mode` to `dataframe`, dołącz oryginalne pola wejściowe obok kolumn `scaled_<field>`. Wyłącz to, gdy kolejne kroki wymagają jedynie znormalizowanych kolumn, aby zmniejszyć rozmiar danych wyjściowych i zwiększyć przepustowość; domyślnie: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
+          "source": "Fill in missing data",
           "message": "Uzupełnij brakujące dane"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "Liczba używana do uzupełniania braków, gdy metoda uzupełniania jest ustawiona na „Wartość stała”. Na przykład `0`, aby uzupełnić zerem, lub `-1` jako wartość sentinel; ignorowane przy innych metodach uzupełniania; domyślnie: `0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
+          "source": "Score your category predictions",
           "message": "Oceń przewidywania kategorii"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Liczba rekordów do zebrania przed obliczeniem oceny jakości. Wszystkie rekordy w partii są oceniane wspólnie.\n\n**Wskazówka**: użyj co najmniej `50`, aby uzyskać miarodajne wyniki; co najmniej `200`, aby uzyskać szczegółowy podział na kategorie"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
+          "source": "Score your number predictions",
           "message": "Oceń przewidywania liczbowe"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Liczba rekordów do zebrania przed obliczeniem oceny jakości. Wszystkie rekordy we wsadzie są oceniane łącznie.\n\n**Wskazówka**: użyj co najmniej `30`, aby uzyskać miarodajne wyniki; `200`+ dla stabilnej oceny"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
+          "source": "Score your data groupings",
           "message": "Oceń grupowanie danych"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Liczba rekordów do zebrania przed obliczeniem oceny jakości. Wszystkie rekordy w partii są oceniane wspólnie. Partia musi zawierać co najmniej 2 różne grupy.\n\n**Wskazówka**: użyj co najmniej `50`, aby uzyskać miarodajne wyniki"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
+          "source": "Categorize records",
           "message": "Kategoryzacja rekordów"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Określa, czy uwzględniać stałą bazową (wyraz wolny). Opcja ta powinna być niemal zawsze włączona — pozwala modelowi uwzględnić ogólną tendencję w danych (np. jeśli większość wniosków jest zatwierdzana, stała bazowa to odzwierciedla).\n\nDomyślnie: włączone"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
+          "source": "Classify by similarity",
           "message": "Klasyfikuj według podobieństwa"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Sąsiedzi bardziej podobni do nowego rekordu mają większy wpływ na prognozę — bardzo podobny rekord liczy się bardziej niż tylko umiarkowanie podobny"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
+          "source": "Predict numbers by similarity",
           "message": "Przewiduj liczby na podstawie podobieństwa"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Rekordy bardziej podobne do nowego rekordu mają większy wpływ na przewidywaną wartość"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
+          "source": "Classify with decision rules",
           "message": "Klasyfikacja za pomocą reguł decyzyjnych"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Mierzy przyrost informacji uzyskany przy każdym podziale. Może tworzyć nieco bardziej zrównoważone drzewa, ale jest wolniejszy obliczeniowo"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
+          "source": "Predict numbers with decision rules",
           "message": "Przewidywanie liczb za pomocą reguł decyzyjnych"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Maksymalna liczba poziomów w drzewie decyzyjnym. Głębsze drzewa mogą wychwytywać bardziej złożone wzorce, ale mogą zapamiętywać dane treningowe zamiast uczyć się ogólnych reguł.\n\n**Wskazówka**: zacznij od `5`–`15`; zwiększ, jeśli dokładność jest zbyt niska, zmniejsz, jeśli model jest przeuczony\n\nDomyślnie: `10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
+          "source": "Classify with multiple decision trees",
           "message": "Klasyfikuj za pomocą wielu drzew decyzyjnych"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Każde drzewo uwzględnia log2 całkowitej liczby pól przy każdym podziale. Wykorzystuje mniej cech, zwiększając różnorodność drzew"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
+          "source": "Predict numbers with multiple trees",
           "message": "Prognozuj liczby za pomocą wielu drzew"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "Każde drzewo uwzględnia log2 całkowitej liczby pól przy każdym podziale. Wykorzystuje mniej cech, zwiększając różnorodność drzew"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
+          "source": "Classify with gradient boosting",
           "message": "Klasyfikuj za pomocą gradient boostingu"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Maksymalna liczba poziomów w każdym drzewie. Gradient boosting zazwyczaj wykorzystuje płytkie drzewa (pnie decyzyjne lub małe drzewa), z których każde wychwytuje jeden aspekt wzorca.\n\n**Wskazówka**: `2`–`6` sprawdza się najlepiej w gradient boostingu; głębsze drzewa niosą ryzyko przeuczenia\n\nDomyślnie: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
+          "source": "Predict numbers with gradient boosting",
           "message": "Przewiduj liczby za pomocą gradient boostingu"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
@@ -2628,7 +2628,7 @@
           "message": "Maksymalna liczba poziomów w każdym drzewie. Gradient boosting zazwyczaj korzysta z płytkich drzew, z których każde wychwytuje jeden aspekt wzorca.\n\n**Wskazówka**: `2`–`6` działa najlepiej dla gradient boostingu; głębsze drzewa stwarzają ryzyko przetrenowania\n\nDomyślnie: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
+          "source": "Compute rolling statistics",
           "message": "Oblicz statystyki kroczące"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "Suma wszystkich wartości w bieżącym oknie. Przydatna do śledzenia metryk skumulowanych, takich jak przychód kroczący lub łączna liczba zdarzeń"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
+          "source": "Smooth with moving average",
           "message": "Wygładź za pomocą średniej kroczącej"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "Prawie brak wygładzania — dokładnie śledzi surowy sygnał, najlepsze do natychmiastowego wykrywania nagłych zmian"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
+          "source": "Profile data quality",
           "message": "Profiluj jakość danych"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Ile rekordów zebrać przed obliczeniem raportu profilowania. Wszystkie rekordy w partii są analizowane wspólnie.\n\n**Wskazówka**: użyj co najmniej `50`, aby uzyskać miarodajne statystyki; `200`+ dla wiarygodnego wykrywania wartości odstających"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
+          "source": "Validate record schema",
           "message": "Waliduj schemat rekordu"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Zgłoś wyjątek VALIDATION-ERROR, gdy rekord nie przejdzie walidacji; natychmiast zatrzymuje potok przy pierwszym nieprawidłowym rekordzie"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
+          "source": "Clean up text",
           "message": "Wyczyść tekst"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Zastosuj normalizację Unicode NFKC (symbol zastępczy, obecnie przekazywanie bez zmian)"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
+          "source": "Count tokens in text",
           "message": "Zlicz tokeny w tekście"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Określa, czy uwzględniać tokeny specjalne (takie jak `[CLS]` i `[SEP]`) w liczbie tokenów. Ustaw na `True`, aby dopasować liczbę, którą faktycznie zobaczyłby model, lub na `False` dla surowej liczby tokenów zawartości."
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
+          "source": "Split text into searchable chunks",
           "message": "Podziel tekst na przeszukiwalne fragmenty"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "Duże nakładanie dla maksymalnego zachowania kontekstu kosztem większej liczby fragmentów i pamięci"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
+          "source": "Convert text to search vectors",
           "message": "Konwertuj tekst na wektory wyszukiwania"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
@@ -3736,7 +3736,7 @@
           "message": "Opcjonalny identyfikator tenanta do określenia zakresu artefaktów modeli rejestru."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
+          "source": "Extract structured data from text",
           "message": "Wyodrębnij dane ustrukturyzowane z tekstu"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "Maksymalna liczba prób ponowienia, gdy wyodrębnione dane wyjściowe nie przejdą walidacji schematu. Wartość domyślna to 2."
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
+          "source": "Re-rank search results by relevance",
           "message": "Ponowne rangowanie wyników wyszukiwania według trafności"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "Opcjonalny identyfikator tenanta do określenia zakresu artefaktów modeli rejestru."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
+          "source": "Split text at semantic boundaries",
           "message": "Podziel tekst na granicach semantycznych"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "Opcjonalny identyfikator tenanta do określenia zakresu artefaktów modeli rejestru."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
+          "source": "Block unsafe records",
           "message": "Blokuj niebezpieczne rekordy"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Lista konfiguracji reguł guardrail. Każda reguła zawiera:\n- `type` — typ reguły (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` lub `critical`\n- `params` — parametry specyficzne dla reguły\n\nRekordy, które nie spełnią którejkolwiek z reguł, są usuwane z potoku."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
+          "source": "Check and annotate text safety",
           "message": "Sprawdzaj i oznaczaj bezpieczeństwo tekstu"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
@@ -4572,7 +4572,7 @@
           "message": "Lista konfiguracji reguł guardrail. Każda reguła zawiera:\n- `type` — typ reguły (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` lub `critical`\n- `params` — parametry specyficzne dla reguły\n\nKażdy rekord jest wzbogacany o `_guardrail_passed` (bool) oraz `_guardrail_violations` (list). Jeśli skonfigurowano redagowanie danych PII, pole tekstowe jest zastępowane zredagowaną wersją."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
+          "source": "Extract text from any document",
           "message": "Wyodrębnij tekst z dowolnego dokumentu"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Jeśli strona PDF zawiera mniej możliwych do wyodrębnienia znaków tekstu niż podana wartość, jest traktowana jako zeskanowana i stosowany jest OCR. Domyślnie: `50`."
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
+          "source": "Analyze images with vision AI",
           "message": "Analizuj obrazy za pomocą Vision AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {

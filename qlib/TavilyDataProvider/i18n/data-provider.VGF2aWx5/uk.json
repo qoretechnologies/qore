@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Шукати в Інтернеті"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Обмежує пошук із темою `news` останніми N днями.\n\n**Замінено параметром `time_range`**, який діє для будь-якої теми; цей параметр і далі приймається, щоб наявні процеси продовжували працювати."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "Читати сторінки"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Повернути, скільки коштував цей запит у кредитах, як `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "Обійти сайт"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Повернути, скільки коштував цей запит у кредитах, як `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "Скласти карту сайту"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Повернути, скільки коштував цей запит у кредитах, як `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "Розпочати дослідження"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Як закодовано вміст. За замовчуванням — `base64`, що є єдиним кодуванням, яке підтримує документи Tavily."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "Отримати дослідницький звіт"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Дослідницьке завдання, яке слід прочитати, у вигляді, поверненому дією **Розпочати дослідження** в `request_id`.\n\nСписок, що розкривається, показує дослідницькі завдання, розпочаті цим обліковим записом, узяті з журналу використання.  Журнал записується за кілька хвилин після початку завдання, тож щойно розпочатого завдання в ньому ще немає: тоді використайте `request_id`, повернений дією **Розпочати дослідження**."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "Отримати витрату кредитів"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Повідомляти використання лише цього проєкту, а не всього облікового запису.  Надсилається в заголовку `X-Project-ID`.\n\nTavily не публікує кінцевої точки, яка перелічує проєкти, тож це не можна запропонувати як список, що розкривається; візьміть значення з панелі Tavily."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "Перелічити журнали використання API"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

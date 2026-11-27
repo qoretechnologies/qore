@@ -16,8 +16,8 @@
           "message": "Generate configurable record streams for testing data pipelines without any external service connections"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
-          "message": "Generate Records"
+          "source": "Generate records",
+          "message": "Generate records"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
           "source": "Generate a stream of records with a configurable schema",
@@ -164,8 +164,8 @@
           "message": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
-          "message": "Generate From Template"
+          "source": "Generate from template",
+          "message": "Generate from template"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {
           "source": "Generate records based on a template record",
