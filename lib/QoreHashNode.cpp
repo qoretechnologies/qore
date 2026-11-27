@@ -56,7 +56,6 @@
 #include <cstring>
 #include <atomic>
 #include <map>
-#include <set>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -292,6 +291,8 @@ void qore_hash_member_map::reserve(size_t n) {
 namespace {
 //! the secret key of the keyed hash of hardened key maps (qore#7557); created once, by the first hardening
 uint64_t qore_hash_process_key[2] = {0, 0};
+//! the keys of the keyed folded-multiply hash (qore_keyed_fold64()), derived from the process key when it is created
+uint64_t qore_hash_fold_key[2] = {0, 0};
 //! true once the key was created (qore_hash_ensure_process_key())
 std::atomic<bool> qore_hash_process_key_ready{false};
 //! serializes the creation of the key
@@ -413,6 +414,10 @@ void qore_hash_ensure_process_key() {
     if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
         qore_hash_process_key[0] = k[0];
         qore_hash_process_key[1] = k[1];
+        // the keys of the folded-multiply hash: derived with SipHash, so that they tell nothing of the process key
+        // (qore#7750)
+        qore_hash_fold_key[0] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d30ull);
+        qore_hash_fold_key[1] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d31ull);
         qore_hash_process_key_ready.store(true, std::memory_order_release);
     }
 }
@@ -430,6 +435,11 @@ QoreForkStdMutex qore_dbg_keyed_hash_sites_fork_handler(qore_dbg_keyed_hash_site
 const uint64_t* qore_intern_hash_process_key() {
     qore_hash_ensure_process_key();
     return qore_hash_process_key;
+}
+
+const uint64_t* qore_intern_hash_fold_key() {
+    qore_hash_ensure_process_key();
+    return qore_hash_fold_key;
 }
 
 int qore_intern_hash_process_key_check(ExceptionSink* xsink) {
@@ -462,39 +472,6 @@ void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept 
 std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites() {
     std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
     return qore_dbg_keyed_hash_sites ? *qore_dbg_keyed_hash_sites : std::map<std::string, uint64_t>();
-}
-
-namespace {
-//! the sites of the adaptive containers that switched to the keyed hash (debug builds); protected by
-//! qore_dbg_keyed_hash_sites_lock
-std::set<std::string>* qore_dbg_keyed_hash_switched_sites = nullptr;
-//! true while dbg_keyed_hash_force_collisions() is in effect
-std::atomic<bool> qore_dbg_keyed_hash_collide_flag{false};
-}
-
-void qore_intern_dbg_keyed_hash_switched(const char* site) noexcept {
-    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
-    // an allocation failure only leaves the switch unrecorded
-    try {
-        if (!qore_dbg_keyed_hash_switched_sites) {
-            qore_dbg_keyed_hash_switched_sites = new std::set<std::string>;
-        }
-        qore_dbg_keyed_hash_switched_sites->insert(site);
-    } catch (const std::bad_alloc&) {
-    }
-}
-
-bool qore_intern_dbg_keyed_hash_collide() noexcept {
-    return qore_dbg_keyed_hash_collide_flag.load(std::memory_order_relaxed);
-}
-
-void qore_dbg_set_keyed_hash_collide(bool collide) {
-    qore_dbg_keyed_hash_collide_flag.store(collide, std::memory_order_relaxed);
-}
-
-std::set<std::string> qore_dbg_get_keyed_hash_switched_sites() {
-    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
-    return qore_dbg_keyed_hash_switched_sites ? *qore_dbg_keyed_hash_switched_sites : std::set<std::string>();
 }
 #endif
 

@@ -3160,7 +3160,7 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
             bool is_null;
             int64_t count;
         };
-        qore_adaptive_int_map<int64_t, size_t> value_map("dataframe-6");
+        qore_keyed_fold_int_map<int64_t, size_t> value_map;
         QORE_KEYED_HASH_SITE("dataframe-6", value_map);
         value_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         std::vector<IntCountEntry> entries;
@@ -3546,7 +3546,7 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
 
     const ColumnData& src = *columns[idx].data;
     if (src.type == ColumnType::INT64) {
-        qore_adaptive_int_set<int64_t> seen("dataframe-9");
+        qore_keyed_fold_int_set<int64_t> seen;
         QORE_KEYED_HASH_SITE("dataframe-9", seen);
         seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         bool seen_null = false;
@@ -3565,7 +3565,8 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
         return static_cast<int64_t>(seen.size()) + (seen_null ? 1 : 0);
     }
     if (src.type == ColumnType::STRING) {
-        qore_keyed_string_set seen;
+        // the strings of the column outlive the set, so it keeps views of them and copies none
+        qore_keyed_string_view_set seen;
         QORE_KEYED_HASH_SITE("dataframe-10", seen);
         seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         bool seen_null = false;
@@ -3578,7 +3579,7 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
                     seen_null = true;
                 }
             } else {
-                seen.insert(src.str_data[row]);
+                seen.insert(std::string_view(src.str_data[row]));
             }
         }
         return static_cast<int64_t>(seen.size()) + (seen_null ? 1 : 0);

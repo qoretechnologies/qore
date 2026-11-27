@@ -456,9 +456,9 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     // Build hash table from the right DataFrame: key → list of row indices
     qore_keyed_string_map<std::vector<int64_t>> right_hash;
     QORE_KEYED_HASH_SITE("dataframe-12", right_hash);
-    qore_adaptive_int_map<int64_t, std::vector<int64_t>> right_int64_hash("dataframe-13");
+    qore_keyed_fold_int_map<int64_t, std::vector<int64_t>> right_int64_hash;
     QORE_KEYED_HASH_SITE("dataframe-13", right_int64_hash);
-    qore_adaptive_int_map<int64_t, int64_t> right_int64_unique_hash("dataframe-14");
+    qore_keyed_fold_int_map<int64_t, int64_t> right_int64_unique_hash;
     QORE_KEYED_HASH_SITE("dataframe-14", right_int64_unique_hash);
     std::vector<int64_t> right_null_rows;
     bool unique_right_keys = false;
@@ -798,7 +798,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     for (int64_t l = 0; l < n_rows; ++l) {
         const std::vector<int64_t>* matched_rows = nullptr;
         qore_keyed_string_map<std::vector<int64_t>>::const_iterator string_it;
-        qore_adaptive_int_map<int64_t, std::vector<int64_t>>::const_iterator int_it;
+        qore_keyed_fold_int_map<int64_t, std::vector<int64_t>>::const_iterator int_it;
 
         if (single_int64_key) {
             if (left_int64_key->isNull(l)) {

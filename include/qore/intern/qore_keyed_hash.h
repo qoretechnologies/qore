@@ -83,6 +83,13 @@ DLLEXPORT const uint64_t* qore_intern_hash_process_key();
 */
 DLLEXPORT int qore_intern_hash_process_key_check(ExceptionSink* xsink);
 
+//! Internal (not public API; also called by the bundled modules): returns the two 64-bit keys of the keyed
+//! folded-multiply hash (qore_keyed_fold64()), which are derived from the secret key of the process with SipHash-1-3,
+//! creating the process key on the first call
+/** @throw std::runtime_error if no source of random bytes works
+*/
+DLLEXPORT const uint64_t* qore_intern_hash_fold_key();
+
 //! SipHash-1-3 with the secret key of the process, for std::unordered_* containers with string keys
 /** Transparent: with std::equal_to<> as the key comparison, a container with std::string keys is searched with a
     std::string_view or a C string without a std::string being created.
@@ -183,269 +190,82 @@ using qore_keyed_int_set = std::unordered_set<K, qore_keyed_int_hash>;
 //! Internal, debug builds only: records that a container of the given site was constructed with a keyed hasher and
 //! the hash of the hasher's probe (QORE_KEYED_HASH_SITE()); read by dbg_keyed_hash_sites()
 DLLEXPORT void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept;
-
-//! Internal, debug builds only: records that an adaptive container of the given site switched to the keyed hash;
-//! read by dbg_keyed_hash_switched_sites()
-DLLEXPORT void qore_intern_dbg_keyed_hash_switched(const char* site) noexcept;
-
-//! Internal, debug builds only: true while dbg_keyed_hash_force_collisions() is in effect; the adaptive containers
-//! created then give every key the same standard hash, as keys that share their hash would have
-DLLEXPORT bool qore_intern_dbg_keyed_hash_collide() noexcept;
 #endif
 
-#if defined(__GNUC__) || defined(__clang__)
-//! the rare paths of the adaptive containers: out of line, so that their inserts stay small
-#define QORE_KEYED_HASH_COLD __attribute__((noinline, cold))
-#define QORE_KEYED_HASH_UNLIKELY(x) __builtin_expect(!!(x), 0)
+//! the keyed folded-multiply hash of a 64-bit integer (qore#7750)
+/** Two rounds of a full 64 x 64 -> 128-bit multiplication with the secret key of the process in both factors, each
+    folded by xoring the high and the low half of the product (the construction of wyhash and of ahash's fallback
+    hash).  Much cheaper than SipHash-1-3, and its values cannot be computed without the key, but it is not a
+    pseudorandom function as SipHash is: it is used only for the tables of integer keys of data operations, never for
+    tables that a network peer fills or searches.
+
+    @param k0 the first 64 bits of the key
+    @param k1 the second 64 bits of the key
+    @param v the value
+
+    @return the hash of the value
+*/
+inline uint64_t qore_keyed_fold64(uint64_t k0, uint64_t k1, uint64_t v) {
+    auto fold = [](uint64_t a, uint64_t b) -> uint64_t {
+#ifdef __SIZEOF_INT128__
+        unsigned __int128 r = static_cast<unsigned __int128>(a) * b;
+        return static_cast<uint64_t>(r) ^ static_cast<uint64_t>(r >> 64);
 #else
-#define QORE_KEYED_HASH_COLD
-#define QORE_KEYED_HASH_UNLIKELY(x) (x)
+        uint64_t al = a & 0xffffffffull, ah = a >> 32, bl = b & 0xffffffffull, bh = b >> 32;
+        uint64_t ll = al * bl, lh = al * bh, hl = ah * bl, hh = ah * bh;
+        uint64_t mid = (ll >> 32) + (lh & 0xffffffffull) + (hl & 0xffffffffull);
+        uint64_t lo = (ll & 0xffffffffull) | (mid << 32);
+        uint64_t hi = hh + (lh >> 32) + (hl >> 32) + (mid >> 32);
+        return lo ^ hi;
 #endif
+    };
+    // the second factor rotates the value, so that the two factors are not related by a fixed xor
+    uint64_t m = fold(v ^ k0, ((v << 23) | (v >> 41)) ^ k1 ^ 0x9e3779b97f4a7c15ull);
+    return fold(m ^ k1, (k0 ^ 0xd6e8feb86659fd93ull) | 1);
+}
 
-//! the state of an adaptive hasher: the standard hash, or the keyed hash of the process
-struct qore_adaptive_hash_state {
-    //! the key of the process for the keyed hash, nullptr for the standard hash
-    const uint64_t* k = nullptr;
-#ifdef DEBUG
-    //! debug builds: the standard hash gives every key the same hash (dbg_keyed_hash_force_collisions() when the
-    //! container was created)
-    bool dbg_collide = false;
-#endif
-};
-
-//! The hasher of qore_adaptive_int_map and qore_adaptive_int_set: the standard hash of an integer (its value), or
-//! SipHash-1-3 with the secret key of the process, as given by the state that it refers to
-class qore_adaptive_int_hash {
+//! The keyed folded-multiply hash of the process (qore_keyed_fold64()), for std::unordered_* containers with integer
+//! keys of data operations
+/** libstdc++ takes it for a "fast" hash (it is), so the nodes do not store the hashes of their keys.
+*/
+class qore_keyed_fold_int_hash {
 public:
-    DLLLOCAL explicit qore_adaptive_int_hash(const qore_adaptive_hash_state* s) : s(s) {
+    //! fetches the key of the process, creating it if necessary
+    /** @throw std::runtime_error if no key could be created
+    */
+    DLLLOCAL qore_keyed_fold_int_hash() : k(qore_intern_hash_fold_key()) {
     }
 
     template <typename T>
     DLLLOCAL size_t operator()(T v) const noexcept {
-        static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_adaptive_int_hash takes integer keys");
-        uint64_t u = static_cast<uint64_t>(v);
-        if (s->k) {
-            return static_cast<size_t>(qore_siphash13_u64(s->k[0], s->k[1], u));
-        }
-#ifdef DEBUG
-        if (s->dbg_collide) {
-            return 0;
-        }
-#endif
-        return static_cast<size_t>(u);
+        static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_keyed_fold_int_hash takes integer keys");
+        return static_cast<size_t>(qore_keyed_fold64(k[0], k[1], static_cast<uint64_t>(v)));
     }
 
-    //! the keyed hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
-    DLLLOCAL uint64_t dbgProbe() const {
-        const uint64_t* k = qore_intern_hash_process_key();
-        return qore_siphash13_u64(k[0], k[1], static_cast<uint64_t>(0x0123456789abcdefull));
+    //! the hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
+    DLLLOCAL uint64_t dbgProbe() const noexcept {
+        return (*this)(static_cast<uint64_t>(0x0123456789abcdefull));
     }
 
 private:
-    const qore_adaptive_hash_state* s;
+    //! the keys of the folded-multiply hash (qore_intern_hash_fold_key())
+    const uint64_t* k;
 };
 
 template <>
-struct qore_is_keyed_hasher<qore_adaptive_int_hash> : public std::true_type {
+struct qore_is_keyed_hasher<qore_keyed_fold_int_hash> : public std::true_type {
 };
 
-//! the common part of the adaptive integer containers: a container that uses the standard hash of its integer keys
-//! until a bucket has more than MaxChain keys, and then the keyed hash of the process
-/** As the key maps of hashes do (qore#7557): containers of keys that do not share their buckets keep the cheaper
-    standard hash.  The chain of the bucket of each new key is checked, and all chains after a growth of the
-    container; the switch moves the nodes into a new container with the keyed hash (every key is hashed again), and is
-    final for the container.  The container cannot be copied or moved, as its hasher refers to its state.
-
-    @tparam C the std::unordered_map or std::unordered_set type with qore_adaptive_int_hash
-*/
-template <typename C>
-class qore_adaptive_container_base {
-public:
-    using container_t = C;
-    using hasher = qore_adaptive_int_hash;
-    using key_type = typename C::key_type;
-    using iterator = typename C::iterator;
-    using const_iterator = typename C::const_iterator;
-
-    //! the longest chain of a bucket before the container switches to the keyed hash
-    static constexpr size_t MaxChain = 16;
-
-    //! creates the container
-    /** @param site the name of the site of the container, for the debug registry (QORE_KEYED_HASH_SITE())
-    */
-    DLLLOCAL explicit qore_adaptive_container_base(const char* site) : c(0, qore_adaptive_int_hash(&std_state)) {
-#ifdef DEBUG
-        this->site = site;
-        std_state.dbg_collide = qore_intern_dbg_keyed_hash_collide();
-#else
-        (void)site;
-#endif
-    }
-
-    qore_adaptive_container_base(const qore_adaptive_container_base&) = delete;
-    qore_adaptive_container_base& operator=(const qore_adaptive_container_base&) = delete;
-
-    DLLLOCAL hasher hash_function() const {
-        return c.hash_function();
-    }
-
-    DLLLOCAL iterator begin() {
-        return c.begin();
-    }
-    DLLLOCAL const_iterator begin() const {
-        return c.begin();
-    }
-    DLLLOCAL iterator end() {
-        return c.end();
-    }
-    DLLLOCAL const_iterator end() const {
-        return c.end();
-    }
-    DLLLOCAL iterator find(key_type k) {
-        return c.find(k);
-    }
-    DLLLOCAL const_iterator find(key_type k) const {
-        return c.find(k);
-    }
-    DLLLOCAL size_t count(key_type k) const {
-        return c.count(k);
-    }
-    DLLLOCAL size_t size() const {
-        return c.size();
-    }
-    DLLLOCAL bool empty() const {
-        return c.empty();
-    }
-    DLLLOCAL void reserve(size_t n) {
-        c.reserve(n);
-    }
-    //! removes the elements; the container keeps the hash it uses
-    DLLLOCAL void clear() {
-        c.clear();
-    }
-
-    //! returns true if the container uses the keyed hash
-    DLLLOCAL bool isKeyed() const {
-        return keyed_state.k;
-    }
-
-protected:
-    //! the state of the standard hash, which the container uses until it switches
-    qore_adaptive_hash_state std_state;
-    //! the state of the keyed hash, which the container uses after it switched
-    qore_adaptive_hash_state keyed_state;
-    C c;
-#ifdef DEBUG
-    const char* site;
-#endif
-
-    //! checks the chains after the insert of a new key, and switches to the keyed hash if one is too long
-    /** @param k the new key
-        @param buckets_before the number of buckets before the insert: if the insert grew the container, which moves
-        keys to other buckets, every chain is checked
-
-        @return true if the container switched (its iterators are invalid then)
-    */
-    DLLLOCAL bool checkInserted(key_type k, size_t buckets_before) {
-        if (keyed_state.k) {
-            return false;
-        }
-        if (QORE_KEYED_HASH_UNLIKELY(c.bucket_count() != buckets_before)) {
-            return checkAllChains();
-        }
-        if (QORE_KEYED_HASH_UNLIKELY(c.bucket_size(c.bucket(k)) > MaxChain)) {
-            return switchToKeyed();
-        }
-        return false;
-    }
-
-    //! checks every chain after the container grew, and switches to the keyed hash if one is too long
-    /** @return true if the container switched
-    */
-    DLLLOCAL QORE_KEYED_HASH_COLD bool checkAllChains() {
-        for (size_t b = 0, e = c.bucket_count(); b < e; ++b) {
-            if (c.bucket_size(b) > MaxChain) {
-                return switchToKeyed();
-            }
-        }
-        return false;
-    }
-
-    //! switches the container to the keyed hash; nothing is changed if it cannot (a later check tries again)
-    /** The nodes move into a new container whose hasher refers to keyed_state, which hashes their keys again when
-        they are inserted (with every standard library, also one that stores the hashes in the nodes); the two
-        containers are swapped, so the container's hasher refers to keyed_state from then on.
-
-        @return true if the container switched
-    */
-    DLLLOCAL QORE_KEYED_HASH_COLD bool switchToKeyed() noexcept {
-        try {
-            keyed_state.k = qore_intern_hash_process_key();
-            C n(0, qore_adaptive_int_hash(&keyed_state));
-            // the buckets for every key, so that the inserts below allocate nothing and cannot fail
-            n.reserve(c.size());
-            while (!c.empty()) {
-                n.insert(c.extract(c.begin()));
-            }
-            c.swap(n);
-        } catch (...) {
-            // only the key or the reserve() can fail, before any node moved
-            keyed_state.k = nullptr;
-            return false;
-        }
-#ifdef DEBUG
-        qore_intern_dbg_keyed_hash_switched(site);
-#endif
-        return true;
-    }
-};
-
-//! an unordered map with integer keys that switches to the keyed hash of the process when a chain grows too long
+//! an unordered map with integer keys of data operations and the keyed folded-multiply hash of the process
 template <typename K, typename V>
-class qore_adaptive_int_map : public qore_adaptive_container_base<std::unordered_map<K, V, qore_adaptive_int_hash>> {
-    using base_t = qore_adaptive_container_base<std::unordered_map<K, V, qore_adaptive_int_hash>>;
-public:
-    using iterator = typename base_t::iterator;
+using qore_keyed_fold_int_map = std::unordered_map<K, V, qore_keyed_fold_int_hash>;
 
-    DLLLOCAL explicit qore_adaptive_int_map(const char* site) : base_t(site) {
-    }
-
-    template <typename... A>
-    DLLLOCAL std::pair<iterator, bool> try_emplace(K k, A&&... args) {
-        size_t buckets_before = this->c.bucket_count();
-        std::pair<iterator, bool> rv = this->c.try_emplace(k, std::forward<A>(args)...);
-        if (rv.second && this->checkInserted(k, buckets_before)) {
-            // the switch moved the nodes into another container, so the iterator is found again
-            rv.first = this->c.find(k);
-        }
-        return rv;
-    }
-
-    DLLLOCAL V& operator[](K k) {
-        return try_emplace(k).first->second;
-    }
-};
-
-//! an unordered set of integers that switches to the keyed hash of the process when a chain grows too long
+//! an unordered set of integers of data operations with the keyed folded-multiply hash of the process
 template <typename K>
-class qore_adaptive_int_set : public qore_adaptive_container_base<std::unordered_set<K, qore_adaptive_int_hash>> {
-    using base_t = qore_adaptive_container_base<std::unordered_set<K, qore_adaptive_int_hash>>;
-public:
-    using iterator = typename base_t::iterator;
+using qore_keyed_fold_int_set = std::unordered_set<K, qore_keyed_fold_int_hash>;
 
-    DLLLOCAL explicit qore_adaptive_int_set(const char* site) : base_t(site) {
-    }
-
-    DLLLOCAL std::pair<iterator, bool> insert(K k) {
-        size_t buckets_before = this->c.bucket_count();
-        std::pair<iterator, bool> rv = this->c.insert(k);
-        if (rv.second && this->checkInserted(k, buckets_before)) {
-            // the switch moved the nodes into another container, so the iterator is found again
-            rv.first = this->c.find(k);
-        }
-        return rv;
-    }
-};
+//! an unordered set of string views with the keyed hash of the process, for the strings of data that outlive it
+using qore_keyed_string_view_set = std::unordered_set<std::string_view, qore_keyed_string_hash, std::equal_to<>>;
 
 //! Asserts at compile time that a container uses a keyed hasher, and in debug builds records its site
 /** Placed where the container is constructed (the constructor of its owner, or after the declaration of a local

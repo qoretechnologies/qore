@@ -199,6 +199,53 @@ int main(int argc, char** argv) {
     is.insert(-5);
     check(is.count(-5) == 1 && !is.count(5), "the integer set is searched");
 
+    // the folded-multiply hasher is qore_keyed_fold64() with the fold keys, which are derived from the key of the
+    // process and differ from it, and depends on the key
+    {
+        const uint64_t* fk = qore_intern_hash_fold_key();
+        check(fk == qore_intern_hash_fold_key(), "the fold keys stay the same");
+        check(fk[0] != k[0] && fk[1] != k[1] && fk[0] != fk[1], "the fold keys are not the process key");
+        check(fk[0] == qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d30ull)
+            && fk[1] == qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d31ull),
+            "the fold keys are derived with SipHash");
+        qore_keyed_fold_int_hash fh;
+        bool same = true, keyed = true, unrelated = true;
+        for (int64_t v : ints) {
+            uint64_t u = static_cast<uint64_t>(v);
+            if (fh(v) != static_cast<size_t>(qore_keyed_fold64(fk[0], fk[1], u))) {
+                same = false;
+            }
+            if (qore_keyed_fold64(fk[0], fk[1], u) == qore_keyed_fold64(fk[0] ^ 1, fk[1], u)) {
+                keyed = false;
+            }
+            // the two factors of the first round are not related by a fixed xor
+            if (qore_keyed_fold64(fk[0], fk[1], u)
+                    == qore_keyed_fold64(fk[0], fk[1], u ^ fk[0] ^ fk[1] ^ 0x9e3779b97f4a7c15ull)) {
+                unrelated = false;
+            }
+        }
+        check(same, "the folded-multiply hasher is qore_keyed_fold64() with the fold keys");
+        check(keyed, "the folded-multiply hash depends on the key");
+        check(unrelated, "the folded-multiply hash has no fixed pairs of values with the same hash");
+        qore_keyed_fold_int_map<int64_t, int> fm;
+        for (int64_t i = 0; i < 1000; ++i) {
+            fm[i * 4096] = static_cast<int>(i);
+        }
+        bool ffound = true;
+        for (int64_t i = 0; i < 1000; ++i) {
+            auto it = fm.find(i * 4096);
+            if (it == fm.end() || it->second != i) {
+                ffound = false;
+            }
+        }
+        check(ffound, "every key of the folded-multiply map is found");
+        qore_keyed_string_view_set vs;
+        std::string a("abc");
+        vs.insert(std::string_view(a));
+        check(vs.count(std::string_view("abc")) == 1 && !vs.count(std::string_view("abd")),
+            "the string view set is searched");
+    }
+
     if (failures) {
         printf("FAILED: %u of %u keyed hash checks\n", failures, checks);
         return 1;

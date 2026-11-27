@@ -462,7 +462,7 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     // a column that is not an int or float column has only numbers or null cells here; its cells are read as floats
     if (idx_cd.type == ColumnType::INT64 && col_cd.type == ColumnType::STRING) {
         std::vector<int64_t> unique_indices;
-        qore_adaptive_int_map<int64_t, size_t> index_map("dataframe-15");
+        qore_keyed_fold_int_map<int64_t, size_t> index_map;
         QORE_KEYED_HASH_SITE("dataframe-15", index_map);
         std::vector<std::string> unique_cols;
         qore_keyed_string_map<size_t> col_map;
@@ -610,14 +610,13 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         } else if (pivotKey(cd, i, key_buf, nullptr, name, xsink)) {
             return -1;
         }
-        auto it = map.find(*key);
-        if (it != map.end()) {
-            rv = it->second;
+        // one search for a key that exists and for a new one
+        auto [it, inserted] = map.try_emplace(*key, map.size());
+        rv = it->second;
+        if (!inserted) {
             added = false;
             return 0;
         }
-        rv = map.size();
-        map.emplace(*key, rv);
         added = true;
         std::string new_key;
         return pivotKey(cd, i, new_key, &label, name, xsink);
