@@ -909,6 +909,22 @@ public:
     Var* qore_argv_var = nullptr;
     Var* env_var = nullptr;
 
+    //! true once the process-information variables are empty in a Program restricted from external information
+    /** Set when the Program is created with the restriction, or after a change of its options that restricts external
+        information has emptied them (processInfoRestrictionChanged()); reset when its own options no longer restrict
+        it (noteOwnOptionsChanged()).  Only a Program with this flag set and the restriction has its variables read as
+        they are by code restricted from external information: every other Program fails closed (withholdProcessInfo())
+    */
+    std::atomic<bool> process_info_cleared{false};
+
+    //! the old values of the process-information variables that were emptied on a path that has no exception sink
+    /** They are released with the Program's data (releaseParkedProcessInfo()), as their release can run the code of
+        destructors, which must not run under the locks of the options or lose its exceptions
+    */
+    mutable std::vector<QoreValue> process_info_parked;
+    //! serializes process_info_parked
+    mutable std::mutex process_info_parked_lock;
+
     //! returns true if the Program's own options restrict external information (PO_NO_EXTERNAL_INFO)
     DLLLOCAL bool restrictsExternalInfo() const {
         return static_cast<bool>(pwo.parse_options.loadShared() & PO_NO_EXTERNAL_INFO);
@@ -925,8 +941,8 @@ public:
 
     //! returns true if the calling code may not be given the values of the Program's process-information variables
     /** They are external information: code restricted from it (see qore_caller_restricts_domain()) gets them as they
-        are in its own Program, empty, unless this Program is restricted from external information itself, whose
-        variables hold what was assigned to them in it
+        are in its own Program, empty, unless this Program is restricted from external information itself and its
+        variables were emptied (process_info_cleared), whose variables hold what was assigned to them in it
     */
     DLLLOCAL bool withholdProcessInfo() const;
 
@@ -940,28 +956,59 @@ public:
         return true;
     }
 
-    //! empties the process-information variables if the Program's own options restrict external information
-    /** Called after a change of the options that restricts external information in a Program that did not restrict
-        it before (\a was_restricted is false), without the locks of the options, as the old values are released
+    //! called by every change of the Program's own options, with the write lock of the options held
+    /** A Program whose own options no longer restrict external information is no longer one whose
+        process-information variables are known to be empty
     */
-    DLLLOCAL void processInfoRestrictionChanged(bool was_restricted);
+    DLLLOCAL void noteOwnOptionsChanged() {
+        if (!restrictsExternalInfo()) {
+            process_info_cleared.store(false, std::memory_order_release);
+        }
+    }
+
+    //! empties the process-information variables if the Program's own options restrict external information and
+    //! they were not emptied yet
+    /** Called after a change of the options, without the locks of the options.  The old values are released with
+        \a xsink, each with an exception sink of its own whose exceptions are added to it; without \a xsink they are
+        kept until the Program's data are released (process_info_parked).  The variables count as empty
+        (process_info_cleared) only once all of them were emptied
+    */
+    DLLLOCAL void processInfoRestrictionChanged(ExceptionSink* xsink);
+
+    //! creates the process-information variables of a new Program, empty if \a no_external_info is true
+    DLLLOCAL void initProcessInfoVars(bool no_external_info);
+
+    //! creates one process-information variable; see initProcessInfoVars()
+    DLLLOCAL Var* createProcessInfoVar(const char* name, const QoreTypeInfo* typeInfo, bool is_env,
+            bool no_external_info);
+
+    //! keeps a value whose release could run the code of destructors until the Program's data are released
+    DLLLOCAL void parkProcessInfoValue(QoreValue v) const;
+
+    //! releases the values kept by parkProcessInfoValue()
+    DLLLOCAL void releaseParkedProcessInfo(ExceptionSink* xsink);
 
     //! empties the process-information variables when a change of the options restricts external information
     /** Declared before the lock of the options, so that it runs after the lock is released
     */
     class ProcessInfoRestrictionGuard {
     public:
-        DLLLOCAL ProcessInfoRestrictionGuard(qore_program_private_base& p)
-                : p(p), was_restricted(p.restrictsExternalInfo()) {
+        //! \a xsink receives the exceptions of the release of the old values; without it they are kept (see
+        //! processInfoRestrictionChanged())
+        DLLLOCAL ProcessInfoRestrictionGuard(qore_program_private_base& p, ExceptionSink* xsink = nullptr)
+                : p(p), xsink(xsink) {
         }
 
         DLLLOCAL ~ProcessInfoRestrictionGuard() {
-            p.processInfoRestrictionChanged(was_restricted);
+            p.processInfoRestrictionChanged(xsink);
         }
+
+        ProcessInfoRestrictionGuard(const ProcessInfoRestrictionGuard&) = delete;
+        ProcessInfoRestrictionGuard& operator=(const ProcessInfoRestrictionGuard&) = delete;
 
     private:
         qore_program_private_base& p;
-        bool was_restricted;
+        ExceptionSink* xsink;
     };
 
     //! true while code is parsed in the Program or is pending (parsePending() before parseCommit() or parseRollback())
@@ -1685,38 +1732,7 @@ public:
         // of restricted code is restricted although the options it was created with are not)
         bool no_external_info = static_cast<bool>(pwo.parse_options.loadShared() & PO_NO_EXTERNAL_INFO);
 
-        Var *var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "ARGV", listTypeInfo, true);
-        argv_var = var;
-        if (var) {
-            if (no_external_info) {
-                // provide empty list when PO_NO_EXTERNAL_INFO is set
-                var->setInitial(new QoreListNode(stringTypeInfo));
-            } else if (ARGV) {
-                var->setInitial(ARGV->copy());
-            }
-        }
-
-        var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "QORE_ARGV", listTypeInfo, true);
-        qore_argv_var = var;
-        if (var) {
-            if (no_external_info) {
-                // provide empty list when PO_NO_EXTERNAL_INFO is set
-                var->setInitial(new QoreListNode(stringTypeInfo));
-            } else if (QORE_ARGV) {
-                var->setInitial(QORE_ARGV->copy());
-            }
-        }
-
-        var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "ENV", hashTypeInfo, true);
-        env_var = var;
-        if (var) {
-            if (no_external_info) {
-                // provide empty hash when PO_NO_EXTERNAL_INFO is set
-                var->setInitial(new QoreHashNode(autoTypeInfo));
-            } else {
-                var->setInitial(ENV->copy());
-            }
-        }
+        initProcessInfoVars(no_external_info);
         setDefines();
     }
 
@@ -1842,6 +1858,7 @@ public:
     DLLLOCAL void applyParseOptionImplications() {
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         pwo.parse_options = withImplications(pwo.parse_options.loadShared());
+        noteOwnOptionsChanged();
     }
 
     //! Returns the options given with the options that they imply
@@ -1972,6 +1989,7 @@ public:
         // the options are the API's from now on
         directive_compat = QoreParseOptions();
         pwo.parse_options = withImplications(po);
+        noteOwnOptionsChanged();
         syncExecModeWithParseOptions();
     }
 
@@ -2048,6 +2066,7 @@ public:
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         pwo.parse_options = withImplications((pwo.parse_options.loadShared() & ~reset) | po);
+        noteOwnOptionsChanged();
         syncExecModeWithParseOptions();
     }
 
@@ -4812,6 +4831,7 @@ public:
                 return -1;
             }
             pwo.parse_options = withImplications(current | PO_MODERN);
+            noteOwnOptionsChanged();
             syncExecModeWithParseOptions();
         }
         pgm->setWarningMask(QP_WARN_ALL);
@@ -5216,6 +5236,7 @@ public:
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         directive_compat &= ~po;
         pwo.parse_options = withImplications(pwo.parse_options.loadShared() & ~po);
+        noteOwnOptionsChanged();
         syncExecModeWithParseOptions();
     }
 
@@ -5237,7 +5258,7 @@ public:
             return -1;
         }
         // empties the process-information variables if the change restricts external information, after the lock
-        ProcessInfoRestrictionGuard pirg(*this);
+        ProcessInfoRestrictionGuard pirg(*this, xsink);
         // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
         // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
@@ -5343,7 +5364,7 @@ public:
         QoreParseOptions changed;
         bool refused;
         // empties the process-information variables if the change restricts external information, after the lock
-        ProcessInfoRestrictionGuard pirg(*this);
+        ProcessInfoRestrictionGuard pirg(*this, xsink);
         {
             // the write lock before po_mutex (see po_mutex)
             std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
@@ -5396,8 +5417,8 @@ public:
         // the scoped options that the directive changes, if any
         ParseOptionsOverlayFrame* frame = q_parse_overlay_find_delta(&pwo.parse_options);
         // empties the process-information variables if a change of the Program's own options restricts external
-        // information, after the lock
-        ProcessInfoRestrictionGuard pirg(*this);
+        // information, after the lock; the exceptions of the release of the old values are those of the parse
+        ProcessInfoRestrictionGuard pirg(*this, parseSink);
         {
             // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
             // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under
@@ -6048,6 +6069,10 @@ public:
         if (!po_locked) {
             return;
         }
+        // empties the process-information variables if a locked restriction of external information becomes the
+        // Program's own, after the lock; the old values are kept until the Program's data are released, as the
+        // callers (the end of a parse, the destructor of ParseOverlayScope) have no exception sink for them
+        ProcessInfoRestrictionGuard pirg(*this);
         // the write lock is taken before po_mutex (see po_mutex)
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         std::lock_guard<std::mutex> po_guard(po_mutex);
@@ -6062,6 +6087,7 @@ public:
             // a change for the whole Program; the thread can still have scoped options of an enclosing file
             SharedParseOptionsWrite spw;
             pwo.parse_options = current | keep;
+            noteOwnOptionsChanged();
         }
     }
 
@@ -7274,13 +7300,15 @@ public:
 
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         // empties the process-information variables if the change restricts external information; the callers can
-        // hold the lock of the options (getParseOptionsWriteLock()) across the call
+        // hold the lock of the options (getParseOptionsWriteLock()) across the call, so the old values are kept until
+        // the Program's data are released (no exception sink), and no destructor runs here
         ProcessInfoRestrictionGuard pirg(*pgm.priv);
         std::lock_guard<std::recursive_mutex> lg(pgm.priv->pwo.parse_options.writeLock());
         QoreParseOptions rv = pgm.priv->pwo.parse_options.loadShared();
         // the options that a directive set and that the replacement keeps are still the code's own (issue #6382)
         pgm.priv->directive_compat &= po;
         pgm.priv->pwo.parse_options = withImplications(po);
+        pgm.priv->noteOwnOptionsChanged();
         pgm.priv->syncExecModeWithParseOptions();
         return rv;
     }

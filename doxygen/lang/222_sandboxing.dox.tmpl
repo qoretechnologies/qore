@@ -498,23 +498,43 @@ authenticate();
       or takes it from the code that creates it (see @ref Qore::Program::constructor() "Program::constructor()")
     - <b>restricted later</b>: a %Program whose own options get the restriction after it was created
       (@ref Qore::Program::setParseOptions() "Program::setParseOptions()",
-      @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" or the
-      @ref no-external-info "%no-external-info" parse directive) loses their values: they are emptied then, and are
-      not restored if the restriction is removed again
+      @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()", the
+      @ref no-external-info "%no-external-info" parse directive, or a restriction of a file with
+      @ref push-parse-options "%push-parse-options" that @ref lock-options "%lock-options" or
+      @ref Qore::Program::lockOptions() "Program::lockOptions()" keeps) loses their values: they are emptied then,
+      and are not restored if the restriction is removed again.  An exception of a destructor of an old value is
+      raised by the change of the options; where the change has no caller to raise it to (a lock of the options, the
+      end of a parse), the old values are released with the data of the %Program
+    - <b>created for a debugger</b>: a %Program created with
+      @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" has variables of its own,
+      empty if it is restricted, else with the values of the %Program that it is created for; restricting it later
+      empties only its own
     - <b>read from another %Program</b>: code restricted from external information that reads them from a %Program
       that is not restricted from it, with @ref Qore::Program::getGlobalVariable() "Program::getGlobalVariable()",
       @ref Qore::Program::getGlobalVars() "Program::getGlobalVars()", the same methods of
       @ref Qore::ProgramControl "ProgramControl", or the \c getValue() method of the \c GlobalVar class of the
       \c reflection module, gets them empty, as they are in its own %Program, whatever name it uses for them; the
       calling code decides, as for the functions of external information (see @ref sandbox_caller_domains).  The
-      variables of a %Program that is restricted from external information itself hold what was assigned to them in
-      it, and are read as they are
+      variables of a %Program that is restricted from external information itself, once they were emptied, hold what
+      was assigned to them in it, and are read as they are; while a %Program is getting the restriction, they are
+      read empty
 
     Only these variables are covered: a value that the code of a %Program stores elsewhere (in another variable, or
     as the result of a call) is that %Program's own data, and code that runs in a %Program, also when restricted code
-    calls it (see @ref sandbox_program_capability), reads the %Program's own variables.  A file that restricts
-    external information only for its own code (with @ref push-parse-options "%push-parse-options") does not change
-    the variables of its %Program.
+    calls it (see @ref sandbox_program_capability), reads the %Program's own variables: this includes the builtin
+    functions that restricted code runs in another %Program through it, such as
+    @ref Qore::get_global_vars() "get_global_vars()" called with
+    @ref Qore::Program::callFunction() "Program::callFunction()" or through
+    @ref Qore::Program::getCallReference() "Program::getCallReference()", and
+    @ref Qore::Program::getExpression() "Program::getExpression()".  A file that restricts external information only
+    for its own code (with @ref push-parse-options "%push-parse-options", without locking it) does not change the
+    variables of its %Program.
+
+    @note @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" is not a strong boundary for code that may use the
+    debugger (@ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"): such code can reach any %Program of the process by
+    its ID (@ref Qore::ProgramControl::resolveProgramId() "ProgramControl::resolveProgramId()") and inspect its state
+    (its statements, breakpoints and the local variables of its top-level code); restrict code from external
+    information without allowing it the debugger
 
     @since %Qore 3.0
 

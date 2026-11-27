@@ -55,6 +55,13 @@ auto sub reflection(Program h) {
         return shape(Reflection::Namespace::forName(h, \"Qore\").getGlobalVar(\"ENV\").getValue());
     });
 }
+string sub eval_pgm(int id) {
+    return t(auto sub () {
+        Program e = ProgramControl::resolveProgramId(id).createEvalProgram(PO_NEW_STYLE);
+        e.parse(\"int sub f() { return ENV.size(); }\", \"e\");
+        return sprintf(\"own:%d get:%s\", e.callFunction(\"f\"), shape(e.getGlobalVariable(\"ENV\")));
+    });
+}
 hash<auto> sub child() {
     Program c(PO_NEW_STYLE);
     c.parse(\"hash<auto> sub e() { return {\\\"ENV\\\": ENV.size(), \\\"QORE_ARGV\\\": QORE_ARGV.size(), \\\"ARGV\\\": ARGV.size()}; }\", \"c\");
@@ -69,6 +76,10 @@ hash<auto> sub child() {
         addTestCase("accessors of a restricted Program", \restrictedTargetTest());
         addTestCase("Program created by restricted code", \childTest());
         addTestCase("restriction added to a Program", \addedRestrictionTest());
+        addTestCase("restriction locked in by a file", \lockedInRestrictionTest());
+        addTestCase("Program created for a debugger", \evalProgramTest());
+        addTestCase("reads while a restriction is added", \restrictionWindowTest());
+        addTestCase("destructors of the emptied values", \destructorTest());
         set_return_value(main());
     }
 
@@ -111,7 +122,9 @@ hash<auto> sub child() {
         assertEq({"ENV": "hash:0", "QORE_ARGV": "list:0", "all": "hash:0"},
             r.callFunction("control", ProgramControl::getProgram().getProgramId()));
 
-        # reflection refuses the values of another Program or answers as the restricted code's own variable
+        # reflection refuses the values of another Program to restricted code (REFLECTION-ACCESS-ERROR) before it
+        # reads them, also for a GlobalVar object that the host gives it; its check of the process-information
+        # variables is defence in depth that no path reaches today, so either answer is accepted
         string rv = r.callFunction("reflection", h);
         if (rv != "REFLECTION-ACCESS-ERROR") {
             assertEq("hash:0", rv);
@@ -155,6 +168,83 @@ hash<auto> sub child() {
         p = new Program(PO_NEW_STYLE);
         p.parse("%no-external-info\n" + code, "directive");
         assertEq(empty, p.callFunction("e"));
+    }
+
+    lockedInRestrictionTest() {
+        # a restriction of a file with %push-parse-options that %lock-options keeps becomes the Program's own
+        Program k(PO_ALLOW_REPARSE);
+        k.parse("%push-parse-options\n%no-external-info\n%lock-options\nint sub dummy() { return 1; }\n", "pushed");
+        assertTrue(boolean(k.getParseOptions() & PO_NO_EXTERNAL_INFO));
+        k.parse("int sub f() { return elements $ENV + elements $QORE_ARGV; }", "later");
+        assertEq(0, k.callFunction("f"));
+        hash<auto> v = getReader().callFunction("by_name", k);
+        assertEq({"v": "hash:0", "found": True}, v.ENV);
+        assertEq({"v": "list:0", "found": True}, v.QORE_ARGV);
+    }
+
+    evalProgramTest() {
+        Program h = getHost();
+        int envs = h.getGlobalVariable("ENV").size();
+        assertTrue(envs > 0);
+
+        # restricted debugger code: the Program that it creates for another Program has no process data of it
+        assertEq("own:0 get:hash:0", getReader().callFunction("eval_pgm", h.getProgramId()));
+        assertEq(envs, h.getGlobalVariable("ENV").size());
+
+        # an unrestricted one has copies of the variables, not the other Program's own: restricting it later empties
+        # its copies only
+        Program e = ProgramControl::resolveProgramId(h.getProgramId()).createEvalProgram(PO_NEW_STYLE);
+        assertEq(envs, e.getGlobalVariable("ENV").size());
+        e.setParseOptions(PO_NO_EXTERNAL_INFO);
+        assertEq(0, e.getGlobalVariable("ENV").size());
+        assertEq(envs, h.getGlobalVariable("ENV").size());
+        hash<auto> v = getReader().callFunction("by_name", e);
+        assertEq({"v": "hash:0", "found": True}, v.ENV);
+    }
+
+    restrictionWindowTest() {
+        # the destructor of the old value of ARGV runs while the restriction is added, after ARGV is emptied and
+        # before ENV is: restricted code that reads ENV then gets it empty, as from any Program whose variables
+        # were not all emptied yet
+        Program p(PO_NEW_STYLE);
+        p.parse("our code probe; class T { destructor() { probe(); } } "
+            "sub setit(code c) { probe = c; ARGV = (new T(),); }", "window");
+        Program r = getReader();
+        *hash<auto> seen;
+        p.callFunction("setit", sub () {
+            seen = {
+                "restricted": boolean(p.getParseOptions() & PO_NO_EXTERNAL_INFO),
+                "ENV": r.callFunction("by_name", p).ENV,
+            };
+        });
+        p.setParseOptions(PO_NO_EXTERNAL_INFO);
+        assertEq({"restricted": True, "ENV": {"v": "hash:0", "found": True}}, seen);
+        assertEq({"v": "hash:0", "found": True}, r.callFunction("by_name", p).ENV);
+    }
+
+    destructorTest() {
+        # an exception of the destructor of an emptied value is raised by the change of the options, and every
+        # variable is emptied
+        Program p(PO_NEW_STYLE);
+        p.parse("class T { destructor() { throw \"DTOR-ERR\", \"x\"; } } "
+            "sub setit() { ARGV = (new T(),); QORE_ARGV = (new T(),); }", "dtor");
+        p.callFunction("setit");
+        assertThrows("DTOR-ERR", \p.setParseOptions(), PO_NO_EXTERNAL_INFO);
+        assertEq(0, p.getGlobalVariable("ARGV").size());
+        assertEq(0, p.getGlobalVariable("QORE_ARGV").size());
+        assertEq(0, p.getGlobalVariable("ENV").size());
+        assertEq({"v": "hash:0", "found": True}, getReader().callFunction("by_name", p).ENV);
+
+        # without an exception sink (Program::lockOptions() keeping a restriction of a file), the old values are
+        # released with the Program's data: their destructors do not run under the locks of the options
+        Program k(PO_ALLOW_REPARSE);
+        k.parse("class T { destructor() { throw \"DTOR-ERR\", \"x\"; } } sub setit() { $ARGV = (new T(),); }",
+            "dtor-lock");
+        k.callFunction("setit");
+        k.parse("%push-parse-options\n%no-external-info\n%lock-options\nint sub dummy() { return 1; }\n",
+            "pushed");
+        assertEq(0, k.getGlobalVariable("ARGV").size());
+        assertThrows("DTOR-ERR", sub () { delete k; });
     }
 
     # returns an unrestricted Program with a variable of its own

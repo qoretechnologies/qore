@@ -658,8 +658,11 @@ public:
         getGlobalVariableValue(), which applies this check itself: the process-information variables
         (\c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV) are external information, so code that is restricted
         from it (see qore_caller_restricts_domain()) gets them as they are in a Program restricted from external
-        information, unless this Program is restricted from it itself.  Call it before switching to the Program's
-        context, as the calling code is that of the current thread.
+        information, unless this Program is restricted from it itself (and its variables were emptied).
+
+        @warning call it before switching to the Program's context (QoreExternalProgramContextHelper): the calling
+        code that decides is found on the current thread's call stack, and once the thread runs in this Program, it is
+        this Program's, so the function would give the value to any caller
 
         @param var the global variable of this Program (see findGlobalVar())
         @param rv set to the value that the calling code gets instead (with a reference that the caller owns) if the

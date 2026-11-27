@@ -2545,6 +2545,22 @@ protected:
         return v;
     }
 
+    //! see GlobalVariableList::runtimeCreateOwnVar(); the lookup index names the new variable in place of the
+    //! reference that it replaces
+    DLLLOCAL Var* runtimeCreateOwnVar(qore_ns_private& vns, const char* vname, const QoreTypeInfo* typeInfo,
+            bool builtin, Var*& replaced) {
+        Var* v = vns.var_list.runtimeCreateOwnVar(vname, typeInfo, builtin, replaced);
+        if (v) {
+            varmap_t::iterator i = varmap.find(v->getName());
+            if (replaced && i != varmap.end() && i->second.obj == replaced) {
+                i->second.assign(&vns, v);
+            } else {
+                varmap.update(v->getName(), &vns, v);
+            }
+        }
+        return v;
+    }
+
     DLLLOCAL bool parseResolveGlobalVarsAndClassHierarchiesIntern();
 
     // returns 0 for success, non-zero for error
@@ -3540,6 +3556,11 @@ public:
 
     DLLLOCAL static Var* runtimeCreateVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname, const QoreTypeInfo* typeInfo, bool builtin = false) {
         return rns.rpriv->runtimeCreateVar(*vns.priv, vname, typeInfo, builtin);
+    }
+
+    DLLLOCAL static Var* runtimeCreateOwnVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname,
+            const QoreTypeInfo* typeInfo, bool builtin, Var*& replaced) {
+        return rns.rpriv->runtimeCreateOwnVar(*vns.priv, vname, typeInfo, builtin, replaced);
     }
 
     /*
