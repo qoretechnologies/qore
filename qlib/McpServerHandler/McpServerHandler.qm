@@ -253,9 +253,34 @@ hash<auto> sub myTool(*hash<auto> args) {
     The server can request LLM completions from the client using \c requestSampling()
     and user input using \c requestElicitationForm() (requires client capability support).
 
+    @subsection mcpserverhandler_credentials The Credentials of a Request
+    The code that the handler calls with the request context gets it without the credentials of the request when it
+    is the code of a %Program that a sandbox that does not trust its code governs, also when trusted code registered it
+    with a handler of trusted code (see @ref httpserverutil_request_credentials): a resource reader
+    (@ref McpServerHandler::McpServerHandler::registerResource() "registerResource()"), a prompt handler
+    (@ref McpServerHandler::McpServerHandler::registerPrompt() "registerPrompt()") and the JSON-RPC methods of the
+    handler, and restricted code that asks for the context of the current call
+    (@ref McpServerHandler::McpServerHandler::getToolCallContext() "getToolCallContext()", for example a tool).  Such
+    code gets the keys of the request that the request filter gives
+    (@ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys": the user, the address
+    of the client, the URL and the header fields other than the credentials) and the handler's keys of the call: the
+    JSON-RPC keys (@ref JsonRpcHandler::JsonRpcHandler::JsonRpcHandlerContextKeys "JsonRpcHandlerContextKeys") and the
+    protocol state of the call (\c mcp_modern, \c mcp_version, \c mcp_method, \c mcp_client_capabilities,
+    \c mcp_client_info, \c mcp_log_level, \c mcp_principal and the session in \c mcp_session).  It does not get the
+    \c Authorization, \c Proxy-Authorization, \c Cookie and \c Set-Cookie fields, the raw \c Authorization value
+    (\c auth), the objects of the server (such as its logger and listener), the handler's state (\c socket,
+    \c uctx) or the \c Mcp-Session-Id field: the session is given by \c mcp_session and by the \c sid of the call
+    context.  The \c Authorization field is given only when the handler has no authenticator of the platform (or a
+    @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator") and trusted code opts in to it with
+    @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()".
+
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - the resource readers, prompt handlers and methods of a restricted %Program that the handler calls, and restricted
+      code that calls @ref McpServerHandler::McpServerHandler::getToolCallContext() "getToolCallContext()", get the
+      request without its credentials and without the \c Mcp-Session-Id field (see
+      @ref mcpserverhandler_credentials; issue #7303)
     - the no-argument @ref McpServerHandler::McpServerHandler::constructor() "constructor" initializes the
       JSON-RPC handler and registers its MCP methods (issue #7596)
     - added @ref McpServerHandler::McpServerHandler::addCallCancelHandler() "McpServerHandler::addCallCancelHandler()"
