@@ -1121,7 +1121,7 @@ int qore_object_private::checkOpenSharedUpdateScope(const QoreProgram* scope_pgm
             "for a shared object", theclass->getName());
         return -1;
     }
-    // the code that changes the object in the scope: the code of a Program that no restricting sandbox governs
+    // the code that changes the object in the scope: the code of a Program that is not restricted
     // (qore#7737); for an update closure also not the code of a class that restricted code declared, as the calling
     // code is the scope's code (a C++ update is the module's own code, whose scope is that of the object's Program:
     // its caller may be restricted, see qore_update_shared_object())
@@ -1153,7 +1153,7 @@ int qore_object_private::checkOpenSharedUpdateScope(const QoreProgram* scope_pgm
 }
 
 QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
-    // the code that calls: the code of a Program that no restricting sandbox governs (qore#7737)
+    // the code that calls: the code of a Program that is not restricted (qore#7737)
     const QoreProgram* call_pgm = getProgram();
     if (checkOpenSharedUpdateScope(call_pgm, false, xsink)) {
         return QoreValue();

@@ -72,7 +72,7 @@ class QoreValue;
 DLLEXPORT bool qore_caller_creates_shared_objects();
 
 //! Returns true if the calling code may mark objects as shared with qore_share_object()
-/** As SandboxManager::canShareObjects(): code that no restricting sandbox governs may, and so may code in an update
+/** As SandboxManager::canShareObjects(): code that is not restricted may, and so may code in an update
     scope of a shared object (see qore_update_shared_object() and SandboxManager::updateSharedObject()), as long as it
     does not run for restricted code that the scope's code called.  Fails closed: false if it cannot be decided
 
@@ -124,7 +124,7 @@ DLLEXPORT int qore_check_shared_object_change(const QoreObject* obj, const char*
 /** As SandboxManager::checkSharedObjectCallback(): for a C++ method that runs code that its caller gives while it
     holds the object's state (such as a lock), code that is restricted or acts for restricted code can only give a
     closure that a method of a class that trusted code declared created.  Nothing is checked for an object that is not
-    shared or a caller that no restricting sandbox governs; fails closed.
+    shared or a caller that is not restricted; fails closed.
 
     @param obj the object that the caller changes; nothing is checked for null
     @param callback the code that the caller gives; where the callback is checked (a shared object and a restricted
@@ -175,10 +175,10 @@ typedef QoreValue (*q_shared_object_update_t)(QoreObject* obj, void* arg, Except
     rules, as code that a closure calls in an update scope: code that runs in a restricted Program (a callback of a
     restricted caller, a method of a class of a restricted Program), and any code that it calls, acts for restricted
     code, so it cannot change the object, open another update scope or share objects.  Code that runs in a Program
-    that no restricting sandbox governs is the scope's code, whoever supplied it: a closure or method reference of a
-    trusted class, or a reference to a builtin function or method, that the caller gives runs with the rights of the
-    scope, and a name that the caller gives resolves in the scope's Program.  The update therefore never calls code,
-    or resolves names, that its caller supplied; the restrictions of SandboxManager::updateSharedObject() on its
+    that is not restricted is the scope's code, whoever supplied it: a closure or method reference of a trusted
+    class, or a reference to a builtin function or method, that the caller gives runs with the rights of the scope,
+    and a name that the caller gives resolves in the scope's Program.  The update therefore never calls code, or
+    resolves names, that its caller supplied; the restrictions of SandboxManager::updateSharedObject() on its
     closure (created by a class of the object in the calling code, run once) have no counterpart here, as the update
     is the module's own C++ code.  Use it for the objects of the module's own classes.  The scope ends on every path
     out of this function; a thread that the update starts does not inherit it.

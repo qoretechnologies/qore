@@ -337,11 +337,9 @@ foreach string name in (p.callFunction("probe_check_names")) {
 # creates, shares and changes shared objects as trusted code does, while its sandbox's policies still apply (qore#7737)
 printf("--- a tenant of a trusted (governed) sandbox\n");
 Program g(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
-{
-    SandboxManager gsm();
-    gsm.setUncontrolledApiPolicy(True);
-    g.setSandboxManager(gsm);
-}
+SandboxManager gsm();
+gsm.setUncontrolledApiPolicy(True);
+g.setSandboxManager(gsm);
 g.parse(TenantCode, "governed tenant");
 foreach string name in ("creates shared objects", "can share objects", "a probe that it creates is shared",
         "it marks a probe that it creates") {
@@ -355,4 +353,23 @@ foreach string name in ("set the value", "mark it", "its own code in the scope",
     CppApiTest::SharedObjectProbe t(1);
     printf("a file that the update opens for it: %s\n", g.callFunction("update_open", t, get_script_path()));
     printf("the update checks a callback of it: %s\n", g.callFunction("update_check_own", t));
+}
+{
+    # a probe of the governed tenant is a probe of a Program that is not restricted: its scope can be opened
+    CppApiTest::SharedObjectProbe t = g.callFunction("create_probe");
+    CppApiTest::SharedObjectProbe::share(t);
+    printf("it updates a probe of its own that is shared: %s\n", g.callFunction("update", t));
+    printf("trusted code updates a shared probe of it: %s\n", try_desc(auto sub () { return t.update(); }));
+}
+# the classification is decided at each call: a manager that no longer allows uncontrolled APIs restricts its code
+gsm.setUncontrolledApiPolicy(False);
+printf("--- the same tenant after its sandbox refuses uncontrolled APIs\n");
+foreach string name in ("creates shared objects", "can share objects", "it marks a probe that it creates") {
+    printf("%s: %s\n", name, g.callFunction("run_check", name));
+}
+{
+    CppApiTest::SharedObjectProbe shared(1);
+    printf("set the value: shared: %s\n", g.callFunction("run_probe_check", "set the value", shared));
+    printf("build the cache on first use: shared: %s\n", g.callFunction("run_probe_check",
+        "build the cache on first use", shared));
 }

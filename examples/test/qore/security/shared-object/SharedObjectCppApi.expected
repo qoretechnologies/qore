@@ -60,3 +60,11 @@ its own code in the scope: shared: ok: {can_share: True, inner: [True, "ok: null
 run its own code locked: shared: ok: "tenant closure"
 a file that the update opens for it: ok: {can_share: True, creates_shared: True, open: "FILESYSTEM-ACCESS-DENIED"}
 the update checks a callback of it: ok: {can_share: True, inner: "tenant"}
+it updates a probe of its own that is shared: ok: {can_share: True}
+trusted code updates a shared probe of it: ok: {can_share: True}
+--- the same tenant after its sandbox refuses uncontrolled APIs
+creates shared objects: ok: False
+can share objects: ok: False
+it marks a probe that it creates: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot mark an object of class 'SharedObjectProbe' as shared by every Program of the process
+set the value: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot set the value of an object of class 'SharedObjectProbe': the object is shared by every Program of the process
+build the cache on first use: shared: ok: ["built from orig", "built from orig", 1]

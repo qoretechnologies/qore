@@ -17,19 +17,20 @@
 
 #! Test for qore#7669: the C++ API of shared objects for binary modules
 /** The builtin class CppApiTest::SharedObjectProbe of the cppapiuser test module calls
-    qore_caller_creates_shared_objects(), qore_caller_can_share_objects(), qore_share_object(),
-    qore_object_is_shared(), qore_check_shared_object_change(), qore_check_shared_object_callback() and
-    qore_update_shared_object() from C++.  Trusted code marks probes and updates them; a tenant (a sandboxed Program)
-    cannot change a shared probe, share objects outside an update scope, or run its own code locked, but builds a
-    probe's cache on first use in a C++ update scope, in which the C++ code can share objects and the tenant's own code
-    cannot, nor open a nested scope (also from a Qore update scope); the scope ends with the update and is not
-    inherited by a thread; in the scope, the tenant is still the sandboxed caller (qore_caller_creates_shared_objects()
-    is False and a file that the update opens for it is refused by its sandbox) and a callback of the tenant is refused
-    by qore_check_shared_object_callback(); a probe that no Program owns is updated only by code that may share objects, a probe of the
-    tenant by nobody; null pointers are handled.  The hazard that the API documents is shown too: a closure of a
-    trusted class that the tenant gives runs in the scope with its rights.  A tenant of a trusted (governed) sandbox,
-    one that allows uncontrolled APIs, is sandboxed but not restricted (qore#7737): it creates, shares and changes
-    shared objects as trusted code does, while its sandbox's file-system policy still applies.
+    qore_caller_creates_shared_objects(), qore_caller_can_share_objects(), qore_share_object(), qore_object_is_shared(),
+    qore_check_shared_object_change(), qore_check_shared_object_callback() and qore_update_shared_object() from C++.
+    Trusted code marks probes and updates them; a tenant (a restricted Program: a sandboxed Program whose sandbox
+    refuses uncontrolled APIs) cannot change a shared probe, share objects outside an update scope, or run its own code
+    locked, but builds a probe's cache on first use in a C++ update scope, in which the C++ code can share objects and
+    the tenant's own code cannot, nor open a nested scope (also from a Qore update scope); the scope ends with the
+    update and is not inherited by a thread; in the scope, the tenant is still the restricted caller
+    (qore_caller_creates_shared_objects() is False and a file that the update opens for it is refused by its sandbox)
+    and a callback of the tenant is refused by qore_check_shared_object_callback(); a probe that no Program owns is
+    updated only by code that may share objects, a probe of the tenant by nobody; null pointers are handled.  The hazard
+    that the API documents is shown too: a closure of a trusted class that the tenant gives runs in the scope with its
+    rights.  A tenant of a trusted (governed) sandbox, one that allows uncontrolled APIs, is sandboxed but not
+    restricted (qore#7737): it creates, shares and changes shared objects as trusted code does, while its sandbox's
+    file-system policy still applies.
 
     SharedObjectCppApi.q checks these; its output must be the one in SharedObjectCppApi.expected in every execution
     mode, on the IR tier, and in programs compiled with qcc -O0 and -O3.
