@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
-          "message": "List Files"
+          "source": "List files",
+          "message": "List files"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
           "source": "List or search files and folders",
@@ -532,8 +532,8 @@
           "message": "The `next_page_token` value returned by a previous listing, used to retrieve the following page"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File Info",
-          "message": "Get File Info"
+          "source": "Get file info",
+          "message": "Get file info"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file's metadata",
@@ -556,8 +556,8 @@
           "message": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download a file's content",
@@ -580,8 +580,8 @@
           "message": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
-          "source": "Export Document",
-          "message": "Export Document"
+          "source": "Export document",
+          "message": "Export document"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
           "source": "Export a Google-native document to a concrete format",
@@ -688,8 +688,8 @@
           "message": "Plain text; available for Docs"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file to Drive",
@@ -868,8 +868,8 @@
           "message": "A description to store with the file"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
-          "message": "Create Text File"
+          "source": "Create text file",
+          "message": "Create text file"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
           "source": "Create a file from text content",
@@ -928,8 +928,8 @@
           "message": "The MIME type to store with the new file"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
-          "source": "Replace File Content",
-          "message": "Replace File Content"
+          "source": "Replace file content",
+          "message": "Replace file content"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
           "source": "Replace an existing file's content",
@@ -1084,8 +1084,8 @@
           "message": "The filename"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
-          "message": "Create Folder"
+          "source": "Create folder",
+          "message": "Create folder"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
           "source": "Create a folder",
@@ -1120,8 +1120,8 @@
           "message": "The folder to create the new folder in; if not set, the user's `My Drive` root is used"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File",
-          "message": "Copy File"
+          "source": "Copy file",
+          "message": "Copy file"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
           "source": "Copy a file",
@@ -1168,8 +1168,8 @@
           "message": "The folder to place the copy in; if not set, the copy is placed beside the original"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
-          "source": "Move File",
-          "message": "Move File"
+          "source": "Move file",
+          "message": "Move file"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
           "source": "Move a file to a different folder",
@@ -1204,8 +1204,8 @@
           "message": "The folder to move the file into"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
-          "source": "Rename File",
-          "message": "Rename File"
+          "source": "Rename file",
+          "message": "Rename file"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
           "source": "Change a file's name",
@@ -1252,8 +1252,8 @@
           "message": "A new description to store with the file; the existing description is left unchanged when this is not set"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file or move it to the trash",
@@ -1288,8 +1288,8 @@
           "message": "Delete the file outright rather than moving it to the trash. **This cannot be undone**; leave it cleared to move the file to the trash, where it can still be recovered"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
-          "source": "Share File",
-          "message": "Share File"
+          "source": "Share file",
+          "message": "Share file"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
           "source": "Grant access to a file",
@@ -1456,8 +1456,8 @@
           "message": "Send a notification email to the grantee"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
-          "source": "Restore from Trash",
-          "message": "Restore from Trash"
+          "source": "Restore from trash",
+          "message": "Restore from trash"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
           "source": "Restore a file from the trash",
@@ -1480,8 +1480,8 @@
           "message": "The Drive identifier of the file to restore from the trash"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
-          "source": "Create Shortcut",
-          "message": "Create Shortcut"
+          "source": "Create shortcut",
+          "message": "Create shortcut"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
           "source": "Create a shortcut pointing at a file or folder",
@@ -1528,8 +1528,8 @@
           "message": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
-          "source": "List Shared Drives",
-          "message": "List Shared Drives"
+          "source": "List shared drives",
+          "message": "List shared drives"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
           "source": "List the shared drives the account can reach",
@@ -1564,8 +1564,8 @@
           "message": "The `next_page_token` value returned by a previous listing"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
-          "source": "Get Storage Quota",
-          "message": "Get Storage Quota"
+          "source": "Get storage quota",
+          "message": "Get storage quota"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
           "source": "Get how much of the account's storage is in use",
@@ -1576,8 +1576,8 @@
           "message": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Drive rejects one that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.  Files in the trash still count against the quota, so `usage_in_drive_trash` is what emptying it would recover."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
-          "source": "List Permissions",
-          "message": "List Permissions"
+          "source": "List permissions",
+          "message": "List permissions"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
           "source": "List who has access to a file",
@@ -1600,8 +1600,8 @@
           "message": "The Drive identifier of the file whose permissions are to be listed"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
-          "source": "Remove Permission",
-          "message": "Remove Permission"
+          "source": "Remove permission",
+          "message": "Remove permission"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
           "source": "Withdraw someone's access to a file",
@@ -1636,8 +1636,8 @@
           "message": "The identifier of the permission to withdraw, as returned by `list-permissions` or `share-file`"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
-          "source": "List File Revisions",
-          "message": "List File Revisions"
+          "source": "List file revisions",
+          "message": "List file revisions"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
           "source": "List the earlier versions Drive holds for a file",
@@ -1660,8 +1660,8 @@
           "message": "The Drive identifier of the file whose revisions are to be listed"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
-          "source": "Get File Revision",
-          "message": "Get File Revision"
+          "source": "Get file revision",
+          "message": "Get file revision"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
           "source": "Get the details of one revision of a file",
@@ -1696,8 +1696,8 @@
           "message": "The identifier of the revision, as returned by `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
-          "source": "Delete File Revision",
-          "message": "Delete File Revision"
+          "source": "Delete file revision",
+          "message": "Delete file revision"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
           "source": "Remove one earlier version of a file",
@@ -1732,8 +1732,8 @@
           "message": "The identifier of the revision, as returned by `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files",
-          "message": "Find Files"
+          "source": "Find files",
+          "message": "Find files"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
           "source": "Search Drive and read the results as records",
@@ -1912,8 +1912,8 @@
           "message": "How many files to fetch per request; Drive caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
-          "message": "New File"
+          "source": "New file",
+          "message": "New file"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
           "source": "React to a file being created in Drive",
@@ -1960,8 +1960,8 @@
           "message": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
-          "message": "New Folder"
+          "source": "New folder",
+          "message": "New folder"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {
           "source": "React to a folder being created in Drive",

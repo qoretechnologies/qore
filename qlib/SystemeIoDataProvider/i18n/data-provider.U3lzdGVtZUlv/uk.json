@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Значення користувацького контактного поля"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Значення користувацького контактного поля"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Унікальний ідентифікатор контакту, який потрібно видалити"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -636,7 +636,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -656,7 +656,7 @@
           "message": "ID контакту"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign Tag to Contact",
+          "source": "Assign tag to contact",
           "message": "Призначити тег контакту"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Унікальний ідентифікатор тегу, який потрібно призначити контакту"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Видалити тег із контакту"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Унікальний ідентифікатор тегу, який потрібно видалити з контакту"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Створити тег"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "Назва створюваного тегу"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Оновити тег"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Нова назва тегу"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Видалити тег"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Унікальний ідентифікатор тегу, який потрібно видалити"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Отримати тег"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
@@ -876,7 +876,7 @@
           "message": "ID тегу"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact Field",
+          "source": "Create contact field",
           "message": "Створити поле контакту"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Унікальний ідентифікатор slug для настроюваного поля контакту"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact Field",
+          "source": "Update contact field",
           "message": "Оновити поле контакту"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Нова відображувана назва для настроюваного поля контакту"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact Field",
+          "source": "Delete contact field",
           "message": "Видалити поле контакту"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Унікальний слаг-ідентифікатор настроюваного поля контакту, яке потрібно видалити"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact Fields",
+          "source": "List contact fields",
           "message": "Отримати список полів контактів"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact Field",
+          "source": "Get contact field",
           "message": "Отримати поле контакту"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Слаг поля контакту"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "Список курсів"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create Enrollment",
+          "source": "Create enrollment",
           "message": "Створити запис на курс"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Список ідентифікаторів модулів, до яких надається доступ. Обов'язково, коли `accessType` має значення `partial_access`"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Delete Enrollment",
+          "source": "Delete enrollment",
           "message": "Видалити запис"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Унікальний ідентифікатор запису, який потрібно видалити"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "Список записів"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "Список спільнот"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Create Membership",
+          "source": "Create membership",
           "message": "Створити членство"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Унікальний ідентифікатор контакту, який потрібно додати як учасника"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Delete Membership",
+          "source": "Delete membership",
           "message": "Видалити членство"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Унікальний ідентифікатор членства, яке потрібно видалити"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
-          "source": "List Memberships",
+          "source": "List memberships",
           "message": "Членство у списках"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Cancel Subscription",
+          "source": "Cancel subscription",
           "message": "Скасувати підписку"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Унікальний ідентифікатор підписки, яку потрібно скасувати"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "Список підписок"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "За спаданням"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Спрацьовує під час створення нового контакту в Systeme.io"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
-          "source": "New Tag",
+          "source": "New tag",
           "message": "Новий тег"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {

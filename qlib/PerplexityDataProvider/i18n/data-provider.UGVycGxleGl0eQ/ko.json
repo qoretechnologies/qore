@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "다중 채팅"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "응답에 선호하는 언어를 지정하는 ISO 639-1 언어 코드"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Simple Chat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "응답에 선호하는 언어를 지정하는 ISO 639-1 언어 코드"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
+          "source": "Stream chat",
           "message": "스트림 채팅"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "응답에 선호하는 언어를 지정하는 ISO 639-1 언어 코드"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "웹 검색"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

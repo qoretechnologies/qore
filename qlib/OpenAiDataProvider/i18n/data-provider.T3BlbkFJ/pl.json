@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Czat wielokrotny"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Prosty czat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Prześlij plik"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Nazwa pliku"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Usuń plik"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Identyfikator lub nazwa pliku OpenAI przeznaczonego do usunięcia"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
+          "source": "Create an assistant",
           "message": "Utwórz asystenta"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Określa, że model musi wygenerować poprawny JSON na wyjściu"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
+          "source": "Update assistant",
           "message": "Zaktualizuj asystenta"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Określa, że model musi wygenerować poprawny JSON na wyjściu"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
+          "source": "Delete assistant",
           "message": "Usuń asystenta"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "Identyfikator asystenta do usunięcia"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
+          "source": "Create a thread",
           "message": "Utwórz wątek"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Zestaw 16 par klucz-wartość, które można dołączyć do obiektu. Może to być przydatne do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie. Klucze mogą mieć maksymalnie 64 znaki długości, a wartości maksymalnie 512 znaków długości"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
+          "source": "Update thread",
           "message": "Zaktualizuj wątek"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "Zestaw 16 par klucz-wartość, które można dołączyć do obiektu. Może to być przydatne do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie. Klucze mogą mieć maksymalnie 64 znaki długości, a wartości maksymalnie 512 znaków długości"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
+          "source": "Delete thread",
           "message": "Usuń wątek"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "ID wątku"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Przetwórz żądanie za pomocą modelu"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Strumieniuj odpowiedź"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
+          "source": "Create a conversation",
           "message": "Utwórz konwersację"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Zestaw 16 par klucz-wartość, które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie oraz wyszukiwania obiektów za pośrednictwem API lub panelu. Klucze to ciągi znaków o maksymalnej długości 64 znaków; wartości to ciągi znaków o maksymalnej długości 512 znaków"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Pobierz konwersację"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "Identyfikator konwersacji"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
+          "source": "Update a conversation",
           "message": "Zaktualizuj konwersację"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6920,7 +6920,7 @@
           "message": "Zestaw 16 par klucz-wartość, które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie oraz wyszukiwania obiektów za pośrednictwem API lub panelu. Klucze to ciągi znaków o maksymalnej długości 64 znaków; wartości to ciągi znaków o maksymalnej długości 512 znaków"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
+          "source": "Delete a conversation",
           "message": "Usuń konwersację"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Identyfikator konwersacji"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Wyświetl listę elementów konwersacji"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "Dodatkowe pola do uwzględnienia w odpowiedzi.\n\nInformacje o obsługiwanych wartościach można znaleźć w dokumentacji [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
+          "source": "Add items to a conversation",
           "message": "Dodaj elementy do konwersacji"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Dodatkowe pola do uwzględnienia w odpowiedzi.\n\nInformacje o obsługiwanych wartościach można znaleźć w dokumentacji [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Pobierz element konwersacji"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7468,7 +7468,7 @@
           "message": "Dodatkowe pola do uwzględnienia w odpowiedzi.\n\nInformacje o obsługiwanych wartościach można znaleźć w dokumentacji [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
+          "source": "Delete a conversation item",
           "message": "Usuń element konwersacji"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7504,7 +7504,7 @@
           "message": "Element w ramach konwersacji; lista jest wypełniana na podstawie wybranej konwersacji"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
+          "source": "Cancel a response",
           "message": "Anuluj odpowiedź"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "Identyfikator odpowiedzi do pobrania"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Wyświetl listę elementów wejściowych odpowiedzi"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
@@ -7624,7 +7624,7 @@
           "message": "Dodatkowe pola do uwzględnienia w odpowiedzi.\n\nInformacje o obsługiwanych wartościach można znaleźć w dokumentacji [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
+          "source": "Generate an image",
           "message": "Wygeneruj obraz"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Transkrybuj audio"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {

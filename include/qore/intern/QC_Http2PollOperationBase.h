@@ -461,6 +461,25 @@ private:
     DLLLOCAL bool isDrainComplete() const {
         return drain_requested.load(std::memory_order_acquire) && sock && qore_socket_object_private(sock).isHttp2DrainComplete();
     }
+
+    //! Closes the connection if its session has ended; called on the I/O thread at the end of a read cycle
+    /** nghttp2 wants to neither read nor write once it has sent the GOAWAY frame of a connection error, after which
+        the connection must be closed (RFC 9113 section 5.4.1), or once a GOAWAY frame has been sent or received and
+        no stream is active.  The connection was left open before: its client waited for an answer until its own
+        timeout (qore#7770)
+
+        @return true if the connection was closed
+    */
+    DLLLOCAL bool closeIfSessionDone(ExceptionSink* xsink) {
+        if (!sock || !qore_socket_object_private(sock).isHttp2SessionDone()) {
+            return false;
+        }
+        clearStreamQueues(xsink);
+        setClosed(qore_socket_object_private(sock).getHttp2GoawayErrorSent() >= 0
+            ? "the server ended the connection for a connection error with a GOAWAY frame (see the log)"
+            : "the session ended: a GOAWAY frame was sent or received and no stream is active");
+        return true;
+    }
     bool headers_only;                          //!< dispatch on HEADERS before END_STREAM
     mutable bool request_pending;               //!< set by continuePoll, cleared by getOutput
     bool keep_alive;                            //!< HTTP/2 connections are persistent by default
@@ -486,6 +505,7 @@ private:
     // --- I/O-thread-only data (no lock needed) ---
 
     //! Registered stream queues — I/O-thread-only
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
     //! Stream IDs that had data drained — I/O-thread-only
@@ -508,6 +528,7 @@ private:
         @ref isStreamPeerClosed(), so this set stays bounded by the number of
         resets seen on the connection.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int32_t> peer_closed_streams;
 
     //! Persistent-session close-delivery Queue for this connection, or nullptr.

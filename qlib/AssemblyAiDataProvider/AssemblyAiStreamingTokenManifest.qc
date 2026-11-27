@@ -38,7 +38,7 @@ public class AssemblyAiStreamingTokenManifest {
                 "method": "GET",
                 "path": "/v3/token",
                 "operation_id": "generateStreamingToken",
-                "display_name": "Create Streaming Token",
+                "display_name": "Create streaming token",
                 "short_desc": "Issue a temporary credential for real-time transcription",
                 "desc": "Create a temporary token for a real-time transcription WebSocket session. Limit token validity and session duration before sharing the token with a client application.",
                 "groups": ("Real-Time Speech",),

@@ -91,7 +91,7 @@ public class KlaviyoCreateEventDataProvider inherits KlaviyoHandWrittenDataProvi
         const RequestPath = "/api/events";
 
         #! The action display name
-        const DisplayName = "Create Event";
+        const DisplayName = "Create event";
 
         #! The action short description
         const ShortDesc = "Creates a new event";
@@ -384,7 +384,7 @@ public class KlaviyoSubscribeProfileDataProvider inherits KlaviyoHandWrittenData
         const RequestPath = "/api/profile-subscription-bulk-create-jobs";
 
         #! The action display name
-        const DisplayName = "Subscribe Profile";
+        const DisplayName = "Subscribe profile";
 
         #! The action short description
         const ShortDesc = "Subscribes a profile to marketing channels";
@@ -624,7 +624,7 @@ public class KlaviyoUnsubscribeProfileDataProvider inherits KlaviyoHandWrittenDa
         const RequestPath = "/api/profile-subscription-bulk-delete-jobs";
 
         #! The action display name
-        const DisplayName = "Unsubscribe Profile";
+        const DisplayName = "Unsubscribe profile";
 
         #! The action short description
         const ShortDesc = "Unsubscribes a profile from marketing channels";

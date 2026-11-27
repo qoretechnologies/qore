@@ -71,7 +71,7 @@ module BgeM3FastApiDataProvider {
             "app": BgeM3FastApiDataProvider::AppName,
             "path": "/create-embeddings",
             "action": "create-embeddings",
-            "display_name": "Create Embeddings",
+            "display_name": "Create embeddings",
             "short_desc": "Generate embedding vectors via the BGE-M3 FastAPI sidecar",
             "desc": "Converts a list of input texts into embedding vectors using the "
                 "[BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI sidecar's native "
@@ -108,7 +108,7 @@ module BgeM3FastApiDataProvider {
             "app": BgeM3FastApiDataProvider::AppName,
             "path": "/health",
             "action": "health",
-            "display_name": "Get Health",
+            "display_name": "Get health",
             "short_desc": "Liveness and host memory pressure inspection",
             "desc": "Returns the sidecar's liveness status (typically `\"ok\"`) and "
                 "host memory pressure data.  Upstream routers can use the `pressure` "
@@ -125,7 +125,7 @@ module BgeM3FastApiDataProvider {
             "app": BgeM3FastApiDataProvider::AppName,
             "path": "/metrics",
             "action": "metrics",
-            "display_name": "Get Metrics",
+            "display_name": "Get metrics",
             "short_desc": "Prometheus text-format runtime metrics",
             "desc": "Returns the sidecar's Prometheus text-exposition-format metrics "
                 "in the `text` field of the response.  Suitable for scraping by "

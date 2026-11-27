@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "建立聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -832,7 +832,7 @@
           "message": "此自訂欄位的值"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "更新聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1316,7 +1316,7 @@
           "message": "此自訂欄位的值"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "刪除聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "取得聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "聯絡人 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Create a Contact List",
+          "source": "Create a contact list",
           "message": "建立聯絡人名單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "是否將此名單標記為最愛"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Update a Contact List",
+          "source": "Update a contact list",
           "message": "更新聯絡人名單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "是否將此名單標記為最愛"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Delete a Contact List",
+          "source": "Delete a contact list",
           "message": "刪除聯絡人清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "要刪除的聯絡人清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
-          "source": "List Contact Lists",
+          "source": "List contact lists",
           "message": "列出聯絡人清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Get a Contact List",
+          "source": "Get a contact list",
           "message": "獲取聯絡人清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "聯絡人清單 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "建立標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "由聯絡人建立的標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "更新標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "標籤的新名稱"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "刪除標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "要刪除的標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "取得標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "標籤 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "建立自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "日期欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "更新自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "自訂欄位的新標籤"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "刪除自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "要刪除的自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "列出自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Get a Custom Field",
+          "source": "Get a custom field",
           "message": "獲取自訂欄位"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "自訂欄位 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Create a Segment",
+          "source": "Create a segment",
           "message": "建立區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "區隔的條件表達式"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Update a Segment",
+          "source": "Update a segment",
           "message": "更新區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "區隔的新準則運算式"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
-          "source": "Delete a Segment",
+          "source": "Delete a segment",
           "message": "刪除區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "要刪除的區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "列出受眾區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get a Segment",
+          "source": "Get a segment",
           "message": "獲取區隔"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "區隔 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Create an Email Campaign",
+          "source": "Create an email campaign",
           "message": "建立電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "電子郵件的主旨行"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Update an Email Campaign",
+          "source": "Update an email campaign",
           "message": "更新電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "電子郵件行銷活動的新名稱"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Delete an Email Campaign",
+          "source": "Delete an email campaign",
           "message": "刪除電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2524,7 +2524,7 @@
           "message": "要刪除的電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
-          "source": "Schedule an Email Campaign",
+          "source": "Schedule an email campaign",
           "message": "排程電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "ISO-8601 格式的預定傳送日期"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
-          "source": "List Email Campaigns",
+          "source": "List email campaigns",
           "message": "列出電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Get an Email Campaign",
+          "source": "Get an email campaign",
           "message": "獲取電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "電子郵件行銷活動 ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Import Contacts",
+          "source": "Import contacts",
           "message": "匯入聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "要將匯入聯絡人加入其中的聯絡人清單 ID 列表"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Export Contacts",
+          "source": "Export contacts",
           "message": "匯出聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "要包含在匯出中的欄位名稱清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Add List Members",
+          "source": "Add list members",
           "message": "新增清單成員"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "要新增聯絡人的聯絡人清單 ID 列表"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Remove List Members",
+          "source": "Remove list members",
           "message": "移除名單成員"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "要從中移除聯絡人的聯絡人名單 ID 清單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
-          "source": "Get Email Summary",
+          "source": "Get email summary",
           "message": "獲取電子郵件摘要"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "要獲取摘要的電子郵件行銷活動 ID 列表"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "取得帳戶"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "獲取 Constant Contact 帳戶資訊"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "更新帳戶"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "時區 ID（例如 `US/Eastern`）"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "新聯絡人"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "New Email Campaign",
+          "source": "New email campaign",
           "message": "新電子郵件行銷活動"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "New Contact List",
+          "source": "New contact list",
           "message": "新聯絡人名單"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {

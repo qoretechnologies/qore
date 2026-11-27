@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpClientSendUrlClientState.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - TLS connections of the HTTP client's connection manager to a server that advertises HTTP/3
+# HTTPClient::sendUrl() changes nothing on the client: a request to another target leaves the client's protocol state
+# as it was, and the HTTP/3 advertisement (Alt-Svc) of a target does not make the client replace its connection
+# manager under the requests of other threads that send on it at the same time (qoretechnologies/qore#7720)
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpClientSendUrlClientStateTest
+
+#! answers with the request's path; a request for /port answers with the client's port of the connection
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string rv = cx.raw_path == "/port" ? string(cx."peer-info".port) : cx.raw_path;
+        return makeResponse(200, rv, {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpClientSendUrlClientStateTest inherits QUnit::Test {
+    private {
+        #! the client's own origin: plain HTTP/1.1
+        HttpServer server_a(<HttpServerOptionInfo>{});
+        string url_a;
+        #! another origin: HTTPS, advertising HTTP/3 with Alt-Svc (the client's manager, for its own plain HTTP origin,
+        #! sends to it with HTTP/1.1 over TLS)
+        HttpServer server_b(<HttpServerOptionInfo>{});
+        string url_b;
+    }
+
+    constructor() : QUnit::Test("HttpClientSendUrlClientState", "1.0") {
+        on_error {
+            server_a.stop();
+            server_b.stop();
+        }
+        OkHandler h();
+        server_a.setDefaultHandler("ok", h);
+        server_b.setDefaultHandler("ok", h);
+        server_a.waitForAsyncIo();
+        server_b.waitForAsyncIo();
+        url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        url_b = sprintf("https://127.0.0.1:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port);
+        server_a.waitForAsyncIo();
+        server_b.waitForAsyncIo();
+
+        addTestCase("sendUrl() leaves the client's connection manager", \testClientState());
+        addTestCase("sendUrl() from several threads on one client", \testConcurrent());
+        set_return_value(main());
+        server_a.stop();
+        server_b.stop();
+    }
+
+    private HTTPClient client() {
+        return new HTTPClient({"url": url_a, "timeout": 30s, "connect_timeout": 30s, "ssl_verify_cert": False});
+    }
+
+    #! the client keeps its connection manager, and so the connection of its own requests
+    testClientState() {
+        HTTPClient hc = client();
+        on_exit hc.disconnect();
+        hash<auto> resp = hc.send(NOTHING, "GET", "/port");
+        assertEq(200, resp.status_code);
+        string port = resp.body;
+        # the other target advertises HTTP/3: a second request to it would take the HTTP/3 upgrade, which replaces the
+        # client's connection manager, if the first had recorded the advertisement
+        for (int i = 0; i < 2; ++i) {
+            resp = hc.sendUrl(NOTHING, "GET", url_b + "/other");
+            assertEq(200, resp.status_code, sprintf("request %d to the other target", i + 1));
+            assertEq("/other", resp.body);
+            assertFalse(hc.isHttp3Active(), sprintf("request %d: the client's HTTP/3 state is unchanged", i + 1));
+        }
+        resp = hc.send(NOTHING, "GET", "/port");
+        assertEq(200, resp.status_code);
+        assertEq(port, resp.body, "the client's own request is sent on the connection that it used before");
+    }
+
+    testConcurrent() {
+        HTTPClient hc = client();
+        on_exit hc.disconnect();
+        const int Threads = 8;
+        const int Iterations = 4;
+        Counter done(Threads);
+        Queue errors();
+        Queue results();
+        for (int t = 0; t < Threads; ++t) {
+            background sub (int idx) {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < Iterations; ++i) {
+                        # half of the threads send to the client's own origin, half to the other target
+                        string url = (idx % 2) ? url_b + "/other" : url_a + "/own";
+                        hash<auto> resp = hc.sendUrl(NOTHING, "GET", url);
+                        results.push(resp.status_code == 200 && resp.body == ((idx % 2) ? "/other" : "/own"));
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(get_exception_string(ex));
+                }
+            }(t);
+        }
+        assertEq(0, done.waitForZero(120s), "the threads ended");
+        assertEq(0, errors.size(), errors.size() ? errors.get() : "");
+        int ok;
+        while (results.size()) {
+            if (results.get()) {
+                ++ok;
+            }
+        }
+        assertEq(Threads * Iterations, ok, "every request was answered by its own target");
+        assertFalse(hc.isHttp2Active(), "the client's HTTP/2 state is unchanged");
+        assertFalse(hc.isHttp3Active(), "the client's HTTP/3 state is unchanged");
+    }
+}

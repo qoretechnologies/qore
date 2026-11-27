@@ -7658,7 +7658,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return false;
     }
 
-    if (!self->isValid()) {
+    if (int entry = qore_object_private::checkFastCallEntry(self)) [[unlikely]] {
+        if (entry > 0) {
+            // another thread destroys the object: the regular call path refuses the call while the destructor runs,
+            // as the AST interpreter does (qore_object_private::startCall(), qore#7509)
+            return false;
+        }
         // as the AST interpreter raises it (issue #5784)
         qore_raise_deleted_method_call(xsink, self, method_name, inst->qc, inst->method, inst->variant);
         result = QoreValue();

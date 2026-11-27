@@ -16,7 +16,7 @@
           "message": "Lea y gestione correo electrónico en cualquier servidor IMAP.\n\n- busque en un buzón con criterios del lado del servidor, de modo que solo se transfieran los mensajes coincidentes\n- recupere un mensaje completo, o una única parte MIME cuando solo se necesita un adjunto\n- reaccione al nuevo correo a medida que llega, utilizando server push donde el servidor lo soporte\n- cambie indicadores, mueva mensajes entre buzones y archive mensajes con `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) es el protocolo de buzón estándar y, para muchos proveedores de correo electrónico, es el único acceso programático que ofrecen. Debido a que los mensajes permanecen en el servidor, una integración puede monitorizar un buzón y actuar sobre lo que llega sin apropiarse del correo de la cuenta.\n\nSe admite tanto la autenticación por contraseña como mediante token de portador OAuth2; el mecanismo se elige a partir de lo que publica el servidor"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Buscar mensajes"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Abrir el buzón con `EXAMINE` en lugar de `SELECT`, para que recuperar mensajes no pueda cambiar ningún flag"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Recuperar un mensaje"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Establezca la marca `\\Seen` en el mensaje después de recuperarlo.\n\nLa recuperación en sí nunca cambia las marcas, así que deje esto en `False` para inspeccionar un mensaje sin que el cliente de correo del remitente lo muestre como leído"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Recuperar un archivo adjunto"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "El especificador de parte MIME que se recuperará (ej.: `1`, `2.1`, `HEADER`, `TEXT`).\n\nRecuperar una sola parte evita transferir todo el mensaje, lo cual es útil cuando se necesita un archivo adjunto de un mensaje con varios de gran tamaño"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Listar buzones"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Listar solo los buzones a los que la cuenta está suscrita, usando `LSUB` en lugar de `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Cambiar flags de mensajes"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Reemplazar todos los flags de los mensajes con los flags especificados"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Mover mensajes"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Copiar los mensajes en lugar de moverlos, dejando los originales en su lugar"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Almacenar un mensaje"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "La hora de llegada que se registrará para el mensaje; por defecto es la hora en que el servidor lo almacena"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nuevo correo electrónico"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Marcar cada mensaje reportado con `\\Deleted` y purgarlo una vez que su evento haya sido generado.\n\n**Esto elimina el correo del servidor permanentemente**; prefiera `mark_seen` o mover a otro buzón a menos que el buzón sea una cola destinada a vaciarse.\n\nEl mensaje se purga tan pronto como su evento ha sido **generado**, lo cual no equivale a que el consumidor lo haya **procesado**. Si la generación del evento lanza una excepción, el mensaje permanece en su lugar para la siguiente pasada, pero un consumidor que recibe el evento y luego falla, agota el tiempo de espera o se reinicia durante el procesamiento ya habrá perdido la única copia. Para cargas de trabajo que no deban perder el mensaje de origen, deje esta opción sin marcar y actúe desde el consumidor una vez que el procesamiento haya finalizado con éxito: cada evento incluye su `uid`, y las acciones `set-flags` y `move-messages` lo aceptan"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nuevos archivos adjuntos de correo electrónico"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

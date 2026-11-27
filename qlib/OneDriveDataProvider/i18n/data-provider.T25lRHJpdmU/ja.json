@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
+          "source": "Get drive info",
           "message": "ドライブ情報を取得"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -352,7 +352,7 @@
           "message": "ストレージクォータ、ドライブタイプ、所有者情報を含む現在のユーザーのOneDriveメタデータを取得します"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "品目を検索"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -412,7 +412,7 @@
           "message": "結果の並べ替え順序 (例: `name asc`、`size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "アイテムの取得"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
@@ -448,7 +448,7 @@
           "message": "ドライブのルートからのアイテムの相対パス (例: `/Documents/file.txt`)。`id` または `path` のいずれかを指定してください"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "フォルダを作成"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "ファイルをアップロード"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "親フォルダーのID。省略した場合、ファイルはドライブのルートにアップロードされます"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "アップロードセッションを作成"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "ファイルのダウンロード"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -784,7 +784,7 @@
           "message": "ダウンロードするファイルの一意の識別子"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "アイテムの削除"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -808,7 +808,7 @@
           "message": "削除するアイテムの一意の識別子"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "アイテムを更新"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -868,7 +868,7 @@
           "message": "アイテムの移動先フォルダーのID。アイテムを別のフォルダーに移動するにはこれを設定します"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
+          "source": "Copy item",
           "message": "アイテムをコピー"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
@@ -964,7 +964,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "共有リンクを作成"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "共有リンクの有効期限の日時"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "ファイルまたはフォルダーの変更"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

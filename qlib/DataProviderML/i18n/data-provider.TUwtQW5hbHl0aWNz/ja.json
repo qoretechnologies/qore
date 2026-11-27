@@ -16,7 +16,7 @@
           "message": "不正検出、売上予測、顧客セグメンテーション、複雑なデータの簡素化を、外部依存関係なしにすべてデータパイプライン内で実行します。異常検出（異常なトランザクションやセンサー障害のフラグ付け）、クラスタリング（顧客セグメントや地理的ホットスポットの発見）、予測（季節パターンを考慮した収益予測）、回帰（特徴量からの価格推定）、次元削減（50 フィールドを 3 つの主要な値に圧縮）が含まれます。"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
+          "source": "Detect unusual data points",
           "message": "異常なデータポイントの検知"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "レコードを異常としてフラグ付けするタイミングを決定する `0.0` から `1.0` までの値。このしきい値以上のスコアを持つレコードが異常として分類されます。値が小さいほど多くのレコードが異常としてフラグ付けされ、値が大きいほど少なくなります。\n\n**一般的な値**: `0.5`（標準）、`0.6`～`0.7`（控えめ — 明らかな異常のみ）。デフォルト: `0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
+          "source": "Find natural groups in data",
           "message": "データ内の自然なグループを検出"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
@@ -184,7 +184,7 @@
           "message": "大きさではなくデータポイント間の角度を測定します。値の大きさよりも方向が重要な場合に最適です"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
+          "source": "Divide data into groups",
           "message": "データをグループに分割"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
@@ -288,7 +288,7 @@
           "message": "`output_mode` が `dataframe` の場合、各クラスタセントロイドの `centroid_distance_<n>` 列を含めます。後続のステップで決定された `cluster` と最も近い `distance` の値のみが必要な場合は、これを無効にします。デフォルト: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
+          "source": "Simplify complex data",
           "message": "複雑なデータの簡素化"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
@@ -380,7 +380,7 @@
           "message": "`output_mode` が `dataframe` の場合、`component_<n>` 列とともに元の入力フィールドを含めます。後続のステップで主成分のみが必要な場合はこれを無効にして、出力サイズを削減しスループットを向上させます。デフォルト: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
+          "source": "Forecast future values",
           "message": "将来の値を予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
@@ -528,7 +528,7 @@
           "message": "長期予測でトレンドがどれだけ急速に平坦化するかを制御する`0.0`から`1.0`の間の値。`1.0`に近い値ほどトレンドが長く持続し、`0.0`に近い値ほどトレンドが素早く平坦化します。減衰トレンドが有効な場合のみ使用されます。\n\n**標準値**: `0.8`–`0.98` (一般的な範囲)。アルゴリズムに自動選択させる場合は未設定のままにしてください"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
+          "source": "Predict values from input data",
           "message": "入力データから値を予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
@@ -600,7 +600,7 @@
           "message": "有効にすると、適合前に入力フィールドが同様の範囲を持つようにスケーリングされます。これにより、入力フィールドの単位や規模が大きく異なる場合（例: 床面積と部屋数を混在させる場合）に精度が向上する可能性があります。デフォルト: `False`（無効）"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
+          "source": "Detect local outliers",
           "message": "ローカル外れ値の検出"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
@@ -660,7 +660,7 @@
           "message": "外れ値スコアのカットオフ。`1.0` のスコアは、ポイントが近傍と同じ密度を持っていることを意味します（正常）。`1.0` を大幅に上回るスコアは、ポイントが近傍よりも密度の低い領域にあることを示します（異常）。しきい値を低くすると、より多くのレコードがフラグ付けされます。\n\n**一般的な値**: `1.5`（標準 — 中程度の外れ値を捕捉）、`2.0`（控えめ — 強い外れ値のみ）。デフォルト: `1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
+          "source": "Group data with probabilities",
           "message": "確率に基づいてデータをグループ化"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
@@ -736,7 +736,7 @@
           "message": "クラスタは軸に平行な楕円になります。データが限られている場合に高速かつ安定しますが、フィールド間の相関関係は捉えられません"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
+          "source": "Run pre-trained model",
           "message": "事前学習済みモデルの実行"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
@@ -968,7 +968,7 @@
           "message": "`output_mode` が `columns` または `dataframe` の場合、ONNX 出力列と共にもとの入力特徴量列を含めます。下流のステップでモデル出力のみが必要な場合はこれを無効にして、出力サイズを削減しスループットを向上させます。デフォルト: `False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
+          "source": "Run registered model",
           "message": "登録済みモデルの実行"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "`causal-lm` 実行のためにモデルレジストリから読み込む `tokenizer.json` アーティファクト名（オプション）。パッケージマニフェストがすでにトークナイザーアーティファクトを特定している場合は省略してください。"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
+          "source": "Separate trends and seasonal patterns",
           "message": "トレンドと季節パターンの分離"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "季節変動は全体的な水準に比例してスケールします。データの値が増加するにつれて季節パターンが大きくなる場合に最適です"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
+          "source": "Put all fields on the same scale",
           "message": "すべてのフィールドを同じスケールに統一"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "`output_mode` が `dataframe` の場合、`scaled_<field>` 列とともに元の入力フィールドを含めます。後続のステップでスケーリングされた列のみが必要な場合はこれを無効にして、出力サイズを削減しスループットを向上させます。デフォルト: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
+          "source": "Normalize values to a range",
           "message": "値を範囲に正規化"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "`output_mode` が `dataframe` の場合、`scaled_<field>` 列と並んで元の入力フィールドを含めます。後続のステップで正規化された列のみが必要な場合はこれを無効にして、出力サイズを削減しスループットを向上させます。デフォルト: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
+          "source": "Fill in missing data",
           "message": "欠損データの補完"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "補完方法が「固定値」に設定されている場合にギャップを埋めるために使用する数値。たとえば、ゼロで埋める場合は`0`、センチネル値として使用する場合は`-1`です。他の補完方法を使用している場合は無視されます。デフォルト: `0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
+          "source": "Score your category predictions",
           "message": "カテゴリ予測のスコアリング"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "品質スコアを計算するまでに収集するレコード数。バッチ内のすべてのレコードがまとめて評価されます。\n\n**ヒント**: 有意なスコアを得るには少なくとも `50` を、カテゴリごとの詳細な内訳を得るには `200` 件以上を使用してください"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
+          "source": "Score your number predictions",
           "message": "数値予測のスコアリング"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "品質スコアを計算する前に収集するレコード数。バッチ内のすべてのレコードがまとめて評価されます。\n\n**ヒント**: 有意なスコアを得るには少なくとも `30` 件、安定した評価には `200` 件以上を使用してください"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
+          "source": "Score your data groupings",
           "message": "データグループ化のスコアリング"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "品質スコアを計算する前に収集するレコード数。バッチ内のすべてのレコードがまとめて評価されます。バッチには少なくとも2つの異なるグループが含まれている必要があります。\n\n**ヒント**: 有意義なスコアを得るには、少なくとも `50` を使用してください"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
+          "source": "Categorize records",
           "message": "レコードの分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "ベースライン定数を含めるかどうか。これはほぼ常に有効にする必要があります — これにより、モデルがデータ内の全体的な傾向を考慮できるようになります（例: ほとんどの申請が承認される場合、ベースラインがそれを捉えます）。\n\nデフォルト: 有効"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
+          "source": "Classify by similarity",
           "message": "類似度で分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "新しいレコードにより類似している近傍レコードほど、予測において大きな影響力を持ちます。非常に類似しているレコードは、多少類似しているレコードよりも重視されます"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
+          "source": "Predict numbers by similarity",
           "message": "類似度で数値を予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "新しいレコードにより類似しているレコードほど、予測値に大きな影響を与えます"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
+          "source": "Classify with decision rules",
           "message": "決定ルールで分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "各分割によって得られる情報量を測定します。わずかによりバランスの取れたツリーが生成される可能性がありますが、計算速度は遅くなります"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
+          "source": "Predict numbers with decision rules",
           "message": "決定ルールで数値を予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "決定ツリーの最大階層数。ツリーが深いほど複雑なパターンを捉えることができますが、一般的なルールを学習する代わりにトレーニングデータを暗記してしまう可能性があります。\n\n**ヒント**: `5`–`15` から始めます。精度が低すぎる場合は増やし、モデルが過学習する場合は減らします\n\nデフォルト: `10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
+          "source": "Classify with multiple decision trees",
           "message": "複数の決定木による分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "各決定木は各分岐で全フィールド数のlog2を考慮します。使用する特徴量が少なくなり、決定木の多様性が高まります"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
+          "source": "Predict numbers with multiple trees",
           "message": "複数の決定木による数値予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "各決定木は各分岐で全フィールド数のlog2を考慮します。使用する特徴量が少なくなり、決定木の多様性が高まります"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
+          "source": "Classify with gradient boosting",
           "message": "勾配ブースティングで分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "各ツリーの最大階層数。勾配ブースティングでは通常、パターンの1つの側面を捉える浅いツリー（スタンプまたは小さなツリー）を使用します。\n\n**ヒント**: 勾配ブースティングでは `2`～`6` が最適です。ツリーが深すぎると過学習のリスクが生じます\n\nデフォルト: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
+          "source": "Predict numbers with gradient boosting",
           "message": "勾配ブースティングで数値を予測"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
@@ -2628,7 +2628,7 @@
           "message": "各ツリーの最大階層数。勾配ブースティングでは通常、パターンの1つの側面を捉える浅いツリーを使用します。\n\n**ヒント**: 勾配ブースティングでは `2`～`6` が最適です。ツリーが深すぎると過学習のリスクが生じます\n\nデフォルト: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
+          "source": "Compute rolling statistics",
           "message": "移動統計の計算"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "現在のウィンドウ内のすべての値の合計。移動収益や合計イベント数などの累積メトリクスの追跡に役立ちます"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
+          "source": "Smooth with moving average",
           "message": "移動平均による平滑化"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "ほぼ平滑化なし — 生の信号に密接に追従し、急激な変化を即座に検出するのに最適"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
+          "source": "Profile data quality",
           "message": "データ品質をプロファイル"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "プロファイルレポートを計算する前に収集するレコード数。バッチ内のすべてのレコードがまとめて分析されます。\n\n**ヒント**: 有意な統計情報を得るには少なくとも `50` を、信頼性の高い外れ値検出には `200` 以上を使用してください"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
+          "source": "Validate record schema",
           "message": "レコードスキーマの検証"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "レコードの検証が失敗したときに VALIDATION-ERROR 例外をスローします。最初の無効なレコードでパイプラインを直ちに停止します"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
+          "source": "Clean up text",
           "message": "テキストのクリーンアップ"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Unicode NFKC 正規化を適用（プレースホルダー、現在はパススルー）"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
+          "source": "Count tokens in text",
           "message": "テキスト内のトークン数をカウント"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "トークン数に特殊トークン（`[CLS]` や `[SEP]` など）を含めるかどうか。モデルが実際に認識するカウントと一致させるには `True` に設定し、生のコンテンツトークン数の場合は `False` に設定します。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
+          "source": "Split text into searchable chunks",
           "message": "テキストを検索可能なチャンクに分割"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "コンテキストを最大限保持するための大きめの重複（チャンク数とストレージは増加）"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
+          "source": "Convert text to search vectors",
           "message": "テキストを検索ベクトルに変換"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
@@ -3736,7 +3736,7 @@
           "message": "レジストリモデルアーティファクトをスコープするための任意のテナント識別子。"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
+          "source": "Extract structured data from text",
           "message": "テキストから構造化データを抽出"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "抽出出力がスキーマ検証に失敗した場合の最大再試行回数。デフォルトは2です。"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
+          "source": "Re-rank search results by relevance",
           "message": "関連性による検索結果の再ランク付け"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "レジストリモデルアーティファクトをスコープするための任意のテナント識別子。"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
+          "source": "Split text at semantic boundaries",
           "message": "意味の境界でテキストを分割"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "レジストリモデルアーティファクトをスコープするための任意のテナント識別子。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
+          "source": "Block unsafe records",
           "message": "安全でないレコードをブロック"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "ガードレールルールの設定リスト。各ルールには以下が含まれます:\n- `type` — ルールタイプ (`pii`、`prompt_injection`、`output_format`、`topic_restriction`)\n- `severity` — `warning`、`high`、または `critical`\n- `params` — ルール固有のパラメーター\n\nいずれかのルールに不合格となったレコードはパイプラインから破棄されます。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
+          "source": "Check and annotate text safety",
           "message": "テキストの安全性を確認および注釈付け"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
@@ -4572,7 +4572,7 @@
           "message": "ガードレールルールの設定リスト。各ルールには以下が含まれます:\n- `type` — ルールタイプ (`pii`、`prompt_injection`、`output_format`、`topic_restriction`)\n- `severity` — `warning`、`high`、または `critical`\n- `params` — ルール固有のパラメーター\n\n各レコードには `_guardrail_passed` (bool) および `_guardrail_violations` (list) が付加されます。PIIの墨消しが設定されている場合、テキストフィールドは墨消しされたバージョンに置き換えられます。"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
+          "source": "Extract text from any document",
           "message": "任意の文書からテキストを抽出"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "PDFページの抽出可能なテキスト文字数がこの値未満の場合、スキャンされたものとして扱われ、OCRが適用されます。デフォルト: `50`。"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
+          "source": "Analyze images with vision AI",
           "message": "Vision AI で画像を分析"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {

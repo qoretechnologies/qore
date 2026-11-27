@@ -49,6 +49,8 @@ string(REPLACE ";" " " QORE_KRB5_CFLAGS_STRING "${QORE_KRB5_CFLAGS}")
 set(CMAKE_REQUIRED_FLAGS ${QORE_KRB5_CFLAGS_STRING})
 set(CMAKE_REQUIRED_LIBRARIES ${QORE_KRB5_LINK_LIBRARIES})
 check_symbol_exists(KRB5_GC_CONSTRAINED_DELEGATION "krb5.h" HAVE_KRB5_GC_CONSTRAINED_DELEGATION)
+# the initiator credentials of code that a sandbox governs name their client keytab (qore#7736)
+check_symbol_exists(gss_acquire_cred_from "gssapi/gssapi_ext.h" HAVE_GSS_ACQUIRE_CRED_FROM)
 check_symbol_exists(gss_acquire_cred_impersonate_name "gssapi/gssapi_ext.h"
     HAVE_GSS_ACQUIRE_CRED_IMPERSONATE_NAME)
 unset(CMAKE_REQUIRED_INCLUDES)

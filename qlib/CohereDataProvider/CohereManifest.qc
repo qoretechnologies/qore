@@ -255,7 +255,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v2/embed",
                 "operation_id": "embedv2",
-                "display_name": "Create Embeddings",
+                "display_name": "Create embeddings",
                 "short_desc": "Embed text, images, or mixed content for search and retrieval",
                 "desc": "Create vectors for semantic search, classification, or clustering. Supply one of `texts`, `images`, or `inputs`, choose the matching `input_type`, and select the numeric `embedding_types` needed by your vector store. Use an Embed v4 model for mixed-content `inputs`.",
                 "groups": (
@@ -385,7 +385,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v2/rerank",
                 "operation_id": "rerankv2",
-                "display_name": "Rerank Documents",
+                "display_name": "Rerank documents",
                 "short_desc": "Rank candidate documents by relevance to a query",
                 "desc": "Improve search results by scoring candidate documents against a query. Use `top_n` to return only the best matches; each result identifies the original document by its `index`.",
                 "groups": (
@@ -425,7 +425,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v1/classify",
                 "operation_id": "classify",
-                "display_name": "Classify Text",
+                "display_name": "Classify text",
                 "short_desc": "Classify text with an existing classification model",
                 "desc": "Legacy classification endpoint, retained for compatibility. **Cohere has retired classification fine-tuning and previously fine-tuned models.** Use Chat with structured output for new classification workflows.",
                 "groups": (
@@ -465,7 +465,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/models",
                 "operation_id": "list-models",
-                "display_name": "List Models",
+                "display_name": "List models",
                 "short_desc": "Find available models and their supported tasks",
                 "desc": "List models available to this account. Filter by `endpoint` to choose a compatible model. Follow `next_page_token` with `page_token` to retrieve subsequent pages.",
                 "groups": (
@@ -512,7 +512,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/models/{model}",
                 "operation_id": "get-model",
-                "display_name": "Get Model",
+                "display_name": "Get model",
                 "short_desc": "Inspect a model and its supported capabilities",
                 "desc": "Retrieve the capabilities, context size, tokenizer URL, and defaults for a selected model.",
                 "groups": (
@@ -533,7 +533,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v1/tokenize",
                 "operation_id": "tokenize",
-                "display_name": "Tokenize Text",
+                "display_name": "Tokenize text",
                 "short_desc": "Convert text to model-specific token IDs",
                 "desc": "Count and inspect tokens before constructing prompts. Token IDs depend on the selected model; use the same model when detokenizing.",
                 "groups": (
@@ -554,7 +554,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v1/detokenize",
                 "operation_id": "detokenize",
-                "display_name": "Detokenize Tokens",
+                "display_name": "Detokenize tokens",
                 "short_desc": "Convert model-specific token IDs back into text",
                 "desc": "Decode token IDs produced for the selected model into text.",
                 "groups": (
@@ -575,7 +575,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v2/parse",
                 "operation_id": "parsev2",
-                "display_name": "Parse Document Image",
+                "display_name": "Parse document image",
                 "short_desc": "Extract structured blocks or Markdown from a document image",
                 "desc": "Extract text, tables, and image regions from a document image. Supply an image URL or data URI in `document.image_url`. Cohere currently accepts images, not PDF files. Choose `output_format` for Markdown or structured blocks.",
                 "groups": (
@@ -615,7 +615,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v2/audio/transcriptions",
                 "operation_id": "create-transcription",
-                "display_name": "Transcribe Audio",
+                "display_name": "Transcribe audio",
                 "short_desc": "Turn recorded speech into text",
                 "desc": "Transcribe audio from a FLAC, MP3, MPEG, MPGA, OGG, or WAV file. Specify the spoken `language` and an audio transcription model.",
                 "groups": (
@@ -698,7 +698,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v1/datasets",
                 "operation_id": "create-dataset",
-                "display_name": "Create Dataset",
+                "display_name": "Create dataset",
                 "short_desc": "Upload data for embedding, batch inference, or fine-tuning",
                 "desc": "Upload a JSONL or CSV dataset for the selected task. `data` contains the file bytes; `eval_data` optionally supplies evaluation data. Check dataset validation before starting a job.",
                 "groups": (
@@ -765,7 +765,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/datasets",
                 "operation_id": "list-datasets",
-                "display_name": "List Datasets",
+                "display_name": "List datasets",
                 "short_desc": "Find datasets by task, validation status, and creation time",
                 "desc": "Find datasets to process or review. Filter by type and validation status, and use `limit` and `offset` for pagination.",
                 "groups": (
@@ -860,7 +860,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/datasets/{id}",
                 "operation_id": "get-dataset",
-                "display_name": "Get Dataset",
+                "display_name": "Get dataset",
                 "short_desc": "Inspect dataset validation and download information",
                 "desc": "Retrieve dataset metadata, validation errors, and available download URLs.",
                 "groups": (
@@ -880,7 +880,7 @@ public class CohereManifest {
                 "method": "DELETE",
                 "path": "/v1/datasets/{id}",
                 "operation_id": "delete-dataset",
-                "display_name": "Delete Dataset",
+                "display_name": "Delete dataset",
                 "short_desc": "Remove a dataset from the account",
                 "desc": "Permanently delete the selected dataset. Download any needed input or output data before deleting it.",
                 "groups": (
@@ -900,7 +900,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/datasets/usage",
                 "operation_id": "get-dataset-usage",
-                "display_name": "Get Dataset Usage",
+                "display_name": "Get dataset usage",
                 "short_desc": "Inspect dataset storage usage",
                 "desc": "Review dataset storage usage before uploading additional data.",
                 "groups": (
@@ -913,7 +913,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v1/embed-jobs",
                 "operation_id": "create-embed-job",
-                "display_name": "Create Embedding Job",
+                "display_name": "Create embedding job",
                 "short_desc": "Generate embeddings for an uploaded dataset",
                 "desc": "Submit an `embed-input` dataset for batch embedding. Select an embedding model and the intended `input_type`. The response contains the `job_id` used to inspect or cancel the job.",
                 "groups": (
@@ -974,7 +974,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/embed-jobs",
                 "operation_id": "list-embed-jobs",
-                "display_name": "List Embedding Jobs",
+                "display_name": "List embedding jobs",
                 "short_desc": "Find submitted embedding jobs",
                 "desc": "List embedding jobs and inspect their current status.",
                 "groups": (
@@ -987,7 +987,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/embed-jobs/{id}",
                 "operation_id": "get-embed-job",
-                "display_name": "Get Embedding Job",
+                "display_name": "Get embedding job",
                 "short_desc": "Inspect an embedding job and its output dataset",
                 "desc": "Retrieve the status of an embedding job and the dataset containing its results.",
                 "groups": (
@@ -1007,7 +1007,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v1/embed-jobs/{id}/cancel",
                 "operation_id": "cancel-embed-job",
-                "display_name": "Cancel Embedding Job",
+                "display_name": "Cancel embedding job",
                 "short_desc": "Cancel an unfinished embedding job",
                 "desc": "Request cancellation of an embedding job that is still running.",
                 "groups": (
@@ -1027,7 +1027,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v2/batches",
                 "operation_id": "CreateBatch",
-                "display_name": "Create Batch",
+                "display_name": "Create batch",
                 "short_desc": "Process a dataset with batch inference",
                 "desc": "Submit a dataset for batch inference with the selected model. Give the batch a recognizable `name` so it can be found later.",
                 "groups": (
@@ -1052,7 +1052,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v2/batches",
                 "operation_id": "ListBatches",
-                "display_name": "List Batches",
+                "display_name": "List batches",
                 "short_desc": "Find batch inference jobs",
                 "desc": "List batch inference jobs. Follow `next_page_token` using `page_token` to retrieve subsequent pages.",
                 "groups": (
@@ -1065,7 +1065,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v2/batches/{id}",
                 "operation_id": "GetBatch",
-                "display_name": "Get Batch",
+                "display_name": "Get batch",
                 "short_desc": "Inspect batch progress and output data",
                 "desc": "Retrieve batch status, record counts, token usage, and the output dataset identifier.",
                 "groups": (
@@ -1085,7 +1085,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v2/batches/{id}:cancel",
                 "operation_id": "CancelBatch",
-                "display_name": "Cancel Batch",
+                "display_name": "Cancel batch",
                 "short_desc": "Cancel an unfinished batch inference job",
                 "desc": "Request cancellation of a batch that is still running.",
                 "groups": (
@@ -1106,7 +1106,7 @@ public class CohereManifest {
                 "mutates_state": False,
                 "path": "/v1/check-api-key",
                 "operation_id": "checkAPIKey",
-                "display_name": "Check API Key",
+                "display_name": "Check API key",
                 "short_desc": "Check whether the connection API key is valid",
                 "desc": "Check the connection's API key without generating content. Inspect the boolean `valid` result; HTTP success alone does not mean that a key is valid. This does not check remaining trial quota.",
                 "groups": (

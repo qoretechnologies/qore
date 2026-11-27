@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "搜尋客戶"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "從 Cin7Core 擷取客戶清單，可選擇依名稱、ID 或修改日期進行篩選。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "建立客戶"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "以逗號分隔的客戶標籤"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -744,7 +744,7 @@
           "message": "要擷取的客戶唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "以逗號分隔的客戶標籤"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
+          "source": "Search suppliers",
           "message": "搜尋供應商"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "從 Cin7Core 擷取供應商清單，並提供選用篩選功能。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "建立供應商"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "以逗號分隔的供應商標籤"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "取得供應商"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "要擷取的供應商唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "更新供應商"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "與此供應商建立關聯的標籤"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "搜尋產品"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "從 Cin7Core 擷取產品清單，可選擇依 SKU、名稱、類別或品牌進行篩選。"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "取得產品"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "要擷取的產品唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
+          "source": "Find product availability",
           "message": "尋找產品可用性"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "檢查跨倉庫位置的產品可用性與庫存水準。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
+          "source": "Search sales",
           "message": "搜尋銷售"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "從 Cin7Core 擷取銷售訂單清單，可選用篩選條件。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
+          "source": "Create sale",
           "message": "建立銷售"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
@@ -2368,7 +2368,7 @@
           "message": "此行總計"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
+          "source": "Get sale",
           "message": "取得銷售"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "要擷取的銷售唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
+          "source": "Update sale",
           "message": "更新銷售"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "此費用的總金額"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
+          "source": "Delete sale",
           "message": "刪除銷貨"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "要刪除/作廢的銷貨唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
+          "source": "Search sale payments",
           "message": "搜尋銷售付款"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "擷取銷貨付款清單。"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
+          "source": "Add sale payment",
           "message": "新增銷售付款"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "記錄付款的帳戶"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
+          "source": "Update sale payment",
           "message": "更新銷售付款"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "付款參考編號或備註"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
+          "source": "Delete sale payment",
           "message": "刪除銷貨付款"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "要刪除的付款唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
+          "source": "Add sale attachment",
           "message": "新增銷售附件"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "以 Base64 字串編碼的檔案內容"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
+          "source": "Delete sale attachment",
           "message": "刪除銷貨附件"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "要刪除的附件唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
+          "source": "Add sale pack",
           "message": "新增銷售包裝"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
@@ -3496,7 +3496,7 @@
           "message": "包裝的倉庫位置"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
+          "source": "Get sale pack",
           "message": "取得銷售包裝"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "用於取得特定包裝記錄的選填任務 ID"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
+          "source": "Add sale shipment",
           "message": "新增銷售出貨"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "要求出貨的日期"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
+          "source": "Find sale fulfilment",
           "message": "尋找銷貨履約"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "搜尋銷貨的履約、揀貨與包裝任務。"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
+          "source": "Find sale invoices",
           "message": "尋找銷貨發票"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "搜尋與銷貨訂單相關聯的發票。"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
+          "source": "Find sale credit notes",
           "message": "尋找銷貨貸項通知單"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "搜尋與銷貨訂單相關聯的貸項通知單。"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
+          "source": "Search stock adjustments",
           "message": "搜尋庫存調整"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "從 Cin7Core 擷取庫存調整清單。"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "建立庫存調整"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "調整項的單位成本"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "取得庫存調整"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "要擷取的庫存調整唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "更新庫存調整"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4180,7 +4180,7 @@
           "message": "調整狀態（Draft、Authorized、Void）"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "刪除庫存調整"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "要刪除/作廢的庫存調整唯一識別碼 (GUID)"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
+          "source": "Find assemblies",
           "message": "尋找組裝"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "搜尋組裝與製成品任務。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新付款"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "透過輪詢偵測到銷貨上有新付款時觸發。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
+          "source": "New sale credit note authorized",
           "message": "新銷貨貸項通知單已核准"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "透過輪詢偵測到新銷貨貸項通知單已核准時觸發。"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
+          "source": "New sale invoice authorized",
           "message": "新銷貨發票已核准"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
@@ -4252,7 +4252,7 @@
           "message": "透過輪詢偵測到新銷貨發票已核准時觸發。"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
+          "source": "Sale tracking changed",
           "message": "銷貨追蹤已變更"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "透過輪詢偵測到銷貨追蹤或貨運資訊變更時觸發。"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
+          "source": "Sale voided",
           "message": "銷貨已作廢"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
@@ -4276,7 +4276,7 @@
           "message": "透過輪詢偵測到銷貨訂單作廢時觸發。"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
+          "source": "Stock level update",
           "message": "庫存水準更新"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "透過輪詢在產品庫存/存貨水準變更時觸發。"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "客戶已更新"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4300,7 +4300,7 @@
           "message": "透過輪詢在建立或修改客戶時觸發。"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
+          "source": "Supplier updated",
           "message": "供應商已更新"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {

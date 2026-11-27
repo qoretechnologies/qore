@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "Crear un cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -436,7 +436,7 @@
           "message": "ID del grupo de clientes a asignar"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "Actualizar un cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -544,7 +544,7 @@
           "message": "ID del grupo de clientes a asignar"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "Eliminar un cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -568,7 +568,7 @@
           "message": "El ID del cliente a eliminar"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "Obtener un cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -592,7 +592,7 @@
           "message": "El ID del cliente a recuperar"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Buscar clientes"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Ordenar por fecha de modificación descendente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create a Customer Address",
+          "source": "Create a customer address",
           "message": "Crear una dirección de cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Dirección comercial"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.display_name": {
-          "source": "Search Customer Addresses",
+          "source": "Search customer addresses",
           "message": "Buscar direcciones de clientes"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Número de página"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update a Customer Address",
+          "source": "Update a customer address",
           "message": "Actualizar una dirección de cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Dirección comercial"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete a Customer Address",
+          "source": "Delete a customer address",
           "message": "Eliminar una dirección de cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "El ID de la dirección de cliente a eliminar"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "Crear un producto"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1352,7 +1352,7 @@
           "message": "Precio de oferta (anula el precio cuando se establece)"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "Actualizar un producto"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Precio de oferta (anula el precio cuando se establece)"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
+          "source": "Delete a product",
           "message": "Eliminar un producto"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "El ID del producto a eliminar"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Obtener un producto"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "El ID del producto a recuperar"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Buscar productos"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "Orden descendente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Create a Blog Post",
+          "source": "Create a blog post",
           "message": "Crear una publicación de blog"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "Meta palabras clave SEO"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.display_name": {
-          "source": "Get a Blog Post",
+          "source": "Get a blog post",
           "message": "Obtener una publicación de blog"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "El ID de la publicación de blog a recuperar"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Update a Blog Post",
+          "source": "Update a blog post",
           "message": "Actualizar una entrada de blog"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Meta palabras clave SEO"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Delete a Blog Post",
+          "source": "Delete a blog post",
           "message": "Eliminar una publicación de blog"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "El ID de la publicación de blog a eliminar"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.display_name": {
-          "source": "Search Blog Posts",
+          "source": "Search blog posts",
           "message": "Buscar publicaciones de blog"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Número de página"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Obtener un pedido"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "El ID del pedido a recuperar"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "Actualizar un pedido"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "Objeto de dirección de facturación para el pedido"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
+          "source": "Search orders",
           "message": "Buscar pedidos"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Número de página"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create a Shipment",
+          "source": "Create a shipment",
           "message": "Crear un envío"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Comentarios sobre el envío"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get a Shipment",
+          "source": "Get a shipment",
           "message": "Obtener un envío"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "El ID del envío a recuperar"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.display_name": {
-          "source": "Update a Shipment",
+          "source": "Update a shipment",
           "message": "Actualizar un envío"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "Array de artículos en el envío con `order_product_id` y `quantity`"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.display_name": {
-          "source": "Delete a Shipment",
+          "source": "Delete a shipment",
           "message": "Eliminar un envío"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.short_desc": {
@@ -2876,7 +2876,7 @@
           "message": "El ID del envío a eliminar"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "Buscar envíos"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Número de página"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.display_name": {
-          "source": "Watch Abandoned Cart",
+          "source": "Watch abandoned cart",
           "message": "Supervisar carrito abandonado"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.display_name": {
-          "source": "Watch New Cart",
+          "source": "Watch new cart",
           "message": "Supervisar nuevo carrito"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Customer",
+          "source": "Watch new customer",
           "message": "Supervisar nuevo cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.display_name": {
-          "source": "Watch New Customer Address",
+          "source": "Watch new customer address",
           "message": "Supervisar nueva dirección de cliente"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.short_desc": {
@@ -3008,7 +3008,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Order",
+          "source": "Watch new order",
           "message": "Supervisar nuevo pedido"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3032,7 +3032,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Watch New Product",
+          "source": "Watch new product",
           "message": "Supervisar nuevo producto"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Watch New Shipment",
+          "source": "Watch new shipment",
           "message": "Supervisar nuevo envío"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Customer",
+          "source": "Watch updated customer",
           "message": "Supervisar cliente actualizado"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.display_name": {
-          "source": "Watch Updated Customer Address",
+          "source": "Watch updated customer address",
           "message": "Supervisar dirección de cliente actualizada"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Order",
+          "source": "Watch updated order",
           "message": "Supervisar pedido actualizado"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Watch Updated Order Status",
+          "source": "Watch updated order status",
           "message": "Supervisar estado de pedido actualizado"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.short_desc": {

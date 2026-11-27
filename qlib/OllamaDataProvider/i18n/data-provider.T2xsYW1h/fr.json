@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Complétion de chat"
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Table de hachage qui impose une structure de réponse spécifique, par ex. `{type: \"json_object\"}` ou `{type: \"json_schema\", schema: {...}}`."
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Créer des plongements"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -596,7 +596,7 @@
           "message": "Chaîne de durée contrôlant la durée pendant laquelle Ollama conserve le modèle chargé en mémoire une fois la requête terminée (par ex. `\"5m\"`, `\"1h\"`, `\"0\"` pour un déchargement immédiat)."
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Installed Models",
+          "source": "List installed models",
           "message": "Lister les modèles installés"
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.short_desc": {

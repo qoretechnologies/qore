@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Czat wielokrotny"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Prosty czat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
+          "source": "Stream chat",
           "message": "Czat strumieniowy"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Wyszukiwanie w sieci"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

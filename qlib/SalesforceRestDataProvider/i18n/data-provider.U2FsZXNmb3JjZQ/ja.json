@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "レコードを作成"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Salesforce テーブル（「sobject」とも呼ばれます）の名前（例: `Account`）"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "単一レコードの検索"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Salesforce テーブル（「sobject」とも呼ばれます）の名前（例: `Account`）"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "一致するレコードを検索"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Salesforce テーブル（「sobject」とも呼ばれます）の名前（例: `Account`）"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Salesforce テーブル（「sobject」とも呼ばれます）の名前（例: `Account`）"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "レコードのアップサート"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Salesforce テーブル（「sobject」とも呼ばれます）の名前（例: `Account`）"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "レコードを削除"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {

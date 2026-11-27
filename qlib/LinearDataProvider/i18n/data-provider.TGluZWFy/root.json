@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
-          "message": "Create Issue"
+          "source": "Create issue",
+          "message": "Create issue"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
           "source": "Create a new issue in Linear",
@@ -524,8 +524,8 @@
           "message": "The parent issue for creating a sub-issue"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
-          "message": "Search Issues"
+          "source": "Search issues",
+          "message": "Search issues"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
           "source": "Search for issues in Linear",
@@ -640,8 +640,8 @@
           "message": "Maximum number of results to return"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
-          "message": "Get Issue"
+          "source": "Get issue",
+          "message": "Get issue"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
           "source": "Get a specific issue from Linear",
@@ -664,8 +664,8 @@
           "message": "The issue to retrieve"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
-          "message": "Update Issue"
+          "source": "Update issue",
+          "message": "Update issue"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
           "source": "Update an existing Linear issue",
@@ -848,8 +848,8 @@
           "message": "The parent issue ID (to make this a sub-issue)"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
-          "message": "Archive Issue"
+          "source": "Archive issue",
+          "message": "Archive issue"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
           "source": "Archive a Linear issue",
@@ -872,8 +872,8 @@
           "message": "The issue to archive"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
-          "message": "Create Comment"
+          "source": "Create comment",
+          "message": "Create comment"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
           "source": "Add a comment to a Linear issue",
@@ -908,8 +908,8 @@
           "message": "The body/content of the comment in markdown format"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
-          "message": "Create Project"
+          "source": "Create project",
+          "message": "Create project"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
           "source": "Create a new project in Linear",
@@ -1044,8 +1044,8 @@
           "message": "The target completion date of the project"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
-          "message": "Search Projects"
+          "source": "Search projects",
+          "message": "Search projects"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
           "source": "Search for projects in Linear",
@@ -1120,8 +1120,8 @@
           "message": "Maximum number of results to return"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
-          "message": "Create Cycle"
+          "source": "Create cycle",
+          "message": "Create cycle"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
           "source": "Create a new cycle (sprint) in Linear",
@@ -1180,8 +1180,8 @@
           "message": "The end date of the cycle"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
-          "message": "Search Cycles"
+          "source": "Search cycles",
+          "message": "Search cycles"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
           "source": "Search for cycles in Linear",
@@ -1216,8 +1216,8 @@
           "message": "Maximum number of results to return"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
-          "message": "Create Label"
+          "source": "Create label",
+          "message": "Create label"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
           "source": "Create a new label in Linear",
@@ -1276,8 +1276,8 @@
           "message": "The team to create the label in (leave empty for workspace labels)"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
-          "message": "Search Labels"
+          "source": "Search labels",
+          "message": "Search labels"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
           "source": "Search for labels in Linear",
@@ -1312,8 +1312,8 @@
           "message": "Maximum number of results to return"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
-          "message": "Search Teams"
+          "source": "Search teams",
+          "message": "Search teams"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
           "source": "List teams in Linear",
@@ -1336,8 +1336,8 @@
           "message": "Maximum number of results to return"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
-          "message": "Get Team"
+          "source": "Get team",
+          "message": "Get team"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
           "source": "Get a specific team from Linear",
@@ -1360,8 +1360,8 @@
           "message": "The team to retrieve"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
-          "message": "Issue Created"
+          "source": "Issue created",
+          "message": "Issue created"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new issue is created",
@@ -1384,8 +1384,8 @@
           "message": "Only trigger for issues created in this team (optional)"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
-          "message": "Issue Updated"
+          "source": "Issue updated",
+          "message": "Issue updated"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
           "source": "Trigger when an issue is updated",
@@ -1408,8 +1408,8 @@
           "message": "Only trigger for issues updated in this team (optional)"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
-          "message": "Comment Created"
+          "source": "Comment created",
+          "message": "Comment created"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new comment is created",

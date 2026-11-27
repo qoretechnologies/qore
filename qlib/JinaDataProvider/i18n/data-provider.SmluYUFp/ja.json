@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "埋め込みを作成"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "出力ベクトルのサイズです。対応範囲は選択した `model` によって決まります。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "埋め込みタイプ"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "`true`の場合、エラーを返さずにモデルの最大トークン制限を超える入力を切り詰めます。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "Late Chunking"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "`True` にすると、分割前に入力を単一のシーケンスとして処理し、チャンク間の文脈を保持します。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "マルチベクトルを返す"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "`true`の場合、トークンごとに1つの埋め込みを返します。`dimensions`と併用できません。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "トークン化された入力を返す"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "`true`の場合、マルチベクトル埋め込みとともにトークンを返します。`return_multivector=true`が必要です。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "入力タイプ"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "ドキュメント"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "ドキュメントの再ランク付け"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "URLまたはbase64エンコードされた文字列としての画像。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Top N"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "返す上位結果の件数です。未指定の場合はすべての文書を返します。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "ドキュメントを返す"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "`True`（既定値）にすると、各結果に文書の内容が含まれます。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "最大ドキュメント長"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "ドキュメントあたりの最大トークン数 (1-8192)。モデルのデフォルト (jina-reranker-v3 の場合は 2048、jina-reranker-v3.5 の場合は 8192) を使用するには省略します。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "埋め込みを返す"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "`true`の場合、関連性スコアとともにドキュメント埋め込みを返します。"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "コンテンツの分類"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "候補ラベル：最大512個のラベルのリスト、または最大64個のラベルを持つ8グループまでの辞書。"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "分類器のトレーニングまたは更新"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "パブリック"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "反復回数"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "トレーニングプロセスの反復回数"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "分類器を一覧表示"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "保存された分類器を再利用または削除します。**サービスの可用性:** Jina は2026年9月7日の検証中にこのエンドポイントでHTTP 500を返しました。分類器IDは引き続き直接指定できます。"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "分類器を削除"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "削除する保存済み分類器。"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "モデルのリスト"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "埋め込みまたは再ランキングモデルを選択する前に、モデルの機能を比較してください。カタログは公開されています。接続pingを使用してAPIキーを確認してください。"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "モデルの取得"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "機能と価格を取得するモデル。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "バッチ埋め込みを作成"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "`true`の場合（デフォルト）、埋め込みはL2正規化され、単位長になります。"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "バッチステータスを取得"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "検査またはキャンセルする埋め込みバッチ。"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "バッチをキャンセル"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "検査またはキャンセルする埋め込みバッチ。"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "バッチの一覧"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "返却する最新バッチの最大数。"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Webページまたはドキュメントを読み込む"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "ショートカット"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "ウェブを検索"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "結果にサイトアイコンを含める。"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "テキストをセグメント化"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "この数の末尾トークンのみを返します。"
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "ビジョンモデルとチャット"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "応答のバリエーションを制御するサンプリング温度。"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "ディープサーチ"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "これらのドメインからのみソースを読み込む"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "バッチ出力をダウンロード"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "ダウンロードするJSONL結果またはエラーの完了済みバッチ。"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "バッチエラーをダウンロード"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

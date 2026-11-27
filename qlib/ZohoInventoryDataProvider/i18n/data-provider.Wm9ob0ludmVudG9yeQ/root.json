@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "Search Contacts",
-          "message": "Search Contacts"
+          "source": "Search contacts",
+          "message": "Search contacts"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "Search and list contacts",
@@ -416,8 +416,8 @@
           "message": "Vendor contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
-          "message": "Create Contact"
+          "source": "Create contact",
+          "message": "Create contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -504,8 +504,8 @@
           "message": "Notes about the contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get contact details",
@@ -532,8 +532,8 @@
           "message": "The contact to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -620,8 +620,8 @@
           "message": "Notes about the contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -648,8 +648,8 @@
           "message": "The contact to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
-          "source": "Mark Contact Active/Inactive",
-          "message": "Mark Contact Active/Inactive"
+          "source": "Mark contact active/inactive",
+          "message": "Mark contact active/inactive"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
           "source": "Mark a contact as active or inactive",
@@ -688,8 +688,8 @@
           "message": "`True` to mark active, `False` to mark inactive"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
-          "source": "List Contact Persons",
-          "message": "List Contact Persons"
+          "source": "List contact persons",
+          "message": "List contact persons"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
           "source": "List contact persons for a contact",
@@ -716,8 +716,8 @@
           "message": "The parent contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Create Contact Person",
-          "message": "Create Contact Person"
+          "source": "Create contact person",
+          "message": "Create contact person"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
           "source": "Create a new contact person",
@@ -784,8 +784,8 @@
           "message": "Job title or designation"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Get Contact Person",
-          "message": "Get Contact Person"
+          "source": "Get contact person",
+          "message": "Get contact person"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
           "source": "Get contact person details",
@@ -812,8 +812,8 @@
           "message": "The contact person to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Update Contact Person",
-          "message": "Update Contact Person"
+          "source": "Update contact person",
+          "message": "Update contact person"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
           "source": "Update an existing contact person",
@@ -880,8 +880,8 @@
           "message": "Job title or designation"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Delete Contact Person",
-          "message": "Delete Contact Person"
+          "source": "Delete contact person",
+          "message": "Delete contact person"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
           "source": "Delete a contact person",
@@ -908,8 +908,8 @@
           "message": "The contact person to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
-          "source": "Mark Contact Person Primary",
-          "message": "Mark Contact Person Primary"
+          "source": "Mark contact person primary",
+          "message": "Mark contact person primary"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
           "source": "Mark a contact person as primary",
@@ -936,8 +936,8 @@
           "message": "The contact person to mark as primary"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
-          "message": "List Items"
+          "source": "List items",
+          "message": "List items"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
           "source": "List and search items",
@@ -996,8 +996,8 @@
           "message": "Sales and purchase items"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
-          "message": "Create Item"
+          "source": "Create item",
+          "message": "Create item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
           "source": "Create a new item",
@@ -1116,8 +1116,8 @@
           "message": "Inventory account"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
-          "message": "Get Item"
+          "source": "Get item",
+          "message": "Get item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
           "source": "Get item details",
@@ -1144,8 +1144,8 @@
           "message": "The item to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
-          "message": "Update Item"
+          "source": "Update item",
+          "message": "Update item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
           "source": "Update an existing item",
@@ -1220,8 +1220,8 @@
           "message": "Cost price of the item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
-          "source": "Mark Item Active/Inactive",
-          "message": "Mark Item Active/Inactive"
+          "source": "Mark item active/inactive",
+          "message": "Mark item active/inactive"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
           "source": "Mark an item as active or inactive",
@@ -1256,8 +1256,8 @@
           "message": "Active status"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
-          "message": "Delete Item"
+          "source": "Delete item",
+          "message": "Delete item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
           "source": "Delete an item",
@@ -1284,8 +1284,8 @@
           "message": "The item to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
-          "source": "List Item Groups",
-          "message": "List Item Groups"
+          "source": "List item groups",
+          "message": "List item groups"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
           "source": "List and search item groups",
@@ -1312,8 +1312,8 @@
           "message": "Filter by group name"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Create Item Group",
-          "message": "Create Item Group"
+          "source": "Create item group",
+          "message": "Create item group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
           "source": "Create a new item group",
@@ -1384,8 +1384,8 @@
           "message": "List of items in the group with attributes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Get Item Group",
-          "message": "Get Item Group"
+          "source": "Get item group",
+          "message": "Get item group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
           "source": "Get item group details",
@@ -1412,8 +1412,8 @@
           "message": "The item group to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Update Item Group",
-          "message": "Update Item Group"
+          "source": "Update item group",
+          "message": "Update item group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
           "source": "Update an existing item group",
@@ -1488,8 +1488,8 @@
           "message": "Items in the group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Delete Item Group",
-          "message": "Delete Item Group"
+          "source": "Delete item group",
+          "message": "Delete item group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
           "source": "Delete an item group",
@@ -1516,8 +1516,8 @@
           "message": "The item group to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
-          "source": "List Item Adjustments",
-          "message": "List Item Adjustments"
+          "source": "List item adjustments",
+          "message": "List item adjustments"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
           "source": "List inventory adjustments",
@@ -1536,8 +1536,8 @@
           "message": "Zoho Inventory organization"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Create Item Adjustment",
-          "message": "Create Item Adjustment"
+          "source": "Create item adjustment",
+          "message": "Create item adjustment"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
           "source": "Create a new inventory adjustment",
@@ -1620,8 +1620,8 @@
           "message": "Reference number for the adjustment"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Get Item Adjustment",
-          "message": "Get Item Adjustment"
+          "source": "Get item adjustment",
+          "message": "Get item adjustment"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
           "source": "Get inventory adjustment details",
@@ -1648,8 +1648,8 @@
           "message": "The inventory adjustment to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Delete Item Adjustment",
-          "message": "Delete Item Adjustment"
+          "source": "Delete item adjustment",
+          "message": "Delete item adjustment"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
           "source": "Delete an inventory adjustment",
@@ -1676,8 +1676,8 @@
           "message": "The inventory adjustment to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
-          "message": "List Packages"
+          "source": "List packages",
+          "message": "List packages"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
           "source": "List packages",
@@ -1712,8 +1712,8 @@
           "message": "Filter by package number"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
-          "source": "Create Package",
-          "message": "Create Package"
+          "source": "Create package",
+          "message": "Create package"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
           "source": "Create a new package",
@@ -1776,8 +1776,8 @@
           "message": "Custom package number"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
-          "source": "Get Package",
-          "message": "Get Package"
+          "source": "Get package",
+          "message": "Get package"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
           "source": "Get package details",
@@ -1804,8 +1804,8 @@
           "message": "The package to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
-          "source": "Update Package",
-          "message": "Update Package"
+          "source": "Update package",
+          "message": "Update package"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
           "source": "Update an existing package",
@@ -1856,8 +1856,8 @@
           "message": "Package notes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
-          "source": "Delete Package",
-          "message": "Delete Package"
+          "source": "Delete package",
+          "message": "Delete package"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
           "source": "Delete a package",
@@ -1884,8 +1884,8 @@
           "message": "The package to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
-          "message": "List Purchase Orders"
+          "source": "List purchase orders",
+          "message": "List purchase orders"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
           "source": "List and search purchase orders",
@@ -1940,8 +1940,8 @@
           "message": "Billed purchase orders"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
-          "message": "Create Purchase Order"
+          "source": "Create purchase order",
+          "message": "Create purchase order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Create a new purchase order",
@@ -2016,8 +2016,8 @@
           "message": "Purchase order notes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
-          "message": "Get Purchase Order"
+          "source": "Get purchase order",
+          "message": "Get purchase order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Get purchase order details",
@@ -2044,8 +2044,8 @@
           "message": "The purchase order to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
-          "message": "Update Purchase Order"
+          "source": "Update purchase order",
+          "message": "Update purchase order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Update an existing purchase order",
@@ -2120,8 +2120,8 @@
           "message": "Purchase order notes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
-          "message": "Delete Purchase Order"
+          "source": "Delete purchase order",
+          "message": "Delete purchase order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Delete a purchase order",
@@ -2148,8 +2148,8 @@
           "message": "The purchase order to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
-          "message": "List Sales Orders"
+          "source": "List sales orders",
+          "message": "List sales orders"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
           "source": "List and search sales orders",
@@ -2200,8 +2200,8 @@
           "message": "Void sales orders"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
-          "message": "Create Sales Order"
+          "source": "Create sales order",
+          "message": "Create sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Create a new sales order",
@@ -2284,8 +2284,8 @@
           "message": "Terms and conditions"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
-          "message": "Get Sales Order"
+          "source": "Get sales order",
+          "message": "Get sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
           "source": "Get sales order details",
@@ -2312,8 +2312,8 @@
           "message": "The sales order to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
-          "message": "Update Sales Order"
+          "source": "Update sales order",
+          "message": "Update sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Update an existing sales order",
@@ -2396,8 +2396,8 @@
           "message": "Terms and conditions"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
-          "message": "Delete Sales Order"
+          "source": "Delete sales order",
+          "message": "Delete sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Delete a sales order",
@@ -2424,8 +2424,8 @@
           "message": "The sales order to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
-          "message": "List Invoices"
+          "source": "List invoices",
+          "message": "List invoices"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
           "source": "List and search invoices",
@@ -2496,8 +2496,8 @@
           "message": "Partially paid invoices"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
-          "message": "Create Invoice"
+          "source": "Create invoice",
+          "message": "Create invoice"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a new invoice",
@@ -2608,8 +2608,8 @@
           "message": "Associated sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
-          "message": "Get Invoice"
+          "source": "Get invoice",
+          "message": "Get invoice"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get invoice details",
@@ -2636,8 +2636,8 @@
           "message": "The invoice to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
-          "message": "Update Invoice"
+          "source": "Update invoice",
+          "message": "Update invoice"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an existing invoice",
@@ -2736,8 +2736,8 @@
           "message": "Reference number"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
-          "message": "Delete Invoice"
+          "source": "Delete invoice",
+          "message": "Delete invoice"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
           "source": "Delete an invoice",
@@ -2764,8 +2764,8 @@
           "message": "The invoice to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
-          "source": "List Shipment Orders",
-          "message": "List Shipment Orders"
+          "source": "List shipment orders",
+          "message": "List shipment orders"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
           "source": "List and search shipment orders",
@@ -2800,8 +2800,8 @@
           "message": "Filter by shipment status"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Create Shipment Order",
-          "message": "Create Shipment Order"
+          "source": "Create shipment order",
+          "message": "Create shipment order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
           "source": "Create a new shipment order",
@@ -2888,8 +2888,8 @@
           "message": "Shipment notes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Get Shipment Order",
-          "message": "Get Shipment Order"
+          "source": "Get shipment order",
+          "message": "Get shipment order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
           "source": "Get shipment order details",
@@ -2916,8 +2916,8 @@
           "message": "The shipment order to retrieve"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Update Shipment Order",
-          "message": "Update Shipment Order"
+          "source": "Update shipment order",
+          "message": "Update shipment order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
           "source": "Update an existing shipment order",
@@ -2992,8 +2992,8 @@
           "message": "Shipment notes"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Delete Shipment Order",
-          "message": "Delete Shipment Order"
+          "source": "Delete shipment order",
+          "message": "Delete shipment order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
           "source": "Delete a shipment order",
@@ -3020,8 +3020,8 @@
           "message": "The shipment order to delete"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
-          "source": "Mark Shipment Delivered",
-          "message": "Mark Shipment Delivered"
+          "source": "Mark shipment delivered",
+          "message": "Mark shipment delivered"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
           "source": "Mark a shipment as delivered",
@@ -3048,8 +3048,8 @@
           "message": "The shipment order to mark as delivered"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",
@@ -3076,8 +3076,8 @@
           "message": "How often to check for new contacts (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
-          "message": "New Invoice"
+          "source": "New invoice",
+          "message": "New invoice"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
           "source": "Trigger when a new invoice is created",
@@ -3104,8 +3104,8 @@
           "message": "How often to check for new invoices (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "New Item Adjustment",
-          "message": "New Item Adjustment"
+          "source": "New item adjustment",
+          "message": "New item adjustment"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
           "source": "Trigger when a new item adjustment is created",
@@ -3132,8 +3132,8 @@
           "message": "How often to check for new item adjustments (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "New Item Group",
-          "message": "New Item Group"
+          "source": "New item group",
+          "message": "New item group"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
           "source": "Trigger when a new item group is created",
@@ -3160,8 +3160,8 @@
           "message": "How often to check for new item groups (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
-          "message": "New Item"
+          "source": "New item",
+          "message": "New item"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
           "source": "Trigger when a new item is created",
@@ -3188,8 +3188,8 @@
           "message": "How often to check for new items (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
-          "source": "New Package",
-          "message": "New Package"
+          "source": "New package",
+          "message": "New package"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
           "source": "Trigger when a new package is created",
@@ -3216,8 +3216,8 @@
           "message": "How often to check for new packages (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "New Purchase Order",
-          "message": "New Purchase Order"
+          "source": "New purchase order",
+          "message": "New purchase order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
           "source": "Trigger when a new purchase order is created",
@@ -3244,8 +3244,8 @@
           "message": "How often to check for new purchase orders (seconds)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
-          "message": "New Sales Order"
+          "source": "New sales order",
+          "message": "New sales order"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
           "source": "Trigger when a new sales order is created",

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
-          "source": "Approve Invoice",
-          "message": "Approve Invoice"
+          "source": "Approve invoice",
+          "message": "Approve invoice"
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
           "source": "Approve an invoice by ID",
@@ -364,8 +364,8 @@
           "message": "The invoice to approve"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer in Wave",
@@ -472,8 +472,8 @@
           "message": "Internal notes about the customer (not visible to the customer)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
-          "message": "Create Product"
+          "source": "Create product",
+          "message": "Create product"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product in Wave",
@@ -532,8 +532,8 @@
           "message": "The unit price of the product or service"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
-          "source": "Create Sales Tax",
-          "message": "Create Sales Tax"
+          "source": "Create sales tax",
+          "message": "Create sales tax"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
           "source": "Create a new sales tax in Wave",
@@ -640,8 +640,8 @@
           "message": "Whether the tax is recoverable (can be claimed back)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
-          "message": "Create Transaction"
+          "source": "Create transaction",
+          "message": "Create transaction"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
           "source": "Create a new transaction in Wave",
@@ -700,8 +700,8 @@
           "message": "The description of the transaction"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
-          "message": "Create Account"
+          "source": "Create account",
+          "message": "Create account"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
           "source": "Create a new account in Wave",
@@ -824,8 +824,8 @@
           "message": "The currency code for the account"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
-          "source": "Create Income/Expense",
-          "message": "Create Income/Expense"
+          "source": "Create income/expense",
+          "message": "Create income/expense"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
           "source": "Create an income or expense entry in Wave",
@@ -912,8 +912,8 @@
           "message": "Expense entry"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
-          "message": "Create Invoice"
+          "source": "Create invoice",
+          "message": "Create invoice"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a new invoice in Wave",
@@ -1072,8 +1072,8 @@
           "message": "The purchase order number associated with the invoice"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer in Wave",
@@ -1096,8 +1096,8 @@
           "message": "The customer to delete"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
-          "message": "Send Invoice"
+          "source": "Send invoice",
+          "message": "Send invoice"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
           "source": "Send an invoice in Wave",
@@ -1120,8 +1120,8 @@
           "message": "The invoice to send"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer in Wave",
@@ -1228,8 +1228,8 @@
           "message": "The new internal notes about the customer"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product in Wave",
@@ -1324,8 +1324,8 @@
           "message": "Optional variables to pass to the GraphQL query"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
-          "message": "Search Customers"
+          "source": "Search customers",
+          "message": "Search customers"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
           "source": "Search for customers in Wave",
@@ -1360,8 +1360,8 @@
           "message": "Maximum number of results to return"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
-          "message": "Search Invoices"
+          "source": "Search invoices",
+          "message": "Search invoices"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
           "source": "Search for invoices in Wave",
@@ -1472,8 +1472,8 @@
           "message": "Maximum number of results to return"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
-          "message": "Search Products"
+          "source": "Search products",
+          "message": "Search products"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
           "source": "Search for products in Wave",
@@ -1508,8 +1508,8 @@
           "message": "Maximum number of results to return"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a specific customer from Wave",
@@ -1544,8 +1544,8 @@
           "message": "The customer to retrieve"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
-          "source": "Get Customer by Email",
-          "message": "Get Customer by Email"
+          "source": "Get customer by email",
+          "message": "Get customer by email"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
           "source": "Get a specific customer by email from Wave",
@@ -1580,8 +1580,8 @@
           "message": "The email address of the customer to retrieve"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "Invoice Created",
-          "message": "Invoice Created"
+          "source": "Invoice created",
+          "message": "Invoice created"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new invoice is created",
@@ -1604,8 +1604,8 @@
           "message": "Only trigger for invoices in this business (optional)"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
-          "message": "Get Invoice"
+          "source": "Get invoice",
+          "message": "Get invoice"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get a specific invoice from Wave",
@@ -1640,8 +1640,8 @@
           "message": "The invoice to retrieve"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a specific product from Wave",
@@ -1676,8 +1676,8 @@
           "message": "The product to retrieve"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
-          "message": "Search Accounts"
+          "source": "Search accounts",
+          "message": "Search accounts"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {
           "source": "Search for accounts in Wave",

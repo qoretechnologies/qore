@@ -506,6 +506,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
 
 #ifdef DEBUG
 int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink) {
+    if (qore_intern_hash_process_key_check(xsink)) {
+        return -1;
+    }
     QoreDatagramDispatcher dispatcher;
     struct sockaddr_storage local_addr = {};
     std::vector<uint8_t> recv_buf(QUIC_RECV_BUF_SIZE);
@@ -645,7 +648,7 @@ static int quic_client_send_packets(QuicSession& session, int fd, QuicPacketBatc
 
     // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
     // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, nullptr, 0);
     ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
         fd, count, static_cast<int>(rc));
@@ -2258,6 +2261,12 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
             errno, strerror(errno));
     }
 
+    // the dispatcher of the socket is created here, where an error can be reported, and not when the first datagram
+    // arrives (qore#7750)
+    if (!sock->priv->socket->priv->getQuicDispatcher(xsink)) {
+        return;
+    }
+
     // Copy sessions from qore_socket_private (from previous poll ops).
     // This is a snapshot: new sessions are added to both sessions_ and the
     // authoritative map; stale entries in sessions_ are harmless because
@@ -2499,7 +2508,7 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 
         // the datagrams not sent are kept by the session for its next write: all sessions share the socket, and
         // each keeps its own, so that none is dropped by another session's write (qore#7414)
-        int count = pkt_batch_.size();
+        [[maybe_unused]] int count = pkt_batch_.size();
         QuicSendResult rc = session->sendPackets(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
@@ -2586,7 +2595,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     // a transient shared_ptr can leave stale CID entries behind, and its
     // destruction may be pending on that other thread — the map miss below is
     // what makes such late packets safe to drop.
-    QoreDatagramDispatcher& dispatcher = sock->priv->socket->priv->getQuicDispatcher();
+    // the constructor created the dispatcher, so this call does not fail
+    QoreDatagramDispatcher* dp = sock->priv->socket->priv->getQuicDispatcher(xsink);
+    if (!dp) {
+        return -1;
+    }
+    QoreDatagramDispatcher& dispatcher = *dp;
     int64_t target_sid = dispatcher.dispatch(recv_buf_, static_cast<size_t>(nread));
 
     // Pin the target session for the whole packet-processing call
@@ -3364,7 +3378,7 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
 static int sendKeepingUnsent(QuicSession& session, int fd, QuicPacketBatch& batch,
         const struct sockaddr_storage& peer_addr, socklen_t peer_addrlen, const struct sockaddr_storage& local_addr,
         socklen_t local_addrlen, ngtcp2_tstamp& next_expiry, const char* op, ExceptionSink* xsink) {
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, reinterpret_cast<const struct sockaddr*>(&peer_addr),
         peer_addrlen, reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
     switch (rc) {
@@ -3439,9 +3453,13 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
 }
 
 int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
+    QoreDatagramDispatcher* dispatcher = sock->priv->socket->priv->getQuicDispatcher(xsink);
+    if (!dispatcher) {
+        return -1;
+    }
     return recvAndDispatchQuicPackets(
         qore_socket_ops(sock->priv->socket).getDescriptor(),
-        sock->priv->socket->priv->getQuicDispatcher(),
+        *dispatcher,
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
 }
@@ -3748,9 +3766,13 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
 }
 
 int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
+    QoreDatagramDispatcher* dispatcher = sock->priv->socket->priv->getQuicDispatcher(xsink);
+    if (!dispatcher) {
+        return -1;
+    }
     return recvAndDispatchQuicPackets(
         qore_socket_ops(sock->priv->socket).getDescriptor(),
-        sock->priv->socket->priv->getQuicDispatcher(),
+        *dispatcher,
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
 }

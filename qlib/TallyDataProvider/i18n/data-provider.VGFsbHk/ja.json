@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create Form",
+          "source": "Create form",
           "message": "フォームを作成"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "一意の提出を強制するために使用されるフィールドキー"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "フォームの取得"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
@@ -1068,7 +1068,7 @@
           "message": "取得するフォームの一意の識別子"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update Form",
+          "source": "Update form",
           "message": "フォームを更新"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "一意の提出を強制するために使用されるフィールドキー"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete Form",
+          "source": "Delete form",
           "message": "フォームを削除"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "削除（ゴミ箱に移動）するフォームの一意の識別子"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
-          "source": "Search Forms",
+          "source": "Search forms",
           "message": "フォームを検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "結果をフィルタリングするためのワークスペースIDのリスト"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "送信を取得"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "取得する送信の一意の識別子"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "送信を削除"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "削除する送信データの一意の識別子"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
-          "source": "Search Submissions",
+          "source": "Search submissions",
           "message": "送信データを検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "特定の送信ID以降の送信データを取得"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
-          "source": "Search Questions",
+          "source": "Search questions",
           "message": "質問を検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "質問を取得するフォームのID"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Webhookを作成"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "外部サブスクライバーのオプションの識別子"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Webhook の更新"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "カスタムHTTPヘッダーの値"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Webhookの削除"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "削除するWebhookの一意の識別子"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
-          "source": "Search Webhooks",
+          "source": "Search webhooks",
           "message": "Webhookを検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "1ページあたりのWebhook数（1〜100、デフォルト `25`）"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search Webhook Events",
+          "source": "Search webhook events",
           "message": "Webhookイベントを検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "ページネーションのページ番号（デフォルト `1`）"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
-          "source": "Retry Webhook Event",
+          "source": "Retry webhook event",
           "message": "Webhookイベントを再試行"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "再試行する失敗したWebhookイベントのID"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create Workspace",
+          "source": "Create workspace",
           "message": "ワークスペースを作成"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "新しいワークスペースの表示名"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "ワークスペースを取得"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "取得するワークスペースの一意の識別子"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace",
+          "source": "Update workspace",
           "message": "ワークスペースを更新"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "ワークスペースの新しい表示名"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete Workspace",
+          "source": "Delete workspace",
           "message": "ワークスペースを削除"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "削除するワークスペースの一意の識別子。ワークスペース内のすべてのフォームも削除されます"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
-          "source": "Search Workspaces",
+          "source": "Search workspaces",
           "message": "ワークスペースを検索"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "ページネーションのページ番号（デフォルト `1`）"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "現在のユーザーを取得"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "現在認証されているユーザーに関する情報を取得します"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
-          "source": "New Form Submission",
+          "source": "New form submission",
           "message": "新しいフォーム送信"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {

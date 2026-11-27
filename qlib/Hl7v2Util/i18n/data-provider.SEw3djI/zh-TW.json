@@ -16,7 +16,7 @@
           "message": "讀取和寫入 [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) 分隔符號醫療保健訊息，以用於整合與轉換工作流程。\n\n**功能**：\n- 保留訊息結構和自訂 `Z` 區段，而無需固定結構描述\n- 從 `MSH` 讀取自訂分隔符號並處理 HL7 逸出序列\n- 透過 DataProvider API 每筆記錄公開一個解析後的區段\n- 將解析後的訊息或簡單區段記錄序列化回 HL7 v2 文字"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "讀取 HL7 v2 訊息"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "將文字依讀取時的樣子保留為輸入編碼，不經檢查"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "讀取 HL7 v2 內嵌資料"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "內嵌 HL7 v2 訊息資料。當訊息已在記憶體中時請使用此選項。"
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "寫入 HL7 v2 訊息"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "寫入已序列化 HL7 v2 訊息的路徑。"
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "載入 HL7 v2 結構描述"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "若為 `True`，則忽略記憶體內的結構描述快取並重新載入結構描述成品。"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "HL7 v2 結構描述摘要"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

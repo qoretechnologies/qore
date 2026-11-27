@@ -16,7 +16,7 @@
           "message": "生成可設定的記錄串流，用於在無需任何外部服務連線的情況下測試資料管線"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "生成記錄"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "用作產生日期欄位之參考點的固定日期/時間值；當與種子 (seed) 一起提供時，可確保日期欄位在多次執行間具備完整的可重現性；若未提供，則使用生成開始時的當前日期/時間"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "從範本產生"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

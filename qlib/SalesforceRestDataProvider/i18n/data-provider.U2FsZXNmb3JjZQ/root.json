@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
-          "message": "Create Record"
+          "source": "Create record",
+          "message": "Create record"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
           "source": "Create a record in Salesforce",
@@ -364,8 +364,8 @@
           "message": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
-          "message": "Find Single Record"
+          "source": "Find single record",
+          "message": "Find single record"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
           "source": "Find a single record in Salesforce",
@@ -388,8 +388,8 @@
           "message": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
-          "message": "Find Matching Records"
+          "source": "Find matching records",
+          "message": "Find matching records"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
           "source": "Find records in Salesforce",
@@ -412,8 +412,8 @@
           "message": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
           "source": "Update records in Salesforce",
@@ -436,8 +436,8 @@
           "message": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
-          "message": "Upsert Records"
+          "source": "Upsert records",
+          "message": "Upsert records"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
           "source": "Upsert records in Salesforce",
@@ -460,8 +460,8 @@
           "message": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {
           "source": "Delete records in Salesforce",

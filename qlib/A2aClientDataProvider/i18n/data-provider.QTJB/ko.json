@@ -16,7 +16,7 @@
           "message": "에이전트 간 협업을 위해 A2A 에이전트에 연결합니다"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Agent Card",
+          "source": "Get agent card",
           "message": "에이전트 카드 가져오기"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
@@ -28,7 +28,7 @@
           "message": "A2A 에이전트의 기능 및 스킬이 포함된 카드를 조회합니다."
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Extended Agent Card",
+          "source": "Get extended agent card",
           "message": "확장 에이전트 카드 가져오기"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
@@ -40,7 +40,7 @@
           "message": "추가 세부 정보가 포함된 인증된 확장 에이전트 카드를 가져옵니다."
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "메시지 전송"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "다중 테넌시 지원을 위한 선택적 테넌트 식별자"
         },
         "app.QTJB.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "작업 가져오기"
         },
         "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
@@ -184,7 +184,7 @@
           "message": "조회할 작업의 고유 식별자"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
-          "source": "Cancel Task",
+          "source": "Cancel task",
           "message": "작업 취소"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
@@ -208,7 +208,7 @@
           "message": "취소할 작업의 고유 식별자"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "작업 목록 조회"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
@@ -256,7 +256,7 @@
           "message": "다음 결과 페이지를 가져오기 위한 선택적 커서"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Set Push Notification Config",
+          "source": "Set push notification config",
           "message": "푸시 알림 구성 설정"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -304,7 +304,7 @@
           "message": "웹훅의 선택적 검증 토큰"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Get Push Notification Config",
+          "source": "Get push notification config",
           "message": "푸시 알림 구성 가져오기"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "푸시 알림 구성을 관리할 작업 ID"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
-          "source": "List Push Notification Configs",
+          "source": "List push notification configs",
           "message": "푸시 알림 구성 목록 조회"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "푸시 알림 구성을 관리할 작업 ID"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Delete Push Notification Config",
+          "source": "Delete push notification config",
           "message": "푸시 알림 구성 삭제"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "삭제할 푸시 알림 구성의 ID"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
-          "source": "Task Status Update",
+          "source": "Task status update",
           "message": "작업 상태 업데이트"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
@@ -400,7 +400,7 @@
           "message": "A2A 작업 상태가 변경될 때 알림을 받습니다"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
-          "source": "Task Artifact Update",
+          "source": "Task artifact update",
           "message": "작업 아티팩트 업데이트"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
@@ -412,7 +412,7 @@
           "message": "A2A 작업 아티팩트가 추가되거나 수정될 때 알림을 받습니다"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
-          "source": "Task Message Update",
+          "source": "Task message update",
           "message": "작업 메시지 업데이트"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {

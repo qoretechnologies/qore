@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
-          "message": "List Accounts"
+          "source": "List accounts",
+          "message": "List accounts"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.short_desc": {
           "source": "List and search email accounts",
@@ -400,8 +400,8 @@
           "message": "Sending Error"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
-          "message": "Create Account"
+          "source": "Create account",
+          "message": "Create account"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
           "source": "Create a new email account",
@@ -488,8 +488,8 @@
           "message": "Active"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
-          "message": "Get Account"
+          "source": "Get account",
+          "message": "Get account"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Get a single account by ID",
@@ -512,8 +512,8 @@
           "message": "The unique account UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.display_name": {
-          "source": "Patch Account",
-          "message": "Patch Account"
+          "source": "Patch account",
+          "message": "Patch account"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.short_desc": {
           "source": "Update an existing account",
@@ -560,8 +560,8 @@
           "message": "The custom tracking domain to configure for this account"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
-          "message": "Delete Account"
+          "source": "Delete account",
+          "message": "Delete account"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
           "source": "Delete an email account",
@@ -584,8 +584,8 @@
           "message": "The unique account UUID to delete"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.display_name": {
-          "source": "Pause Account",
-          "message": "Pause Account"
+          "source": "Pause account",
+          "message": "Pause account"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.short_desc": {
           "source": "Pause an email account",
@@ -608,8 +608,8 @@
           "message": "The unique account UUID to pause"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.display_name": {
-          "source": "Resume Account",
-          "message": "Resume Account"
+          "source": "Resume account",
+          "message": "Resume account"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.short_desc": {
           "source": "Resume a paused account",
@@ -632,8 +632,8 @@
           "message": "The unique account UUID to resume"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.display_name": {
-          "source": "Mark Account Fixed",
-          "message": "Mark Account Fixed"
+          "source": "Mark account fixed",
+          "message": "Mark account fixed"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.short_desc": {
           "source": "Mark an account as fixed",
@@ -656,8 +656,8 @@
           "message": "The unique account UUID to mark as fixed"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.display_name": {
-          "source": "Test Account Vitals",
-          "message": "Test Account Vitals"
+          "source": "Test account vitals",
+          "message": "Test account vitals"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.short_desc": {
           "source": "Test account vitals and health",
@@ -680,8 +680,8 @@
           "message": "The unique account UUID to test vitals for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.display_name": {
-          "source": "Get Warmup Analytics",
-          "message": "Get Warmup Analytics"
+          "source": "Get warmup analytics",
+          "message": "Get warmup analytics"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.short_desc": {
           "source": "Get warmup analytics for an account",
@@ -704,8 +704,8 @@
           "message": "A list of email addresses to get warmup analytics for (1-100 items)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.display_name": {
-          "source": "Get Custom Tracking Domain Status",
-          "message": "Get Custom Tracking Domain Status"
+          "source": "Get custom tracking domain status",
+          "message": "Get custom tracking domain status"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.short_desc": {
           "source": "Get custom tracking domain status",
@@ -728,8 +728,8 @@
           "message": "An optional custom tracking domain to check the status for"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
-          "message": "List Campaigns"
+          "source": "List campaigns",
+          "message": "List campaigns"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
           "source": "List and search campaigns",
@@ -796,8 +796,8 @@
           "message": "Filter campaigns by name"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
-          "message": "Create Campaign"
+          "source": "Create campaign",
+          "message": "Create campaign"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
           "source": "Create a new campaign",
@@ -1016,8 +1016,8 @@
           "message": "If `True`, this variant will not be used for sending; by default all variants are enabled"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
-          "message": "Get Campaign"
+          "source": "Get campaign",
+          "message": "Get campaign"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.short_desc": {
           "source": "Get a single campaign by ID",
@@ -1040,8 +1040,8 @@
           "message": "The unique campaign UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.display_name": {
-          "source": "Patch Campaign",
-          "message": "Patch Campaign"
+          "source": "Patch campaign",
+          "message": "Patch campaign"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.short_desc": {
           "source": "Update an existing campaign",
@@ -1088,8 +1088,8 @@
           "message": "The updated maximum number of emails that can be sent per day"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
-          "message": "Delete Campaign"
+          "source": "Delete campaign",
+          "message": "Delete campaign"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.short_desc": {
           "source": "Delete a campaign",
@@ -1112,8 +1112,8 @@
           "message": "The unique campaign UUID to delete"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.display_name": {
-          "source": "Update Campaign Status",
-          "message": "Update Campaign Status"
+          "source": "Update campaign status",
+          "message": "Update campaign status"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.short_desc": {
           "source": "Update campaign status",
@@ -1168,8 +1168,8 @@
           "message": "Running Subsequences"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.display_name": {
-          "source": "Share Campaign",
-          "message": "Share Campaign"
+          "source": "Share campaign",
+          "message": "Share campaign"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.short_desc": {
           "source": "Share a campaign with team members",
@@ -1192,8 +1192,8 @@
           "message": "The unique campaign UUID to generate a share link for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Analytics",
-          "message": "Get Campaign Analytics"
+          "source": "Get campaign analytics",
+          "message": "Get campaign analytics"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.short_desc": {
           "source": "Get analytics for a campaign",
@@ -1216,8 +1216,8 @@
           "message": "The unique campaign UUID to retrieve analytics for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.display_name": {
-          "source": "Get Campaign Analytics Overview",
-          "message": "Get Campaign Analytics Overview"
+          "source": "Get campaign analytics overview",
+          "message": "Get campaign analytics overview"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.short_desc": {
           "source": "Get campaign analytics overview",
@@ -1240,8 +1240,8 @@
           "message": "The unique campaign UUID to retrieve analytics overview for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Daily Analytics",
-          "message": "Get Campaign Daily Analytics"
+          "source": "Get campaign daily analytics",
+          "message": "Get campaign daily analytics"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.short_desc": {
           "source": "Get daily analytics for a campaign",
@@ -1264,8 +1264,8 @@
           "message": "The unique campaign UUID to retrieve daily analytics for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.display_name": {
-          "source": "Get Campaign Step Analytics",
-          "message": "Get Campaign Step Analytics"
+          "source": "Get campaign step analytics",
+          "message": "Get campaign step analytics"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.short_desc": {
           "source": "Get step-by-step analytics for a campaign",
@@ -1288,8 +1288,8 @@
           "message": "The unique campaign UUID to retrieve step analytics for"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.display_name": {
-          "source": "List Campaign Subsequences",
-          "message": "List Campaign Subsequences"
+          "source": "List campaign subsequences",
+          "message": "List campaign subsequences"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.short_desc": {
           "source": "List and search campaign subsequences",
@@ -1336,8 +1336,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Create Campaign Subsequence",
-          "message": "Create Campaign Subsequence"
+          "source": "Create campaign subsequence",
+          "message": "Create campaign subsequence"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Create a new campaign subsequence",
@@ -1372,8 +1372,8 @@
           "message": "The name of the subsequence to create"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Get Campaign Subsequence",
-          "message": "Get Campaign Subsequence"
+          "source": "Get campaign subsequence",
+          "message": "Get campaign subsequence"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Get a single campaign subsequence by ID",
@@ -1396,8 +1396,8 @@
           "message": "The unique subsequence UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.display_name": {
-          "source": "Patch Campaign Subsequence",
-          "message": "Patch Campaign Subsequence"
+          "source": "Patch campaign subsequence",
+          "message": "Patch campaign subsequence"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.short_desc": {
           "source": "Update an existing campaign subsequence",
@@ -1432,8 +1432,8 @@
           "message": "The updated name for the subsequence"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Delete Campaign Subsequence",
-          "message": "Delete Campaign Subsequence"
+          "source": "Delete campaign subsequence",
+          "message": "Delete campaign subsequence"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Delete a campaign subsequence",
@@ -1456,8 +1456,8 @@
           "message": "The unique subsequence UUID to delete"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.display_name": {
-          "source": "Pause Subsequence",
-          "message": "Pause Subsequence"
+          "source": "Pause subsequence",
+          "message": "Pause subsequence"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.short_desc": {
           "source": "Pause a campaign subsequence",
@@ -1480,8 +1480,8 @@
           "message": "The unique subsequence UUID to pause"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Resume Subsequence",
-          "message": "Resume Subsequence"
+          "source": "Resume subsequence",
+          "message": "Resume subsequence"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Resume a paused subsequence",
@@ -1504,8 +1504,8 @@
           "message": "The unique subsequence UUID to resume"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Duplicate Subsequence",
-          "message": "Duplicate Subsequence"
+          "source": "Duplicate subsequence",
+          "message": "Duplicate subsequence"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Duplicate a campaign subsequence",
@@ -1528,8 +1528,8 @@
           "message": "The unique subsequence UUID to duplicate"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
-          "message": "List Leads"
+          "source": "List leads",
+          "message": "List leads"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.short_desc": {
           "source": "List and search leads",
@@ -1624,8 +1624,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
-          "message": "Create Lead"
+          "source": "Create lead",
+          "message": "Create lead"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
           "source": "Create a new lead",
@@ -1732,8 +1732,8 @@
           "message": "The UUID of the lead list to add the lead to"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
-          "message": "Get Lead"
+          "source": "Get lead",
+          "message": "Get lead"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.short_desc": {
           "source": "Get a single lead by ID",
@@ -1756,8 +1756,8 @@
           "message": "The unique identifier (UUID) of the lead to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.display_name": {
-          "source": "Patch Lead",
-          "message": "Patch Lead"
+          "source": "Patch lead",
+          "message": "Patch lead"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.short_desc": {
           "source": "Update an existing lead",
@@ -1840,8 +1840,8 @@
           "message": "The website URL of the lead"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
-          "message": "Delete Lead"
+          "source": "Delete lead",
+          "message": "Delete lead"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
           "source": "Delete a lead",
@@ -1864,8 +1864,8 @@
           "message": "The unique identifier (UUID) of the lead to delete"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.display_name": {
-          "source": "Merge Leads",
-          "message": "Merge Leads"
+          "source": "Merge leads",
+          "message": "Merge leads"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.short_desc": {
           "source": "Merge duplicate leads",
@@ -1900,8 +1900,8 @@
           "message": "The unique identifier (UUID) of the second lead to merge"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.display_name": {
-          "source": "Move Leads",
-          "message": "Move Leads"
+          "source": "Move leads",
+          "message": "Move leads"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.short_desc": {
           "source": "Move leads between campaigns",
@@ -1948,8 +1948,8 @@
           "message": "The UUID of the lead list to move leads to"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Move Lead to Subsequence",
-          "message": "Move Lead to Subsequence"
+          "source": "Move lead to subsequence",
+          "message": "Move lead to subsequence"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.short_desc": {
           "source": "Move a lead to a campaign subsequence",
@@ -1984,8 +1984,8 @@
           "message": "The unique identifier (UUID) of the target subsequence"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.display_name": {
-          "source": "Remove Lead from Subsequence",
-          "message": "Remove Lead from Subsequence"
+          "source": "Remove lead from subsequence",
+          "message": "Remove lead from subsequence"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.short_desc": {
           "source": "Remove a lead from a subsequence",
@@ -2020,8 +2020,8 @@
           "message": "The unique identifier (UUID) of the subsequence to remove the lead from"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.display_name": {
-          "source": "Update Lead Interest Status",
-          "message": "Update Lead Interest Status"
+          "source": "Update lead interest status",
+          "message": "Update lead interest status"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.short_desc": {
           "source": "Update a lead's interest status",
@@ -2088,8 +2088,8 @@
           "message": "Wrong Person"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.display_name": {
-          "source": "Bulk Assign Leads",
-          "message": "Bulk Assign Leads"
+          "source": "Bulk assign leads",
+          "message": "Bulk assign leads"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.short_desc": {
           "source": "Bulk assign leads to a campaign",
@@ -2124,8 +2124,8 @@
           "message": "The list of user UUIDs to assign the leads to"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.display_name": {
-          "source": "Export Leads",
-          "message": "Export Leads"
+          "source": "Export leads",
+          "message": "Export leads"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.short_desc": {
           "source": "Export leads to a file",
@@ -2172,8 +2172,8 @@
           "message": "The format for the export"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.display_name": {
-          "source": "List Lead Lists",
-          "message": "List Lead Lists"
+          "source": "List lead lists",
+          "message": "List lead lists"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.short_desc": {
           "source": "List and search lead lists",
@@ -2196,8 +2196,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Create Lead List",
-          "message": "Create Lead List"
+          "source": "Create lead list",
+          "message": "Create lead list"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.short_desc": {
           "source": "Create a new lead list",
@@ -2220,8 +2220,8 @@
           "message": "The name of the lead list to create"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.display_name": {
-          "source": "Get Lead List",
-          "message": "Get Lead List"
+          "source": "Get lead list",
+          "message": "Get lead list"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.short_desc": {
           "source": "Get a single lead list by ID",
@@ -2244,8 +2244,8 @@
           "message": "The unique identifier (UUID) of the lead list to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.display_name": {
-          "source": "Patch Lead List",
-          "message": "Patch Lead List"
+          "source": "Patch lead list",
+          "message": "Patch lead list"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.short_desc": {
           "source": "Update an existing lead list",
@@ -2280,8 +2280,8 @@
           "message": "The new name for the lead list"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Delete Lead List",
-          "message": "Delete Lead List"
+          "source": "Delete lead list",
+          "message": "Delete lead list"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.short_desc": {
           "source": "Delete a lead list",
@@ -2304,8 +2304,8 @@
           "message": "The unique identifier (UUID) of the lead list to delete"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.display_name": {
-          "source": "List Lead Labels",
-          "message": "List Lead Labels"
+          "source": "List lead labels",
+          "message": "List lead labels"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.short_desc": {
           "source": "List and search lead labels",
@@ -2364,8 +2364,8 @@
           "message": "The maximum number of results to return per page (1-100)"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Create Lead Label",
-          "message": "Create Lead Label"
+          "source": "Create lead label",
+          "message": "Create lead label"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.short_desc": {
           "source": "Create a new lead label",
@@ -2424,8 +2424,8 @@
           "message": "The description for the label"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.display_name": {
-          "source": "Get Lead Label",
-          "message": "Get Lead Label"
+          "source": "Get lead label",
+          "message": "Get lead label"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.short_desc": {
           "source": "Get a single lead label by ID",
@@ -2448,8 +2448,8 @@
           "message": "The unique identifier (UUID) of the label to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.display_name": {
-          "source": "Patch Lead Label",
-          "message": "Patch Lead Label"
+          "source": "Patch lead label",
+          "message": "Patch lead label"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.short_desc": {
           "source": "Update an existing lead label",
@@ -2520,8 +2520,8 @@
           "message": "The description for the label"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Delete Lead Label",
-          "message": "Delete Lead Label"
+          "source": "Delete lead label",
+          "message": "Delete lead label"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.short_desc": {
           "source": "Delete a lead label",
@@ -2556,8 +2556,8 @@
           "message": "The interest status to reassign leads and emails to when the label is deleted"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
-          "message": "List Emails"
+          "source": "List emails",
+          "message": "List emails"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.short_desc": {
           "source": "List and search emails",
@@ -2632,8 +2632,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
-          "message": "Get Email"
+          "source": "Get email",
+          "message": "Get email"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.short_desc": {
           "source": "Get a single email by ID",
@@ -2656,8 +2656,8 @@
           "message": "The unique email UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.display_name": {
-          "source": "Patch Email",
-          "message": "Patch Email"
+          "source": "Patch email",
+          "message": "Patch email"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.short_desc": {
           "source": "Update an existing email",
@@ -2704,8 +2704,8 @@
           "message": "The updated body content for the email"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
-          "message": "Delete Email"
+          "source": "Delete email",
+          "message": "Delete email"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
           "source": "Delete an email",
@@ -2728,8 +2728,8 @@
           "message": "The unique email UUID to delete"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.display_name": {
-          "source": "Reply to Email",
-          "message": "Reply to Email"
+          "source": "Reply to email",
+          "message": "Reply to email"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.short_desc": {
           "source": "Reply to an email",
@@ -2776,8 +2776,8 @@
           "message": "The email address to send the reply from"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.display_name": {
-          "source": "Count Unread Emails",
-          "message": "Count Unread Emails"
+          "source": "Count unread emails",
+          "message": "Count unread emails"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.short_desc": {
           "source": "Count unread emails",
@@ -2788,8 +2788,8 @@
           "message": "Get the count of unread emails in the inbox."
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.display_name": {
-          "source": "Mark Thread as Read",
-          "message": "Mark Thread as Read"
+          "source": "Mark thread as read",
+          "message": "Mark thread as read"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.short_desc": {
           "source": "Mark an email thread as read",
@@ -2812,8 +2812,8 @@
           "message": "The unique email UUID to mark the thread as read"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.display_name": {
-          "source": "Get Campaign for Email",
-          "message": "Get Campaign for Email"
+          "source": "Get campaign for email",
+          "message": "Get campaign for email"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.short_desc": {
           "source": "Get the campaign associated with an email",
@@ -2836,8 +2836,8 @@
           "message": "The unique email UUID to get the campaign for"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.display_name": {
-          "source": "List Block List",
-          "message": "List Block List"
+          "source": "List block list",
+          "message": "List block list"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.short_desc": {
           "source": "List and search block list entries",
@@ -2860,8 +2860,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Create Block List Entry",
-          "message": "Create Block List Entry"
+          "source": "Create block list entry",
+          "message": "Create block list entry"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
           "source": "Create a new block list entry",
@@ -2884,8 +2884,8 @@
           "message": "The email address or domain to add to the block list"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Delete Block List Entry",
-          "message": "Delete Block List Entry"
+          "source": "Delete block list entry",
+          "message": "Delete block list entry"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
           "source": "Delete a block list entry",
@@ -2908,8 +2908,8 @@
           "message": "The unique block list entry UUID to delete"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.display_name": {
-          "source": "Patch Block List",
-          "message": "Patch Block List"
+          "source": "Patch block list",
+          "message": "Patch block list"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.short_desc": {
           "source": "Update block list entries",
@@ -2944,8 +2944,8 @@
           "message": "The updated email address or domain for the block list entry"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.display_name": {
-          "source": "List Custom Tags",
-          "message": "List Custom Tags"
+          "source": "List custom tags",
+          "message": "List custom tags"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.short_desc": {
           "source": "List and search custom tags",
@@ -2980,8 +2980,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Create Custom Tag",
-          "message": "Create Custom Tag"
+          "source": "Create custom tag",
+          "message": "Create custom tag"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.short_desc": {
           "source": "Create a new custom tag",
@@ -3016,8 +3016,8 @@
           "message": "The resource type the tag applies to (e.g., account, campaign)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.display_name": {
-          "source": "Get Custom Tag",
-          "message": "Get Custom Tag"
+          "source": "Get custom tag",
+          "message": "Get custom tag"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.short_desc": {
           "source": "Get a single custom tag by ID",
@@ -3040,8 +3040,8 @@
           "message": "The unique custom tag UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.display_name": {
-          "source": "Patch Custom Tag",
-          "message": "Patch Custom Tag"
+          "source": "Patch custom tag",
+          "message": "Patch custom tag"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.short_desc": {
           "source": "Update an existing custom tag",
@@ -3088,8 +3088,8 @@
           "message": "The updated resource type for the custom tag"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Delete Custom Tag",
-          "message": "Delete Custom Tag"
+          "source": "Delete custom tag",
+          "message": "Delete custom tag"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.short_desc": {
           "source": "Delete a custom tag",
@@ -3112,8 +3112,8 @@
           "message": "The unique custom tag UUID to delete"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.display_name": {
-          "source": "Assign Custom Tag",
-          "message": "Assign Custom Tag"
+          "source": "Assign custom tag",
+          "message": "Assign custom tag"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.short_desc": {
           "source": "Assign a custom tag to a resource",
@@ -3180,8 +3180,8 @@
           "message": "Unassign the tag"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.display_name": {
-          "source": "List Inbox Placement Tests",
-          "message": "List Inbox Placement Tests"
+          "source": "List inbox placement tests",
+          "message": "List inbox placement tests"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.short_desc": {
           "source": "List and search inbox placement tests",
@@ -3204,8 +3204,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Create Inbox Placement Test",
-          "message": "Create Inbox Placement Test"
+          "source": "Create inbox placement test",
+          "message": "Create inbox placement test"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
           "source": "Create a new inbox placement test",
@@ -3268,8 +3268,8 @@
           "message": "From Outside"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Get Inbox Placement Test",
-          "message": "Get Inbox Placement Test"
+          "source": "Get inbox placement test",
+          "message": "Get inbox placement test"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
           "source": "Get a single inbox placement test by ID",
@@ -3292,8 +3292,8 @@
           "message": "The unique inbox placement test UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.display_name": {
-          "source": "Patch Inbox Placement Test",
-          "message": "Patch Inbox Placement Test"
+          "source": "Patch inbox placement test",
+          "message": "Patch inbox placement test"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.short_desc": {
           "source": "Update an existing inbox placement test",
@@ -3352,8 +3352,8 @@
           "message": "Completed"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Delete Inbox Placement Test",
-          "message": "Delete Inbox Placement Test"
+          "source": "Delete inbox placement test",
+          "message": "Delete inbox placement test"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
           "source": "Delete an inbox placement test",
@@ -3376,8 +3376,8 @@
           "message": "The unique inbox placement test UUID to delete"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.display_name": {
-          "source": "Get Inbox Placement Analytics",
-          "message": "Get Inbox Placement Analytics"
+          "source": "Get inbox placement analytics",
+          "message": "Get inbox placement analytics"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.short_desc": {
           "source": "Get inbox placement analytics",
@@ -3388,8 +3388,8 @@
           "message": "Retrieve inbox placement analytics data showing deliverability across providers."
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.display_name": {
-          "source": "Get IP Analytics Stats by Date",
-          "message": "Get IP Analytics Stats by Date"
+          "source": "Get IP analytics stats by date",
+          "message": "Get IP analytics stats by date"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.short_desc": {
           "source": "Get inbox placement analytics by date",
@@ -3424,8 +3424,8 @@
           "message": "The end date for the analytics date range filter"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.display_name": {
-          "source": "Get IP Analytics Stats by Test",
-          "message": "Get IP Analytics Stats by Test"
+          "source": "Get IP analytics stats by test",
+          "message": "Get IP analytics stats by test"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.short_desc": {
           "source": "Get inbox placement analytics by test",
@@ -3448,8 +3448,8 @@
           "message": "The unique inbox placement test UUID to get stats for"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.display_name": {
-          "source": "Get IP Deliverability Insights",
-          "message": "Get IP Deliverability Insights"
+          "source": "Get IP deliverability insights",
+          "message": "Get IP deliverability insights"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.short_desc": {
           "source": "Get deliverability insights",
@@ -3460,8 +3460,8 @@
           "message": "Retrieve deliverability insights for inbox placement tests."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.display_name": {
-          "source": "List IP Analytics",
-          "message": "List IP Analytics"
+          "source": "List IP analytics",
+          "message": "List IP analytics"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.short_desc": {
           "source": "List inbox placement analytics records",
@@ -3484,8 +3484,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.display_name": {
-          "source": "Get IP Blacklist Report",
-          "message": "Get IP Blacklist Report"
+          "source": "Get IP blacklist report",
+          "message": "Get IP blacklist report"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.short_desc": {
           "source": "Get an IP blacklist report",
@@ -3508,8 +3508,8 @@
           "message": "The unique blacklist report UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.display_name": {
-          "source": "List IP Blacklist Reports",
-          "message": "List IP Blacklist Reports"
+          "source": "List IP blacklist reports",
+          "message": "List IP blacklist reports"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.short_desc": {
           "source": "List IP blacklist reports",
@@ -3532,8 +3532,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
-          "message": "Create Email Verification"
+          "source": "Create email verification",
+          "message": "Create email verification"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {
           "source": "Create an email verification request",
@@ -3556,8 +3556,8 @@
           "message": "The email address to verify"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.display_name": {
-          "source": "Get Email Verification Status",
-          "message": "Get Email Verification Status"
+          "source": "Get email verification status",
+          "message": "Get email verification status"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.short_desc": {
           "source": "Get email verification status",
@@ -3580,8 +3580,8 @@
           "message": "The unique email verification UUID to check status for"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.display_name": {
-          "source": "List Background Jobs",
-          "message": "List Background Jobs"
+          "source": "List background jobs",
+          "message": "List background jobs"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.short_desc": {
           "source": "List and search background jobs",
@@ -3604,8 +3604,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.display_name": {
-          "source": "Get Background Job",
-          "message": "Get Background Job"
+          "source": "Get background job",
+          "message": "Get background job"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.short_desc": {
           "source": "Get a single background job by ID",
@@ -3628,8 +3628,8 @@
           "message": "The unique background job UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
-          "message": "Get Workspace"
+          "source": "Get workspace",
+          "message": "Get workspace"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
           "source": "Get workspace information",
@@ -3640,8 +3640,8 @@
           "message": "Retrieve information about the current workspace."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get Workspace Admin",
-          "message": "Get Workspace Admin"
+          "source": "Get workspace admin",
+          "message": "Get workspace admin"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
           "source": "Get workspace admin information",
@@ -3652,8 +3652,8 @@
           "message": "Retrieve administrative information about the workspace."
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.display_name": {
-          "source": "Patch Workspace",
-          "message": "Patch Workspace"
+          "source": "Patch workspace",
+          "message": "Patch workspace"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.short_desc": {
           "source": "Update workspace settings",
@@ -3676,8 +3676,8 @@
           "message": "The new name for the workspace"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "List Workspace Members",
-          "message": "List Workspace Members"
+          "source": "List workspace members",
+          "message": "List workspace members"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
           "source": "List and search workspace members",
@@ -3700,8 +3700,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Create Workspace Member",
-          "message": "Create Workspace Member"
+          "source": "Create workspace member",
+          "message": "Create workspace member"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
           "source": "Add a new workspace member",
@@ -3760,8 +3760,8 @@
           "message": "The last name of the workspace member"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Get Workspace Member",
-          "message": "Get Workspace Member"
+          "source": "Get workspace member",
+          "message": "Get workspace member"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
           "source": "Get a single workspace member by ID",
@@ -3784,8 +3784,8 @@
           "message": "The unique workspace member UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.display_name": {
-          "source": "Patch Workspace Member",
-          "message": "Patch Workspace Member"
+          "source": "Patch workspace member",
+          "message": "Patch workspace member"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.short_desc": {
           "source": "Update a workspace member",
@@ -3844,8 +3844,8 @@
           "message": "The new last name for the workspace member"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Member",
-          "message": "Delete Workspace Member"
+          "source": "Delete workspace member",
+          "message": "Delete workspace member"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
           "source": "Remove a workspace member",
@@ -3868,8 +3868,8 @@
           "message": "The unique workspace member UUID to remove"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "List Workspace Group Members",
-          "message": "List Workspace Group Members"
+          "source": "List workspace group members",
+          "message": "List workspace group members"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.short_desc": {
           "source": "List and search workspace group members",
@@ -3892,8 +3892,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Create Workspace Group Member",
-          "message": "Create Workspace Group Member"
+          "source": "Create workspace group member",
+          "message": "Create workspace group member"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
           "source": "Add a member to a workspace group",
@@ -3940,8 +3940,8 @@
           "message": "The role to assign to the member in the workspace group"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Get Workspace Group Member",
-          "message": "Get Workspace Group Member"
+          "source": "Get workspace group member",
+          "message": "Get workspace group member"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
           "source": "Get a single workspace group member by ID",
@@ -3964,8 +3964,8 @@
           "message": "The unique workspace group member UUID to retrieve"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Group Member",
-          "message": "Delete Workspace Group Member"
+          "source": "Delete workspace group member",
+          "message": "Delete workspace group member"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
           "source": "Remove a member from a workspace group",
@@ -3988,8 +3988,8 @@
           "message": "The unique workspace group member UUID to remove"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
-          "message": "List Audit Logs"
+          "source": "List audit logs",
+          "message": "List audit logs"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
           "source": "List and search audit logs",
@@ -4072,8 +4072,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.display_name": {
-          "source": "Reply Received",
-          "message": "Reply Received"
+          "source": "Reply received",
+          "message": "Reply received"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.short_desc": {
           "source": "Triggered when a reply is received",
@@ -4084,8 +4084,8 @@
           "message": "This event is triggered when a reply is received to a campaign email."
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
-          "message": "Email Bounced"
+          "source": "Email bounced",
+          "message": "Email bounced"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.short_desc": {
           "source": "Triggered when an email bounces",
@@ -4096,8 +4096,8 @@
           "message": "This event is triggered when a campaign email bounces."
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Interested",
-          "message": "Lead Interested"
+          "source": "Lead interested",
+          "message": "Lead interested"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
           "source": "Triggered when a lead shows interest",
@@ -4108,8 +4108,8 @@
           "message": "This event is triggered when a lead's interest status changes to interested."
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.display_name": {
-          "source": "Campaign Completed",
-          "message": "Campaign Completed"
+          "source": "Campaign completed",
+          "message": "Campaign completed"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.short_desc": {
           "source": "Triggered when a campaign completes",

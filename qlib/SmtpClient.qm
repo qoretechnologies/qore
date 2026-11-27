@@ -84,7 +84,7 @@ module SmtpClient {
                 "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
                     "selector_value": "text/html", "fallback": "plain-body", "plain_alternative": True},
             }},
-            "display_name": "Send an Email With SMTP",
+            "display_name": "Send an email with SMTP",
             "short_desc": "Send an email through a generic SMTP server",
             "desc": "Send an email through a generic SMTP server",
             "action_code": DPAT_API,

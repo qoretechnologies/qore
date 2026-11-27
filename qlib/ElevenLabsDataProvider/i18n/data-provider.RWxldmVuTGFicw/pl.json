@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
-          "source": "Text to Speech",
+          "source": "Text to speech",
           "message": "Tekst na mowę"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Identyfikator wersji słownika wymowy do użycia"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
-          "source": "Speech to Speech",
+          "source": "Speech to speech",
           "message": "Mowa na mowę"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "PCM 16-bit, 16kHz mono, little-endian — mniejsze opóźnienie"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
-          "source": "Text to Sound Effects",
+          "source": "Text to sound effects",
           "message": "Tekst na efekty dźwiękowe"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Jeśli `True`, tworzy płynnie zapętlony efekt dźwiękowy"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
-          "source": "Audio Isolation",
+          "source": "Audio isolation",
           "message": "Izolacja dźwięku"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Dane audio, z których ma zostać wyizolowany głos. Szum tła zostanie usunięty i zachowany zostanie tylko głos"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
-          "source": "Speech to Text",
+          "source": "Speech to text",
           "message": "Mowa na tekst"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "PCM 16-bit, 16kHz mono, little-endian — mniejsze opóźnienie"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
-          "source": "Voice Design",
+          "source": "Voice design",
           "message": "Projektowanie głosu"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Przykładowy tekst, który zostanie wypowiedziany w wygenerowanych podglądach głosu"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
-          "source": "List Voices",
+          "source": "List voices",
           "message": "Lista głosów"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Sortuj malejąco"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "Pobierz głos"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Unikalny identyfikator głosu do pobrania"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
-          "source": "Create Voice",
+          "source": "Create voice",
           "message": "Utwórz głos"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Etykiety klucz-wartość do powiązania z głosem"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
-          "source": "Edit Voice",
+          "source": "Edit voice",
           "message": "Edytuj głos"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Etykiety klucz-wartość do powiązania z głosem"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "Usuń głos"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Unikalny identyfikator głosu do usunięcia"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lista modeli"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Wyświetla listę dostępnych modeli AI ElevenLabs i ich możliwości"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
-          "source": "List History",
+          "source": "List history",
           "message": "Wyświetl historię"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "Identyfikator elementu historii, po którym należy rozpocząć paginację"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Get History Item",
+          "source": "Get history item",
           "message": "Pobierz element historii"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Unikalny identyfikator elementu historii do pobrania"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Delete History Item",
+          "source": "Delete history item",
           "message": "Usuń element historii"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "Unikalny identyfikator elementu historii do usunięcia"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
-          "source": "Get History Audio",
+          "source": "Get history audio",
           "message": "Pobierz dźwięk z historii"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Unikalny identyfikator elementu historii, dla którego ma zostać pobrany dźwięk"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
-          "source": "Create Dubbing",
+          "source": "Create dubbing",
           "message": "Utwórz dubbing"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Jeśli `True`, wulgaryzmy w transkrypcji zostaną ocenzurowane. **Uwaga**: to jest funkcja beta"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
-          "source": "Get Dubbing Status",
+          "source": "Get dubbing status",
           "message": "Pobierz stan dubbingu"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Unikalny identyfikator projektu dubbingowego do pobrania"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
-          "source": "Get Dubbing Audio",
+          "source": "Get dubbing audio",
           "message": "Pobierz dźwięk dubbingu"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Kod języka zdubbingowanego dźwięku do pobrania (np. `es`, `fr`, `de`)"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
-          "source": "Delete Dubbing",
+          "source": "Delete dubbing",
           "message": "Usuń dubbing"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Unikalny identyfikator projektu dubbingowego do usunięcia"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
-          "source": "List Dubbing Projects",
+          "source": "List dubbing projects",
           "message": "Lista projektów dubbingu"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Pokaż tylko projekty dubbingowe innych osób"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Create Pronunciation Dictionary",
+          "source": "Create pronunciation dictionary",
           "message": "Utwórz słownik wymowy"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Członkowie przestrzeni roboczej mogą tylko przeglądać słownik"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
-          "source": "List Pronunciation Dictionaries",
+          "source": "List pronunciation dictionaries",
           "message": "Wyświetl słowniki wymowy"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Kursor używany do paginacji w celu pobrania następnej strony wyników"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Get Pronunciation Dictionary",
+          "source": "Get pronunciation dictionary",
           "message": "Pobierz słownik wymowy"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Unikalny identyfikator słownika wymowy do pobrania"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
-          "source": "Add Pronunciation Rules",
+          "source": "Add pronunciation rules",
           "message": "Dodaj reguły wymowy"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {

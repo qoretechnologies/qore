@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
+          "source": "Create submission",
           "message": "Utwórz zgłoszenie"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Wybierz formularz, dla którego chcesz utworzyć zgłoszenie. Pola zgłoszenia zostaną zaktualizowane na podstawie Twojego wyboru."
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Pobierz zgłoszenie"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Unikalny identyfikator zgłoszenia do pobrania"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
+          "source": "Get form submissions",
           "message": "Pobierz zgłoszenia formularza"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Maksymalna liczba zgłoszeń do zwrócenia"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
+          "source": "Update submission",
           "message": "Zaktualizuj zgłoszenie"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Identyfikator zgłoszenia do zaktualizowania"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Usuń zgłoszenie"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Identyfikator zgłoszenia do usunięcia"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Pobierz formularz"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Formularz do pobrania"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
+          "source": "Get forms",
           "message": "Pobierz formularze"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Maksymalna liczba formularzy do zwrócenia"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
+          "source": "Get form reports",
           "message": "Pobierz raporty formularza"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Formularz, dla którego mają zostać pobrane raporty"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
+          "source": "New submission",
           "message": "Nowe zgłoszenie"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Wybierz formularz do monitorowania pod kątem nowych zgłoszeń"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nowa płatność"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {

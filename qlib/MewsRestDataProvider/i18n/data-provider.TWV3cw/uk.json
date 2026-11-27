@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
+          "source": "Retrieve order items",
           "message": "Отримати позиції замовлення"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Максимальна кількість записів для повернення"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
+          "source": "Retrieve payment information",
           "message": "Отримати інформацію про платежі"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Максимальна кількість записів для повернення"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
+          "source": "Retrieve customer information",
           "message": "Отримати інформацію про клієнтів"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {

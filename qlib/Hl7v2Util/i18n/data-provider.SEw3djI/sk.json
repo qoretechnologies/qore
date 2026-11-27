@@ -16,7 +16,7 @@
           "message": "Čítajte a zapisujte oddelené zdravotnícke správy [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) pre integračné a transformačné pracovné postupy.\n\n**Možnosti**:\n- Zachovanie štruktúry správ a vlastných segmentov `Z` bez potreby pevnej schémy\n- Čítanie vlastných oddeľovačov z `MSH` a spracovanie riadiacich sekvencií HL7\n- Sprístupnenie jedného analyzovaného segmentu na záznam prostredníctvom rozhrania DataProvider API\n- Spätná serializácia analyzovaných správ alebo jednoduchých záznamov segmentov do textu HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "Prečítať správu HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Ponechať text vo vstupnom kódovaní tak, ako bol prečítaný, bez kontroly"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "Čítať inline údaje HL7 v2"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Inline údaje správy HL7 v2. Túto možnosť použite, keď je správa už v pamäti."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "Zapísať správu HL7 v2"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Cesta na zápis serializovanej správy HL7 v2."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "Načítať schému HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Ak je `True`, ignorovať vyrovnávaciu pamäť schém v pamäti a znova načítať artefakt schémy."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "Súhrn schémy HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Získat repozitář"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Samostatný název repozitáře, **nikoli** `owner/name`.\n\nPro `qoretechnologies/qorus` je to `qorus`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Aktualizovat repozitář"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.short_desc": {
@@ -504,7 +504,7 @@
           "message": "Zda archivovat tento repozitář. `false` zruší archivaci dříve archivovaného repozitáře."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security and Analysis",
+          "source": "Security and analysis",
           "message": "Zabezpečení a analýza"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Určete, které funkce zabezpečení a analýzy chcete pro repozitář povolit nebo zakázat.\n\nChcete-li tento parametr použít, musíte mít pro repozitář oprávnění správce nebo být vlastníkem či správcem zabezpečení organizace, která repozitář vlastní. Další informace naleznete v části „[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)“.\n\nChcete-li například povolit GitHub Advanced Security, použijte tato data v těle požadavku `PATCH`:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nKteré funkce zabezpečení a analýzy jsou aktuálně povoleny, můžete zkontrolovat pomocí požadavku `GET /repos/{owner}/{repo}`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.YWR2YW5jZWRfc2VjdXJpdHk.display_name": {
-          "source": "Advanced Security",
+          "source": "Advanced security",
           "message": "Pokročilé zabezpečení"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.YWR2YW5jZWRfc2VjdXJpdHk.short_desc": {
@@ -540,7 +540,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.Y29kZV9zZWN1cml0eQ.display_name": {
-          "source": "Code Security",
+          "source": "Code security",
           "message": "Bezpečnost kódu"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.Y29kZV9zZWN1cml0eQ.short_desc": {
@@ -564,7 +564,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5n.display_name": {
-          "source": "Secret Scanning",
+          "source": "Secret scanning",
           "message": "Skenující tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5n.short_desc": {
@@ -588,7 +588,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2FpX2RldGVjdGlvbg.display_name": {
-          "source": "Secret Scanning AI Detection",
+          "source": "Secret scanning AI detection",
           "message": "AI detekce tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2FpX2RldGVjdGlvbg.short_desc": {
@@ -612,7 +612,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9hbGVydF9kaXNtaXNzYWw.display_name": {
-          "source": "Secret Scanning Delegated Alert Dismissal",
+          "source": "Secret scanning delegated alert dismissal",
           "message": "Delegované zrušení upozornění tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9hbGVydF9kaXNtaXNzYWw.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3M.display_name": {
-          "source": "Secret Scanning Delegated Bypass",
+          "source": "Secret scanning delegated bypass",
           "message": "Delegované obejítí tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3M.short_desc": {
@@ -660,7 +660,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3Nfb3B0aW9ucw.display_name": {
-          "source": "Secret Scanning Delegated Bypass Options",
+          "source": "Secret scanning delegated bypass options",
           "message": "Možnosti obejítí tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3Nfb3B0aW9ucw.short_desc": {
@@ -716,7 +716,7 @@
           "message": "ID týmu nebo role vybrané jako přezkumový recenzent"
         },
         "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
-          "source": "Reviewer Type",
+          "source": "Reviewer type",
           "message": "Typ recenzenta"
         },
         "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
@@ -736,7 +736,7 @@
           "message": "ROLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX25vbl9wcm92aWRlcl9wYXR0ZXJucw.display_name": {
-          "source": "Secret Scanning Non Provider Patterns",
+          "source": "Secret scanning non provider patterns",
           "message": "Vlastní vzory tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX25vbl9wcm92aWRlcl9wYXR0ZXJucw.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX3B1c2hfcHJvdGVjdGlvbg.display_name": {
-          "source": "Secret Scanning Push Protection",
+          "source": "Secret scanning push protection",
           "message": "Ochrana při odesílání tajemství"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX3B1c2hfcHJvdGVjdGlvbg.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Může být `enabled` nebo `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Buď `true` pro povolení issues pro tento repozitář, nebo `false` pro jejich zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
+          "source": "Has projects",
           "message": "Má projekty"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Buď `true` pro povolení projektů pro tento repozitář, nebo `false` pro jejich zakázání. **Poznámka:** Pokud vytváříte repozitář v organizaci, která má projekty repozitářů zakázané, výchozí hodnota je `false`, a pokud předáte `true`, rozhraní API vrátí chybu."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Buď `true` pro povolení wiki pro tento repozitář, nebo `false` pro její zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.display_name": {
-          "source": "Has Pull Requests",
+          "source": "Has pull requests",
           "message": "Má pull requesty"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Buď `true` pro povolení pull requestů pro tento repozitář, nebo `false` pro zákaz pull requestů."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
-          "source": "Pull Request Creation Policy",
+          "source": "Pull request creation policy",
           "message": "Zásady vytváření pull requestů"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
@@ -852,7 +852,7 @@
           "message": "collaborators_only"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
+          "source": "Is template",
           "message": "Je šablona"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Buď `true` pro zpřístupnění tohoto repozitáře jako šablony repozitáře, nebo `false` pro zabránění tomu."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
+          "source": "Allow squash merge",
           "message": "Povolit sloučení typu squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
@@ -876,7 +876,7 @@
           "message": "Buď `true` pro povolení squash sloučení pull requestů, nebo `false` pro zabránění squash sloučení."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
+          "source": "Allow merge commit",
           "message": "Povolit slučovací commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
@@ -888,7 +888,7 @@
           "message": "Buď `true` pro povolení slučování pull requestů pomocí slučovacího commitu, nebo `false` pro zabránění slučování pull requestů pomocí slučovacích commitů."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
+          "source": "Allow rebase merge",
           "message": "Povolit sloučení typu rebase"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
@@ -900,7 +900,7 @@
           "message": "Buď `true` pro povolení rebase sloučení pull requestů, nebo `false` pro zabránění rebase sloučení."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
+          "source": "Allow auto merge",
           "message": "Povolit automatické sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Buď `true` pro povolení automatického sloučení u pull requestů, nebo `false` pro jeho zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
+          "source": "Delete branch on merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Buď `true` pro povolení automatického mazání zdrojových větví po sloučení pull requestů, nebo `false` pro zabránění automatickému mazání."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
-          "source": "Allow Update Branch",
+          "source": "Allow update branch",
           "message": "Povolit aktualizaci větve"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Buď `true` pro trvalé povolení aktualizace zdrojové větve pull requestu, která zaostává za základní větví, i když není před sloučením vyžadována její aktuálnost, nebo false v opačném případě."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash PR Title as Default",
+          "source": "Use squash PR title as default",
           "message": "Použít název PR pro squash jako výchozí"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Buď `true` pro povolení použití názvu pull requestu pro squash-merge commity, nebo `false` pro použití zprávy commitu. **Tato vlastnost bude zrušena. Použijte místo ní `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
+          "source": "Squash merge commit title",
           "message": "Název commitu při sloučení squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
@@ -968,7 +968,7 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
+          "source": "Squash merge commit message",
           "message": "Zpráva commitu squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
@@ -992,7 +992,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
+          "source": "Merge commit title",
           "message": "Název slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
+          "source": "Merge commit message",
           "message": "Zpráva slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.display_name": {
-          "source": "Allow Forking",
+          "source": "Allow forking",
           "message": "Povolit forkování"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Buď `true` pro povolení soukromých forků, nebo `false` pro zabránění soukromým forkům."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.display_name": {
-          "source": "Web Commit Signoff Required",
+          "source": "Web commit signoff required",
           "message": "Vyžadováno schválení webového commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Buď `true` pro vyžadování potvrzení (sign-off) přispěvatelů u webových commitů, nebo `false` pro nevyžadování potvrzení u webových commitů."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Smazat repozitář"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Samostatný název repozitáře, **nikoli** `owner/name`.\n\nPro `qoretechnologies/qorus` je to `qorus`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItYXV0aGVudGljYXRlZC11c2Vy.display_name": {
-          "source": "List My Repositories",
+          "source": "List my repositories",
           "message": "Zobrazit mé repozitáře"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItYXV0aGVudGljYXRlZC11c2Vy.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.display_name": {
-          "source": "List Repositories for Owner",
+          "source": "List repositories for owner",
           "message": "Zobrazit repozitáře pro vlastníka"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.display_name": {
-          "source": "Create Repository",
+          "source": "Create repository",
           "message": "Vytvořit repozitář"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Zda je repozitář soukromý."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YXV0b19pbml0.display_name": {
-          "source": "Auto Init",
+          "source": "Auto init",
           "message": "Automatická inicializace"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YXV0b19pbml0.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Zda je repozitář inicializován s minimálním souborem README."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.display_name": {
-          "source": "Gitignore Template",
+          "source": "Gitignore template",
           "message": "Šablona Gitignore"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Požadovaný jazyk nebo platforma pro soubor .gitignore."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
-          "source": "License Template",
+          "source": "License template",
           "message": "Šablona licence"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Klíčové slovo licence open source pro tento repozitář."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2lzc3Vlcw.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Zda jsou povoleny issues."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3dpa2k.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Zda je povolena wiki."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
+          "source": "Has projects",
           "message": "Má projekty"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3Byb2plY3Rz.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Zda jsou povoleny projekty."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rpc2N1c3Npb25z.display_name": {
-          "source": "Has Discussions",
+          "source": "Has discussions",
           "message": "Má diskuze"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rpc2N1c3Npb25z.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "ID týmu, kterému bude udělen přístup k tomuto repozitáři. Toto je platné pouze při vytváření repozitáře v organizaci."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
+          "source": "Allow squash merge",
           "message": "Povolit sloučení typu squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Zda u pull requestů povolit sloučení typu squash."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
+          "source": "Allow merge commit",
           "message": "Povolit slučovací commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Zda u pull requestů povolit slučovací commity."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
+          "source": "Allow rebase merge",
           "message": "Povolit sloučení typu rebase"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Zda u pull requestů povolit sloučení typu rebase."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
+          "source": "Allow auto merge",
           "message": "Povolit automatické sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Zda u pull requestů povolit automatické slučování (Auto-merge)."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
+          "source": "Delete branch on merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Zda po sloučení pull requestů smazat zdrojové větve"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
+          "source": "Squash merge commit title",
           "message": "Název commitu při sloučení squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
+          "source": "Squash merge commit message",
           "message": "Zpráva commitu squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
+          "source": "Merge commit title",
           "message": "Název slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
+          "source": "Merge commit message",
           "message": "Zpráva slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rvd25sb2Fkcw.display_name": {
-          "source": "Has Downloads",
+          "source": "Has downloads",
           "message": "Má soubory ke stažení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rvd25sb2Fkcw.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "Zda jsou povoleny soubory ke stažení."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
+          "source": "Is template",
           "message": "Je šablona"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "Zda tento repozitář slouží jako šablona, kterou lze použít ke generování nových repozitářů."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.display_name": {
-          "source": "Create Repository in Organization",
+          "source": "Create repository in organization",
           "message": "Vytvořit repozitář v organizaci"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "Zda je repozitář soukromý."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.display_name": {
-          "source": "Auto Init",
+          "source": "Auto init",
           "message": "Automatická inicializace"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Předáním `true` vytvoříte výchozí commit s prázdným README."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.display_name": {
-          "source": "Gitignore Template",
+          "source": "Gitignore template",
           "message": "Šablona Gitignore"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Požadovaná [šablona .gitignore](https://github.com/github/gitignore) jazyka nebo platformy, která se má použít. Použijte název šablony bez přípony. Například „Haskell“."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
-          "source": "License Template",
+          "source": "License template",
           "message": "Šablona licence"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "Vyberte [šablonu open source licence](https://choosealicense.com/), která nejlépe vyhovuje vašim potřebám, a poté použijte [klíčové slovo licence](https://docs.github.com/articles/licensing-a-repository/#searching-github-by-license-type) jako řetězec `license_template`. Například „mit“ nebo „mpl-2.0“."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Buď `true` pro povolení issues pro tento repozitář, nebo `false` pro jejich zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
+          "source": "Has projects",
           "message": "Má projekty"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Buď `true` pro povolení projektů pro tento repozitář, nebo `false` pro jejich zakázání. **Poznámka:** Pokud vytváříte repozitář v organizaci, která má projekty repozitářů zakázané, výchozí hodnota je `false`, a pokud předáte `true`, rozhraní API vrátí chybu."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Buď `true` pro povolení wiki pro tento repozitář, nebo `false` pro její zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2Rvd25sb2Fkcw.display_name": {
-          "source": "Has Downloads",
+          "source": "Has downloads",
           "message": "Má soubory ke stažení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2Rvd25sb2Fkcw.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Zda jsou povoleny soubory ke stažení."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
+          "source": "Is template",
           "message": "Je šablona"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "ID týmu, kterému bude udělen přístup k tomuto repozitáři. Toto je platné pouze při vytváření repozitáře v organizaci."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
+          "source": "Allow squash merge",
           "message": "Povolit sloučení typu squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Buď `true` pro povolení squash sloučení pull requestů, nebo `false` pro zabránění squash sloučení."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
+          "source": "Allow merge commit",
           "message": "Povolit slučovací commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Buď `true` pro povolení slučování pull requestů pomocí slučovacího commitu, nebo `false` pro zabránění slučování pull requestů pomocí slučovacích commitů."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
+          "source": "Allow rebase merge",
           "message": "Povolit sloučení typu rebase"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Buď `true` pro povolení rebase sloučení pull requestů, nebo `false` pro zabránění rebase sloučení."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
+          "source": "Allow auto merge",
           "message": "Povolit automatické sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Buď `true` pro povolení automatického sloučení u pull requestů, nebo `false` pro jeho zakázání."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
+          "source": "Delete branch on merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Buď `true` pro povolení automatického mazání zdrojových větví po sloučení pull requestů, nebo `false` pro zabránění automatickému mazání. **Pro nastavení této vlastnosti na `true` musí být ověřený uživatel vlastníkem organizace.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash PR Title as Default",
+          "source": "Use squash PR title as default",
           "message": "Použít název PR pro squash jako výchozí"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
@@ -1992,7 +1992,7 @@
           "message": "Buď `true` pro povolení použití názvu pull requestu pro squash-merge commity, nebo `false` pro použití zprávy commitu. **Tato vlastnost bude zrušena. Použijte místo ní `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
+          "source": "Squash merge commit title",
           "message": "Název commitu při sloučení squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
+          "source": "Squash merge commit message",
           "message": "Zpráva commitu squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
+          "source": "Merge commit title",
           "message": "Název slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
+          "source": "Merge commit message",
           "message": "Zpráva slučovacího commitu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Y3VzdG9tX3Byb3BlcnRpZXM.display_name": {
-          "source": "Custom Properties",
+          "source": "Custom properties",
           "message": "Vlastní vlastnosti"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Y3VzdG9tX3Byb3BlcnRpZXM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Vlastní vlastnosti pro nový repozitář. Klíče jsou názvy vlastních vlastností a hodnoty jsou odpovídající hodnoty vlastních vlastností."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3Itb3Jn.display_name": {
-          "source": "List Organization Repositories",
+          "source": "List organization repositories",
           "message": "Zobrazit repozitáře organizace"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3Itb3Jn.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.display_name": {
-          "source": "List Contributors",
+          "source": "List contributors",
           "message": "Získat seznam přispěvatelů"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.short_desc": {
@@ -2296,7 +2296,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "List Collaborators",
+          "source": "List collaborators",
           "message": "Získat seznam spolupracovníků"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -2412,7 +2412,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.display_name": {
-          "source": "Get File or Directory",
+          "source": "Get file or directory",
           "message": "Získat soubor nebo adresář"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Název commitu/větve/tagu. Výchozí hodnota: výchozí větev repozitáře."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.display_name": {
-          "source": "Create or Update File",
+          "source": "Create or update file",
           "message": "Vytvořit nebo aktualizovat soubor"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Jméno autora nebo přispěvatele příspěvku. Pokud je `name` vynecháno, obdržíte kód stavu `422`."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Smazat soubor"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Jméno autora (nebo přispěvatele) příspěvku"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.display_name": {
-          "source": "List Issues",
+          "source": "List issues",
           "message": "Vypsat issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "Uživatel, který je zmíněn v issue."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
+          "source": "Issue field values",
           "message": "Hodnoty polí issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "Čárkami oddělený seznam filtrů polí issue ve formátu `field_slug:value`.\nVrací se pouze issue odpovídající všem zadaným hodnotám polí.\nVyžaduje, aby byla pro repozitář povolena pole issue. Pole issue nejsou\ndostupná pro repozitáře vlastněné uživateli a dostupnost polí pro\nveřejné repozitáře vlastněné organizacemi závisí na nastavení viditelnosti\norganizace. Například `priority:Urgent,severity:High` filtruje\nissue, kde pole `priority` je `Urgent` A pole `severity` je\n`High`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.display_name": {
-          "source": "List My Issues",
+          "source": "List my issues",
           "message": "Vypsat mé issues"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Vlastněné"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Získat požadavek"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "**Číslo** issue zobrazené v uživatelském rozhraní a URL, nikoli interní `id`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Vytvořit požadavek"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "GitHub přijímá pouze řešitele s **přístupem pro zápis** k repozitáři a kohokoli jiného bez upozornění ignoruje, proto tento rozevírací seznam obsahuje spolupracovníky repozitáře."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
+          "source": "Issue field values",
           "message": "Hodnoty polí issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "Název typu issue, který se má k této issue přiřadit. _POZNÁMKA: Typ pro nové issue mohou nastavit pouze uživatelé s přístupem pro zápis. V opačném případě je typ bez upozornění zahozen._"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Aktualizovat problém"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "closed"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.c3RhdGVfcmVhc29u.display_name": {
-          "source": "State Reason",
+          "source": "State reason",
           "message": "Důvod stavu"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.c3RhdGVfcmVhc29u.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "GitHub přijímá pouze řešitele s **přístupem pro zápis** k repozitáři a kohokoli jiného bez upozornění ignoruje, proto tento rozevírací seznam obsahuje spolupracovníky repozitáře."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue ID",
+          "source": "Duplicate issue ID",
           "message": "ID duplicitní issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "ID issue, která má být označena jako kanonický duplikát, pokud je `state_reason` `duplicate`. Issue musí existovat a být přístupná ověřenému uživateli. Ignorováno, pokud `state_reason` není `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
+          "source": "Issue field values",
           "message": "Hodnoty polí issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
@@ -3864,7 +3864,7 @@
           "message": "Název typu problému, který má být přidán k tomuto problému, nebo `null` pro odstranění aktuálního typu problému."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.display_name": {
-          "source": "Add Assignees",
+          "source": "Add assignees",
           "message": "Přidat řešitele"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "Pokud je `true`, přiřazený uživatel je uložen jako návrh pro lidskou revizi místo přímého použití."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.display_name": {
-          "source": "Remove Assignees",
+          "source": "Remove assignees",
           "message": "Odebrat přiřazené osoby"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.short_desc": {
@@ -4044,7 +4044,7 @@
           "message": "GitHub přijímá pouze řešitele s **přístupem pro zápis** k repozitáři a ostatní bez upozornění ignoruje, proto tento rozevírací seznam obsahuje spolupracovníky repozitáře."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Vypsat štítky"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Vypsat pull requesty"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.short_desc": {
@@ -4260,7 +4260,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Získat pull request"
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.short_desc": {
@@ -4308,7 +4308,7 @@
           "message": "**Číslo** pull requestu zobrazené v uživatelském rozhraní a v adrese URL, nikoli interní `id`.\n\nGitHub čísluje issue a pull requesty v jedné sekvenci, takže číslo pull requestu není nikdy zároveň číslem issue."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Vytvořit pull request"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.short_desc": {
@@ -4404,7 +4404,7 @@
           "message": "Udává, zda je pull request koncept (draft). Více informací naleznete v části „[Draft Pull Requests](https://docs.github.com/articles/about-pull-requests#draft-pull-requests)“ v nápovědě GitHubu."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
-          "source": "Maintainer Can Modify",
+          "source": "Maintainer can modify",
           "message": "Správce může upravovat"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "Udává, zda [správci mohou upravovat](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) pull request."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.aGVhZF9yZXBv.display_name": {
-          "source": "Head Repo",
+          "source": "Head repo",
           "message": "Zdrojový repozitář (head)"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.aGVhZF9yZXBv.short_desc": {
@@ -4440,7 +4440,7 @@
           "message": "Issue v repozitáři, které se má převést na pull request. Název, tělo a komentáře daného issue se stanou názvem, tělem a komentáři nového pull requestu. Povinné, pokud není zadáno `title`."
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Aktualizovat pull request"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.short_desc": {
@@ -4544,7 +4544,7 @@
           "message": "Název větve, do které chcete své změny začlenit. Mělo by jít o existující větev v aktuálním repozitáři. Cílovou větev v pull requestu nelze aktualizovat tak, aby ukazovala na jiný repozitář."
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
-          "source": "Maintainer Can Modify",
+          "source": "Maintainer can modify",
           "message": "Správce může upravovat"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
@@ -4556,7 +4556,7 @@
           "message": "Udává, zda [správci mohou upravovat](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) pull request."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.display_name": {
-          "source": "List Requested Reviewers",
+          "source": "List requested reviewers",
           "message": "Vypsat vyžádané recenzenty"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.short_desc": {
@@ -4604,7 +4604,7 @@
           "message": "**Číslo** pull requestu zobrazené v uživatelském rozhraní a v adrese URL, nikoli interní `id`.\n\nGitHub čísluje issue a pull requesty v jedné sekvenci, takže číslo pull requestu není nikdy zároveň číslem issue."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.display_name": {
-          "source": "Request Reviewers",
+          "source": "Request reviewers",
           "message": "Požádat o recenzenty"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.short_desc": {
@@ -4676,7 +4676,7 @@
           "message": "Pole `slug` týmů, o které bude požádáno."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.display_name": {
-          "source": "Remove Requested Reviewers",
+          "source": "Remove requested reviewers",
           "message": "Odebrat vyžádané recenzenty"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.short_desc": {
@@ -4748,7 +4748,7 @@
           "message": "Pole `slug` týmů, které budou odebrány."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Vypsat větve"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "Získat větev"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Název větve. Nesmí obsahovat zástupné znaky (wildcards). Chcete-li v názvech větví použít zástupné znaky, použijte [the GraphQL API](https://docs.github.com/graphql)."
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.display_name": {
-          "source": "Create Branch or Tag",
+          "source": "Create branch or tag",
           "message": "Vytvořit větev nebo tag"
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Hodnota SHA1 pro tuto referenci."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Vypsat commity"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.short_desc": {
@@ -5060,7 +5060,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.display_name": {
-          "source": "List Releases",
+          "source": "List releases",
           "message": "Zobrazit vydání"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.short_desc": {
@@ -5120,7 +5120,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.display_name": {
-          "source": "Create Release",
+          "source": "Create release",
           "message": "Vytvořit vydání"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.short_desc": {
@@ -5228,7 +5228,7 @@
           "message": "`true` pro označení vydání jako předběžné verze. `false` pro označení vydání jako plné verze."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.Z2VuZXJhdGVfcmVsZWFzZV9ub3Rlcw.display_name": {
-          "source": "Generate Release Notes",
+          "source": "Generate release notes",
           "message": "Generovat poznámky k vydání"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.Z2VuZXJhdGVfcmVsZWFzZV9ub3Rlcw.short_desc": {
@@ -5240,7 +5240,7 @@
           "message": "Zda se má pro toto vydání automaticky vygenerovat název a tělo. Pokud je zadán parametr `name`, použije se zadaný název; v opačném případě bude název vygenerován automaticky. Pokud je zadán parametr `body`, tělo se připojí před automaticky vygenerované poznámky."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.display_name": {
-          "source": "Make Latest",
+          "source": "Make latest",
           "message": "Nastavit jako nejnovější"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
@@ -5264,7 +5264,7 @@
           "message": "legacy"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.display_name": {
-          "source": "Discussion Category Name",
+          "source": "Discussion category name",
           "message": "Název kategorie diskuze"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
@@ -5276,7 +5276,7 @@
           "message": "Pokud je zadáno, vytvoří se diskuze v zadané kategorii a propojí se s vydáním. Hodnotou musí být kategorie, která již v repozitáři existuje. Další informace naleznete v části „[Správa kategorií pro diskuze ve vašem repozitáři](https://docs.github.com/discussions/managing-discussions-for-your-community/managing-categories-for-discussions-in-your-repository)“."
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LWZvci1hdXRoZW50aWNhdGVkLXVzZXI.display_name": {
-          "source": "List My Organizations",
+          "source": "List my organizations",
           "message": "Vypsat mé organizace"
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LWZvci1hdXRoZW50aWNhdGVkLXVzZXI.short_desc": {
@@ -5312,7 +5312,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LW1lbWJlcnM.display_name": {
-          "source": "List Organization Members",
+          "source": "List organization members",
           "message": "Seznam členů organizace"
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LW1lbWJlcnM.short_desc": {
@@ -5408,7 +5408,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.display_name": {
-          "source": "Search Repositories",
+          "source": "Search repositories",
           "message": "Hledat repozitáře"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.short_desc": {
@@ -5504,7 +5504,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.display_name": {
-          "source": "Search Issues and Pull Requests",
+          "source": "Search issues and pull requests",
           "message": "Hledat issues a pull requesty"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.short_desc": {
@@ -5528,7 +5528,7 @@
           "message": "Dotaz obsahuje jedno nebo více klíčových slov a kvalifikátorů. Kvalifikátory umožňují omezit hledání na určité oblasti GitHubu. REST API podporuje stejné kvalifikátory jako webové rozhraní GitHubu. Více o formátu dotazu najdete v [Constructing a search query](https://docs.github.com/rest/search/search#constructing-a-search-query). Podrobný seznam kvalifikátorů najdete v \"[Searching issues and pull requests](https://docs.github.com/search-github/searching-on-github/searching-issues-and-pull-requests)\"."
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.YWR2YW5jZWRfc2VhcmNo.display_name": {
-          "source": "Advanced Search",
+          "source": "Advanced search",
           "message": "Pokročilé vyhledávání"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.YWR2YW5jZWRfc2VhcmNo.short_desc": {
@@ -5640,7 +5640,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.display_name": {
-          "source": "Search Type",
+          "source": "Search type",
           "message": "Typ vyhledávání"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.short_desc": {
@@ -5660,7 +5660,7 @@
           "message": "hybridní"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.display_name": {
-          "source": "List Workflows",
+          "source": "List workflows",
           "message": "Zobrazit seznam workflow"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Číslo stránky výsledků, které se mají načíst. Další informace naleznete v části „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.display_name": {
-          "source": "Get Secrets Public Key",
+          "source": "Get secrets public key",
           "message": "Získat veřejný klíč pro tajné klíče"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.short_desc": {
@@ -5756,7 +5756,7 @@
           "message": "Samostatný název repozitáře, **nikoli** `owner/name`.\n\nPro `qoretechnologies/qorus` je to `qorus`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.display_name": {
-          "source": "Get Secret",
+          "source": "Get secret",
           "message": "Získat tajný klíč"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.short_desc": {
@@ -5804,7 +5804,7 @@
           "message": "Název tajného klíče."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.display_name": {
-          "source": "Create or Update Secret",
+          "source": "Create or update secret",
           "message": "Vytvořit nebo aktualizovat tajný klíč"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.short_desc": {
@@ -5876,7 +5876,7 @@
           "message": "ID klíče, který jste použili k zašifrování tajného klíče."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.display_name": {
-          "source": "Delete Secret",
+          "source": "Delete secret",
           "message": "Smazat tajný klíč"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.short_desc": {
@@ -5924,7 +5924,7 @@
           "message": "Název tajného klíče."
         },
         "app.R2l0aHVi.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhledat záznamy"
         },
         "app.R2l0aHVi.action.c2VhcmNo.short_desc": {
@@ -5948,7 +5948,7 @@
           "message": "Tabulka, se kterou se má pracovat: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` nebo `contributors`"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Najít jeden záznam"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -5972,7 +5972,7 @@
           "message": "Tabulka, se kterou se má pracovat: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` nebo `contributors`"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvořit záznamy"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.short_desc": {
@@ -5996,7 +5996,7 @@
           "message": "Tabulka, se kterou se má pracovat: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` nebo `contributors`"
         },
         "app.R2l0aHVi.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovat záznamy"
         },
         "app.R2l0aHVi.action.dXBkYXRl.short_desc": {
@@ -6020,7 +6020,7 @@
           "message": "Tabulka, se kterou se má pracovat: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` nebo `contributors`"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Smazat záznamy"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "Tabulka, se kterou se má pracovat: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` nebo `contributors`"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "Nový požadavek"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.short_desc": {
@@ -6056,7 +6056,7 @@
           "message": "Spustí se při otevření issue.\n\nDoručená zpráva obsahuje samotný `issue`, `repository` a `sender`, který jej otevřel.\n\nUdálost `issues` na GitHubu pokrývá také úpravy, uzavření, označení štítkem a přiřazení; tyto akce nejsou vyvolány, pokud není nastaveno **All Actions** – v takovém případě čtěte `action` v payloadu pro jejich rozlišení."
         },
         "app.R2l0aHVi.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Nový pull request"
         },
         "app.R2l0aHVi.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
@@ -6068,7 +6068,7 @@
           "message": "Spustí se při otevření pull requestu.\n\nDoručení obsahuje `pull_request`, jeho `number`, `repository` a `sender`.\n\nUdálost `pull_request` na GitHubu pokrývá také zavření, sloučení, znovuotevření, žádosti o review a každý push do větve (`synchronize`); tyto události se nevyvolávají, pokud není nastaveno **All Actions**."
         },
         "app.R2l0aHVi.action.bmV3X3Jldmlld19yZXF1ZXN0.display_name": {
-          "source": "New Pull Request Review",
+          "source": "New pull request review",
           "message": "Nová recenze pull requestu"
         },
         "app.R2l0aHVi.action.bmV3X3Jldmlld19yZXF1ZXN0.short_desc": {
@@ -6080,7 +6080,7 @@
           "message": "Spustí se, když někdo odešle recenzi na pull request.\n\nDoručená zpráva obsahuje `review` – jeho stav je `approved`, `changes_requested` nebo `commented` – spolu s `pull_request`, kterého se týká, `repository` a `sender`.\n\n**Jedná se o odeslání recenze, nikoli o žádost o ni**, navzdory ID této události: aplikace, kterou tento modul nahrazuje, ji pojmenovala `new_review_request`, zatímco odebírala recenze. ID je zachováno kvůli stávajícím workflow. Pro *žádost* o recenzi použijte **New Pull Request** s nastaveným **All Actions** a porovnejte `action` vůči `review_requested`."
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nový commit"
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -6092,7 +6092,7 @@
           "message": "Spustí se při každém pushi do repozitáře.\n\n**Jedno doručení může obsahovat mnoho commitů**: `commits` obsahuje ty v rámci pushe (až do limitu 20 od GitHubu) a `head_commit` je poslední z nich. `ref` určuje, do které větve nebo tagu byl push proveden, a `before` a `after` vymezují rozsah.\n\nPush, který větev smaže, dorazí také sem, přičemž je nastaveno `deleted` a `after` jsou samé nuly."
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfYnJhbmNo.display_name": {
-          "source": "New Branch",
+          "source": "New branch",
           "message": "Nová větev"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfYnJhbmNo.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "Spustí se při vytvoření větve.\n\nUdálost `create` na GitHubu pokrývá **větve i tagy** a rozlišuje je pomocí `ref_type`; tato událost vyvolává pouze větve, jak napovídá její název. Nastavte **All Actions**, abyste přijímali i vytváření tagů, a čtěte `ref_type` pro jejich rozlišení.\n\nAplikace, kterou tento modul nahrazuje, hlásila nový tag jako novou větev."
         },
         "app.R2l0aHVi.action.bmV3X3JlbGVhc2U.display_name": {
-          "source": "New Release",
+          "source": "New release",
           "message": "Nové vydání"
         },
         "app.R2l0aHVi.action.bmV3X3JlbGVhc2U.short_desc": {
@@ -6116,7 +6116,7 @@
           "message": "Spustí se při publikování vydání (release).\n\nVydání typu **draft** (koncept) tuto událost při svém vytvoření nevyvolá; vyvolá ji až při publikování, což činí z `published` ten správný okamžik pro reakci, nikoli z `created`.\n\nNastavte **All Actions**, chcete-li přijímat také úpravy, mazání a přechody předběžných verzí (pre-release)."
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "Nový komentář ke commitu"
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {

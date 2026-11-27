@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.display_name": {
-          "source": "Search Datasources",
+          "source": "Search datasources",
           "message": "Vyhľadať zdroje údajov"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.display_name": {
-          "source": "Get a Datasource",
+          "source": "Get a datasource",
           "message": "Získať zdroj údajov"
         },
         "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.short_desc": {
@@ -408,7 +408,7 @@
           "message": "ID zdroja údajov"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.display_name": {
-          "source": "Update a Datasource",
+          "source": "Update a datasource",
           "message": "Aktualizovať zdroj údajov"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.short_desc": {
@@ -480,7 +480,7 @@
           "message": "Poznámka o certifikácii zdroja údajov"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.display_name": {
-          "source": "Delete a Datasource",
+          "source": "Delete a datasource",
           "message": "Odstrániť zdroj údajov"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.short_desc": {
@@ -504,7 +504,7 @@
           "message": "Jedinečný identifikátor zdroja údajov, ktorý sa má odstrániť"
         },
         "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.display_name": {
-          "source": "Download a Datasource",
+          "source": "Download a datasource",
           "message": "Stiahnuť zdroj údajov"
         },
         "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.short_desc": {
@@ -528,7 +528,7 @@
           "message": "Jedinečný identifikátor zdroja údajov na stiahnutie"
         },
         "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.display_name": {
-          "source": "Add Tag to Datasource",
+          "source": "Add tag to datasource",
           "message": "Pridať štítok k zdroju údajov"
         },
         "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.short_desc": {
@@ -564,7 +564,7 @@
           "message": "Názov štítku, ktorý sa má pridať k zdroju údajov"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.display_name": {
-          "source": "Delete Tag from Datasource",
+          "source": "Delete tag from datasource",
           "message": "Odstrániť značku zo zdroja údajov"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Názov značky, ktorá sa má odstrániť zo zdroja údajov"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "Vyhľadať projekty"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get a Project",
+          "source": "Get a project",
           "message": "Získať projekt"
         },
         "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -668,7 +668,7 @@
           "message": "ID projektu"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create a Project",
+          "source": "Create a project",
           "message": "Vytvoriť projekt"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -740,7 +740,7 @@
           "message": "Uzamknuté na projekt bez vnorených"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update a Project",
+          "source": "Update a project",
           "message": "Aktualizovať projekt"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Uzamknuté na projekt bez vnorených"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete a Project",
+          "source": "Delete a project",
           "message": "Odstrániť projekt"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Jedinečný identifikátor projektu na odstránenie"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.display_name": {
-          "source": "Search Users",
+          "source": "Search users",
           "message": "Vyhľadať používateľov"
         },
         "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.VGFibGVhdQ.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
+          "source": "Get a user",
           "message": "Získať používateľa"
         },
         "app.VGFibGVhdQ.action.Z2V0LXVzZXI.short_desc": {
@@ -956,7 +956,7 @@
           "message": "ID používateľa"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Create a User",
+          "source": "Create a user",
           "message": "Vytvoriť používateľa"
         },
         "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Tableau ID s viacfaktorovou autentifikáciou"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
+          "source": "Update a user",
           "message": "Aktualizovať používateľa"
         },
         "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Tableau ID s viacfaktorovou autentifikáciou"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete a User",
+          "source": "Delete a user",
           "message": "Odstrániť používateľa"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "Jedinečný identifikátor používateľa, ktorý sa má odstrániť"
         },
         "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.display_name": {
-          "source": "List Extract Refresh Tasks",
+          "source": "List extract refresh tasks",
           "message": "Zoznam úloh obnovenia extraktu"
         },
         "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
-          "source": "Get an Extract Refresh Task",
+          "source": "Get an extract refresh task",
           "message": "Získať úlohu obnovenia extraktu"
         },
         "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "ID úlohy"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
-          "source": "Delete an Extract Refresh Task",
+          "source": "Delete an extract refresh task",
           "message": "Odstrániť úlohu obnovenia extraktu"
         },
         "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
@@ -1268,7 +1268,7 @@
           "message": "Jedinečný identifikátor úlohy obnovenia extraktu, ktorá sa má odstrániť"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.display_name": {
-          "source": "Datasource Created",
+          "source": "Datasource created",
           "message": "Zdroj údajov bol vytvorený"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.display_name": {
-          "source": "Datasource Deleted",
+          "source": "Datasource deleted",
           "message": "Zdroj údajov odstránený"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.short_desc": {
@@ -1316,7 +1316,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.display_name": {
-          "source": "Datasource Updated",
+          "source": "Datasource updated",
           "message": "Zdroj údajov bol aktualizovaný"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.display_name": {
-          "source": "Datasource Refresh Started",
+          "source": "Datasource refresh started",
           "message": "Obnovenie zdroja údajov sa začalo"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.display_name": {
-          "source": "Datasource Refresh Succeeded",
+          "source": "Datasource refresh succeeded",
           "message": "Obnovenie zdroja údajov bolo úspešné"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.display_name": {
-          "source": "Datasource Refresh Failed",
+          "source": "Datasource refresh failed",
           "message": "Obnovenie zdroja údajov zlyhalo"
         },
         "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.display_name": {
-          "source": "New Datasource",
+          "source": "New datasource",
           "message": "Nový zdroj údajov"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Nový projekt"
         },
         "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.short_desc": {

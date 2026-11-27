@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Wyszukaj kontakty"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
@@ -624,7 +624,7 @@
           "message": "malejąco"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Dołącz historię scalania"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Lista kontaktów"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Dołącz historię scalania"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Utwórz notatkę"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Unikalny identyfikator danego administratora."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Lista tagów"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Wyświetla listę wszystkich tagów zdefiniowanych w obszarze roboczym.\n\nTa lista nie jest stronicowana: Intercom zwraca cały zestaw w jednej odpowiedzi."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
+          "source": "List tags on contact",
           "message": "Wyświetl tagi kontaktu"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
+          "source": "Add tag to contact",
           "message": "Dodaj tag do kontaktu"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Unikalny identyfikator tagu nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Usuń tag z kontaktu"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
@@ -840,7 +840,7 @@
           "message": "Unikalny identyfikator tagu nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
-          "source": "Create or Update Company",
+          "source": "Create or update company",
           "message": "Utwórz lub zaktualizuj firmę"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Nazwa planu powiązanego z firmą."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Miesięczne wydatki"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Wartość przychodu generowanego przez firmę dla Twojej działalności. Pamiętaj, że wartości zmiennoprzecinkowe zostaną obcięte, tzn. dozwolone są tylko liczby całkowite, 155.98 zostanie obcięte do 155. Pamiętaj, że górny limit to 2**31-1, czyli 2147483647."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Atrybuty niestandardowe"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Czas utworzenia firmy przez Ciebie.\n\nWartość jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
-          "source": "Update Last Request At",
+          "source": "Update last request at",
           "message": "Zaktualizuj czas ostatniego żądania"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Ustaw na true, aby zaktualizować czas ostatniej aktywności firmy na bieżący moment."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Lista firm"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "`asc` lub `desc`. Zwraca firmy w kolejności rosnącej lub malejącej. Domyślnie: desc"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
-          "source": "Create Conversation",
+          "source": "Create conversation",
           "message": "Utwórz konwersację"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "Tytuł wiadomości e-mail. Ma zastosowanie tylko wtedy, gdy typem wiadomości jest e-mail."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
-          "source": "Attachment Urls",
+          "source": "Attachment urls",
           "message": "Adresy URL załączników"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "Lista adresów URL obrazów, które zostaną dodane jako załączniki. Możesz dołączyć do 10 adresów URL."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Unikalny identyfikator marki do powiązania z tą konwersacją."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
-          "source": "Search Conversations",
+          "source": "Search conversations",
           "message": "Szukaj konwersacji"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
@@ -1376,7 +1376,7 @@
           "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
-          "source": "Include Monitors",
+          "source": "Include monitors",
           "message": "Dołącz monitory"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "W przypadku ustawienia wartości true odpowiedź będzie zawierać tablicę `monitor_evaluations` dla każdej konwersacji z wynikami monitorów QA, które ją oznaczyły."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
-          "source": "Include Scorecards",
+          "source": "Include scorecards",
           "message": "Dołącz karty ocen"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "W przypadku ustawienia wartości true odpowiedź będzie zawierać tablicę `scorecards` dla każdej konwersacji z wynikami kart ocen QA."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
-          "source": "Create Message",
+          "source": "Create message",
           "message": "Utwórz wiadomość"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Wysyła wiadomość do kontaktu **od członka zespołu**, rozpoczynając nową konwersację.\n\n`message_type` określa sposób dostarczenia: `email` wymaga `subject`, `in_app` wyświetla wiadomość w komunikatorze, a `whatsapp` wymaga zatwierdzonego `template`.\n\nUżyj opcji **Odpowiedz na konwersację**, aby dodać wiadomość do istniejącej konwersacji."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
-          "source": "Message Type",
+          "source": "Message type",
           "message": "Typ wiadomości"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Styl wiadomości wychodzącej. Możliwe wartości: `plain` lub `personal`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "lead"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
-          "source": "Create Conversation Without Contact Reply",
+          "source": "Create conversation without contact reply",
           "message": "Utwórz konwersację bez odpowiedzi kontaktu"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Określa, czy w skrzynce odbiorczej powinna zostać otwarta konwersacja dla wiadomości bez konieczności odpowiedzi kontaktu. Domyślnie false, jeśli nie podano."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
-          "source": "Submit Data Event",
+          "source": "Submit data event",
           "message": "Prześlij zdarzenie danych"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Opcjonalne metadane dotyczące zdarzenia."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List Data Events",
+          "source": "List data events",
           "message": "Wyświetl zdarzenia danych"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "ID użytkownika"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjM2UxZDZmZGM2Y2I1MjI3ZTEwNGRkOGZkYmI2MjJhODAwNDM2NTVmN2YyMzAwNWQ3OGY1MjZlYWIzY2ViYTg0Yg.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
-          "source": "Intercom User ID",
+          "source": "Intercom user ID",
           "message": "ID użytkownika Intercom"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjNzVlNDdjMWNlM2FhMGZjOTc1YTM0ZGViZmM5MmE2NjI3YWNlMTE3MmEzZDNkN2JlYjdlMzQ3NjZmMjdhMWZlNg.field.ZW1haWw.display_name": {
@@ -1892,7 +1892,7 @@
           "message": "flaga podsumowania"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
-          "source": "List Articles",
+          "source": "List articles",
           "message": "Wyświetl artykuły"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Lista kolekcji"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Create Article",
+          "source": "Create article",
           "message": "Utwórz artykuł"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "Identyfikator nadrzędnej kolekcji lub sekcji artykułu. Artykuł bez tego pola jest samodzielny."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Przetłumaczona treść"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Zawartość artykułu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostępność dla AI Chatbota"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Czy artykuł jest dostępny dla chatbota AI."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostępność dla AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Czy artykuł jest dostępny dla AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Czy artykuł jest dostępny dla AI Sales Agent."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "Identyfikatory odbiorców"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Treść artykułu w formacie HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Treść w Markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Treść artykułu w formacie markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Opis artykułu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Data aktualizacji szkicu"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub `null`, jeśli nie ma szkicu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Posiada nieopublikowane zmiany"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Data aktualizacji"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Opis artykułu. W przypadku artykułów wielojęzycznych będzie to opis treści w języku domyślnym."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Treść w Markdown"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Treść artykułu w formacie Markdown. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Alternatywa dla `body` — możesz podać treść w formacie Markdown zamiast HTML. Wzajemnie wyklucza się z `body`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "Identyfikatory odbiorców"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Lista identyfikatorów grup odbiorców do przypisania do tego artykułu na potrzeby targetowania Fin AI Agenta. Przesłanie parametru `audience_ids` na poziomie głównym rozsyła ten sam zestaw do wszystkich ustawień regionalnych. Aby targetować według ustawień regionalnych, użyj zamiast tego `translated_content.<locale>.audience_ids`. Przesłanie parametrów na poziomie głównym i regionalnym w tym samym żądaniu sprawia, że priorytet ma poziom główny. Nieznane identyfikatory odbiorców zwracają błąd 404. Żadne częściowe zatwierdzenie nie następuje."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostępność dla AI Chatbota"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin). W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostępność dla AI Copilot"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Copilot. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Zaplanowany czas publikacji"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "Znacznik czasu ISO 8601 planowanej publikacji artykułu w przyszłości. W połączeniu z `state: \"published\"` artykuł zostanie zaplanowany zamiast natychmiast opublikowany. Ustawienie `null` anuluje oczekujący harmonogram publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Połączenie z `state: \"draft\"` zwraca 400 `parameter_invalid`. Wysłanie w tym samym żądaniu co `scheduled_unpublish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Zaplanowany czas wycofania publikacji"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Znacznik czasu ISO 8601 planowanego wycofania publikacji artykułu w przyszłości. Ustawienie `null` anuluje oczekujący harmonogram wycofania publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Wartość jest odrzucana z błędem 400 `parameter_invalid`, jeśli artykuł nigdy nie był opublikowany. Wysłanie w tym samym żądaniu co `scheduled_publish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
-          "source": "List Teammates",
+          "source": "List teammates",
           "message": "Wyświetl listę członków zespołu"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Wyświetla listę członków zespołu mających dostęp do obszaru roboczego.\n\nJest to wyeksportowane, aby listy rozwijane członków zespołu miały akcję do wywołania — autor artykułu, autor notatki lub odpowiedzi, nadawca wiadomości.\n\nTa lista nie jest stronicowana: Intercom zwraca wszystkich w jednej odpowiedzi, w tablicy `admins`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
-          "source": "Display Avatar",
+          "source": "Display avatar",
           "message": "Wyświetl awatar"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Jeśli ustawiono wartość true, odpowiedź będzie zawierać obiekt awatara administratora z adresem URL obrazu. Domyślnie false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Pobierz kontakt"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Dołącz historię scalania"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Przekaż `true`, aby uwzględnić w odpowiedzi historię scaleń kontaktu. Zwracana tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
@@ -2952,7 +2952,7 @@
           "message": "Adres e-mail kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
-          "source": "Email Verified",
+          "source": "Email verified",
           "message": "E-mail zweryfikowany"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "Adres URL obrazu zawierający awatar kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
-          "source": "Signed Up At",
+          "source": "Signed up at",
           "message": "Czas rejestracji"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "(Znacznik czasu Unix w sekundach) Czas rejestracji kontaktu.\n\nWartość ta jest wysyłana jako liczba całkowita sekund od 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
-          "source": "Last Seen At",
+          "source": "Last seen at",
           "message": "Ostatnio widziano"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Identyfikator administratora przypisanego jako właściciel konta kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
-          "source": "Unsubscribed from Emails",
+          "source": "Unsubscribed from emails",
           "message": "Wypisano z subskrypcji e-mail"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "Określa, czy kontakt zrezygnował z subskrypcji wiadomości e-mail"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Atrybuty niestandardowe"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "Atrybuty niestandardowe ustawione dla kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Dołącz historię scalania"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Przekaż `true`, aby uwzględnić w odpowiedzi historię scaleń kontaktu. Zwracana tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Usuń kontakt"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Pobierz konwersację"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Identyfikator docelowej konwersacji"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
-          "source": "Display As",
+          "source": "Display as",
           "message": "Wyświetl jako"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Ustaw na plaintext, aby pobierać wiadomości konwersacji w formacie zwykłego tekstu. Wpływa to zarówno na treść, jak i temat. Linki śródliniowe są renderowane jako `label (url)`, zachowując adres URL linku obok widocznego tekstu."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
-          "source": "Include Translations",
+          "source": "Include translations",
           "message": "Dołącz tłumaczenia"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "W przypadku ustawienia wartości true części konwersacji zostaną przetłumaczone na wykryty język konwersacji."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
+          "source": "Get company",
           "message": "Pobierz firmę"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Unikalny identyfikator firmy nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
+          "source": "Update company",
           "message": "Zaktualizuj firmę"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "Branża, w której działa ta firma."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Atrybuty niestandardowe"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Tablica asocjacyjna par klucz/wartość zawierająca dowolne inne dane firmy, które Intercom ma zapisać."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Miesięczne wydatki"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Wartość przychodu generowanego przez firmę dla Twojej działalności. Pamiętaj, że wartości zmiennoprzecinkowe zostaną obcięte, tzn. dozwolone są tylko liczby całkowite, 155.98 zostanie obcięte do 155. Pamiętaj, że górny limit to 2**31-1, czyli 2147483647."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
+          "source": "Delete company",
           "message": "Usuń firmę"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "Unikalny identyfikator firmy nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
+          "source": "Get article",
           "message": "Pobierz artykuł"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "Unikalny identyfikator artykułu nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
+          "source": "Update article",
           "message": "Zaktualizuj artykuł"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Treść artykułu w formacie HTML. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Wzajemnie wyklucza się z `body_markdown`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Treść w Markdown"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "Identyfikator nadrzędnej kolekcji lub sekcji artykułu. Artykuł bez tego pola jest samodzielny."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
-          "source": "Parent Type",
+          "source": "Parent type",
           "message": "Typ nadrzędny"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Typ elementu nadrzędnego, którym może być `collection` lub `section`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Przetłumaczona treść"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Zawartość artykułu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostępność dla AI Chatbota"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3488,7 +3488,7 @@
           "message": "Czy artykuł jest dostępny dla chatbota AI."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostępność dla AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Czy artykuł jest dostępny dla AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Czy artykuł jest dostępny dla AI Sales Agent."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "Identyfikatory odbiorców"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "Treść artykułu w formacie HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Treść w Markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Treść artykułu w formacie markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Opis artykułu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Data aktualizacji szkicu"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -3596,7 +3596,7 @@
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub `null`, jeśli nie ma szkicu."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Posiada nieopublikowane zmiany"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Data aktualizacji"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -4128,7 +4128,7 @@
           "message": "Zawartość artykułu."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "Identyfikatory odbiorców"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -4140,7 +4140,7 @@
           "message": "Lista identyfikatorów grup odbiorców do przypisania do tego artykułu w celu targetowania Fin AI Agent. Wysłanie `audience_ids` najwyższego poziomu rozsyła ten sam zestaw do wszystkich ustawień regionalnych. Wysłanie `audience_ids: []` czyści wszystkie przypisania do grup odbiorców ze wszystkich ustawień regionalnych. Aby targetować według ustawień regionalnych, użyj zamiast tego `translated_content.<locale>.audience_ids`. Wysłanie w tym samym żądaniu parametrów najwyższego poziomu oraz per-locale powoduje nadrzędność parametrów najwyższego poziomu. Nieznane identyfikatory odbiorców zwracają błąd 404. Żadne częściowe zatwierdzenie nie ma miejsca."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostępność dla AI Chatbota"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4152,7 +4152,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin). W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostępność dla AI Copilot"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4164,7 +4164,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Copilot. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -4176,7 +4176,7 @@
           "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Zaplanowany czas publikacji"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -4188,7 +4188,7 @@
           "message": "Znacznik czasu ISO 8601 planowanej publikacji artykułu w przyszłości. W połączeniu z `state: \"published\"` artykuł zostanie zaplanowany zamiast natychmiast opublikowany. Ustawienie `null` anuluje oczekujący harmonogram publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Połączenie z `state: \"draft\"` zwraca 400 `parameter_invalid`. Wysłanie w tym samym żądaniu co `scheduled_unpublish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Zaplanowany czas wycofania publikacji"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -4200,7 +4200,7 @@
           "message": "Znacznik czasu ISO 8601 planowanego wycofania publikacji artykułu w przyszłości. Ustawienie `null` anuluje oczekujący harmonogram wycofania publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Wartość jest odrzucana z błędem 400 `parameter_invalid`, jeśli artykuł nigdy nie był opublikowany. Wysłanie w tym samym żądaniu co `scheduled_publish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
+          "source": "Delete article",
           "message": "Usuń artykuł"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
@@ -4224,7 +4224,7 @@
           "message": "Unikalny identyfikator artykułu nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Pobierz kolekcję"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
@@ -4248,7 +4248,7 @@
           "message": "Unikalny identyfikator kolekcji nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Pobierz tag"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
@@ -4272,7 +4272,7 @@
           "message": "Unikatowy identyfikator danego tagu"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Usuń tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
@@ -4296,7 +4296,7 @@
           "message": "Unikatowy identyfikator danego tagu"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Wyszukaj rekordy"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
@@ -4320,7 +4320,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Znajdź pojedynczy rekord"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4344,7 +4344,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Utwórz rekordy"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Zaktualizuj rekordy"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Usuń rekordy"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
+          "source": "Reply to conversation",
           "message": "Odpowiedz na konwersację"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
@@ -4524,7 +4524,7 @@
           "message": "Dodaj odpowiedź bez powiadamiania kontaktu"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nowy kontakt"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Uruchamia się dla każdego kontaktu utworzonego w obszarze roboczym.\n\n`role` zawęża strumień do użytkowników (kontakt, który się zarejestrował) lub leadów (kontakt, który tego nie zrobił); jeśli pole pozostanie puste, zgłaszane są oba typy. Zdarzenie przekazuje rekord kontaktu zwracany przez Intercom.\n\nKontakt edytowany później **nie** uruchamia tego zdarzenia ponownie: strumień jest pozycjonowany według `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
+          "source": "New conversation",
           "message": "Nowa konwersacja"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {

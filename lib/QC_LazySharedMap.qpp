@@ -99,9 +99,10 @@ LazySharedMap::copy() {
 
     @return the value
 
-    @throw SHARED-INIT-ERROR the value is needed by its own builder, the wait would close a cycle of waits of builders,
-    the builder returned an object or callable value that sandboxed or restricted code created, or the key would
-    exceed the maximum number of entries
+    @throw SHARED-INIT-ERROR the value is needed by its own builder, the builder returned an object or callable value
+    that sandboxed or restricted code created, or the key would exceed the maximum number of entries
+    @throw SHARED-INIT-CYCLE the wait for another thread's build would close a cycle of waits of builders (see
+    @ref Qore::Thread::LazySharedValue "LazySharedValue")
     @throw SHARED-INIT-TIMEOUT the timeout ran out while another thread built the value
 */
 auto LazySharedMap::get(string key, timeout timeout_ms = 0) [flags=NAMED_ARGS] {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
-          "message": "List Posts"
+          "source": "List posts",
+          "message": "List posts"
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
           "source": "List posts in the community",
@@ -396,8 +396,8 @@
           "message": "Maximum results"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get a Post",
-          "message": "Get a Post"
+          "source": "Get a post",
+          "message": "Get a post"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
           "source": "Retrieve a specific post",
@@ -416,8 +416,8 @@
           "message": "The post ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
-          "source": "Create a Post",
-          "message": "Create a Post"
+          "source": "Create a post",
+          "message": "Create a post"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
           "source": "Create a new post",
@@ -548,8 +548,8 @@
           "message": "If `True`, no notifications will be sent to members about this post"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update a Post",
-          "message": "Update a Post"
+          "source": "Update a post",
+          "message": "Update a post"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
           "source": "Update an existing post",
@@ -692,8 +692,8 @@
           "message": "If `True`, no notifications will be sent about this update"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete a Post",
-          "message": "Delete a Post"
+          "source": "Delete a post",
+          "message": "Delete a post"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
           "source": "Delete a specific post",
@@ -716,8 +716,8 @@
           "message": "The unique identifier of the post to delete"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
-          "message": "List Comments"
+          "source": "List comments",
+          "message": "List comments"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
           "source": "List comments in the community",
@@ -752,8 +752,8 @@
           "message": "Maximum results"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
-          "source": "Get a Comment",
-          "message": "Get a Comment"
+          "source": "Get a comment",
+          "message": "Get a comment"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
           "source": "Retrieve a specific comment",
@@ -772,8 +772,8 @@
           "message": "The comment ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create a Comment",
-          "message": "Create a Comment"
+          "source": "Create a comment",
+          "message": "Create a comment"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
           "source": "Create a new comment",
@@ -808,8 +808,8 @@
           "message": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
-          "source": "Delete a Comment",
-          "message": "Delete a Comment"
+          "source": "Delete a comment",
+          "message": "Delete a comment"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
           "source": "Delete a specific comment",
@@ -832,8 +832,8 @@
           "message": "The unique identifier of the comment to delete"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
-          "source": "List Members",
-          "message": "List Members"
+          "source": "List members",
+          "message": "List members"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
           "source": "List community members",
@@ -884,8 +884,8 @@
           "message": "Maximum results"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
-          "source": "Invite a Member",
-          "message": "Invite a Member"
+          "source": "Invite a member",
+          "message": "Invite a member"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
           "source": "Invite a member to the community",
@@ -956,8 +956,8 @@
           "message": "List of space IDs to add the member to upon invitation"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
-          "source": "Remove a Member",
-          "message": "Remove a Member"
+          "source": "Remove a member",
+          "message": "Remove a member"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
           "source": "Remove a member from the community",
@@ -980,8 +980,8 @@
           "message": "The unique identifier of the community member to remove"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
-          "source": "Tag a Member",
-          "message": "Tag a Member"
+          "source": "Tag a member",
+          "message": "Tag a member"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
           "source": "Tag a specific member",
@@ -1016,8 +1016,8 @@
           "message": "The tag to apply to the member"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
-          "source": "Untag a Member",
-          "message": "Untag a Member"
+          "source": "Untag a member",
+          "message": "Untag a member"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
           "source": "Untag a specific member",
@@ -1052,8 +1052,8 @@
           "message": "The ID of the tag to remove from the member"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
-          "message": "List Spaces"
+          "source": "List spaces",
+          "message": "List spaces"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
           "source": "List spaces in the community",
@@ -1104,8 +1104,8 @@
           "message": "Maximum results"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get a Space",
-          "message": "Get a Space"
+          "source": "Get a space",
+          "message": "Get a space"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
           "source": "Retrieve a specific space",
@@ -1124,8 +1124,8 @@
           "message": "The space ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create a Space",
-          "message": "Create a Space"
+          "source": "Create a space",
+          "message": "Create a space"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
           "source": "Create a new space",
@@ -1244,8 +1244,8 @@
           "message": "Whether member posting is disabled in this space"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update a Space",
-          "message": "Update a Space"
+          "source": "Update a space",
+          "message": "Update a space"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
           "source": "Update an existing space",
@@ -1364,8 +1364,8 @@
           "message": "Whether to hide this space from featured areas in the community"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete a Space",
-          "message": "Delete a Space"
+          "source": "Delete a space",
+          "message": "Delete a space"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
           "source": "Delete a specific space",
@@ -1388,8 +1388,8 @@
           "message": "The unique identifier of the space to delete"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
-          "source": "Add a Member to a Space",
-          "message": "Add a Member to a Space"
+          "source": "Add a member to a space",
+          "message": "Add a member to a space"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
           "source": "Add a member to a certain space",
@@ -1424,8 +1424,8 @@
           "message": "The email address of the member to add to the space"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
-          "source": "Remove a Member from a Space",
-          "message": "Remove a Member from a Space"
+          "source": "Remove a member from a space",
+          "message": "Remove a member from a space"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
           "source": "Remove a member from a space",
@@ -1460,8 +1460,8 @@
           "message": "The ID of the community member to remove from the space"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
-          "source": "Add a Member to a Space Group",
-          "message": "Add a Member to a Space Group"
+          "source": "Add a member to a space group",
+          "message": "Add a member to a space group"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
           "source": "Add a member to a specific space group",
@@ -1496,8 +1496,8 @@
           "message": "The email address of the member to add to the space group"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
-          "source": "Remove a Member from a Space Group",
-          "message": "Remove a Member from a Space Group"
+          "source": "Remove a member from a space group",
+          "message": "Remove a member from a space group"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
           "source": "Remove a member from a space group",
@@ -1532,8 +1532,8 @@
           "message": "The ID of the community member to remove from the space group"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
-          "message": "List Communities"
+          "source": "List communities",
+          "message": "List communities"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
           "source": "List communities in the account",
@@ -1560,8 +1560,8 @@
           "message": "Maximum results"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
-          "source": "Get a Community",
-          "message": "Get a Community"
+          "source": "Get a community",
+          "message": "Get a community"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
           "source": "Retrieve a specific community",
@@ -1580,8 +1580,8 @@
           "message": "The community ID"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
-          "message": "Send a Message"
+          "source": "Send a message",
+          "message": "Send a message"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
           "source": "Send a message to a specific user",
@@ -1616,8 +1616,8 @@
           "message": "The body content of the message"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
-          "source": "New Comment",
-          "message": "New Comment"
+          "source": "New comment",
+          "message": "New comment"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
           "source": "Trigger when new comments are posted",
@@ -1628,8 +1628,8 @@
           "message": "Fires when new comments are posted in the Circle community"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
-          "source": "New Community",
-          "message": "New Community"
+          "source": "New community",
+          "message": "New community"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
           "source": "Trigger when new communities are created",
@@ -1640,8 +1640,8 @@
           "message": "Fires when new communities are created in Circle"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
-          "source": "Member Accepted an Invitation",
-          "message": "Member Accepted an Invitation"
+          "source": "Member accepted an invitation",
+          "message": "Member accepted an invitation"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
           "source": "Trigger when a member accepts an invitation",
@@ -1652,8 +1652,8 @@
           "message": "Fires when a member accepts an invitation to the Circle community"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
-          "message": "New Post"
+          "source": "New post",
+          "message": "New post"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
           "source": "Trigger when new posts are created",
@@ -1664,8 +1664,8 @@
           "message": "Fires when new posts are created in the Circle community"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
-          "source": "New Space",
-          "message": "New Space"
+          "source": "New space",
+          "message": "New space"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
           "source": "Trigger when new spaces are created",
@@ -1676,8 +1676,8 @@
           "message": "Fires when new spaces are created in the Circle community"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
-          "source": "Member Tagged",
-          "message": "Member Tagged"
+          "source": "Member tagged",
+          "message": "Member tagged"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
           "source": "Trigger when a member is tagged",

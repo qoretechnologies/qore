@@ -58,7 +58,7 @@ public class DeepSeekActions {
         const hash<string, hash<DeepSeekActionInfo>> Operations = {
             "list-models": <DeepSeekActionInfo>{
                 "billing": <DataProviderBillingInfo>{"model": "included"},
-                "display_name": "List Models",
+                "display_name": "List models",
                 "short_desc": "Find available models for your workflows",
                 "desc": "Find available models for your workflows.",
                 "group": "Models",
@@ -71,7 +71,7 @@ public class DeepSeekActions {
             },
             "get-balance": <DeepSeekActionInfo>{
                 "billing": <DataProviderBillingInfo>{"model": "included"},
-                "display_name": "Get Balance",
+                "display_name": "Get balance",
                 "short_desc": "Check available credit before running AI workflows",
                 "desc": "Check available credit before running AI workflows.\n\nReturns credit availability and balances without generating tokens.",
                 "group": "Account",
@@ -84,7 +84,7 @@ public class DeepSeekActions {
             },
             "fim-completion": <DeepSeekActionInfo>{
                 "billing": <DataProviderBillingInfo>{"unit": "token"},
-                "display_name": "Fill in the Middle",
+                "display_name": "Fill in the middle",
                 "short_desc": "Complete text or code between a prompt and suffix",
                 "desc": "Complete text or code between a prompt and suffix.\n\nUses `/beta/completions`. Select a model that supports Fill-in-the-Middle, currently `deepseek-v4-pro`.",
                 "group": "Chat",
@@ -96,7 +96,7 @@ public class DeepSeekActions {
             },
             "create-response": <DeepSeekActionInfo>{
                 "billing": <DataProviderBillingInfo>{"unit": "token"},
-                "display_name": "Create Response",
+                "display_name": "Create response",
                 "short_desc": "Generate a response with tools, images, or structured output",
                 "desc": "Generate a response with tools, images, or structured output.\n\nSupports function calls, server-side web search, vision, and JSON Schema output. **Stateless:** send the full conversation history in `input` for each turn.",
                 "group": "Chat",
@@ -107,7 +107,7 @@ public class DeepSeekActions {
                 "fields": DeepSeekCreateResponseRequestDataType::Fields,
             },
             "upload-file": <DeepSeekActionInfo>{
-                "display_name": "Upload Image File",
+                "display_name": "Upload image file",
                 "short_desc": "Upload an image for reuse in model requests",
                 "desc": "Upload an image for reuse in model requests.",
                 "group": "Files",
@@ -118,7 +118,7 @@ public class DeepSeekActions {
                 "fields": DeepSeekUploadFileRequestDataType::Fields,
             },
             "list-files": <DeepSeekActionInfo>{
-                "display_name": "List Image Files",
+                "display_name": "List image files",
                 "short_desc": "Browse uploaded images with pagination",
                 "desc": "Browse uploaded images with pagination.\n\nUse `last_id` as the next `after` cursor while `has_more` is `True`.",
                 "group": "Files",
@@ -129,7 +129,7 @@ public class DeepSeekActions {
                 "fields": DeepSeekListFilesRequestDataType::Fields,
             },
             "get-file": <DeepSeekActionInfo>{
-                "display_name": "Get Image File",
+                "display_name": "Get image file",
                 "short_desc": "Inspect an uploaded image and its expiration",
                 "desc": "Inspect an uploaded image and its expiration.",
                 "group": "Files",
@@ -140,7 +140,7 @@ public class DeepSeekActions {
                 "fields": DeepSeekFileRequestDataType::Fields,
             },
             "delete-file": <DeepSeekActionInfo>{
-                "display_name": "Delete Image File",
+                "display_name": "Delete image file",
                 "short_desc": "Remove an uploaded image from your account",
                 "desc": "Remove an uploaded image from your account.\n\n**Permanent:** subsequent model requests cannot use this file.",
                 "group": "Files",

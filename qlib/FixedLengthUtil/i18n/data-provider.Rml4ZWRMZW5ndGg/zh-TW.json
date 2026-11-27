@@ -16,7 +16,7 @@
           "message": "讀取和寫入定寬檔案資料"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "讀取定寬資料"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "解析日期時使用的時區區域（例如：`Europe/Prague`）；有關有效值請參閱 [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "寫入定寬資料"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TWlsdnVz.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
-          "message": "List Collections"
+          "source": "List collections",
+          "message": "List collections"
         },
         "app.TWlsdnVz.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
           "source": "List Milvus collections",

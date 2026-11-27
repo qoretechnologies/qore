@@ -1,0 +1,1986 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# debug-builtin-guards.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fails when a test calls a builtin that only a debug build of the library has without a guard.  The functions of a
+# debug build (dbg_*() and the other test hooks) are registered only under "#ifdef DEBUG", so in a release build a
+# direct call is a parse error and a call by name (call_function()) raises NO-FUNCTION; when that happens in a
+# thread that another waits for, the test hangs instead of failing.  A test or a fixture that it runs therefore calls
+# them only under a guard: see DebugBuiltinScanner for the guards.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class DebugBuiltinGuardsTest
+
+#! A debug-only builtin, as registered in the sources
+hashdecl DebugBuiltinInfo {
+    #! the name
+    string name;
+    #! where it is registered, as \c file:line relative to the root
+    string location;
+}
+
+#! A C++ or qpp source file for DebugBuiltinSources
+hashdecl SourceFileInfo {
+    #! the text, with every character that is not ASCII replaced, so that offsets are characters
+    string text;
+    #! the offsets of the starts of lines
+    list<int> line_starts;
+    #! the DEBUG-only regions: [start, end]
+    list<list<int>> regions;
+    #! the starts of the C++ functions: [offset, name]
+    list<list> fns;
+}
+
+#! A call of a debug-only builtin that is not under a guard
+hashdecl DebugBuiltinCallInfo {
+    #! the file, relative to the root
+    string file;
+    #! the line number
+    int line;
+    #! the name of the builtin
+    string name;
+    #! how it is called: "call" (a direct call or a call reference), "name" (its name in a string, as given to
+    #! call_function()) or "source" (a call in source code in a string, which a Program parses)
+    string kind;
+    #! True if the call is under a guard that applies only when the code runs: a direct call needs a parse-time guard
+    bool runtime_guard = False;
+    #! the method or function that the call is in, if any
+    *string def;
+}
+
+#! Derives the names of the builtins that only a debug build registers from the sources of the library and modules
+/** A builtin is debug-only when it is registered (an \c add...Variant() or \c add...Method() call with its name, or a
+    qpp declaration) under \c "#ifdef DEBUG" (or \c "#if" with \c defined(DEBUG)), or in a C++ function that is
+    called only there, such as \c init_debug_functions(); a name that is also registered outside such code is not
+    debug-only.
+*/
+class DebugBuiltinSources {
+    public {
+        #! the directories of C++ and qpp sources, relative to the root; "modules/<name>/src" is added
+        const SourceDirs = ("lib", "include");
+
+        #! the extensions of the source files
+        const Extensions = {"cpp": True, "h": True, "qpp": True};
+
+        #! a registration of a builtin function or method by name
+        const Registration = "\\badd\\w*(?:Variant|Method)\\w*\\s*\\(\\s*\"(\\w+)\"";
+
+        #! the start of a C++ function definition at the start of a line that does not end with ";"; group 1 is its
+        #! name
+        const FunctionStart = "(?m)^(?!(?:return|else|if|while|for|switch|case|do|namespace|class|struct|typedef|"
+            "template|static_assert)\\b)[A-Za-z_][\\w:\\t \\*&<>,]*?\\b(\\w+)[ \\t]*\\((?![^\\n]*;[ \\t]*$)";
+
+        #! the start of a qpp declaration (a function or a method); group 1 is its name
+        const QppDeclaration = "(?m)^[A-Za-z_][\\w:\\*<>, ]*?[ \\t]\\*?(?:\\w+::)?(\\w+)[ \\t]*\\([^;\\n]*$";
+    }
+
+    private {
+        string root;
+        #! file -> its text and structure
+        hash<string, hash<SourceFileInfo>> files = {};
+        #! function -> registrations in code that is not DEBUG-only
+        hash<string, list<hash<DebugBuiltinInfo>>> fn_regs = {};
+        #! the names registered in DEBUG-only code
+        hash<string, hash<DebugBuiltinInfo>> debug_names = {};
+        #! the names registered in other code: function -> name -> True
+        hash<string, hash<string, bool>> other_names = {};
+    }
+
+    constructor(string root) {
+        self.root = root;
+    }
+
+    #! Returns the debug-only builtins, name -> info
+    hash<string, hash<DebugBuiltinInfo>> get() {
+        list<string> paths = ();
+        foreach string dir in (SourceDirs) {
+            paths += findFiles(root, dir, Extensions);
+        }
+        Dir modules();
+        if (modules.chdir(root + "/modules")) {
+            foreach string name in (sort(modules.listDirs())) {
+                paths += findFiles(root, "modules/" + name + "/src", Extensions);
+            }
+        }
+        foreach string file in (paths) {
+            readFile(file);
+        }
+        # the functions that are called only in DEBUG-only code (or in other such functions)
+        hash<string, bool> debug_fns = {};
+        hash<string, list<list>> calls = findCalls(keys fn_regs);
+        while (True) {
+            bool changed = False;
+            foreach string fn in (keys fn_regs) {
+                if (debug_fns{fn} || !calls{fn}) {
+                    continue;
+                }
+                # called only in DEBUG-only code, or in a function that is called only there
+                if (!(select calls{fn}, !$1[0] && !($1[1] && $1[1] != fn && debug_fns{$1[1]}))) {
+                    debug_fns{fn} = True;
+                    changed = True;
+                }
+            }
+            if (!changed) {
+                break;
+            }
+        }
+        hash<string, hash<DebugBuiltinInfo>> rv = debug_names;
+        hash<string, bool> other = {};
+        foreach hash<auto> i in (fn_regs.pairIterator()) {
+            foreach hash<DebugBuiltinInfo> reg in (i.value) {
+                if (debug_fns{i.key}) {
+                    if (!rv{reg.name}) {
+                        rv{reg.name} = reg;
+                    }
+                } else {
+                    other{reg.name} = True;
+                }
+            }
+        }
+        foreach string fn in (keys other_names) {
+            if (!debug_fns{fn}) {
+                map other{$1} = True, keys other_names{fn};
+            }
+        }
+        # a name that is also registered in code that is not DEBUG-only is not debug-only
+        return rv - keys other;
+    }
+
+    #! Returns the files with the given extensions under a directory, relative to the root
+    static list<string> findFiles(string root, string dir, hash<string, bool> extensions) {
+        list<string> rv = ();
+        Dir d();
+        if (!d.chdir(root + "/" + dir)) {
+            return rv;
+        }
+        foreach string name in (sort(d.listFiles())) {
+            *string ext = (name =~ x/\.([^.\/]+)$/)[0];
+            if (ext && extensions{ext}) {
+                rv += dir + "/" + name;
+            }
+        }
+        foreach string name in (sort(d.listDirs())) {
+            rv += DebugBuiltinSources::findFiles(root, dir + "/" + name, extensions);
+        }
+        return rv;
+    }
+
+    #! True if a preprocessor condition is true only in a debug build
+    static bool isDebugCondition(string directive, string cond) {
+        if (directive == "ifdef") {
+            return cond =~ /^DEBUG\b/;
+        }
+        if (directive == "if" || directive == "elif") {
+            return cond =~ /(^|[^!\w])defined\s*\(?\s*DEBUG\b|^\s*DEBUG\b/ && cond !~ /!\s*defined\s*\(?\s*DEBUG\b/
+                && cond !~ /\|\|/;
+        }
+        return False;
+    }
+
+    private readFile(string file) {
+        string text = regex_subst(ReadOnlyFile::readTextFile(root + "/" + file), "[^\\x00-\\x7f]", "?", RE_Global);
+        list<int> starts = (0,) + (map $1.offset + 1, regex_extract_detailed(text, "\n", RE_Global) ?? ());
+        # the DEBUG-only regions: [start, end]
+        list<list<int>> regions = ();
+        # the stack of the conditions: True for a DEBUG-only branch
+        list<bool> stack = ();
+        *int start;
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text,
+                "(?m)^[ \\t]*#[ \\t]*(if|ifdef|ifndef|elif|else|endif)\\b([^\\n]*)", RE_Global) ?? ()) {
+            bool was = inlist(True, stack);
+            string directive = m.groups[0];
+            string cond = trim(m.groups[1] ?? "");
+            switch (directive) {
+                case "if":
+                case "ifdef":
+                case "ifndef":
+                    push stack, DebugBuiltinSources::isDebugCondition(directive, cond);
+                    break;
+                case "elif":
+                    if (stack) {
+                        stack[stack.size() - 1] = DebugBuiltinSources::isDebugCondition("elif", cond);
+                    }
+                    break;
+                case "else":
+                    if (stack) {
+                        stack[stack.size() - 1] = False;
+                    }
+                    break;
+                case "endif":
+                    if (stack) {
+                        pop stack;
+                    }
+                    break;
+            }
+            bool now = inlist(True, stack);
+            if (!was && now) {
+                start = m.offset + m.length;
+            } else if (was && !now) {
+                regions += ((start, m.offset),);
+            }
+        }
+        # the starts of the C++ functions: [offset, name]
+        list<list> fns = map ($1.offset, $1.groups[0]), regex_extract_detailed(text, FunctionStart, RE_Global) ?? ();
+        files{file} = <SourceFileInfo>{"text": text, "line_starts": starts, "regions": regions, "fns": fns};
+
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, Registration, RE_Global) ?? ()) {
+            string name = m.groups[0];
+            hash<DebugBuiltinInfo> reg = <DebugBuiltinInfo>{"name": name,
+                "location": sprintf("%s:%d", file, DebugBuiltinSources::lineOf(starts, m.offset))};
+            if (DebugBuiltinSources::inRegions(regions, m.offset)) {
+                debug_names{name} = reg;
+            } else if (*string fn = DebugBuiltinSources::functionAt(fns, m.offset)) {
+                fn_regs{fn} += (reg,);
+                other_names{fn}{name} = True;
+            }
+        }
+        if (file =~ /\.qpp$/) {
+            # a qpp declaration in DEBUG-only code: documented, so the line before it ends its comment
+            foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, QppDeclaration, RE_Global) ?? ()) {
+                if (!DebugBuiltinSources::inRegions(regions, m.offset)) {
+                    continue;
+                }
+                int line = DebugBuiltinSources::lineOf(starts, m.offset);
+                if (line < 2) {
+                    continue;
+                }
+                string prev = text.substr(starts[line - 2], starts[line - 1] - starts[line - 2]);
+                if (prev =~ /^\s*(\*\/|\/\/!)/) {
+                    debug_names{m.groups[0]} = <DebugBuiltinInfo>{"name": m.groups[0],
+                        "location": sprintf("%s:%d", file, line)};
+                }
+            }
+        }
+    }
+
+    #! the line number of an offset
+    static int lineOf(list<int> starts, int pos) {
+        int lo = 0;
+        int hi = starts.size() - 1;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (starts[mid] <= pos) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo + 1;
+    }
+
+    #! True if the offset is in one of the regions
+    static bool inRegions(list<list<int>> regions, int pos) {
+        foreach list<int> r in (regions) {
+            if (r[0] <= pos && pos < r[1]) {
+                return True;
+            }
+            if (r[0] > pos) {
+                break;
+            }
+        }
+        return False;
+    }
+
+    #! the C++ function that the offset is in: the last one that starts before it
+    static *string functionAt(list<list> fns, int pos) {
+        *string rv;
+        foreach list f in (fns) {
+            if (f[0] > pos) {
+                break;
+            }
+            rv = f[1];
+        }
+        return rv;
+    }
+
+    #! Returns the calls of the given functions: function -> list of [in DEBUG-only code, the calling function]
+    private hash<string, list<list>> findCalls(list<string> names) {
+        hash<string, list<list>> rv = {};
+        if (!names) {
+            return rv;
+        }
+        string call = "\\b(" + names.join("|") + ")\\s*\\(";
+        foreach hash<auto> i in (files.pairIterator()) {
+            hash<SourceFileInfo> f = i.value;
+            foreach hash<RegexMatchInfo> m in (regex_extract_detailed(f.text, call, RE_Global) ?? ()) {
+                int ls = f.text.rfind("\n", m.offset - 1) + 1;
+                string pre = f.text.substr(ls, m.offset - ls);
+                # a comment, a preprocessor line, or a declaration or the definition: the name follows a type
+                if (pre =~ /^\s*(\/\/|\*|\/\*|#)/
+                        || pre =~ /^\s*(?!return\b|else\b)[A-Za-z_][\w:<>\*&\s]*[\s\*&]$/) {
+                    continue;
+                }
+                rv{m.groups[0]} += ((DebugBuiltinSources::inRegions(f.regions, m.offset),
+                    DebugBuiltinSources::functionAt(f.fns, m.offset)),);
+            }
+        }
+        return rv;
+    }
+}
+
+#! Finds the calls of debug-only builtins in tests that are not under a guard
+/** A call is a direct call or a call reference of a debug-only builtin, its name as a string (as given to
+    \c call_function()), or a call in source code in a string, which a Program parses.  A check is
+    \c Option::HAVE_LIBRARY_DEBUGGING, \c exists_function(), \c Program::existsFunction(), a variable that is assigned
+    one (or a condition with one as an operand joined by \c "&&", or a value only when one is true:
+    <tt>x = Option::HAVE_LIBRARY_DEBUGGING ? ... : NOTHING</tt>), or a call of a function or a method of a scanned file
+    whose code only returns a check.
+
+    A call is under a guard when:
+    - it is in a \c "%ifdef QoreDebug" or \c "%ifdef HAVE_LIBRARY_DEBUGGING" block (or the \c "%else" block of
+      \c "%ifndef"): the only guard of a direct call in the file, which is otherwise a parse error in a release build
+    - its statement has a check before it (<tt>Option::HAVE_LIBRARY_DEBUGGING ? call_function("dbg_x") : NOTHING</tt>)
+    - it is in the block of an \c if whose condition has a check as an operand joined by \c "&&", or in the \c else
+      block of one whose condition has a negated check as an operand joined by \c "||"
+    - an earlier statement of its block, or of an enclosing block in its method or function (or at the top level of
+      a script), leaves the block when the build is not a debug build: an \c if whose condition has a negated check
+      as an operand joined by \c "||" and whose code calls \c testSkip(), \c return, \c throw, \c exit(),
+      \c continue or \c break; a \c try block whose \c catch block handles \c NO-FUNCTION or skips the test case;
+      or a call of a method or function of the file that calls \c testSkip(), \c throw or \c exit() so
+    - it is in a \c try block whose \c catch block handles \c NO-FUNCTION or skips the test case (not a direct call)
+    - it is in a method or function of the file whose every use in the file is under a guard (a default value of a
+      parameter is in the method or function), or in a method of a QUnit test that runs after a \c setUp() that
+      skips the test case so (not the constructor, \c globalSetUp() or \c globalTearDown())
+    - it is in a class of the file whose every object is created under a guard
+    - it is in the value of a constant or a variable whose every read is under a guard
+    - it is in source code in a string (strings next to each other are one) whose own code guards it, or that is
+      parsed under a guard (a direct call needs the latter, as a release build cannot parse it)
+    - it is in a function or a method of a module whose every call, in the module and in the files near it that name
+      the module, is under a guard
+    - the file is a fixture (not a \c .qtest) whose every use is under a guard: its file name, or its name without
+      the extension as a string (a module's also in \c %requires), in a file of its directory or of the directory
+      above that names its directory (the name of a QUnit test is not a use); a fixture that nothing uses is not
+      guarded
+
+    A call whose guard cannot be seen, such as one in a callback that a server calls only for the requests of test
+    cases that skip without debugging, is allowed with a comment starting with <tt>debug-builtin-guard:</tt> that
+    says where the guard is, on its line or in the comment lines directly above it, above a line that opens a block
+    that it is in, or above a line where the method, class or fixture that it is in is used or created.
+*/
+class DebugBuiltinScanner {
+    public {
+        #! the extensions of the files scanned
+        const Extensions = {"qtest": True, "q": True, "qm": True, "qc": True, "qr": True, "ql": True};
+
+        #! the parse defines of a debug build
+        const ParseDefines = {"QoreDebug": True, "HAVE_LIBRARY_DEBUGGING": True};
+
+        #! comments, strings and regular expression literals; group 1 is the content of a double-quoted string
+        const Lexemes = "#[^\\n]*|/\\*[\\s\\S]*?\\*/|\"((?:\\\\[\\s\\S]|[^\"\\\\])*)\"|'(?:[^'])*'"
+            "|[=!]~\\s*(?:[sxy]|tr)?/(?:\\\\.|[^/\\n\\\\])*/(?:(?:\\\\.|[^/\\n\\\\])*/)?";
+
+        #! the keywords that start a block that is not a method or a function
+        const BlockKeywords = {"if": True, "while": True, "for": True, "foreach": True, "in": True, "switch": True,
+            "catch": True, "sub": True, "try": True, "else": True, "do": True, "return": True, "context": True,
+            "subcontext": True, "summarize": True, "where": True, "sortBy": True, "sortDescendingBy": True};
+
+        #! the statements that leave a block
+        const ExitStatements = "\\b(testSkip|return|throw|exit|continue|break)\\b";
+
+        #! the statements that leave a method or a function and its caller
+        const ExitCaller = "\\b(testSkip|throw|exit)\\b";
+
+        #! the marker of a call whose guard is elsewhere
+        const Marker = "debug-builtin-guard:";
+
+        #! a function or a method whose code returns a check only; group 1 is its name
+        const GuardFunction = "\\b(\\w+)\\s*\\(\\s*\\)\\s*\\{\\s*return\\s+[^;{}]*\\b(?:HAVE_LIBRARY_DEBUGGING|exists_function)\\b[^;{}]*;\\s*\\}";
+    }
+
+    private {
+        string root;
+        #! the names of the debug-only builtins, as a regular expression
+        string names_re;
+        #! the scanned files, relative to the root
+        list<string> files = ();
+        #! file -> FileInfo
+        hash<string, *DebugBuiltinFile> info = {};
+        #! fixture -> True while its uses are checked, then its result
+        hash<string, bool> fixture_state = {};
+        #! the files that are not scanned, relative to the root
+        hash<string, bool> exempt;
+        #! the functions and methods whose code returns a check only
+        hash<string, bool> guard_fns = {};
+    }
+
+    #! Creates the scanner
+    /** @param root the root directory
+        @param names the names of the debug-only builtins
+        @param dirs the directories scanned, relative to the root
+    */
+    constructor(string root, list<string> names, list<string> dirs, hash<string, bool> exempt = {}) {
+        self.root = root;
+        self.exempt = exempt;
+        names_re = "\\b(" + (map regex_escape($1), sort(names, int sub (string a, string b) {
+            return b.size() <=> a.size();
+        })).join("|") + ")\\b";
+        foreach string dir in (dirs) {
+            files += DebugBuiltinSources::findFiles(root, dir, Extensions);
+        }
+    }
+
+    #! Returns the calls that are not under a guard
+    list<hash<DebugBuiltinCallInfo>> scan() {
+        # the functions and methods that return a check: a call of one is a check
+        foreach string file in (files) {
+            string text = ReadOnlyFile::readTextFile(root + "/" + file);
+            if (text.find("HAVE_LIBRARY_DEBUGGING") < 0 && text.find("exists_function") < 0) {
+                continue;
+            }
+            foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, GuardFunction, RE_Global) ?? ()) {
+                guard_fns{m.groups[0]} = True;
+            }
+        }
+        list<hash<DebugBuiltinCallInfo>> rv = ();
+        foreach string file in (files) {
+            if (exempt{file}) {
+                continue;
+            }
+            *DebugBuiltinFile f = getFile(file);
+            if (!f) {
+                continue;
+            }
+            list<hash<DebugBuiltinCallInfo>> calls = f.unguarded();
+            if (!calls) {
+                continue;
+            }
+            # a fixture that is run only under a guard is parsed only then
+            if (file !~ /\.qtest$/ && fixtureGuarded(file)) {
+                continue;
+            }
+            # a function or a method of a module that is called only under a guard
+            if (file =~ /\.qm$/) {
+                calls = select calls, !$1.def || !moduleFnGuarded(file, f, $1.def);
+            }
+            rv += calls;
+        }
+        return rv;
+    }
+
+    #! Returns the file's analysis, or NOTHING if it uses no debug-only builtin by name
+    private *DebugBuiltinFile getFile(string file) {
+        if (info.hasKey(file)) {
+            return info{file};
+        }
+        string text = ReadOnlyFile::readTextFile(root + "/" + file);
+        if (!regex(text, names_re)) {
+            return info{file} = NOTHING;
+        }
+        return info{file} = new DebugBuiltinFile(file, text, names_re, guard_fns);
+    }
+
+    #! the files that can use a fixture: those of its directory, and those of the directory above that name its
+    #! directory
+    private list<string> nearFiles(string file) {
+        string dir = dirname(file);
+        string dir_ref = "(?<![\\w.-])" + regex_escape(basename(dir)) + "(?![\\w.-])";
+        list<string> rv = ();
+        foreach string other in (files) {
+            if (other == file || (dirname(other) != dir && dirname(other) != dirname(dir))) {
+                continue;
+            }
+            if (dirname(other) != dir && !regex(ReadOnlyFile::readTextFile(root + "/" + other), dir_ref)) {
+                continue;
+            }
+            rv += other;
+        }
+        return rv;
+    }
+
+    #! the analysis of a file, also one that uses no debug-only builtin
+    private DebugBuiltinFile anyFile(string file) {
+        if (*DebugBuiltinFile f = info{file}) {
+            return f;
+        }
+        return info{file} = new DebugBuiltinFile(file, ReadOnlyFile::readTextFile(root + "/" + file), names_re,
+            guard_fns);
+    }
+
+    #! True if every call of a function or a method of a module, in the module and in the files near it, is under a
+    #! guard
+    private bool moduleFnGuarded(string file, DebugBuiltinFile f, string name, hash<string, bool> visiting = {}) {
+        if (visiting{name}) {
+            return False;
+        }
+        visiting{name} = True;
+        bool used = False;
+        foreach int p in (f.refsOf(name)) {
+            used = True;
+            if (f.isGuardedAt(p)) {
+                continue;
+            }
+            *string caller = f.defAt(p);
+            if (caller && caller != name && moduleFnGuarded(file, f, caller, visiting)) {
+                continue;
+            }
+            return False;
+        }
+        string call = "(?<![\\w.$])(?:\\w+::)*\\\\?" + name + "\\s*\\(";
+        # the files that name the module, which can load it
+        string base = basename(file);
+        string mod_ref = "\\b" + regex_escape((base =~ x/^(.*)\.[^.]+$/)[0] ?? base) + "\\b";
+        foreach string other in (nearFiles(file)) {
+            string text = ReadOnlyFile::readTextFile(root + "/" + other);
+            if (!regex(text, call) || !regex(text, mod_ref)) {
+                continue;
+            }
+            DebugBuiltinFile of = anyFile(other);
+            foreach int p in (of.findRaw(call)) {
+                used = True;
+                if (of.isGuardedAt(p) || (other !~ /\.qtest$/ && fixtureGuarded(other))) {
+                    continue;
+                }
+                return False;
+            }
+        }
+        return used;
+    }
+
+    #! True if every use of a fixture is under a guard
+    private bool fixtureGuarded(string file) {
+        if (exists fixture_state{file}) {
+            # a cycle: not a guard
+            return fixture_state{file};
+        }
+        fixture_state{file} = False;
+        string base = basename(file);
+        string stem = (base =~ x/^(.*)\.[^.]+$/)[0] ?? base;
+        string dir = dirname(file);
+        # its file name, or its name without the extension as a string (a module's also in %requires), in a file of
+        # its directory, or of the directory above that names its directory
+        string ref = "(?<![\\w.-])" + regex_escape(base) + "(?![\\w.])|\"" + regex_escape(stem) + "\""
+            + (file =~ /\.qm$/ ? "|%requires\\s+" + regex_escape(stem) + "\\b" : "");
+        string dir_ref = "(?<![\\w.-])" + regex_escape(basename(dir)) + "(?![\\w.-])";
+        list<string> near = select files, $1 != file && (dirname($1) == dir || dirname($1) == dirname(dir));
+        bool used = False;
+        foreach string other in (near) {
+            string text = ReadOnlyFile::readTextFile(root + "/" + other);
+            if (dirname(other) != dir && !regex(text, dir_ref)) {
+                continue;
+            }
+            if (!regex(text, ref)) {
+                continue;
+            }
+            DebugBuiltinFile f = info{other} ?? (info{other} = new DebugBuiltinFile(other, text, names_re, guard_fns));
+            foreach int pos in (f.findRaw(ref)) {
+                # the name of a test, not of the fixture
+                if (f.isTestName(pos)) {
+                    continue;
+                }
+                used = True;
+                if (f.isGuardedAt(pos)) {
+                    continue;
+                }
+                if (other !~ /\.qtest$/ && fixtureGuarded(other)) {
+                    continue;
+                }
+                return False;
+            }
+        }
+        return fixture_state{file} = used;
+    }
+}
+
+#! The analysis of one file for DebugBuiltinScanner
+class DebugBuiltinFile {
+    private {
+        string file;
+        #! the text, with every character that is not ASCII replaced, so that offsets are characters
+        string text;
+        #! the text with comments and the content of strings and regular expressions blanked
+        string code;
+        #! the strings: offset of the opening quote -> content
+        hash<string, string> strings = {};
+        #! the offsets of the opening quotes of the strings, in order
+        list<int> string_starts = ();
+        #! the blocks in the order they open: [open, close]
+        list<list<int>> blocks = ();
+        #! the index of each block's parent, -1 for none
+        list<int> parents = ();
+        #! the index of the block that opens at an offset
+        hash<string, int> block_index = {};
+        #! the index of the block that closes at an offset
+        hash<string, int> close_index = {};
+        #! the uses of each method and function, other than its definition
+        hash<string, list<int>> refs = {};
+        #! the cached results of localGuard(): "offset:direct" -> guard or ""
+        hash<string, string> guard_cache = {};
+        #! the offsets of the parse-guarded regions: [start, end]
+        list<list<int>> parse_guarded = ();
+        #! the offsets of the starts of lines
+        list<int> line_starts = ();
+        #! the methods and functions of the file: [name, open, close]
+        list<list> defs = ();
+        #! the methods and functions that leave their caller when the build is not a debug build
+        hash<string, bool> helpers = {};
+        #! the methods and functions whose every use is under a guard (True) or not (False), once checked
+        hash<string, bool> guarded_defs = {};
+        #! the classes whose setUp() skips without debugging (True) or not (False), by the offset of their block
+        hash<string, bool> setup_guarded = {};
+        #! the classes whose every object is created under a guard (True) or not (False), once checked
+        hash<string, bool> guarded_classes = {};
+        #! the variables and constants whose every read is under a guard (True) or not (False), once checked
+        hash<string, bool> guarded_vars = {};
+        #! the offsets of the names of the methods and functions in their definitions
+        hash<string, bool> def_name_offsets = {};
+        #! the offset of the name of the method or function whose block opens at an offset
+        hash<string, int> def_header = {};
+        #! the name of the method or function whose block opens at an offset
+        hash<string, string> def_by_open = {};
+        #! the guard pattern of the file, with its variables that hold a check
+        string guard_re;
+        #! a check alone
+        string check_re;
+        #! a negated check alone
+        string neg_check_re;
+        #! the uses of debug-only builtins: [offset, name, kind, line if not the offset's]
+        list<list> uses = ();
+        #! the functions and methods whose code returns a check only (of every scanned file)
+        hash<string, bool> guard_fns;
+        string names_re;
+    }
+
+    constructor(string file, string text, string names_re, hash<string, bool> guard_fns = {}) {
+        self.file = file;
+        self.guard_fns = guard_fns;
+        self.names_re = names_re;
+        self.text = regex_subst(text, "[^\\x00-\\x7f]", "?", RE_Global);
+        lex();
+        findParseGuarded();
+        findBlocks();
+        findUses();
+        # a variable that holds a check, or a value only when the check is true
+        list<string> aliases = map $1, regex_extract(code, "\\b(\\w+)\\s*=\\s*(?:(?:Qore::)?(?:Option::)?"
+            "HAVE_LIBRARY_DEBUGGING|(?:Qore::)?exists_function\\s*\\(\\s*\"\\s*\"\\s*\\))\\s*(?:[;)]|\\?[^;]*:\\s*NOTHING\\s*;)",
+            RE_Global) ?? ();
+        # a variable assigned a condition that is true only when a check is
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, "\\b(\\w+)\\s*=(?!=)\\s*([^;{}]*&&[^;{}]*);",
+                RE_Global) ?? ()) {
+            foreach string o in (DebugBuiltinFile::operands(m.groups[1], "&&")) {
+                if (o =~ /^\s*(?:Qore::)?(?:Option::)?HAVE_LIBRARY_DEBUGGING\s*$/) {
+                    aliases += m.groups[0];
+                    break;
+                }
+            }
+        }
+        string g = "HAVE_LIBRARY_DEBUGGING|exists_function|function_exists|existsFunction" + (foldl $1 + $2,
+            ("",) + (map "|\\b" + $1 + "\\b", aliases + keys guard_fns));
+        guard_re = g;
+        # a check alone: the constant, a variable that holds one, or a call of a function that makes one
+        check_re = "^\\s*\\(?\\s*(?:[\\w.]+(?:::|\\.))*(?:" + g + ")\\b\\s*(?:\\((?:[^()]|\\([^()]*\\))*\\))?\\s*\\)?\\s*$";
+        neg_check_re = "^\\s*!\\s*(?:\\(\\s*)?(?:[\\w.]+(?:::|\\.))*(?:" + g
+            + ")\\b\\s*(?:\\((?:[^()]|\\([^()]*\\))*\\))?\\s*\\)?\\s*$";
+        findDefs();
+    }
+
+    #! Returns the calls that are not under a guard
+    list<hash<DebugBuiltinCallInfo>> unguarded() {
+        list<hash<DebugBuiltinCallInfo>> rv = ();
+        foreach list u in (uses) {
+            int pos = u[0];
+            if (hasMarker(pos)) {
+                continue;
+            }
+            if (inParseGuard(pos)) {
+                continue;
+            }
+            *string g = localGuard(pos, u[2] == "call");
+            if (!g) {
+                *list d = innermostDef(pos);
+                if (d && isDefGuarded(d[0])) {
+                    g = "def";
+                } else if (inGuardedClass(pos)) {
+                    g = "class";
+                } else if (u[2] == "source" && assignedVarGuarded(pos)) {
+                    # source code in a constant or a variable that is read only under a guard
+                    g = "var";
+                }
+            }
+            if (g && u[2] != "call") {
+                continue;
+            }
+            rv += <DebugBuiltinCallInfo>{
+                "file": file,
+                "line": u[3] ?? lineOf(pos),
+                "name": u[1],
+                "kind": u[2],
+                "runtime_guard": exists g,
+                "def": innermostDef(pos)[0],
+            };
+        }
+        return rv;
+    }
+
+    #! True if code at the offset is under a guard (a use of a fixture)
+    bool isGuardedAt(int pos) {
+        if (inParseGuard(pos) || localGuard(pos, False) || hasMarker(pos)) {
+            return True;
+        }
+        *list d = innermostDef(pos);
+        if (d && isDefGuarded(d[0])) {
+            return True;
+        }
+        if (inGuardedClass(pos) || assignedVarGuarded(pos)) {
+            return True;
+        }
+        # a default value of a parameter, which only the method or function uses: one that skips without debugging
+        foreach list def in (defs) {
+            *int name_offset = def_header{def[1]};
+            if (exists name_offset && name_offset < pos && pos < def[1]) {
+                return isHelper(def[0]) || isDefGuarded(def[0]);
+            }
+        }
+        return False;
+    }
+
+    #! True if the offset is in a class of the file whose every object is created under a guard
+    private bool inGuardedClass(int pos) {
+        for (int i = innermost(pos); i >= 0; i = parents[i]) {
+            int hs = stmtStart(blocks[i][0]);
+            *string cls = (code.substr(hs, blocks[i][0] - hs) =~ x/(?<![\w%-])class\s+(\w+)[^;{}]*$/)[0];
+            if (cls) {
+                return isClassGuarded(cls);
+            }
+        }
+        return False;
+    }
+
+    #! True if every object of a class of the file (or of a class of the file that inherits it) is created under a
+    #! guard
+    private bool isClassGuarded(string cls, hash<string, bool> visiting = {}) {
+        if (guarded_classes.hasKey(cls)) {
+            return guarded_classes{cls};
+        }
+        if (visiting{cls}) {
+            return False;
+        }
+        visiting{cls} = True;
+        bool ok = False;
+        # a creation: "new Cls(", "Cls var(" or "Cls var = new"; a class that inherits it
+        string re = "\\bnew\\s+(?:\\w+::)*" + cls + "\\b|(?<![\\w.:])" + cls + "\\s+\\w+\\s*\\(|\\binherits\\b[^{]*?\\b"
+            + cls + "\\b";
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, re, RE_Global) ?? ()) {
+            ok = True;
+            int p = m.offset;
+            if (m.match =~ /^inherits/) {
+                # the class that inherits it
+                int hs = stmtStart(p);
+                *string sub_cls = (code.substr(hs, p - hs) =~ x/(?<![\w%-])class\s+(\w+)[^;{}]*$/)[0];
+                if (sub_cls && sub_cls != cls && isClassGuarded(sub_cls, visiting)) {
+                    continue;
+                }
+                ok = False;
+                break;
+            }
+            if (inParseGuard(p) || localGuard(p, False) || hasMarker(p)) {
+                continue;
+            }
+            *list d = innermostDef(p);
+            if (d && isDefGuarded(d[0])) {
+                continue;
+            }
+            # created in another class of the file whose objects are created under a guard
+            bool in_class = False;
+            for (int i = innermost(p); i >= 0; i = parents[i]) {
+                int hs = stmtStart(blocks[i][0]);
+                *string other = (code.substr(hs, blocks[i][0] - hs) =~ x/(?<![\w%-])class\s+(\w+)[^;{}]*$/)[0];
+                if (other) {
+                    in_class = other != cls && isClassGuarded(other, visiting);
+                    break;
+                }
+            }
+            if (in_class) {
+                continue;
+            }
+            ok = False;
+            break;
+        }
+        return guarded_classes{cls} = ok;
+    }
+
+    #! True if the offset is in the value assigned to a variable or a constant whose every read is under a guard
+    private bool assignedVarGuarded(int pos) {
+        # the statement's start, or the start of the first line of a statement that the code before it does not end
+        int ss = stmtStart(pos);
+        if (code.substr(ss, pos - ss) =~ /\n/) {
+            # the assignment is on the line that the statement's text starts on after any directives or comments
+            int ls = code.rfind("\n", pos - 1) + 1;
+            while (ls > ss && code.substr(ls, pos - ls) !~ /=/) {
+                ls = code.rfind("\n", ls - 2) + 1;
+            }
+            ss = max(ss, ls);
+        }
+        *string var = (code.substr(ss, pos - ss) =~ x/^\s*(?:(?:const|our|my)\s+)?(?:[\w:<>*,]+\s+)?(\w+)\s*=(?!=)/)[0];
+        return var && isVarGuarded(var);
+    }
+
+    #! True if every read of a variable or a constant of the file is under a guard
+    private bool isVarGuarded(string var) {
+        if (guarded_vars.hasKey(var)) {
+            return guarded_vars{var};
+        }
+        guarded_vars{var} = False;
+        bool read = False;
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, "(?<![\\w$])" + var + "\\b", RE_Global) ?? ()) {
+            int p = m.offset;
+            # a declaration or an assignment is not a read
+            int ss = max(stmtStart(p), code.rfind("\n", p - 1) + 1);
+            if (code.substr(ss, p - ss) =~ /^[\s\w:<>*,]*$/ && code.substr(p + m.length, 10) =~ /^\s*(=(?!=)|;)/) {
+                continue;
+            }
+            read = True;
+            if (inParseGuard(p) || localGuard(p, False) || hasMarker(p)) {
+                continue;
+            }
+            *list d = innermostDef(p);
+            if (d && isDefGuarded(d[0])) {
+                continue;
+            }
+            return False;
+        }
+        return guarded_vars{var} = read;
+    }
+
+    #! the offsets of the uses of a method or function of the file
+    list<int> refsOf(string name) {
+        return getRefs(name);
+    }
+
+    #! the method or function that the offset is in, if any
+    *string defAt(int pos) {
+        return innermostDef(pos)[0];
+    }
+
+    #! True if the string at the offset is the name given to a QUnit test's constructor
+    bool isTestName(int pos) {
+        return code.substr(max(0, pos - 30), min(pos, 30)) =~ /\bTest\s*\(\s*$/;
+    }
+
+    #! Returns the offsets of the matches of a pattern in the text (not in comments)
+    list<int> findRaw(string re) {
+        list<int> rv = ();
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, re, RE_Global) ?? ()) {
+            # not in a comment: the code there is blank, and a string's text is kept only in the text
+            if (code.substr(m.offset, 1) == " " && !inString(m.offset)) {
+                continue;
+            }
+            rv += m.offset;
+        }
+        return rv;
+    }
+
+    #! the index of the string that opens at the offset
+    private int bsearchString(int o) {
+        int lo = 0;
+        int hi = string_starts.size() - 1;
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            if (string_starts[mid] < o) {
+                lo = mid + 1;
+            } else if (string_starts[mid] > o) {
+                hi = mid - 1;
+            } else {
+                return mid;
+            }
+        }
+        return -1;
+    }
+
+    #! True if only white space is between two strings, which then make one string
+    private bool adjacent(int a, int b) {
+        int end = a + strings{a}.size() + 2;
+        return end <= b && code.substr(end, b - end) =~ /^\s*$/;
+    }
+
+    private bool inString(int pos) {
+        return exists stringAt(pos);
+    }
+
+    #! the offset of the opening quote of the string that the offset is in, if any
+    private *int stringAt(int pos) {
+        int lo = 0;
+        int hi = string_starts.size() - 1;
+        int i = -1;
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            if (string_starts[mid] < pos) {
+                i = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        if (i < 0) {
+            return;
+        }
+        int o = string_starts[i];
+        return pos <= o + strings{o}.size() ? o : NOTHING;
+    }
+
+    private lex() {
+        list<string> parts = ();
+        int last = 0;
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, DebugBuiltinScanner::Lexemes, RE_Global)
+                ?? ()) {
+            parts += text.substr(last, m.offset - last);
+            string lexeme = m.match;
+            string c = lexeme[0];
+            if (c == "\"") {
+                strings{m.offset} = m.groups[0] ?? "";
+                string_starts += m.offset;
+                parts += "\"" + blank(lexeme.substr(1, lexeme.size() - 2)) + "\"";
+            } else if (c == "'") {
+                parts += "'" + blank(lexeme.substr(1, lexeme.size() - 2)) + "'";
+            } else if (c == "=" || c == "!") {
+                parts += lexeme.substr(0, 2) + blank(lexeme.substr(2));
+            } else {
+                parts += blank(lexeme);
+            }
+            last = m.offset + m.length;
+        }
+        parts += text.substr(last);
+        code = parts.join("");
+        line_starts = (0,) + (map $1.offset + 1, regex_extract_detailed(text, "\n", RE_Global) ?? ());
+    }
+
+    private static string blank(string s) {
+        return regex_subst(s, "[^\\n]", " ", RE_Global);
+    }
+
+    private int lineOf(int pos) {
+        # binary search
+        int lo = 0;
+        int hi = line_starts.size() - 1;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (line_starts[mid] <= pos) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo + 1;
+    }
+
+    #! the parse-define regions of a debug build
+    private findParseGuarded() {
+        # [is debug, is negated (an %ifndef that turns into a debug region at %else)]
+        list<list<bool>> stack = ();
+        *int start;
+        foreach hash<RegexMatchInfo> dm in (regex_extract_detailed(text,
+                "(?m)^[ \\t]*%(ifdef|ifndef|else|endif)\\b[ \\t]*(\\w*)[^\\n]*\\n?", RE_Global) ?? ()) {
+            int ls = dm.offset;
+            int end = dm.offset + dm.length;
+            list<*string> m = dm.groups;
+            bool was = inlist(True, map $1[0], stack);
+            switch (m[0]) {
+                case "ifdef":
+                    push stack, (DebugBuiltinScanner::ParseDefines{m[1] ?? ""} ?? False, False);
+                    break;
+                case "ifndef":
+                    push stack, (False, DebugBuiltinScanner::ParseDefines{m[1] ?? ""} ?? False);
+                    break;
+                case "else":
+                    if (stack) {
+                        list<bool> top = stack[stack.size() - 1];
+                        stack[stack.size() - 1] = (top[1], False);
+                    }
+                    break;
+                case "endif":
+                    if (stack) {
+                        pop stack;
+                    }
+                    break;
+            }
+            bool now = inlist(True, map $1[0], stack);
+            if (!was && now) {
+                start = end;
+            } else if (was && !now) {
+                parse_guarded += ((start, ls),);
+            }
+        }
+    }
+
+    private bool inParseGuard(int pos) {
+        foreach list<int> r in (parse_guarded) {
+            if (r[0] <= pos && pos < r[1]) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private findBlocks() {
+        # the indexes of the open blocks
+        list<int> stack = ();
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, "[{}]", RE_Global) ?? ()) {
+            if (m.match == "{") {
+                int i = blocks.size();
+                block_index{m.offset} = i;
+                parents += stack ? stack[stack.size() - 1] : -1;
+                blocks += ((m.offset, code.size()),);
+                push stack, i;
+            } else if (stack) {
+                int i = pop stack;
+                blocks[i][1] = m.offset;
+                close_index{m.offset} = i;
+            }
+        }
+    }
+
+    #! the index of the innermost block that encloses the offset, -1 for none
+    private int innermost(int pos) {
+        # the last block that opens before the offset
+        int lo = 0;
+        int hi = blocks.size() - 1;
+        int i = -1;
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            if (blocks[mid][0] < pos) {
+                i = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        while (i >= 0 && blocks[i][1] < pos) {
+            i = parents[i];
+        }
+        return i;
+    }
+
+    #! the uses of debug-only builtins
+    private findUses() {
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, names_re, RE_Global) ?? ()) {
+            int p = m.offset;
+            string before = p ? code.substr(p - 1, 1) : "";
+            if (before == "." || (p > 1 && code.substr(p - 2, 2) == "::")) {
+                continue;
+            }
+            if (before == "\\" || code.substr(p + m.length, 40) =~ /^\s*\(/) {
+                uses += ((p, m.match, "call"),);
+            }
+        }
+        # the strings with source code, which a Program parses: offset -> True
+        hash<string, bool> sources = {};
+        # the names in strings: in the text, where the code is blank
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(text, names_re, RE_Global) ?? ()) {
+            *int o = stringAt(m.offset);
+            if (!exists o) {
+                continue;
+            }
+            string s = strings{o};
+            if (s == m.match) {
+                # its name: not a use when it is checked
+                if (code.substr(max(0, o - 40), min(o, 40)) =~ /(exists_function|function_exists|existsFunction)\s*\(\s*$/) {
+                    continue;
+                }
+                uses += ((o, s, "name"),);
+            } else if (s =~ /[;{]/) {
+                sources{o} = True;
+            }
+        }
+        # the calls in source code in strings that its own code does not guard (a direct call needs a guard where the
+        # source is parsed): at the string, with their own lines
+        hash<string, bool> done = {};
+        foreach string k in (keys sources) {
+            # the string and the strings next to it, which make one string ("a" "b")
+            int i = bsearchString(k.toInt());
+            while (i > 0 && adjacent(string_starts[i - 1], string_starts[i])) {
+                --i;
+            }
+            int o = string_starts[i];
+            if (done{o}) {
+                continue;
+            }
+            done{o} = True;
+            string src = strings{o};
+            bool joined = False;
+            while (i + 1 < string_starts.size() && adjacent(string_starts[i], string_starts[i + 1])) {
+                src += strings{string_starts[++i]};
+                joined = True;
+            }
+            # the source code as a Program parses it
+            src = regex_subst(src, "\\\\([\"\\\\n])", string sub (hash<RegexMatchInfo> m) {
+                return m.groups[0] == "n" ? "\n" : m.groups[0];
+            }, RE_Global);
+            DebugBuiltinFile nested(file, src, names_re, guard_fns);
+            int line = lineOf(o);
+            foreach hash<DebugBuiltinCallInfo> c in (nested.unguarded()) {
+                uses += ((o, c.name, "source", joined ? line : line + c.line - 1),);
+            }
+        }
+    }
+
+    #! True if the line of the offset, or the line before it, has the marker, or the line that opens a block that
+    #! the offset is in (or the line of the name of a method or function that it is in)
+    private bool hasMarker(int pos) {
+        if (lineHasMarker(lineOf(pos))) {
+            return True;
+        }
+        for (int i = innermost(pos); i >= 0; i = parents[i]) {
+            int open = blocks[i][0];
+            if (lineHasMarker(lineOf(open)) || (def_header.hasKey(open) && lineHasMarker(lineOf(def_header{open})))) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! True if the line has the marker, or a comment line of the comment lines directly above it
+    private bool lineHasMarker(int line) {
+        for (int l = line; l >= 1; --l) {
+            int s = line_starts[l - 1];
+            int e = l < line_starts.size() ? line_starts[l] : text.size();
+            string lt = text.substr(s, e - s);
+            if (lt =~ /#.*debug-builtin-guard:\s*\S/) {
+                return True;
+            }
+            # the comment lines directly above the line
+            if (l < line && lt !~ /^\s*#/) {
+                break;
+            }
+        }
+        return False;
+    }
+
+    #! the start of the statement that the offset is in
+    private int stmtStart(int pos) {
+        return max(code.rfind(";", pos - 1), code.rfind("{", pos - 1), code.rfind("}", pos - 1)) + 1;
+    }
+
+    #! the blocks that enclose the offset, outermost first: [open, close]
+    private list<list<int>> enclosing(int pos) {
+        list<list<int>> rv = ();
+        for (int i = innermost(pos); i >= 0; i = parents[i]) {
+            unshift rv, blocks[i];
+        }
+        return rv;
+    }
+
+    #! the close of the block that opens at the offset
+    private *int closeOf(int open) {
+        *int i = block_index{open};
+        return exists i ? blocks[i][1] : NOTHING;
+    }
+
+    #! the open of the block that closes at the offset
+    private *int openOf(int close) {
+        *int i = close_index{close};
+        return exists i ? blocks[i][0] : NOTHING;
+    }
+
+    #! True if the offset is directly in the block that opens at \a level (-1 for the top level)
+    private bool atLevel(int pos, int level) {
+        int i = innermost(pos);
+        return i < 0 ? level < 0 : blocks[i][0] == level;
+    }
+
+    #! the condition of an if that starts at the offset of "(": [condition, offset after ")"]
+    private list cond(int open) {
+        int d = 0;
+        int k = open;
+        int n = code.size();
+        while (k < n) {
+            string c = code.substr(k, 1);
+            if (c == "(") {
+                ++d;
+            } else if (c == ")") {
+                if (!--d) {
+                    break;
+                }
+            }
+            ++k;
+        }
+        return (code.substr(open, k - open + 1), k + 1);
+    }
+
+    #! the code of the statement or block that follows the offset
+    private string body(int pos, int limit) {
+        string rest = code.substr(pos, limit - pos);
+        *list<*string> lead = (rest =~ x/^(\s*)\{/);
+        if (lead) {
+            int o = pos + lead[0].size();
+            int c = closeOf(o) ?? limit;
+            return code.substr(o, c - o);
+        }
+        int semi = code.find(";", pos);
+        return code.substr(pos, (semi < 0 ? limit : semi) - pos);
+    }
+
+    #! the operands of a condition (with its parentheses) at its top level, split by an operator ("||" or "&&")
+    private static list<string> operands(string cond, string op) {
+        string c = trim(cond);
+        if (c =~ /^\(/ && c =~ /\)$/) {
+            c = c.substr(1, c.size() - 2);
+        }
+        list<string> rv = ();
+        int d = 0;
+        int last = 0;
+        int n = c.size();
+        for (int i = 0; i < n; ++i) {
+            string ch = c.substr(i, 1);
+            if (ch == "(" || ch == "[" || ch == "{") {
+                ++d;
+            } else if (ch == ")" || ch == "]" || ch == "}") {
+                --d;
+            } else if (!d && c.substr(i, 2) == op) {
+                rv += c.substr(last, i - last);
+                last = i + 2;
+                ++i;
+            }
+        }
+        rv += c.substr(last);
+        return rv;
+    }
+
+    #! True if the condition is true only in a debug build: one of its operands joined by "&&" is a check
+    private bool checks(string cond) {
+        foreach string o in (DebugBuiltinFile::operands(cond, "&&")) {
+            if (regex(o, check_re)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! True if the condition is true in every build that is not a debug build: one of its operands joined by "||" is
+    #! a negated check
+    private bool checksNot(string cond) {
+        foreach string o in (DebugBuiltinFile::operands(cond, "||")) {
+            if (regex(o, neg_check_re)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! the condition of the if in a header, if any
+    private *string ifCondition(int hs, int open) {
+        string hdr = code.substr(hs, open - hs);
+        *hash<RegexMatchInfo> m = regex_extract_detailed(hdr, "\\bif\\s*\\(")[0];
+        if (!m) {
+            return;
+        }
+        return cond(hs + m.offset + m.length - 1)[0];
+    }
+
+    #! True if a catch block handles NO-FUNCTION
+    private bool catchesNoFunction(int try_close, *string exit_re) {
+        *list<*string> m = (code.substr(try_close + 1) =~ x/^(\s*catch\s*\([^)]*\)\s*)\{/);
+        if (!m) {
+            return False;
+        }
+        int o = try_close + 1 + m[0].size();
+        int c = closeOf(o) ?? code.size();
+        string b = text.substr(o, c - o);
+        # a catch block that handles NO-FUNCTION, or that skips the test case whatever the error
+        return ((b.find("NO-FUNCTION") >= 0 || b.find("UNDEFINED-FUNCTION-CALL") >= 0)
+                && (!exit_re || regex(code.substr(o, c - o), exit_re)))
+            || code.substr(o, c - o) =~ /\btestSkip\s*\(/;
+    }
+
+    #! True if a statement directly in the block that opens at \a level, from \a start to \a end, leaves the block
+    #! when the build is not a debug build
+    private bool exitsBefore(int start, int end, int level, string exit_re, bool use_helpers) {
+        string seg = code.substr(start, end - start);
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(seg, "\\bif\\s*\\(", RE_Global) ?? ()) {
+            int q = start + m.offset;
+            if (!atLevel(q, level)) {
+                continue;
+            }
+            list c = cond(start + m.offset + m.length - 1);
+            if (!checksNot(c[0])) {
+                continue;
+            }
+            if (regex(body(c[1], end), exit_re)) {
+                return True;
+            }
+        }
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(seg, "\\btry\\s*\\{", RE_Global) ?? ()) {
+            int o = start + m.offset + m.length - 1;
+            if (!atLevel(start + m.offset, level)) {
+                continue;
+            }
+            *int c = closeOf(o);
+            if (exists c && c < end && catchesNoFunction(c, ExitStatementsRe)) {
+                return True;
+            }
+        }
+        if (use_helpers) {
+            foreach hash<RegexMatchInfo> m in (regex_extract_detailed(seg, "(?<![\\w.])(\\w+)\\s*\\(", RE_Global)
+                    ?? ()) {
+                # not the name of a definition
+                if (!def_name_offsets{start + m.offset} && isHelper(m.groups[0]) && atLevel(start + m.offset, level)) {
+                    return True;
+                }
+            }
+        }
+        return False;
+    }
+
+    const ExitStatementsRe = DebugBuiltinScanner::ExitStatements;
+
+    #! the methods of a test that QUnit does not run after setUp()
+    const NotAfterSetUp = {"constructor": True, "destructor": True, "copy": True, "setUp": True,
+        "globalSetUp": True, "globalTearDown": True};
+
+    #! the guard of the code at the offset in its own method or function, if any
+    private *string localGuard(int pos, bool direct) {
+        string key = sprintf("%d:%d", pos, direct);
+        if (guard_cache.hasKey(key)) {
+            return guard_cache{key} ?: NOTHING;
+        }
+        *string g = localGuardIntern(pos, direct);
+        guard_cache{key} = g ?? "";
+        return g;
+    }
+
+    private *string localGuardIntern(int pos, bool direct) {
+        int ss = stmtStart(pos);
+        if (regex(code.substr(ss, pos - ss), guard_re)) {
+            return "statement";
+        }
+        list<list<int>> encl = enclosing(pos);
+        foreach list<int> b in (encl) {
+            int o = b[0];
+            string before = code.substr(0, o);
+            if (!direct && before =~ /\btry\s*$/ && catchesNoFunction(b[1])) {
+                return "try";
+            }
+            *string ic = ifCondition(stmtStart(o), o);
+            if (ic && checks(ic)) {
+                return "if";
+            }
+            *list<*string> em = (before =~ x/(\})\s*else\s*$/);
+            if (em) {
+                int cl = before.rfind("}");
+                *int op = openOf(cl);
+                if (exists op) {
+                    *string ec = ifCondition(stmtStart(op), op);
+                    if (ec && checksNot(ec)) {
+                        return "else";
+                    }
+                }
+            }
+        }
+        # the statements that run before the code: those of its blocks up to the method or function (or class) that it
+        # is in, or of the top level if it is in none; not for the value of a constant, which is not run in order
+        list<list<int>> levels = ();
+        bool in_def = False;
+        for (int i = encl.size() - 1; i >= 0; --i) {
+            unshift levels, encl[i];
+            int o = encl[i][0];
+            if (def_by_open{o} || isClassBlock(o)) {
+                in_def = True;
+                break;
+            }
+        }
+        if (!in_def && code.substr(ss, pos - ss) !~ /^\s*const\s/) {
+            unshift levels, (-1, -1);
+        }
+        foreach list<int> b in (levels) {
+            if (exitsBefore(b[0] + 1, pos, b[0], ExitStatementsRe, True)) {
+                return "early";
+            }
+        }
+    }
+
+    #! True if the block that opens at the offset is the body of a class
+    private bool isClassBlock(int open) {
+        int hs = stmtStart(open);
+        return code.substr(hs, open - hs) =~ /(?<![\w%-])class\s+\w+[^;{}]*$/;
+    }
+
+    #! True if a method or function of the file leaves its caller when the build is not a debug build
+    private bool isHelper(string name) {
+        if (helpers.hasKey(name)) {
+            return helpers{name};
+        }
+        helpers{name} = False;
+        foreach list d in (defs) {
+            if (d[0] == name && exitsBefore(d[1] + 1, d[2], d[1], DebugBuiltinScanner::ExitCaller, False)) {
+                return helpers{name} = True;
+            }
+        }
+        return False;
+    }
+
+    #! the method or function that the offset is in, the innermost: [name, open, close]
+    private *list innermostDef(int pos) {
+        for (int i = innermost(pos); i >= 0; i = parents[i]) {
+            *string name = def_by_open{blocks[i][0]};
+            if (name) {
+                return (name, blocks[i][0], blocks[i][1]);
+            }
+        }
+    }
+
+    private findDefs() {
+        foreach list<int> b in (blocks) {
+            *string name = defName(b[0]);
+            if (!name) {
+                continue;
+            }
+            defs += ((name, b[0], b[1]),);
+            def_by_open{b[0]} = name;
+        }
+    }
+
+    #! the name of the method or function whose block opens at the offset, if it is one
+    private *string defName(int open) {
+        int k = skipSpaceBack(open - 1);
+        while (k >= 0 && code.substr(k, 1) == ")") {
+            # the matching "("
+            int d = 0;
+            int j = k;
+            for (; j >= 0; --j) {
+                string c = code.substr(j, 1);
+                if (c == ")") {
+                    ++d;
+                } else if (c == "(" && !--d) {
+                    break;
+                }
+            }
+            if (j < 0) {
+                return;
+            }
+            int from = max(0, j - 200);
+            *list<*string> m = (code.substr(from, j - from) =~ x/(?:^|[^\w:])((?:\w+::)*(\w+))\s*(?:<[^<>()]*>)?\s*$/);
+            if (!m) {
+                return;
+            }
+            string name = m[1];
+            # the character before the name: ":" or "," before a call of a constructor's initialization list
+            int before = skipSpaceBack(j - (code.substr(from, j - from) =~ x/((?:\w+::)*\w+\s*(?:<[^<>()]*>)?\s*)$/)[0].size() - 1);
+            string bc = before >= 0 ? code.substr(before, 1) : "";
+            if ((bc == ":" && (before == 0 || code.substr(before - 1, 1) != ":")) || bc == ",") {
+                k = skipSpaceBack(before - 1);
+                continue;
+            }
+            if (DebugBuiltinScanner::BlockKeywords{name}) {
+                return;
+            }
+            # the offset of the name, which is not a use of it
+            int name_offset = j - (code.substr(from, j - from) =~ x/(\w+\s*(?:<[^<>()]*>)?\s*)$/)[0].size();
+            def_name_offsets{name_offset} = True;
+            def_header{open} = name_offset;
+            return name;
+        }
+    }
+
+    #! the offset of the last character before the offset that is not white space, -1 for none
+    private int skipSpaceBack(int k) {
+        while (k >= 0 && code.substr(k, 1) =~ /^\s$/) {
+            --k;
+        }
+        return k;
+    }
+
+    #! True if the method whose block opens at the offset is one that QUnit runs only after its test's setUp(), and
+    #! the setUp() skips the test case when the build is not a debug build
+    private bool afterGuardedSetUp(int open) {
+        *string name = def_by_open{open};
+        if (!name || NotAfterSetUp{name}) {
+            return False;
+        }
+        int i = block_index{open};
+        int cls = parents[i];
+        if (cls < 0) {
+            return False;
+        }
+        int co = blocks[cls][0];
+        if (setup_guarded.hasKey(co)) {
+            return setup_guarded{co};
+        }
+        bool rv = False;
+        foreach list d in (defs) {
+            if (d[0] == "setUp" && parents[block_index{d[1]}] == cls
+                    && exitsBefore(d[1] + 1, d[2], d[1], DebugBuiltinScanner::ExitCaller, True)) {
+                rv = True;
+                break;
+            }
+        }
+        return setup_guarded{co} = rv;
+    }
+
+    #! True if every use of a method or function of the file is under a guard
+    private bool isDefGuarded(string name, hash<string, bool> visiting = {}) {
+        if (guarded_defs.hasKey(name)) {
+            return guarded_defs{name};
+        }
+        # a method of a test that QUnit runs after a setUp() that skips without debugging
+        foreach list d in (defs) {
+            if (d[0] == name && afterGuardedSetUp(d[1])) {
+                return guarded_defs{name} = True;
+            }
+        }
+        if (visiting{name}) {
+            # a cycle of uses: it is not a guard
+            return False;
+        }
+        visiting{name} = True;
+        bool ok = False;
+        foreach int r in (getRefs(name)) {
+            ok = True;
+            if (inParseGuard(r) || localGuard(r, False) || hasMarker(r)) {
+                continue;
+            }
+            *list d = innermostDef(r);
+            # a use in its own code (a recursive call) is reached only from its other uses
+            if (d && (d[0] == name || isDefGuarded(d[0], visiting))) {
+                continue;
+            }
+            ok = False;
+            break;
+        }
+        return guarded_defs{name} = ok;
+    }
+
+    #! the uses of a method or function of the file, other than its definitions
+    private list<int> getRefs(string name) {
+        if (refs.hasKey(name)) {
+            return refs{name};
+        }
+        list<int> rv = ();
+        foreach hash<RegexMatchInfo> m in (regex_extract_detailed(code, "(?<!\\w)\\\\?" + name + "\\b", RE_Global)
+                ?? ()) {
+            # the name in a definition's header
+            if (def_name_offsets{m.offset}) {
+                continue;
+            }
+            rv += m.offset;
+        }
+        return refs{name} = rv;
+    }
+}
+
+class DebugBuiltinGuardsTest inherits QUnit::Test {
+    public {
+        #! the directories scanned, relative to the root
+        const ScanDirs = ("examples/test",);
+
+        #! the files that are not scanned, relative to the root
+        const Exempt = {
+            # this test has the forms that it finds in the sources of its samples
+            "examples/test/qore/misc/debug-builtin-guards.qtest": True,
+        };
+    }
+
+    constructor() : QUnit::Test("DebugBuiltinGuards", "1.0") {
+        addTestCase("The debug-only builtins are derived from the sources", \derivedNames());
+        addTestCase("The registrations of a debug build are found in sample sources", \sampleSources());
+        addTestCase("A call without a guard is reported; each guard is accepted", \sampleTests());
+        addTestCase("The guards of methods, classes, modules, fixtures and source code", \sampleScopes());
+        addTestCase("No test calls a debug-only builtin without a guard", \repoTests());
+        set_return_value(main());
+    }
+
+    #! the root of the repository
+    private static string root() {
+        return normalize_dir(get_script_dir() + "/../../../..");
+    }
+
+    derivedNames() {
+        hash<string, hash<DebugBuiltinInfo>> names = new DebugBuiltinSources(root()).get();
+        # the hooks that the lazy-shared-values fixture called in a release build (BM's macOS job), and others
+        foreach string name in ("dbg_trusted_build_hides_nothing", "dbg_lazy_shared_wait_waiting", "dbg_node_info",
+                "dbg_call_with_sandboxed_caller_record", "run_debug_unit_tests") {
+            assertTrue(exists names{name}, name);
+        }
+        # a builtin of every build is not one
+        foreach string name in ("printf", "call_function", "exists_function", "get_script_dir") {
+            assertFalse(exists names{name}, name);
+        }
+        # the library's own: a debug build has every one of them, and a release build none
+        list<string> lib = map $1.name, names.values(), $1.location !~ /^modules\//;
+        assertGt(100, lib.size(), "the library's debug-only builtins");
+        list<string> wrong = select lib, exists_function($1) != Option::HAVE_LIBRARY_DEBUGGING;
+        assertEq((), wrong, sprintf("the debug-only builtins that this %s build %s",
+            Option::HAVE_LIBRARY_DEBUGGING ? "debug" : "release",
+            Option::HAVE_LIBRARY_DEBUGGING ? "does not have" : "has"));
+    }
+
+    sampleSources() {
+        TmpDir tmp("debug-builtin-guards-src-");
+        string r = tmp.path;
+        mkdir(r + "/lib");
+        mkdir(r + "/modules/m/src", 0755, True);
+        File f();
+        f.open2(r + "/lib/debug.cpp", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("static void hidden(QoreNamespace& ns) {\n"
+            "    ns.addBuiltinVariant(\"sample_hidden\", f, QCF_NO_FLAGS);\n"
+            "}\n"
+            "void init_sample(QoreNamespace& ns) {\n"
+            "    ns.addBuiltinVariant(\"sample_always\", f, QCF_NO_FLAGS);\n"
+            "#ifdef DEBUG\n"
+            "    ns.addBuiltinVariant(\"sample_ifdef\", f, QCF_NO_FLAGS);\n"
+            "    hidden(ns);\n"
+            "#else\n"
+            "    ns.addBuiltinVariant(\"sample_release\", f, QCF_NO_FLAGS);\n"
+            "#endif\n"
+            "#if defined(DEBUG) && defined(HAVE_X)\n"
+            "    ns.addBuiltinVariant(\"sample_if_defined\", f, QCF_NO_FLAGS);\n"
+            "#endif\n"
+            "#ifndef DEBUG\n"
+            "    ns.addBuiltinVariant(\"sample_ifndef\", f, QCF_NO_FLAGS);\n"
+            "#endif\n"
+            "#ifdef DEBUG\n"
+            "    ns.addBuiltinVariant(\"sample_both\", f, QCF_NO_FLAGS);\n"
+            "#endif\n"
+            "    ns.addBuiltinVariant(\"sample_both\", g, QCF_NO_FLAGS);\n"
+            "}\n");
+        f.close();
+        f.open2(r + "/lib/header.h", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("DLLLOCAL void hidden(QoreNamespace& ns);\n");
+        f.close();
+        f.open2(r + "/modules/m/src/m.qpp", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("#ifdef DEBUG\n"
+            "//! a debug-only function\n"
+            "bool sample_qpp(int i) [dom=DEBUG_HOOK] {\n"
+            "    return true;\n"
+            "}\n"
+            "#endif\n"
+            "//! a function of every build\n"
+            "bool sample_qpp_always() {\n"
+            "    return true;\n"
+            "}\n");
+        f.close();
+        hash<string, hash<DebugBuiltinInfo>> names = new DebugBuiltinSources(r).get();
+        assertEq(("sample_hidden", "sample_if_defined", "sample_ifdef", "sample_qpp"), sort(keys names));
+        assertEq("lib/debug.cpp:2", names.sample_hidden.location, "registered in a function called only under DEBUG");
+        assertEq("modules/m/src/m.qpp:3", names.sample_qpp.location);
+    }
+
+    #! scans a sample test tree; returns "file:line name kind" for each call reported
+    private list<string> scanSample(hash<string, string> sources) {
+        TmpDir tmp("debug-builtin-guards-");
+        foreach hash<auto> i in (sources.pairIterator()) {
+            string path = tmp.path + "/t/" + i.key;
+            mkdir(dirname(path), 0755, True);
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(i.value);
+        }
+        DebugBuiltinScanner s(tmp.path, ("dbg_x", "dbg_y"), ("t",));
+        return sort(map sprintf("%s:%d %s %s%s", $1.file.substr(2), $1.line, $1.name, $1.kind,
+            $1.runtime_guard ? " (runtime guard)" : ""), s.scan());
+    }
+
+    sampleTests() {
+        # every unguarded form is reported, with its line
+        assertEq((
+            "bad.qtest:3 dbg_x call",
+            "bad.qtest:4 dbg_y name",
+            "bad.qtest:5 dbg_x source",
+            "bad.qtest:6 dbg_y call",
+            "bad.qtest:9 dbg_x call (runtime guard)",
+        ), scanSample({"bad.qtest":
+            "%modern\n"
+            "sub t() {\n"
+            "    dbg_x(1);\n"
+            "    call_function(\"dbg_y\");\n"
+            "    p.parse(\"dbg_x(); x;\", \"p\");\n"
+            "    code c = \\dbg_y();\n"
+            "}\n"
+            "sub u() {\n"
+            "    if (Option::HAVE_LIBRARY_DEBUGGING) { dbg_x(); }\n"
+            "}\n"
+            "# dbg_x() in a comment is not a call; nor is it in a message:\n"
+            "sub v() { testSkip(\"needs dbg_x()\"); /* dbg_y() */ }\n"
+            "t(); u(); v();\n"
+        }));
+
+        # every guard is accepted
+        assertEq((), scanSample({"good.qtest":
+            "%modern\n"
+            "%ifdef QoreDebug\n"
+            "sub a() { dbg_x(); }\n"
+            "%endif\n"
+            "%ifndef HAVE_LIBRARY_DEBUGGING\n"
+            "sub b() {}\n"
+            "%else\n"
+            "sub b() { dbg_y(); }\n"
+            "%endif\n"
+            "sub c() {\n"
+            "    any v = Option::HAVE_LIBRARY_DEBUGGING ? call_function(\"dbg_x\") : NOTHING;\n"
+            "    if (Option::HAVE_LIBRARY_DEBUGGING) {\n"
+            "        call_function(\"dbg_x\");\n"
+            "    }\n"
+            "    if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+            "    } else {\n"
+            "        call_function(\"dbg_x\");\n"
+            "    }\n"
+            "    if (exists_function(\"dbg_y\")) {\n"
+            "        call_function(\"dbg_y\");\n"
+            "    }\n"
+            "}\n"
+            "sub d() {\n"
+            "    if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+            "        testSkip(\"needs a debug build\");\n"
+            "    }\n"
+            "    call_function(\"dbg_x\");\n"
+            "    p.parse(\"dbg_y(); x;\", \"p\");\n"
+            "}\n"
+            "sub e() {\n"
+            "    try {\n"
+            "        call_function(\"dbg_x\");\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        if (ex.err == \"NO-FUNCTION\") {\n"
+            "            testSkip(\"needs a debug build\");\n"
+            "        }\n"
+            "        rethrow;\n"
+            "    }\n"
+            "    call_function(\"dbg_y\");\n"
+            "}\n"
+            "sub requireDebug() {\n"
+            "    if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+            "        testSkip(\"needs a debug build\");\n"
+            "    }\n"
+            "}\n"
+            "sub f() {\n"
+            "    hash<auto> h = requireDebug();\n"
+            "    call_function(\"dbg_x\");\n"
+            "}\n"
+            "sub helper() {\n"
+            "    call_function(\"dbg_y\");\n"
+            "}\n"
+            "sub g() {\n"
+            "    bool hook = Option::HAVE_LIBRARY_DEBUGGING;\n"
+            "    if (hook) {\n"
+            "        helper();\n"
+            "    }\n"
+            "    bool fn = exists_function(\"dbg_x\");\n"
+            "    on_exit if (fn) {\n"
+            "        call_function(\"dbg_x\");\n"
+            "    }\n"
+            "}\n"
+            "sub h(Server s) {\n"
+            "    # debug-builtin-guard: the server is started only by d(), which skips in a release build\n"
+            "    call_function(\"dbg_x\");\n"
+            "}\n"
+            "bool ok = exists_function(\"dbg_x\");\n"
+            "a(); b(); c(); d(); e(); f(); g();\n"
+        }));
+
+        # a return leaves the helper, not its caller: the call after it is reported
+        assertEq(("ret.qtest:8 dbg_x name",), scanSample({"ret.qtest":
+            "%modern\n"
+            "sub check() {\n"
+            "    if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+            "        return;\n"
+            "    }\n"
+            "}\n"
+            "check();\n"
+            "call_function(\"dbg_x\");\n"
+        }));
+
+        # a direct call under a runtime guard is still a parse error in a release build
+        assertEq(("direct.qtest:4 dbg_x call (runtime guard)",), scanSample({"direct.qtest":
+            "%modern\n"
+            "sub t() {\n"
+            "    if (!Option::HAVE_LIBRARY_DEBUGGING) { testSkip(\"needs a debug build\"); }\n"
+            "    dbg_x();\n"
+            "}\n"
+        }));
+
+        # a fixture that only guarded code runs (and a module that only it loads) is not reported; one that unguarded
+        # code runs, or that nothing runs, is
+        assertEq((), scanSample({
+            "f/f.qtest":
+                "%modern\n"
+                "sub t() {\n"
+                "    if (!Option::HAVE_LIBRARY_DEBUGGING) { testSkip(\"needs a debug build\"); }\n"
+                "    system(\"qore \" + get_script_dir() + \"/fixture.q\");\n"
+                "}\n",
+            "f/fixture.q":
+                "%modern\n"
+                "%requires FixtureMod\n"
+                "printf(\"%y\\n\", call_function(\"dbg_x\"));\n",
+            "f/FixtureMod.qm":
+                "module FixtureMod { version = \"1.0\"; desc = \"\"; author = \"\"; url = \"\"; }\n"
+                "public sub fm() { call_function(\"dbg_y\"); }\n",
+        }));
+        assertEq((
+            "g/fixture.q:2 dbg_x name",
+            "g/fixture.q:3 dbg_y call",
+            "g/unused.q:2 dbg_x name",
+        ), scanSample({
+            "g/g.qtest":
+                "%modern\n"
+                "system(\"qore \" + get_script_dir() + \"/fixture.q\");\n",
+            "g/fixture.q":
+                "%modern\n"
+                "printf(\"%y\\n\", call_function(\"dbg_x\"));\n"
+                "dbg_y();\n",
+            "g/unused.q":
+                "%modern\n"
+                "call_function(\"dbg_x\");\n",
+        }));
+    }
+
+    sampleScopes() {
+        # a method of a class whose objects are created only under a guard; a test's methods after a setUp() that
+        # skips without debugging (not globalSetUp())
+        assertEq(("c1.qtest:19 dbg_y name", "c1.qtest:6 dbg_y name"), scanSample({
+            "c1.qtest":
+                "%modern\n"
+                "class H {\n"
+                "    handle() { call_function(\"dbg_x\"); }\n"
+                "}\n"
+                "class U {\n"
+                "    handle() { call_function(\"dbg_y\"); }\n"
+                "}\n"
+                "class T inherits QUnit::Test {\n"
+                "    setUp() {\n"
+                "        if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "            testSkip(\"needs a debug build\");\n"
+                "        }\n"
+                "    }\n"
+                "    caseA() {\n"
+                "        call_function(\"dbg_x\");\n"
+                "        H h();\n"
+                "    }\n"
+                "    globalSetUp() {\n"
+                "        call_function(\"dbg_y\");\n"
+                "        U u();\n"
+                "    }\n"
+                "}\n",
+        }));
+
+        # a check that is not the whole condition of a skip or of a block does not guard; a marker, the forms of a
+        # check, a catch block that skips, and the code of a loop in a function that is called under a guard do
+        assertEq(("c2.qtest:16 dbg_x name", "c2.qtest:7 dbg_x name"), scanSample({
+            "c2.qtest":
+                "%modern\n"
+                "sub a(bool h3) {\n"
+                "    if (h3 && !Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "        testSkip(\"needs a debug build\");\n"
+                "    }\n"
+                "    if (h3) {\n"
+                "        call_function(\"dbg_x\");\n"
+                "    }\n"
+                "    if (h3) {\n"
+                "        # debug-builtin-guard: HTTP/3 only, which skips above without library debugging\n"
+                "        call_function(\"dbg_y\");\n"
+                "    }\n"
+                "}\n"
+                "sub b() {\n"
+                "    if (Option::HAVE_LIBRARY_DEBUGGING || ENV.X) {\n"
+                "        call_function(\"dbg_x\");\n"
+                "    }\n"
+                "    if (ENV.X && Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "        call_function(\"dbg_y\");\n"
+                "    }\n"
+                "    *hash<auto> before = Option::HAVE_LIBRARY_DEBUGGING ? call_function(\"dbg_x\") : NOTHING;\n"
+                "    if (before) {\n"
+                "        call_function(\"dbg_y\");\n"
+                "    }\n"
+                "    Program probe();\n"
+                "    if (probe.existsFunction(\"dbg_x\")) {\n"
+                "        call_function(\"dbg_x\");\n"
+                "    }\n"
+                "    try {\n"
+                "        call_function(\"dbg_y\");\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        testSkip(\"needs a debug build\");\n"
+                "    }\n"
+                "}\n"
+                "sub c() {\n"
+                "    foreach int i in (xrange(2)) {\n"
+                "        call_function(\"dbg_x\");\n"
+                "    }\n"
+                "}\n"
+                "a(True); b();\n"
+                "if (Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "    c();\n"
+                "}\n",
+        }));
+
+        # a module's function that is called under a guard (a module's function that returns a check is a check);
+        # source code in a constant that is parsed under a guard, or whose own code guards its calls
+        assertEq(("m/Mod.qm:9 dbg_y name", "m/m.qtest:27 dbg_x source"), scanSample({
+            "m/Mod.qm":
+                "module Mod { version = \"1.0\"; desc = \"\"; author = \"\"; url = \"\"; }\n"
+                "public bool sub have_debug() {\n"
+                "    return Option::HAVE_LIBRARY_DEBUGGING;\n"
+                "}\n"
+                "public sub hook() {\n"
+                "    call_function(\"dbg_x\");\n"
+                "}\n"
+                "public sub other() {\n"
+                "    call_function(\"dbg_y\");\n"
+                "}\n",
+            "m/m.qtest":
+                "%modern\n"
+                "%requires Mod\n"
+                "const Src = \"%modern\n"
+                "sub s() {\n"
+                "    call_function(\\\"dbg_x\\\");\n"
+                "}\n"
+                "s();\";\n"
+                "const Guarded = \"%modern\n"
+                "if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "    exit(1);\n"
+                "}\n"
+                "call_function(\\\"dbg_y\\\");\";\n"
+                "sub t() {\n"
+                "    if (!Mod::have_debug()) {\n"
+                "        testSkip(\"needs a debug build\");\n"
+                "    }\n"
+                "    Mod::hook();\n"
+                "    Program p();\n"
+                "    p.parse(Src, \"src\");\n"
+                "}\n"
+                "sub u() {\n"
+                "    Mod::other();\n"
+                "    Program p();\n"
+                "    p.parse(Guarded, \"guarded\");\n"
+                "}\n"
+                "u(); v(); t();\n"
+                "const Src2 = \"call_function(\\\"dbg_x\\\");\";\n"
+                "sub v() { Program p(); p.parse(Src2, \"x\"); }\n",
+        }));
+
+        # a fixture of a directory below the test, which names its directory (the name of a test is not a use); a
+        # fixture with the same file name in another directory, which no test names
+        assertEq(("p/other/run.q:2 dbg_y name",), scanSample({
+            "p/p.qtest":
+                "%modern\n"
+                "class X inherits QUnit::Test {\n"
+                "    constructor() : QUnit::Test(\"run\", \"1.0\") {}\n"
+                "    t() {\n"
+                "        if (!Option::HAVE_LIBRARY_DEBUGGING) {\n"
+                "            testSkip(\"needs a debug build\");\n"
+                "        }\n"
+                "        system(get_script_dir() + \"/sub/run.q\");\n"
+                "    }\n"
+                "}\n",
+            "p/sub/run.q":
+                "%modern\n"
+                "call_function(\"dbg_x\");\n",
+            "p/other/run.q":
+                "%modern\n"
+                "call_function(\"dbg_y\");\n",
+        }));
+    }
+
+    repoTests() {
+        string r = root();
+        list<string> names = keys new DebugBuiltinSources(r).get();
+        DebugBuiltinScanner s(r, names, ScanDirs, Exempt);
+        list<string> found = map sprintf("%s:%d: %s() %s", $1.file, $1.line, $1.name, $1.runtime_guard
+            ? "is a direct call under a runtime guard: a release build cannot parse it; use call_function() or "
+                "\"%ifdef QoreDebug\""
+            : ($1.kind == "call" ? "is called" : ($1.kind == "name" ? "is called by name"
+                : "is called in source code in a string")) + " without a guard"), s.scan();
+        assertEq((), found, "the calls of debug-only builtins without a guard: guard each one with \"%ifdef "
+            "QoreDebug\", a check of Option::HAVE_LIBRARY_DEBUGGING that skips the test case, or the other guards "
+            "that DebugBuiltinScanner describes, so that a release build does not fail or hang on it");
+    }
+}

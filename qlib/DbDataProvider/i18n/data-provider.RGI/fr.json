@@ -16,7 +16,7 @@
           "message": "Opérations de base de données sur les sources de données connectées."
         },
         "app.RGI.action.c2VsZWN0LXNxbA.display_name": {
-          "source": "Execute an SQL Select Statement",
+          "source": "Execute an SQL select statement",
           "message": "Exécuter une instruction SQL SELECT"
         },
         "app.RGI.action.c2VsZWN0LXNxbA.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Exécuter une instruction SQL SELECT"
         },
         "app.RGI.action.ZXhlYy1zcWw.display_name": {
-          "source": "Execute an SQL Statement",
+          "source": "Execute an SQL statement",
           "message": "Exécuter une instruction SQL"
         },
         "app.RGI.action.ZXhlYy1zcWw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Exécuter une instruction SQL"
         },
         "app.RGI.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Créer un enregistrement"
         },
         "app.RGI.action.Y3JlYXRl.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Rechercher un seul enregistrement"
         },
         "app.RGI.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "Rechercher les enregistrements correspondants"
         },
         "app.RGI.action.ZmluZA.short_desc": {
@@ -112,7 +112,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Mettre à jour des enregistrements"
         },
         "app.RGI.action.dXBkYXRl.short_desc": {
@@ -136,7 +136,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "Upsert d'enregistrements"
         },
         "app.RGI.action.dXBzZXJ0.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Supprimer les enregistrements"
         },
         "app.RGI.action.ZGVsZXRl.short_desc": {
@@ -184,7 +184,7 @@
           "message": "Le nom de la table"
         },
         "app.RGI.action.ZmluZC12aWV3.display_name": {
-          "source": "Find Matching View Records",
+          "source": "Find matching view records",
           "message": "Rechercher les enregistrements correspondants de la vue"
         },
         "app.RGI.action.ZmluZC12aWV3.short_desc": {
@@ -208,7 +208,7 @@
           "message": "Le nom de la vue"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
-          "source": "Find Single View Record",
+          "source": "Find single view record",
           "message": "Rechercher un seul enregistrement de la vue"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "Le nom de la vue"
         },
         "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
-          "source": "Find Matching Materialized View Records",
+          "source": "Find matching materialized view records",
           "message": "Rechercher les enregistrements correspondants de la vue matérialisée"
         },
         "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
@@ -256,7 +256,7 @@
           "message": "Le nom de la vue matérialisée"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
-          "source": "Find Single Materialized View Record",
+          "source": "Find single materialized view record",
           "message": "Rechercher un seul enregistrement de la vue matérialisée"
         },
         "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
@@ -280,7 +280,7 @@
           "message": "Le nom de la vue matérialisée"
         },
         "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
-          "source": "Refresh Materialized View",
+          "source": "Refresh materialized view",
           "message": "Actualiser la vue matérialisée"
         },
         "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {

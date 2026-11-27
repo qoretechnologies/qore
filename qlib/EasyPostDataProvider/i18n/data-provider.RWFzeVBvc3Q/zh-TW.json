@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
-          "source": "List Addresses",
+          "source": "List addresses",
           "message": "列出地址"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "檢索分頁地址清單，或依 ID 獲取單個地址。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
-          "source": "Create Address",
+          "source": "Create address",
           "message": "建立地址"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
@@ -592,7 +592,7 @@
           "message": "ZIP+4 驗證 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "取得地址"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -616,7 +616,7 @@
           "message": "要擷取的地址"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
-          "source": "Verify Address",
+          "source": "Verify address",
           "message": "驗證地址"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
@@ -640,7 +640,7 @@
           "message": "要驗證的現有 EasyPost 地址 ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
-          "source": "Create and Verify Address",
+          "source": "Create and verify address",
           "message": "建立並驗證地址"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
@@ -880,7 +880,7 @@
           "message": "ZIP+4 驗證 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "取得包裹"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "要擷取的現有 EasyPost 包裹 ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "建立包裹"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Small Package"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "列出出貨"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "檢索貨件分頁清單。可選擇依 ID 獲取或依購買狀態篩選。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "建立出貨"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "承運商名稱（例如 `USPS`、`UPS`、`FedEx`）"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "取得貨件"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3724,7 +3724,7 @@
           "message": "要擷取的貨件"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
-          "source": "Buy Shipment",
+          "source": "Buy shipment",
           "message": "購買貨件"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
@@ -3808,7 +3808,7 @@
           "message": "用於購買的最終託運人 ID"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
-          "source": "Refund Shipment",
+          "source": "Refund shipment",
           "message": "退款貨件"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "要退款的先前購買貨件 ID"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "取得貨件標籤"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -3884,7 +3884,7 @@
           "message": "PNG 圖片"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
-          "source": "Get Shipment SmartRates",
+          "source": "Get shipment SmartRates",
           "message": "取得貨件 SmartRates"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "要擷取 SmartRates 的貨件"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
-          "source": "Rerate Shipment",
+          "source": "Rerate shipment",
           "message": "重新評估貨件運費"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
@@ -3932,7 +3932,7 @@
           "message": "要重新評估運費的貨件"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
-          "source": "Insure Shipment",
+          "source": "Insure shipment",
           "message": "為貨件投保"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "貨件投保金額，格式為字串（例如 `\"100.00\"`）"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
-          "source": "List Trackers",
+          "source": "List trackers",
           "message": "列出追蹤器"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "擷取追蹤器的分頁清單。可選擇依追蹤代碼或承運商篩選。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
-          "source": "Create Tracker",
+          "source": "Create tracker",
           "message": "建立追蹤器"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "承運商名稱（例如 `USPS`、`FedEx`）；若省略，EasyPost 會自動偵測"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "取得追蹤器"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "要擷取的追蹤器"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
-          "source": "Delete Tracker",
+          "source": "Delete tracker",
           "message": "刪除追蹤器"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "要刪除的追蹤器"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
-          "source": "Bulk Create Trackers",
+          "source": "Bulk create trackers",
           "message": "批次建立追蹤器"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
@@ -4112,7 +4112,7 @@
           "message": "用於監控的追蹤編號"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
-          "source": "List Insurance Records",
+          "source": "List insurance records",
           "message": "列出保險記錄"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "檢索保險記錄的分頁清單。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
-          "source": "Create Insurance",
+          "source": "Create insurance",
           "message": "建立保險"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
@@ -4568,7 +4568,7 @@
           "message": "呼叫端提供的參考"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
-          "source": "Get Insurance",
+          "source": "Get insurance",
           "message": "取得保險"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "要擷取的保險記錄"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
-          "source": "Refund Insurance",
+          "source": "Refund insurance",
           "message": "退款保險"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
@@ -4616,7 +4616,7 @@
           "message": "要退款的保險 ID"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
-          "source": "List Pickups",
+          "source": "List pickups",
           "message": "列出取件"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
@@ -4628,7 +4628,7 @@
           "message": "檢索取件分頁清單。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
-          "source": "Create Pickup",
+          "source": "Create pickup",
           "message": "建立取件"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "用於計算取件費率的承運商帳戶 ID"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
-          "source": "Get Pickup",
+          "source": "Get pickup",
           "message": "取得取件"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "要擷取的取件"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
-          "source": "Buy Pickup",
+          "source": "Buy pickup",
           "message": "購買取件"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "在 `pickup_rates` 中傳回的取件服務代碼"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
-          "source": "Cancel Pickup",
+          "source": "Cancel pickup",
           "message": "取消取件"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "要取消的取件"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "取得訂單"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "要擷取的訂單"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "建立訂單"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -7568,7 +7568,7 @@
           "message": "承運商名稱"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
-          "source": "Buy Order",
+          "source": "Buy order",
           "message": "購買訂單"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "承運商服務代碼"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Get Customs Info",
+          "source": "Get customs info",
           "message": "取得海關資訊"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7640,7 +7640,7 @@
           "message": "要擷取的海關資訊 ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Create Customs Info",
+          "source": "Create customs info",
           "message": "建立海關資訊"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "自由格式的海關申報文字"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Get Customs Item",
+          "source": "Get customs item",
           "message": "取得海關品項"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "要擷取的海關品項"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Create Customs Item",
+          "source": "Create customs item",
           "message": "建立海關品項"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -8140,7 +8140,7 @@
           "message": "列印在海關表單上的選用識別碼"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "列出退款"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -8152,7 +8152,7 @@
           "message": "檢索退款分頁清單。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "建立退款"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "要退款的追蹤代碼清單"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get Refund",
+          "source": "Get refund",
           "message": "取得退款"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -8212,7 +8212,7 @@
           "message": "要擷取的退款"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "列出批次"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -8224,7 +8224,7 @@
           "message": "檢索分頁批次清單。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "建立批次"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -8272,7 +8272,7 @@
           "message": "呼叫端提供的參考"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "取得批次"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "要擷取的批次"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
-          "source": "Add Shipments to Batch",
+          "source": "Add shipments to batch",
           "message": "新增貨件至批次"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "參考物件的 ID"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
-          "source": "Remove Shipments from Batch",
+          "source": "Remove shipments from batch",
           "message": "從批次中移除貨件"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "參考物件的 ID"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
-          "source": "Buy Batch",
+          "source": "Buy batch",
           "message": "購買批次"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
@@ -8416,7 +8416,7 @@
           "message": "要購買的批次（為所有貨件購買標籤）"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
-          "source": "Get Batch Label",
+          "source": "Get batch label",
           "message": "取得批次標籤"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
@@ -8464,7 +8464,7 @@
           "message": "Eltron EPL2"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
-          "source": "Generate Batch Scan Form",
+          "source": "Generate batch scan form",
           "message": "產生批次掃描表單"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "要產生掃描表單的批次"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "列出 Webhook"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -8500,7 +8500,7 @@
           "message": "擷取所有已設定的 Webhook。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "取得 Webhook"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "要擷取的 Webhook"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "建立 Webhook"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -8596,7 +8596,7 @@
           "message": "標頭值"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "更新 Webhook"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "標頭值"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "刪除 Webhook"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "要刪除的 Webhook"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "列出事件"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
@@ -8704,7 +8704,7 @@
           "message": "檢索 Webhook 傳送事件的分頁清單。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "取得活動"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "要擷取的事件"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
-          "source": "List Event Payloads",
+          "source": "List event payloads",
           "message": "列出事件酬載"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "要列出酬載的事件"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
-          "source": "Get Event Payload",
+          "source": "Get event payload",
           "message": "取得事件酬載"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
@@ -8788,7 +8788,7 @@
           "message": "要擷取的酬載"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Carrier Accounts",
+          "source": "List carrier accounts",
           "message": "列出承運商帳戶"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
@@ -8800,7 +8800,7 @@
           "message": "檢索在 EasyPost 帳戶上設定的所有承運商帳戶。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Get Carrier Account",
+          "source": "Get carrier account",
           "message": "取得貨運商帳戶"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8824,7 +8824,7 @@
           "message": "要擷取的貨運商帳戶"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Create Carrier Account",
+          "source": "Create carrier account",
           "message": "建立物流商帳戶"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8896,7 +8896,7 @@
           "message": "測試環境專用的承運商憑證雜湊。結構與 `credentials` 相同 - 選取 `type` 即可使用該承運商的特定結構描述填入此欄位。"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Update Carrier Account",
+          "source": "Update carrier account",
           "message": "更新物流商帳戶"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8968,7 +8968,7 @@
           "message": "新的測試環境憑證。與 `credentials` 具有相同的結構描述。"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Delete Carrier Account",
+          "source": "Delete carrier account",
           "message": "刪除承運商帳戶"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8992,7 +8992,7 @@
           "message": "要刪除的承運商帳戶"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
-          "source": "On Tracker Created",
+          "source": "On tracker created",
           "message": "追蹤器建立時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
@@ -9004,7 +9004,7 @@
           "message": "在建立新追蹤器時觸發（`tracker.created` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
-          "source": "On Tracker Updated",
+          "source": "On tracker updated",
           "message": "追蹤器更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
@@ -9016,7 +9016,7 @@
           "message": "在追蹤器狀態變更時觸發（`tracker.updated` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
-          "source": "On Batch Created",
+          "source": "On batch created",
           "message": "當批次建立時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
@@ -9028,7 +9028,7 @@
           "message": "建立新批次時觸發（`batch.created` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
-          "source": "On Batch Updated",
+          "source": "On batch updated",
           "message": "當批次更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "更新批次時觸發（`batch.updated` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
-          "source": "On Insurance Purchased",
+          "source": "On insurance purchased",
           "message": "當保險購買時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "購買保險時觸發（`insurance.purchased` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
-          "source": "On Refund Successful",
+          "source": "On refund successful",
           "message": "退款成功時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
@@ -9064,7 +9064,7 @@
           "message": "在退款成功時觸發（`refund.successful` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "On Shipment Invoice Created",
+          "source": "On shipment invoice created",
           "message": "貨件發票建立時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "建立貨件發票時觸發（`shipment.invoice.created` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
-          "source": "On Payment Completed",
+          "source": "On payment completed",
           "message": "付款完成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
@@ -9088,7 +9088,7 @@
           "message": "在付款完成時觸發（`payment.completed` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "On Payment Failed",
+          "source": "On payment failed",
           "message": "付款失敗時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "在付款失敗時觸發（`payment.failed` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "On Payment Created",
+          "source": "On payment created",
           "message": "付款建立時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -9112,7 +9112,7 @@
           "message": "在成功向銀行帳戶或信用卡扣款時觸發（`payment.created` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
-          "source": "On Insurance Cancelled",
+          "source": "On insurance cancelled",
           "message": "當保險取消時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "當獨立保險被取消或購買失敗時觸發（`insurance.cancelled` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
-          "source": "On Shipment Invoice Updated",
+          "source": "On shipment invoice updated",
           "message": "當貨件發票更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
@@ -9136,7 +9136,7 @@
           "message": "調整並更新貨件發票時觸發（`shipment.invoice.updated` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
-          "source": "On Scan Form Created",
+          "source": "On scan form created",
           "message": "當掃描單建立時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "初始建立 ScanForm 物件完成時觸發（`scan_form.created` Webhook 事件）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
-          "source": "On Scan Form Updated",
+          "source": "On scan form updated",
           "message": "當掃描單更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {

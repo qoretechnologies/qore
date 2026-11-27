@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
+          "source": "Retrieve order items",
           "message": "Získať položky objednávky"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Maximálny počet záznamov na vrátenie"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
+          "source": "Retrieve payment information",
           "message": "Získať informácie o platbe"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Maximálny počet záznamov na vrátenie"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
+          "source": "Retrieve customer information",
           "message": "Získať informácie o zákazníkovi"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {

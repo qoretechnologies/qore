@@ -82,6 +82,13 @@ Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
     : SocketPollOperationBase(self), sock_obj(sock), headers_only(headers_only),
       drain_timeout(drain_timeout) {
     // sock is already ref'd by the caller; ownership transferred
+    // the maps of stream keys hash with the keyed hash of the process (qore#7750)
+    QORE_KEYED_HASH_SITE("http3-server-1", stream_queues);
+    QORE_KEYED_HASH_SITE("http3-server-2", tunnel_stream_keys);
+    QORE_KEYED_HASH_SITE("http3-server-3", pending_stream_data);
+    QORE_KEYED_HASH_SITE("http3-server-4", response_send_watches);
+    QORE_KEYED_HASH_SITE("http3-server-5", close_notify_streams);
+    QORE_KEYED_HASH_SITE("http3-server-6", peer_closed_streams);
 }
 
 void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
@@ -1122,6 +1129,9 @@ qclass Http3ServerPollOperation [
     @param headers_only if @ref True, dispatches requests as soon as headers are
     received (before the full body arrives)
     @param max_request_body_size maximum request body size in bytes; 0 = unlimited
+
+    @throw HASH-SECRET-KEY-ERROR no random source works to create the secret key of the keyed hashes of the process
+    (see @ref keyed_internal_tables)
 */
 Http3ServerPollOperation::constructor(Socket[QoreSocketObject] socket,
         timeout drain_timeout = 5s, bool headers_only = False,
@@ -1132,6 +1142,12 @@ Http3ServerPollOperation::constructor(Socket[QoreSocketObject] socket,
     }
 
     QoreSocketObject* sock_ptr = *socket;
+
+    // the containers of the private data use the keyed hash of the process; its key is created here, where a failure
+    // can be reported, before anything is set up (qore#7750)
+    if (qore_intern_hash_process_key_check(xsink)) {
+        return;
+    }
 
     // Set up the Qore object members
     QoreValue sock_arg = args->retrieveEntry(0);

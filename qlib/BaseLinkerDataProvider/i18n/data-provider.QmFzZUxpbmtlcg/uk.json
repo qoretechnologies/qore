@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Список замовлень"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Повертає потік замовлень BaseLinker через `getOrders`. Підтримує курсорну пагінацію через `id_from`/`date_from` і фільтрацію за статусом, електронною поштою та каналом джерела. Розмір сторінки фіксований BaseLinker на рівні 100 замовлень на виклик."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Отримати замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
@@ -372,7 +372,7 @@
           "message": "Ідентифікатор замовлення BaseLinker"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
-          "source": "Add Order",
+          "source": "Add order",
           "message": "Додати замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Вага одиниці в кілограмах."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
-          "source": "Set Order Fields",
+          "source": "Set order fields",
           "message": "Встановити поля замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "5 зірок"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Set Order Status",
+          "source": "Set order status",
           "message": "Встановити статус замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Ідентифікатор нового статусу замовлення; див. `list-order-statuses`."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
-          "source": "Set Order Payment",
+          "source": "Set order payment",
           "message": "Встановити оплату замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Ідентифікатор, призначений платіжним шлюзом"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Видалити замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Масив ID замовлень BaseLinker для видалення (до 1000 за виклик)."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Add Order Product",
+          "source": "Add order product",
           "message": "Додати товар до замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Ідентифікатор аукціону або лістингу на маркетплейсі (eBay, Allegro, Amazon тощо)."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
-          "source": "Set Order Product Fields",
+          "source": "Set order product fields",
           "message": "Встановити поля товару замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "Ідентифікатор аукціону або лістингу на маркетплейсі (eBay, Allegro, Amazon тощо)."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Delete Order Product",
+          "source": "Delete order product",
           "message": "Видалити товар із замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Ідентифікатор позиції товару для видалення"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
-          "source": "List Order Returns",
+          "source": "List order returns",
           "message": "Перелічити повернення замовлень"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Повертає потік повернень замовлень BaseLinker через `getOrderReturns`. Підтримує курсорну пагінацію за допомогою `id_from` і фільтри за статусом та датою підтвердження."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
-          "source": "Get Order Return",
+          "source": "Get order return",
           "message": "Отримати повернення замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "Ідентифікатор повернення замовлення BaseLinker"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
-          "source": "Add Order Return",
+          "source": "Add order return",
           "message": "Додати повернення замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "Вага одиниці в кілограмах."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
-          "source": "Set Order Return Fields",
+          "source": "Set order return fields",
           "message": "Встановити поля повернення замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "Зіставлення `{\"<extra_field_id>\": <value>}` для додаткових полів повернення замовлення, налаштованих у BaseLinker. Текстові поля приймають рядки; файлові поля приймають хеш `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`, де файл у кодуванні base64 не повинен перевищувати 2 МБ."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
-          "source": "Set Order Return Status",
+          "source": "Set order return status",
           "message": "Встановити статус повернення замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "Ідентифікатор цільового статусу повернення; значення беруться з кінцевої точки BaseLinker `getOrderReturnStatusList` і надаються через довідкові дані `order_return_statuses`."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
-          "source": "Set Order Return Refund",
+          "source": "Set order return refund",
           "message": "Встановити відшкодування повернення замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Ідентифікатор, призначений провайдером відшкодування"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
-          "source": "List Inventories",
+          "source": "List inventories",
           "message": "Перелічити інвентарі"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "Перелічити всі інвентарі (каталоги) BaseLinker через `getInventories`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
-          "source": "List Inventory Products",
+          "source": "List inventory products",
           "message": "Перелічити товари інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Перелічити товари в інвентарі BaseLinker через `getInventoryProductsList`. Підтримує пагінацію за номерами сторінок і фільтри за категорією, EAN, SKU, назвою, діапазоном цін і діапазоном залишків."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Get Inventory Product",
+          "source": "Get inventory product",
           "message": "Отримати товар зі складу"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Ідентифікатор товару на складі BaseLinker"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Add / Update Inventory Product",
+          "source": "Add / update inventory product",
           "message": "Додати / оновити товар на складі"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "Зіставлення `{\"<product_id>\": <quantity>}`, де кожен ключ є ідентифікатором товару, включеного до цього комплекту, а значення — кількістю штук."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Delete Inventory Product",
+          "source": "Delete inventory product",
           "message": "Видалити товар зі складу"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Товар для видалення"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
-          "source": "List Inventory Stock",
+          "source": "List inventory stock",
           "message": "Перелічити залишки інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Перелічити залишки товарів на складі в інвентарі BaseLinker через `getInventoryProductsStock`. Кожен рядок містить хеш `product_id` у форматі склад → кількість."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
-          "source": "Update Inventory Stock",
+          "source": "Update inventory stock",
           "message": "Оновити залишки інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "Вкладений map у форматі `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. Для товарів без варіантів використовуйте ID товару як префікс внутрішнього ключа (напр., `0|bl_123`). До 1000 товарів за виклик."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
-          "source": "List Inventory Prices",
+          "source": "List inventory prices",
           "message": "Перелічити ціни інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "Перелічити ціни на товари інвентарю BaseLinker через `getInventoryProductsPrices`. Кожен рядок містить хеш `product_id` у форматі цінова група → ціна."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
-          "source": "Update Inventory Prices",
+          "source": "Update inventory prices",
           "message": "Оновити ціни інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "Вкладений map у форматі `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. До 1000 товарів за виклик."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
-          "source": "List Inventory Manufacturers",
+          "source": "List inventory manufacturers",
           "message": "Перелічити виробників інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Перелічити виробників інвентарю BaseLinker через `getInventoryManufacturers`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
-          "source": "List Inventory Categories",
+          "source": "List inventory categories",
           "message": "Перелічити категорії інвентарю"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
@@ -3124,7 +3124,7 @@
           "message": "Перелічити категорії інвентарю BaseLinker через `getInventoryCategories`. Якщо вказано `inventory_id`, результати обмежуються цим каталогом."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
-          "source": "List Order Packages",
+          "source": "List order packages",
           "message": "Перелічити посилки замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
@@ -3136,7 +3136,7 @@
           "message": "Перелічити кур'єрські посилки (відправлення), пов'язані із замовленням BaseLinker, через `getOrderPackages`."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
-          "source": "Add Courier Package",
+          "source": "Add courier package",
           "message": "Додати кур’єрську посилку"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "Ширина посилки"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
-          "source": "Get Courier Label",
+          "source": "Get courier label",
           "message": "Отримати кур'єрську етикетку"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "Номер відстеження/відправлення, присвоєний перевізником. Укажіть або це значення, або `package_id`."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
-          "source": "Delete Courier Package",
+          "source": "Delete courier package",
           "message": "Видалити кур'єрське відправлення"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "Якщо `True`, видаляє відправлення з BaseLinker, навіть якщо перевізник відхиляє скасування."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Список кур'єрів"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Перелічити кур'єрів, налаштованих для цього акаунта BaseLinker, через `getCouriersList`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
-          "source": "List Courier Services",
+          "source": "List courier services",
           "message": "Перелічити послуги кур'єра"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "Перелічити доступні послуги (варіанти продуктів/тарифів) для вказаного кур'єра через `getCourierServices`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Courier Accounts",
+          "source": "List courier accounts",
           "message": "Перелічити акаунти кур'єрів"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Перелічити облікові дані акаунта кур'єра, налаштовані для вказаного кур'єра через `getCourierAccounts`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
-          "source": "List Courier Fields",
+          "source": "List courier fields",
           "message": "Перелічити поля кур'єра"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "Перелічити схему користувацьких полів (обов'язкові/необов'язкові поля вводу) для вказаного кур'єра через `getCourierFields`. Корисно для програмного формування корисних навантажень `createPackage`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
-          "source": "List Order Statuses",
+          "source": "List order statuses",
           "message": "Отримати список статусів замовлень"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
@@ -3432,7 +3432,7 @@
           "message": "Отримати список статусів замовлень, налаштованих у BaseLinker, через `getOrderStatusList`."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
-          "source": "List Order Sources",
+          "source": "List order sources",
           "message": "Перелічити джерела замовлень"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
@@ -3444,7 +3444,7 @@
           "message": "Перелічити джерела замовлень (маркетплейси/магазини), налаштовані в BaseLinker, через `getOrderSources`."
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Замовлення створено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "Спрацьовує при створенні нового замовлення в BaseLinker. (Опитується з `getJournalList` `log_type` 1.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
-          "source": "Order Downloaded",
+          "source": "Order downloaded",
           "message": "Замовлення завантажено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Спрацьовує при завантаженні замовлення з підключеного магазину. (Опитується з `getJournalList` `log_type` 2.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
-          "source": "Order Paid",
+          "source": "Order paid",
           "message": "Замовлення оплачено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "Спрацьовує, коли замовлення позначається як оплачене. (Отримано з `getJournalList` `log_type` 3.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
-          "source": "Order Removed",
+          "source": "Order removed",
           "message": "Замовлення видалено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
@@ -3492,7 +3492,7 @@
           "message": "Спрацьовує, коли замовлення видалено. (Отримано з `getJournalList` `log_type` 4.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
-          "source": "Orders Merged",
+          "source": "Orders merged",
           "message": "Замовлення об'єднано"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
@@ -3504,7 +3504,7 @@
           "message": "Спрацьовує, коли об'єднуються два або більше замовлень. (Отримано з `getJournalList` `log_type` 5.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
-          "source": "Order Split",
+          "source": "Order split",
           "message": "Замовлення розділено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
@@ -3516,7 +3516,7 @@
           "message": "Спрацьовує, коли замовлення розділено. (Отримано з `getJournalList` `log_type` 6.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
-          "source": "Invoice Issued",
+          "source": "Invoice issued",
           "message": "Рахунок-фактуру виставлено"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
@@ -3528,7 +3528,7 @@
           "message": "Спрацьовує при виставленні рахунка-фактури. (Опитується з `getJournalList` `log_type` 7.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
-          "source": "Receipt Issued",
+          "source": "Receipt issued",
           "message": "Чек видано"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Спрацьовує під час видачі чека. (Опитування з `getJournalList` `log_type` 8.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
-          "source": "Package Created",
+          "source": "Package created",
           "message": "Відправлення створено"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "Спрацьовує під час створення кур'єрського відправлення. (Опитування з `getJournalList` `log_type` 9.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
-          "source": "Package Deleted",
+          "source": "Package deleted",
           "message": "Відправлення видалено"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "Спрацьовує під час видалення кур'єрського відправлення. (Опитування з `getJournalList` `log_type` 10.)"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Delivery Data Edited",
+          "source": "Delivery data edited",
           "message": "Дані доставки змінено"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "Спрацьовує при зміні даних доставки в замовленні. (Опитується з `getJournalList` `log_type` 11.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
-          "source": "Order Product Added",
+          "source": "Order product added",
           "message": "Товар додано до замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Спрацьовує, коли товар додається до замовлення. (Отримано з `getJournalList` `log_type` 12.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
-          "source": "Order Product Edited",
+          "source": "Order product edited",
           "message": "Товар у замовленні змінено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "Спрацьовує, коли позицію товару в замовленні змінено. (Отримано з `getJournalList` `log_type` 13.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
-          "source": "Order Product Removed",
+          "source": "Order product removed",
           "message": "Товар видалено із замовлення"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
@@ -3612,7 +3612,7 @@
           "message": "Спрацьовує, коли позицію товару видалено із замовлення. (Отримано з `getJournalList` `log_type` 14.)"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
-          "source": "Blacklist Entry Added",
+          "source": "Blacklist entry added",
           "message": "Запис додано до чорного списку"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "Спрацьовує, коли покупця додають до чорного списку. (Опитується з `getJournalList` `log_type` 15.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Order Data Edited",
+          "source": "Order data edited",
           "message": "Дані замовлення змінено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3636,7 +3636,7 @@
           "message": "Спрацьовує при зміні основних даних замовлення. (Опитується з `getJournalList` `log_type` 16.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
-          "source": "Order Copied",
+          "source": "Order copied",
           "message": "Замовлення скопійовано"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "Спрацьовує при копіюванні замовлення. (Опитується з `getJournalList` `log_type` 17.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Order Status Changed",
+          "source": "Order status changed",
           "message": "Статус замовлення змінено"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
@@ -3660,7 +3660,7 @@
           "message": "Спрацьовує, коли змінюється статус замовлення. (Отримано з `getJournalList` `log_type` 18.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
-          "source": "Invoice Deleted",
+          "source": "Invoice deleted",
           "message": "Рахунок-фактуру видалено"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Спрацьовує при видаленні рахунка-фактури. (Опитується з `getJournalList` `log_type` 19.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
-          "source": "Receipt Deleted",
+          "source": "Receipt deleted",
           "message": "Чек видалено"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
@@ -3684,7 +3684,7 @@
           "message": "Спрацьовує під час видалення чека. (Опитування з `getJournalList` `log_type` 20.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
-          "source": "Invoice Edited",
+          "source": "Invoice edited",
           "message": "Рахунок-фактуру змінено"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Спрацьовує при зміні рахунка-фактури. (Опитується з `getJournalList` `log_type` 21.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
-          "source": "Package Status Changed",
+          "source": "Package status changed",
           "message": "Статус відправлення змінено"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {

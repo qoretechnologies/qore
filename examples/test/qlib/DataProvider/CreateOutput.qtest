@@ -281,8 +281,24 @@ class CreateOutputTest inherits QUnit::Test {
         assertThrows("ACTION-ERROR", "no output type", sub () {
             registerAction(app, "write-data", DPAT_CREATE, DPAD_CREATE_OUTPUT);
         });
+        # the nothing type describes no generated output (qore#7772), however it is made
+        assertThrows("ACTION-ERROR", "no output type", sub () {
+            registerAction(app, "write-nothing", DPAT_CREATE, DPAD_CREATE_OUTPUT,
+                AbstractDataProviderTypeMap."nothing");
+        });
+        assertThrows("ACTION-ERROR", "no output type", sub () {
+            registerAction(app, "write-new-nothing", DPAT_CREATE, DPAD_CREATE_OUTPUT,
+                AbstractDataProviderType::get(new Type("nothing")));
+        });
         assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "find-data"));
         assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "write-data"));
+        assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "write-nothing"));
+        assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "write-new-nothing"));
+        # an "or nothing" output type still describes the output
+        registerAction(app, "write-or-nothing", DPAT_CREATE, DPAD_CREATE_OUTPUT,
+            GeneratedDataOutputDataType.getOrNothingType());
+        assertEq(DPAD_CREATE_OUTPUT,
+            DataProviderActionCatalog::getAppActionEx(app, "write-or-nothing").output_data_type);
     }
 
     testSimulation() {

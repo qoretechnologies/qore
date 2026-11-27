@@ -16,7 +16,7 @@
           "message": "Ogólny serwer FTP do wymiany plików za pośrednictwem FTP i FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "Odebrano plik FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

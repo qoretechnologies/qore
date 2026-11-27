@@ -89,7 +89,7 @@ class PerfBuildTargetsTest(unittest.TestCase):
         self.assertEqual(sorted(perf_tests()), sorted(str(ROOT / line) for line in out.stdout.split()))
         self.assertRegex(build, r"perf-build-targets\.py build \$\{PERF_TESTS\}\)")
         self.assertRegex(build, r"make -j\$\{MAKE_JOBS\} \$\{PERF_TARGETS\}")
-        self.assertIn("./run_tests.sh -P ", test)
+        self.assertRegex(test, r"qore_ci_suite \"[^\"]*\" \./run_tests\.sh -P\n")
         # the partial build is not installed
         self.assertNotRegex(test, r"(?m)^\s*cmake --install")
 

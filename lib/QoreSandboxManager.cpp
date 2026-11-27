@@ -2008,7 +2008,10 @@ void qore_sandbox_manager_ops::notifyThreadSlotReleasedImpl(QoreSandboxManager* 
 }
 
 void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b) {
-    if (const auto* managers = QoreSandboxComposition::members(b)) {
+    // the caller counted a thread of the manager, so it exists: the null test of members(const QoreSandboxManager*)
+    // would give the compiler a path releasing the count of a null manager after inlining (#7757)
+    assert(b);
+    if (const auto* managers = QoreSandboxComposition::members(*b)) {
         for (auto* manager : *managers) {
             qore_sandbox_manager_ops(manager).releaseThreadSlotQuiet();
         }
@@ -2877,8 +2880,11 @@ void qore_release_module_program_pins() {
 //------------------------------------------------------------------------------
 
 const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager* manager) {
-    return manager && manager->fs_mgr.priv->composition
-        ? &manager->fs_mgr.priv->composition->managers : nullptr;
+    return manager ? members(*manager) : nullptr;
+}
+
+const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager& manager) {
+    return manager.fs_mgr.priv->composition ? &manager.fs_mgr.priv->composition->managers : nullptr;
 }
 
 bool QoreSandboxComposition::same(const QoreSandboxManager* a, const QoreSandboxManager* b) {

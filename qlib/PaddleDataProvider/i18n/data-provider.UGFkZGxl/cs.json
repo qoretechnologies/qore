@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Seznam zákazníků"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvořit zákazníka"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Platná značka národního prostředí ve zkrácené formě dle IETF BCP 47. Při vynechání je výchozí hodnota `en`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Vaše vlastní strukturovaná data typu klíč-hodnota."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "Marketingový souhlas"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Zda tento zákazník udělil souhlas se zasíláním marketingových sdělení. `false`, pokud zákazníci nezaškrtnou pole marketingového souhlasu\npři použití Paddle Checkout. Nastavuje se automaticky službou Paddle."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadata importu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Odkaz nebo identifikátor tohoto objektu z poskytovatele, ze kterého byl importován."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importováno z"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "ID Paddle entity zákazníka, se kterou se má pracovat.: Jedinečné ID Paddle pro tuto entitu zákazníka s předponou `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -648,7 +648,7 @@
           "message": "archivováno"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Platný zkrácený tag národního prostředí podle IETF BCP 47."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "Marketingový souhlas"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Zda tento zákazník udělil souhlas se zasíláním marketingových sdělení. `false`, pokud zákazníci nezaškrtnou pole marketingového souhlasu\npři použití Paddle Checkout. Nastavuje se automaticky službou Paddle."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadata importu"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Odkaz nebo identifikátor tohoto objektu z poskytovatele, ze kterého byl importován."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importováno z"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Získat ověřovací token zákazníka"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "ID Paddle entity zákazníka, se kterou se má pracovat.: Jedinečné ID Paddle pro tuto entitu zákazníka s předponou `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Vypsat zůstatky kreditů zákazníka"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -780,7 +780,7 @@
           "message": "Vrátí entity, které odpovídají kódu měny. Chcete-li zadat více kódů měn, použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Vypsat produkty"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Vrátit pouze zadaná ID. Pro získání více entit použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Daňová kategorie"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Vytvořit produkt"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Název tohoto produktu."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Daňová kategorie"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "Obrázek tohoto produktu. Zahrnuje se v pokladně a na některých zákaznických dokumentech."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Jedinečné Paddle ID tohoto produktu s předponou `pro_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadata importu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Odkaz nebo identifikátor tohoto objektu z poskytovatele, ze kterého byl importován."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importováno z"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Zahrnout související entity v odpovědi. Pro zadání více entit použijte čárkou oddělený seznam."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Obrázek tohoto produktu. Zahrnuje se v pokladně a na některých zákaznických dokumentech."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "standardní"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Daňová kategorie"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "webhosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Archivovat produkt"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "archivováno"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
-          "source": "List Prices",
+          "source": "List prices",
           "message": "Vypsat ceny"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Seřadí vrácené entity podle zadaného pole a směru (`[ASC]` nebo `[DESC]`). Například `?order_by=id[ASC]`.\n\nPlatná pole pro řazení: `billing_cycle.frequency`, `billing_cycle.interval`, `id`, `product_id`, `quantity.maximum`, `quantity.minimum`, `status`, `tax_mode`, `unit_price.amount`, a `unit_price.currency_code`."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
-          "source": "Billing Cycle Interval",
+          "source": "Billing cycle interval",
           "message": "Interval fakturačního cyklu"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
-          "source": "Billing Cycle Frequency",
+          "source": "Billing cycle frequency",
           "message": "Frekvence fakturačního cyklu"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
-          "source": "Create Price",
+          "source": "Create price",
           "message": "Vytvořit cenu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Interní popis této ceny, který se zákazníkům nezobrazuje. Obvykle poznámky pro váš tým."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Fakturační cyklus"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Zkušební období"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "Vyžadováno platební metoda"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Zda tato cena vyžaduje platební metodu (`true`) nebo ne (`false`) při zkušebním používání. Pokud je `false`, mohou se zákazníci přihlásit k předplatnému bez zadání platebních údajů, což se často označuje jako \"bezplatná zkušební verze.\""
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Seznam přepsání jednotkových cen pro zkušební cenové nabídky. Použijte k přepsání základní zkušební ceny vlastní zkušební cenou a měnou pro zemi nebo skupinu zemí."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Kódy zemí"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Podporovaný dvoupísmenný kód země podle ISO 3166-1 alpha-2. Zákazníci nacházející se v uvedených zemích jsou účtováni přepsanou cenou."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Název této ceny zobrazený zákazníkům u pokladny a na fakturách. Obvykle popisuje frekvenci fakturace souvisejícího produktu."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Daňový režim"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "Minimální množství produktu spojeného s touto cenou, které lze koupit. Vyžadováno, pokud je `maximum` nastaveno."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "Seznam přepisů jednotkové ceny. Slouží k přepsání základní ceny vlastní cenou a měnou pro zemi nebo skupinu zemí."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Kódy zemí"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Podporovaný dvoupísmenný kód země podle ISO 3166-1 alpha-2. Zákazníci nacházející se v uvedených zemích jsou účtováni přepsanou cenou."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2136,7 +2136,7 @@
           "message": "Přepsat cenu. Tato cena se vztahuje na zákazníky umístěné v zemích pro tento přepis jednotkové ceny."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Jedinečné Paddle ID pro tuto cenu s předponou `pri_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadata importu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Odkaz nebo identifikátor tohoto objektu z poskytovatele, ze kterého byl importován."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importováno z"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Získat cenu"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Zahrnout do odpovědi související entity."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Aktualizovat cenu"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Interní popis této ceny, který se zákazníkům nezobrazuje. Obvykle poznámky pro váš tým."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "archivováno"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Fakturační cyklus"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Zkušební období"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "Vyžadováno platební metoda"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "Zda tato cena vyžaduje platební metodu (`true`) nebo ne (`false`) při zkušebním používání. Pokud je `false`, mohou se zákazníci přihlásit k předplatnému bez zadání platebních údajů, což se často označuje jako \"bezplatná zkušební verze.\""
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Seznam přepsání jednotkových cen pro zkušební cenové nabídky. Použijte k přepsání základní zkušební ceny vlastní zkušební cenou a měnou pro zemi nebo skupinu zemí."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Kódy zemí"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Podporovaný dvoupísmenný kód země podle ISO 3166-1 alpha-2. Zákazníci nacházející se v uvedených zemích jsou účtováni přepsanou cenou."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Název této ceny zobrazený zákazníkům u pokladny a na fakturách. Obvykle popisuje frekvenci fakturace souvisejícího produktu."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Daňový režim"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Minimální množství produktu spojeného s touto cenou, které lze koupit. Vyžadováno, pokud je `maximum` nastaveno."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Seznam přepisů jednotkové ceny. Slouží k přepsání základní ceny vlastní cenou a měnou pro zemi nebo skupinu zemí."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Kódy zemí"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Podporovaný dvoupísmenný kód země podle ISO 3166-1 alpha-2. Zákazníci nacházející se v uvedených zemích jsou účtováni přepsanou cenou."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Přepsat cenu. Tato cena se vztahuje na zákazníky umístěné v zemích pro tento přepis jednotkové ceny."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "standardní"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "Vypsat předplatná"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Vrátit pouze zadaná ID. Pro získání více entit použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Režim výběru plateb"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "manual"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
-          "source": "Scheduled Change Action",
+          "source": "Scheduled change action",
           "message": "Akce naplánované změny"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "Vrátí předplatná, která mají naplánovanou změnu. Chcete-li zadat více akcí naplánované změny, použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
-          "source": "Next Billed At",
+          "source": "Next billed at",
           "message": "Příští datum fakturace"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Získat předplatné"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Zahrnout související entity v odpovědi. Pro zadání více entit použijte čárkou oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "Vypsat transakce"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "Vrátit entity související se zadaným předplatným. Pro zadání více ID předplatného použijte čárkami oddělený seznam. Předáním `null` vrátíte entity, které nesouvisejí s žádným předplatným."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Aktualizováno"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
@@ -3200,7 +3200,7 @@
           "message": "Vrátit entity aktualizované v určitý čas. Předejte řetězec data a času dle RFC 3339 nebo použijte operátory `[LT]` (menší než), `[LTE]` (menší než nebo rovno), `[GT]` (větší než) nebo `[GTE]` (větší než nebo rovno). Například `updated_at=2023-04-18T17:03:26` nebo `updated_at[LT]=2023-04-18T17:03:26`."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvořeno"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "Vrátit entity vytvořené v určitý čas. Předejte řetězec data a času dle RFC 3339 nebo použijte operátory `[LT]` (menší než), `[LTE]` (menší než nebo rovno), `[GT]` (větší než) nebo `[GTE]` (větší než nebo rovno). Například `created_at=2023-04-18T17:03:26` nebo `created_at[LT]=2023-04-18T17:03:26`."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
-          "source": "Billed At",
+          "source": "Billed at",
           "message": "Fakturováno v"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "Vrátit pouze zadaná ID. Pro získání více entit použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
-          "source": "Invoice Number",
+          "source": "Invoice number",
           "message": "Číslo faktury"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "Vrátit entity související se zadaným původem. Pro zadání více původů použijte čárkami oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Režim výběru plateb"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "Vytvořit transakci"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "rok"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Kódy zemí"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Podporovaný dvoupísmenný kód země podle ISO 3166-1 alpha-2. Zákazníci nacházející se v uvedených zemích jsou účtováni přepsanou cenou."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "past_due"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "Podporovaný třípísmenný kód měny dle ISO 4217. Musí být `USD`, `EUR` nebo `GBP`, pokud je `collection_mode` nastaveno na `manual`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Režim výběru plateb"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3632,7 +3632,7 @@
           "message": "Paddle ID předplatného, pro které je tato transakce určena, s předponou `sub_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
+          "source": "Billing period",
           "message": "Fakturační období"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
@@ -3644,7 +3644,7 @@
           "message": "Časové období, pro které je tato transakce určena. Nastavuje se automaticky službou Paddle pro obnovení předplatného, aby popsalo období, za které jsou účtovány poplatky."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
+          "source": "Ends at",
           "message": "Končí v"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Řetězec datového času RFC 3339, kdy končí toto období."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
+          "source": "Starts at",
           "message": "Začíná v"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.short_desc": {
@@ -3668,7 +3668,7 @@
           "message": "Řetězec datového času RFC 3339, kdy začíná toto období."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
-          "source": "Billing Details",
+          "source": "Billing details",
           "message": "Fakturační údaje"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
@@ -3680,7 +3680,7 @@
           "message": "Podrobnosti pro fakturaci. Povinné, pokud je `collection_mode` nastaveno na `manual`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.display_name": {
-          "source": "Additional Information",
+          "source": "Additional information",
           "message": "Další informace"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "Poznámky nebo jiné informace, které mají být zahrnuty na této faktuře. Zobrazí se na fakturách."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.display_name": {
-          "source": "Enable Checkout",
+          "source": "Enable checkout",
           "message": "Povolit nákup"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Zda může být související transakce zaplacena pomocí Paddle Checkout. Pokud je vynecháno při vytváření transakce, výchozí hodnota je `false`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.display_name": {
-          "source": "Payment Terms",
+          "source": "Payment terms",
           "message": "Platební podmínky"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Jak dlouho má zákazník zaplatit fakturu po jejím vystavení."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.display_name": {
-          "source": "Purchase Order Number",
+          "source": "Purchase order number",
           "message": "Číslo nákupní objednávky"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "Číslo objednávky zákazníka. Zobrazuje se na fakturách"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3812,7 +3812,7 @@
           "message": "Částka, o kterou se slevuje. Pro slevy `percentage` musí být částka mezi `0.01` a `100`. Pro slevy `flat` a `flat_per_seat` je částka v nejnižší jednotce měny."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "Krátký popis tohoto slevového kódu pro vaši potřebu. Uživatelé nevidí."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.display_name": {
-          "source": "Maximum Recurring Intervals",
+          "source": "Maximum recurring intervals",
           "message": "Maximální počet opakujících se intervalů"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Zda se tato sleva vztahuje na více období fakturace (`true`) nebo ne (`false`). Pokud je vynecháno, výchozí hodnota je `false`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.display_name": {
-          "source": "Restrict To",
+          "source": "Restrict to",
           "message": "Omezit na"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "URL pro nákupní stránku používané pro platbu této transakce. Předejte URL schválené domény nebo `null` pro nastavení na výchozí platbovou URL.\n\nPaddle vytvoří jedinečný odkaz pro platbu složený z předané URL nebo vaší výchozí platbové URL + `?_ptxn=` a ID Paddle pro tuto transakci."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Získat transakci"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "Zahrnout související entity v odpovědi. Pro zadání více entit použijte čárkou oddělený seznam."
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "Vypsat reporty"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
-          "source": "Create Report",
+          "source": "Create report",
           "message": "Vytvořit sestavu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "nákupy"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Získat sestavu"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "ID Paddle entity sestavy."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Získat soubor sestavy"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4712,7 +4712,7 @@
           "message": "ID Paddle entity sestavy."
         },
         "app.UGFkZGxl.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhledat záznamy"
         },
         "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "Tabulka, se kterou se má pracovat: `customers`, `products`, `prices`, `transactions` nebo `reports`"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Najít jeden záznam"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4760,7 +4760,7 @@
           "message": "Tabulka, se kterou se má pracovat: `customers`, `products`, `prices`, `transactions` nebo `reports`"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvořit záznamy"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "Tabulka, se kterou se má pracovat: `customers`, `products`, `prices`, `transactions` nebo `reports`"
         },
         "app.UGFkZGxl.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovat záznamy"
         },
         "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "Tabulka, se kterou se má pracovat: `customers`, `products`, `prices`, `transactions` nebo `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Zákazník vytvořen"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Aktivuje se při vytvoření zákazníka bez ohledu na způsob – přes API, nákupní proces nebo nástěnku Paddle.\n\nToto nahrazuje dotazování seznamu zákazníků: dotazování řazené podle času vytvoření nedokáže zachytit zákazníka, který byl vytvořen a smazán mezi dvěma běhy, a spotřebovává požadavek v každém intervalu bez ohledu na to, zda došlo ke změně."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Zákazník aktualizován"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Aktivuje se při změně zákazníka včetně jeho archivace – `status` se změní na `archived`, místo aby byl zákazník smazán.\n\nPaddle posílá celého zákazníka, nikoli rozdíl, takže pokud potřebujete zjistit, které pole se změnilo, porovnejte jej s uloženými daty."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Produkt vytvořen"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Spustí se při přidání produktu do katalogu.\n\nProdukt sám o sobě nenese žádnou cenu, takže nově vytvořený produkt nelze prodávat, dokud pro něj neexistuje cena; sledujte za tímto účelem `price.created`.\n\nToto nahrazuje dotazování seznamu produktů."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Produkt aktualizován"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Spustí se při změně produktu, včetně jeho archivace – `status` se změní na `archived`, čímž je stažen z prodeje bez vlivu na stávající předplatná.\n\n**Archivace produktu nearchivuje jeho ceny**, takže cena archivovaného produktu může být stále účtována, pokud není archivována také."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Cena vytvořena"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Spustí se při vytvoření ceny pro produkt.\n\n`unit_price.amount` je řetězec v **nejmenší jednotce dané měny**, takže `1000` je 10,00 USD v USD, ale 1000 jenů v JPY. `billing_cycle` z něj dělá cenu předplatného; bez toho se jedná o jednorázový poplatek."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Cena aktualizována"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Spustí se při změně ceny, včetně archivace ceny.\n\n**Změna parametru `unit_price` ovlivní pouze nové nákupy**; předplatná, která již tuto cenu účtují, si ponechají částku, se kterou byla vytvořena, dokud nebudou výslovně aktualizována. Změna ceny tedy neznamená, že se někomu změnila fakturovaná částka."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Předplatné vytvořeno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Spustí se při vytvoření předplatného.\n\n**Vytvořeno neznamená zaplaceno.** Nové předplatné je často `trialing` a to vytvořené pro transakci, která ještě nebyla inkasována, nic nevydělává; před zřízením služby zkontrolujte `status`. `subscription.activated` je signál, že fakturace skutečně začala.\n\nToto nahrazuje dotazování seznamu předplatných."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Předplatné aktivováno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Aktivuje se, když se předplatné poprvé stane `active` – zkušební verze skončila a byla zaplacena, nebo nastal naplánovaný začátek.\n\nToto je signál k aktivaci placeného plánu: znamená to, že Paddle platbu vybral, zatímco `subscription.created` pouze znamená, že záznam existuje."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Předplatné aktualizováno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Spustí se při jakékoli změně předplatného: změně plánu, změně množství, přechodu obnovení na `next_billed_at` nebo při **naplánování** pozastavení či zrušení.\n\n`scheduled_change` je pole, které tyto poslední případy rozlišuje – předplatné může být `active` a přesto mít naplánované ukončení. Paddle odesílá celé předplatné namísto rozdílu."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Předplatné zrušeno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Aktivuje se, když předplatné skutečně skončí a `status` se změní na `canceled`.\n\n**Toto je signál k deaktivaci služby, nikoli žádost o zrušení.** Zrušení naplánované na konec fakturačního období se nejprve zobrazí jako `scheduled_change` na `subscription.updated` a zákazník má do tohoto data zaplaceno; tato událost nastává až v okamžiku, kdy toto datum nastane."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Předplatné po splatnosti"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Spustí se, když se nepodaří inkasovat obnovení a předplatné přejde do stavu `past_due`.\n\nPaddle provádí opakované pokusy podle svého plánu upomínání, takže toto ještě není konec: pokud se opakovaný pokus zdaří, předplatné se vrátí do stavu `active`, nebo je zrušeno, jakmile se pokusy vyčerpají. Považujte to za varování k vyzvání zákazníka, nikoli za důvod k odepření přístupu."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Transakce vytvořena"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Spustí se při vytvoření transakce, včetně konceptu, který Paddle vytvoří pro nadcházející obnovení.\n\n**Vytvořená transakce ještě není zaplacena**; většina z nich je v tomto okamžiku ve stavu `draft` nebo `ready`. Pro skutečně vybrané peníze použijte `transaction.completed`.\n\nToto nahrazuje dotazování seznamu transakcí."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Transakce dokončena"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Spustí se, když je transakce `completed`: peníze byly vybrány a faktura je uhrazena.\n\nToto je událost pro vyřízení objednávky. `details.totals` rozepisuje částku na mezisoučet, daň a celkovou částku, vše jako řetězce v nejmenší jednotce `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Platba transakce se nezdařila"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Spustí se, když se pokus o inkasování transakce nezdaří.\n\n`payments` obsahuje pokus a důvod jeho selhání. Paddle se u obnovení předplatného pokouší o platbu automaticky znovu, takže jedno selhání není konečné; okamžik, kdy předplatné přejde do stavu `past_due`, je chvíle, kdy musí zákazník jednat."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Přehled vytvořen"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Spustí se při vyžádání přehledu. Dorazí ve stavu `pending`: Paddle generuje soubor na pozadí, takže zatím není co stáhnout.\n\nPřed vyžádáním souboru počkejte na `report.updated` s hodnotou `status` rovnou `ready`.\n\nToto nahrazuje dotazování seznamu přehledů."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Přehled aktualizován"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
@@ -5012,7 +5012,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5324,7 +5324,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5624,7 +5624,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Fakturační cyklus"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5636,7 +5636,7 @@
           "message": "Jak často má být tato cena účtována. `null`, pokud se jedná o neopakující se (jednorázovou) cenu."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Minimální množství produktu spojeného s touto cenou, které lze koupit. Vyžadováno, pokud je `maximum` nastaveno."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Daňový režim"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "location"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Zkušební období"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -5760,7 +5760,7 @@
           "message": "Zkušební období pro produkt související s touto cenou. Fakturační cyklus začíná po skončení zkušebního období. `null` pro žádné zkušební období. Vyžaduje `billing_cycle`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.short_desc": {
@@ -5784,7 +5784,7 @@
           "message": "Částka v nejnižší jednotce měny, např. 10 USD = 1000 (centů). Přestože je reprezentována jako řetězec, tato hodnota musí být platné celé číslo."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Kód měny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -5940,7 +5940,7 @@
           "message": "Seznam přepisů jednotkové ceny. Slouží k přepsání základní ceny vlastní cenou a měnou pro zemi nebo skupinu zemí."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Fakturační cyklus"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Jak často má být tato cena účtována. `null`, pokud se jedná o neopakující se (jednorázovou) cenu."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "Objekt produktu pro položku mimo katalog, kterou se má účtovat."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Vlastní data"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "Název tohoto produktu."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Daňová kategorie"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "Omezení, kolikrát lze související produkt zakoupit za tuto cenu. Užitečné pro slevové akce. Při vynechání je výchozí hodnota 1-100."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Daňový režim"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.short_desc": {
@@ -6136,7 +6136,7 @@
           "message": "location"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Zkušební období"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -6148,7 +6148,7 @@
           "message": "Zkušební období pro produkt související s touto cenou. Fakturační cyklus začíná po skončení zkušebního období. `null` pro žádné zkušební období. Vyžaduje `billing_cycle`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Jednotková cena"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "Základní cena. Tato cena platí pro všechny zákazníky s výjimkou zákazníků nacházejících se v zemích, kde máte `unit_price_overrides`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Přepisy jednotkové ceny"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {

@@ -104,7 +104,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/list-buckets",
             "action": "list-buckets",
-            "display_name": "List Buckets",
+            "display_name": "List buckets",
             "short_desc": "List the buckets owned by the account",
             "desc": "Lists every bucket owned by the authenticated account, with the date each was created.",
             "action_code": DPAT_API,
@@ -117,7 +117,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/create-bucket",
             "action": "create-bucket",
-            "display_name": "Create Bucket",
+            "display_name": "Create bucket",
             "short_desc": "Create a new bucket",
             "desc": "Creates a new bucket in the connection's region.\n\n"
                 "Bucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case "
@@ -141,7 +141,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/list-objects",
             "action": "list-objects",
-            "display_name": "List Objects",
+            "display_name": "List objects",
             "short_desc": "List the objects in a bucket",
             "desc": "Lists the objects in a bucket.\n\n"
                 "Set `prefix` to restrict the listing to keys beginning with a given string, and set "
@@ -167,7 +167,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/get-object",
             "action": "get-object",
-            "display_name": "Get Object",
+            "display_name": "Get object",
             "short_desc": "Retrieve an object and its metadata",
             "desc": "Retrieves an object's metadata and, unless `include_content` is cleared, its content.\n\n"
                 "Clear `include_content` to check an object's size, type, or modification time without "
@@ -190,7 +190,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/download-file",
             "action": "download-file",
-            "display_name": "Download File",
+            "display_name": "Download file",
             "short_desc": "Download an object's content",
             "desc": "Downloads an object's content along with its metadata.\n\n"
                 "Use `get-object` with `include_content` cleared instead when only the metadata is needed.",
@@ -212,7 +212,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/upload-file",
             "action": "upload-file",
-            "display_name": "Upload File",
+            "display_name": "Upload file",
             "short_desc": "Upload a file to a bucket",
             "desc": "Uploads a file to a bucket.\n\n"
                 "If `object_key` is not set, the file's own name is used as the key.  The MIME type stored with "
@@ -234,7 +234,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/create-text-file",
             "action": "create-text-file",
-            "display_name": "Create Text Object",
+            "display_name": "Create text object",
             "short_desc": "Create an object from text content",
             "desc": "Creates an object directly from text content, without needing a file.\n\n"
                 "Useful for writing generated reports, manifests, and marker objects.",
@@ -255,7 +255,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/delete-object",
             "action": "delete-object",
-            "display_name": "Delete Object",
+            "display_name": "Delete object",
             "short_desc": "Delete an object from a bucket",
             "desc": "Deletes an object from a bucket.\n\n"
                 "On a version-enabled bucket this adds a delete marker rather than removing the data, unless a "
@@ -277,7 +277,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/copy-object",
             "action": "copy-object",
-            "display_name": "Copy Object",
+            "display_name": "Copy object",
             "short_desc": "Copy an object within or between buckets",
             "desc": "Copies an object within a bucket or between buckets, without transferring the content "
                 "through the client.\n\n"
@@ -301,7 +301,7 @@ module AwsS3DataProvider {
             "action": "presigned-url",
             "processing": <DataProviderProcessingInfo>{"locality": "local"},
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "Create Presigned URL",
+            "display_name": "Create presigned URL",
             "short_desc": "Create a temporary URL granting access without AWS credentials",
             "desc": "Creates a URL carrying its own authorization, so that a system that cannot authenticate "
                 "to AWS can still reach the object.\n\n"
@@ -334,7 +334,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/delete-objects",
             "action": "delete-objects",
-            "display_name": "Delete Objects",
+            "display_name": "Delete objects",
             "short_desc": "Delete up to 1000 objects in a single call",
             "desc": "Deletes up to `1000` objects in a single call.\n\n"
                 "Amazon S3 charges per request, so clearing a large prefix this way costs a fraction of one "
@@ -359,7 +359,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/move-object",
             "action": "move-object",
-            "display_name": "Move Object",
+            "display_name": "Move object",
             "short_desc": "Move an object within or between buckets",
             "desc": "Moves an object to a different key, a different bucket, or both.\n\n"
                 "Amazon S3 has no move operation, so this copies the object and then deletes the original.  "
@@ -385,7 +385,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/get-object-tagging",
             "action": "get-object-tagging",
-            "display_name": "Get Object Tags",
+            "display_name": "Get object tags",
             "short_desc": "Read the tags stored with an object",
             "desc": "Reads the tags stored with an object.\n\n"
                 "Object tags drive lifecycle rules, access policies, and cost allocation, so they are how a "
@@ -408,7 +408,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/put-object-tagging",
             "action": "put-object-tagging",
-            "display_name": "Set Object Tags",
+            "display_name": "Set object tags",
             "short_desc": "Replace the tags stored with an object",
             "desc": "Replaces the tags stored with an object.\n\n"
                 "**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  "
@@ -431,7 +431,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/list-object-versions",
             "action": "list-object-versions",
-            "display_name": "List Object Versions",
+            "display_name": "List object versions",
             "short_desc": "List every version of the objects in a bucket",
             "desc": "Lists every version of the objects in a bucket, along with the delete markers.\n\n"
                 "On a bucket with versioning enabled, deleting an object does not remove the data: it adds a "
@@ -458,7 +458,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/delete-bucket",
             "action": "delete-bucket",
-            "display_name": "Delete Bucket",
+            "display_name": "Delete bucket",
             "short_desc": "Delete an empty bucket",
             "desc": "Deletes a bucket.\n\n"
                 "**The bucket must already be empty**, including every non-current version and delete marker "
@@ -482,7 +482,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/list-objects",
             "action": "find-objects",
-            "display_name": "Find Objects",
+            "display_name": "Find objects",
             "short_desc": "Read the objects in a bucket as records",
             "desc": "Reads the objects in a bucket as a stream of records.\n\n"
                 "Unlike `list-objects`, which answers one page and leaves the continuation token to the "
@@ -506,7 +506,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/events/" + EVENT_NEW_BUCKET,
             "action": EVENT_NEW_BUCKET,
-            "display_name": "New Bucket",
+            "display_name": "New bucket",
             "short_desc": "React to a bucket being created in the account",
             "desc": "Fires when a bucket is created in the account.\n\n"
                 "Amazon S3 offers no change feed, so this checks the account's bucket list at each poll "
@@ -527,7 +527,7 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/events/" + EVENT_NEW_OR_UPDATED_FILE,
             "action": EVENT_NEW_OR_UPDATED_FILE,
-            "display_name": "New or Updated File",
+            "display_name": "New or updated file",
             "short_desc": "React to an object being created or updated in a bucket",
             "desc": "Fires when an object is created or updated in the bucket being watched.\n\n"
                 "Amazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and "

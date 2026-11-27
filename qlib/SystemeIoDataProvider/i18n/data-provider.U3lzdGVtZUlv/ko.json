@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "연락처 생성"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -448,7 +448,7 @@
           "message": "사용자 정의 연락처 필드의 값"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "연락처 업데이트"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "사용자 정의 연락처 필드의 값"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "연락처 삭제"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -592,7 +592,7 @@
           "message": "삭제할 연락처의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "연락처 목록"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -636,7 +636,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "연락처 가져오기"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -656,7 +656,7 @@
           "message": "연락처 ID"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign Tag to Contact",
+          "source": "Assign tag to contact",
           "message": "연락처에 태그 지정"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "연락처에 지정할 태그의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "연락처에서 태그 제거"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -728,7 +728,7 @@
           "message": "연락처에서 제거할 태그의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "태그 생성"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "생성할 태그의 이름"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "태그 업데이트"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
@@ -788,7 +788,7 @@
           "message": "태그의 새 이름"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "태그 삭제"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -812,7 +812,7 @@
           "message": "삭제할 태그의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "태그 목록"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "태그 가져오기"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
@@ -876,7 +876,7 @@
           "message": "태그 ID"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact Field",
+          "source": "Create contact field",
           "message": "연락처 필드 생성"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "사용자 정의 연락처 필드의 고유 슬러그 식별자"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact Field",
+          "source": "Update contact field",
           "message": "연락처 필드 업데이트"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "사용자 정의 연락처 필드의 새 표시 이름"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact Field",
+          "source": "Delete contact field",
           "message": "연락처 필드 삭제"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "삭제할 사용자 정의 연락처 필드의 고유 슬러그 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact Fields",
+          "source": "List contact fields",
           "message": "연락처 필드 목록 조회"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact Field",
+          "source": "Get contact field",
           "message": "연락처 필드 가져오기"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "연락처 필드 슬러그"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "강좌 목록 조회"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create Enrollment",
+          "source": "Create enrollment",
           "message": "등록 생성"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "액세스 권한을 부여할 모듈 ID 목록입니다. `accessType`이(가) `partial_access`일 때 필수입니다"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Delete Enrollment",
+          "source": "Delete enrollment",
           "message": "등록 삭제"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "삭제할 등록의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "등록 목록 조회"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "커뮤니티 목록 조회"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Create Membership",
+          "source": "Create membership",
           "message": "멤버십 생성"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "회원으로 추가할 연락처의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Delete Membership",
+          "source": "Delete membership",
           "message": "멤버십 삭제"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "삭제할 멤버십의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
-          "source": "List Memberships",
+          "source": "List memberships",
           "message": "목록 멤버십"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Cancel Subscription",
+          "source": "Cancel subscription",
           "message": "구독 취소"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "취소할 구독의 고유 식별자"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "구독 목록 조회"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "내림차순"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "새 연락처"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Systeme.io에서 새 연락처가 생성될 때 실행됩니다"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
-          "source": "New Tag",
+          "source": "New tag",
           "message": "새 태그"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {
