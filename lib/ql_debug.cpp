@@ -32776,42 +32776,66 @@ static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, Runt
 /** For examples/test/ir/exec-mode-parentless-module.qtest: the Program of such a module takes the execution mode
     requested for the process (qore#7495); an exception of the load is raised in the calling thread
 */
+//! the module and the result of a load in a foreign thread (see f_dbg_load_module_in_foreign_thread())
+struct DbgForeignLoad {
+    std::string name;
+    //! the error of the load, as text
+    std::string error;
+};
+
+//! loads a module in a foreign thread: nothing may leave the thread
+static void* dbg_foreign_load_thread(void* arg) {
+    DbgForeignLoad& load = *static_cast<DbgForeignLoad*>(arg);
+    try {
+        QoreForeignThreadHelper foreign_thread;
+        ExceptionSink load_xsink;
+        if (ModuleManager::runTimeLoadModule(&load_xsink, load.name.c_str(), nullptr) || load_xsink) {
+            QoreValue err = load_xsink.getExceptionErr();
+            QoreValue desc = load_xsink.getExceptionDesc();
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
+            load.error = std::string(err_str->c_str()) + ": " + desc_str->c_str();
+            load_xsink.clear();
+        }
+    } catch (std::exception& e) {
+        load.error = e.what();
+    } catch (...) {
+        load.error = "unknown exception";
+    }
+    return nullptr;
+}
+
 static QoreValue f_dbg_load_module_in_foreign_thread(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     // the string value can be an inline short string (issue #7038)
     QoreStringDataHelper name_arg(get_param_value(params, 0));
-    std::string name(name_arg.c_str(), name_arg.size());
     // the error of the load, as text: an exception of the foreign thread is cleared in it before it is deregistered,
     // which requires that the thread holds no exception (q_deregister_foreign_thread())
-    std::string error;
-    try {
-        std::thread t([&name, &error]() {
-            // nothing may leave the thread
-            try {
-                QoreForeignThreadHelper foreign_thread;
-                ExceptionSink load_xsink;
-                if (ModuleManager::runTimeLoadModule(&load_xsink, name.c_str(), nullptr) || load_xsink) {
-                    QoreValue err = load_xsink.getExceptionErr();
-                    QoreValue desc = load_xsink.getExceptionDesc();
-                    QoreStringValueHelper err_str(err);
-                    QoreStringValueHelper desc_str(desc);
-                    error = std::string(err_str->c_str()) + ": " + desc_str->c_str();
-                    load_xsink.clear();
-                }
-            } catch (std::exception& e) {
-                error = e.what();
-            } catch (...) {
-                error = "unknown exception";
-            }
-        });
-        t.join();
-    } catch (std::system_error& e) {
-        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "cannot start a thread: %s", e.what());
+    DbgForeignLoad load;
+    load.name.assign(name_arg.c_str(), name_arg.size());
+    // the thread has the stack that Qore gives its own threads, not the platform's default for a new thread (128 KiB
+    // with musl, the stack limit with glibc), which is too small for a module's parse with the parse stack guard
+    // (qore#7495)
+    QorePThreadAttr attr;
+    size_t stack_size = q_thread_get_stack_size();
+    if (stack_size) {
+        int src = attr.setstacksize(stack_size);
+        if (src) {
+            xsink->raiseErrnoException("DBG-LOAD-MODULE-ERROR", src, "cannot set the stack size of a thread to %lld",
+                (long long)stack_size);
+            return QoreValue();
+        }
+    }
+    pthread_t tid;
+    int crc = pthread_create(&tid, attr.get_ptr(), dbg_foreign_load_thread, &load);
+    if (crc) {
+        xsink->raiseErrnoException("DBG-LOAD-MODULE-ERROR", crc, "cannot start a thread");
         return QoreValue();
     }
-    if (!error.empty()) {
-        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "the load of module '%s' failed: %s", name.c_str(),
-            error.c_str());
+    pthread_join(tid, nullptr);
+    if (!load.error.empty()) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "the load of module '%s' failed: %s", load.name.c_str(),
+            load.error.c_str());
     }
     return QoreValue();
 }
