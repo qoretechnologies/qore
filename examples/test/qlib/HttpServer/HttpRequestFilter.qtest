@@ -74,7 +74,7 @@ class RecordRequest inherits AbstractStreamRequest {
         seen = {
             "authorization": hdr.hasKey("authorization") || cx.hdr.hasKey("authorization"),
             "cookie": hdr.hasKey("cookie"),
-            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "sock_key"),
+            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "session_token", "sock_key"),
                 cx.hasKey($1)) ?? (),
             "body_reader": cx."header-info".hasKey("body_reader"),
         };
@@ -129,7 +129,7 @@ class TestStreamHandler inherits AbstractHttpRequestHandler {
             "authorization": hdr.hasKey("authorization"),
             "cookie": hdr.hasKey("cookie"),
             "trailer authorization": cx.trailers.hasKey("authorization"),
-            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "sock_key"),
+            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "session_token", "sock_key"),
                 cx.hasKey($1)) ?? (),
             "body_reader": cx."header-info".hasKey("body_reader"),
         };
@@ -163,7 +163,7 @@ class ProbeRestClass inherits AbstractRestClass {
         return RestHandler::makeResponse(200, {
             "authorization": cx.hdr.hasKey("authorization"),
             "cookie": cx.hdr.hasKey("cookie"),
-            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "sock_key"),
+            "server objects": (map $1, ("socket", "socket-info", "uctx", "auth", "logger", "session_token", "sock_key"),
                 cx.hasKey($1)) ?? (),
             "added": cx.added,
         });
@@ -248,7 +248,7 @@ class TenantRequest inherits AbstractStreamRequest {
         seen = {
             'authorization': hdr.hasKey('authorization'),
             'cookie': hdr.hasKey('cookie'),
-            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'session_token', 'sock_key'),
                 cx.hasKey($1)) ?? (),
         };
     }
@@ -292,7 +292,7 @@ class TenantStreamHandler inherits AbstractHttpRequestHandler {
         factory_seen = {
             'authorization': hdr.hasKey('authorization'),
             'cookie': hdr.hasKey('cookie'),
-            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'session_token', 'sock_key'),
                 cx.hasKey($1)) ?? (),
         };
         return new TenantRequest(listener, self, s, cx, hdr, body);
@@ -309,7 +309,7 @@ class TenantRestClass inherits AbstractRestClass {
         return RestHandler::makeResponse(200, {
             'authorization': cx.hdr.hasKey('authorization'),
             'cookie': cx.hdr.hasKey('cookie'),
-            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'session_token', 'sock_key'),
                 cx.hasKey($1)) ?? (),
             'added': cx.added,
         });
@@ -523,7 +523,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             "socket-info": {"fd": 1},
             "uctx": {"a": 1},
             "auth": "Basic dGVzdDp0ZXN0",
-            "sock_key": "key",
+            "session_token": "st1-token",
+            "sock_key": "st1-token",
             "user": "test",
             "peer-info": {"address": "127.0.0.1", "port": 1, "familystr": "ipv4"},
             "header-info": {
@@ -553,7 +554,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     filterTest() {
         # no options: every credential is withheld
         hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(rawContext(1), header());
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(keys (rawContext(1) - keys f.cx)));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(keys (rawContext(1) - keys f.cx)));
         assertEq(("address", "familystr", "port"), sort(keys f.cx."peer-info"));
         assertFalse(f.hdr.hasKey("authorization"));
         assertFalse(f.hdr.hasKey("proxy-authorization"));
@@ -620,7 +622,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(sort(keys rawContext(1, "hello")), sort(h.factory_keys));
         assertTrue(h.factory_seen.authorization);
         assertTrue(h.factory_seen.cookie);
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(h.factory_seen."server objects"));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(h.factory_seen."server objects"));
         assertTrue(r.seen.authorization);
         assertEq(5, r.size);
     }
@@ -719,7 +722,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, rv.code);
         assertTrue(rv.authorization);
         assertTrue(rv.cookie);
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(rv."server objects"));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(rv."server objects"));
         assertEq("by the handler", rv.added);
         # the tenant's REST class gets it filtered, with the keys that the handler names
         rv = restCall(rest, "tenant");
@@ -900,16 +904,19 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> result = parse_json(rv.body);
         assertTrue(h.factory_seen.authorization);
         assertTrue(h.factory_seen.cookie);
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(h.factory_seen."server objects"));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(h.factory_seen."server objects"));
         assertTrue(result.seen.authorization);
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(result.seen."server objects"));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(result.seen."server objects"));
         assertEq(5, result.size);
         # its REST class as well
         AddingRestHandler rest();
         rest.addClass(p.callFunction("rest_class"));
         rv = restCall(rest, "tenant");
         assertTrue(rv.authorization);
-        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(rv."server objects"));
+        assertEq(("auth", "session_token", "sock_key", "socket", "socket-info", "uctx"),
+            sort(rv."server objects"));
         # the setters and the server's push accept it
         assertEq("OK", p.callFunction("set_credentials", new TestStreamHandler()));
         assertEq("OK", p.callFunction("stop_filter", new TestStreamHandler()));

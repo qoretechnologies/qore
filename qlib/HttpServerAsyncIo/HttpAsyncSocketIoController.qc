@@ -303,6 +303,23 @@ public class HttpAsyncSocketIoController {
         Mutex persistent_queue_mutex();
         #! Persistent queues keyed by connection unique hash
         hash<string, hash<auto>> persistent_queues;
+        #! The keys of the persistent queues by their session tokens (see getSessionToken())
+        /** Guarded by persistent_queue_mutex like @ref persistent_queues
+        */
+        hash<string, string> persistent_session_tokens;
+    }
+
+    private:internal {
+        #! The secret of the session tokens of this controller (see getSessionToken()), as hex digits
+        /** Random for each controller, so a token cannot be computed from the connection's internal key without the
+            controller, which handlers do not get, and a token of one server means nothing to another
+        */
+        string session_token_secret = get_random_bytes(32).toHex();
+    }
+
+    public {
+        #! The prefix of a session token (see getSessionToken())
+        const SessionTokenPrefix = "st1-";
     }
 
     #! Creates the HTTP controller with an explicit I/O controller
@@ -1599,9 +1616,37 @@ public class HttpAsyncSocketIoController {
 
     */
     registerPersistentQueue(string key, Queue q, *code<bool(hash<auto>)> filter, *object owner) {
+        string token = getSessionToken(key);
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
         persistent_queues{key} = {"queue": q, "filter": filter, "owner": owner};
+        persistent_session_tokens{token} = key;
+    }
+
+    #! Returns the session token of a connection's internal key
+    /** The token is what the handlers of the connection's requests get as their session (\c cx.session_token): it
+        identifies the session to the server's persistent-session APIs (see
+        signalPersistentQueuesForSessionToken()), but it is not the internal key of the connection's asynchronous I/O
+        operations, which is never given to a handler, and the key cannot be derived from it (qore#7251).
+
+        It is \c "st1-" followed by the hex SHA-256 digest of a random secret of this controller followed by \a key,
+        so it is the same for every request of one connection (of one QUIC session for HTTP/3) and different for
+        every connection.  Only code that has the controller can compute it from a key, and handlers never get the
+        controller; a key cannot be recovered from a token. It is computed for each request, and SHA-256 costs a
+        fraction of HMAC-SHA256 there; a secret prefix is enough for what a token is: a token names only a session that
+        the server registered under it (signalPersistentQueuesForSessionToken()), and the digests that a length
+        extension of a token gives are those of strings with the padding bytes of SHA-256 in them, which are not the key
+        of any connection.
+
+        @param key the internal key of the connection (its socket's unique hash; for HTTP/3, the key of its QUIC
+        session)
+
+        @return the session token of the connection
+
+        @since HttpServerAsyncIo 1.0
+    */
+    string getSessionToken(string key) {
+        return SessionTokenPrefix + SHA256(session_token_secret + key);
     }
 
     #! Deregisters a persistent queue for a connection
@@ -1617,6 +1662,9 @@ public class HttpAsyncSocketIoController {
         on_exit persistent_queue_mutex.unlock();
         if (expected_queue && persistent_queues{key}.queue !== expected_queue) {
             return;
+        }
+        if (persistent_queues{key}) {
+            remove persistent_session_tokens{getSessionToken(key)};
         }
         remove persistent_queues{key};
     }
@@ -1706,11 +1754,11 @@ public class HttpAsyncSocketIoController {
     /** Called when a connection closes so that dedicated handler pool
         threads blocked on Queue::get() are unblocked and can exit cleanly.
 
-        Also callable from outside the framework (e.g. from
-        \c HttpServer::HttpListener::signalPersistentSessionClose())
-        when a cooperative-abort path needs to terminate a specific
+        Also callable by trusted code that has the controller when a
+        cooperative-abort path needs to terminate a specific
         persistent session immediately rather than wait for socket close
-        or idle TTL.  Safe to call from any thread and idempotent: a
+        or idle TTL; the server's persistent-session APIs, which handlers call with the session token, use
+        signalPersistentQueuesForSessionToken().  Safe to call from any thread and idempotent: a
         no-op if no queue is registered under @c uh (e.g. the dedicated
         thread has already exited).
 
@@ -1726,6 +1774,36 @@ public class HttpAsyncSocketIoController {
     bool signalPersistentQueuesForConnection(string uh, *Queue close_ack, *object owner) {
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
+        return signalPersistentQueueIntern(uh, close_ack, owner);
+    }
+
+    #! Signals the persistent queue of the session with the given session token
+    /** As signalPersistentQueuesForConnection(), for the session whose token (see getSessionToken()) is \a token:
+        this is how the server's persistent-session APIs close the session that a handler names with its
+        \c cx.session_token (qore#7251).  A value that is not the token of a registered session, such as the internal
+        key of a connection, signals nothing.
+
+        @param token the session token of the persistent session
+        @param close_ack optional completion queue, as for signalPersistentQueuesForConnection()
+        @param owner if given, the session is closed only if this object (the handler) registered it
+
+        @return @ref True when a close entry was queued, @ref False when no persistent queue was registered for the
+        session of @p token, or another owner registered it
+
+        @since HttpServerAsyncIo 1.0
+    */
+    bool signalPersistentQueuesForSessionToken(string token, *Queue close_ack, *object owner) {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        *string uh = persistent_session_tokens{token};
+        if (!uh) {
+            return False;
+        }
+        return signalPersistentQueueIntern(uh, close_ack, owner);
+    }
+
+    #! Signals the close of the persistent queue registered under the given key; the lock is held
+    private:internal bool signalPersistentQueueIntern(string uh, *Queue close_ack, *object owner) {
         # a session is closed for an owner only if that owner registered it (qore#6921)
         if (owner && persistent_queues{uh} && persistent_queues{uh}.owner !== owner) {
             log(LoggerLevel::DEBUG, "persistent queue %y not signalled: registered by another handler", uh);
