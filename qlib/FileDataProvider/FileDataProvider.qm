@@ -251,6 +251,37 @@ module FileDataProvider {
     - @ref FileDataProvider::FileStatResponseDataType "FileStatResponseDataType"
     - @ref FileDataProvider::FileTargetResponseDataType "FileTargetResponseDataType"
 
+    @section filedataprovider_root_lock Root Directory and Lock
+
+    With the \c root option, relative paths are relative to the root directory; with \c lock as well (the default),
+    every path of a request must be under the root directory, which then confines the provider (the data provider of a
+    @ref ConnectionProvider::FilesystemConnection "FilesystemConnection" is confined to the connection's directory,
+    for example):
+    - a path is checked as given (after \c "." and \c ".." are removed) and by its real path, with symbolic links
+      resolved: a symbolic link that leads outside of the root directory is refused with \c SANDBOX-ERROR for every
+      action, also for one on the link itself (\c delete, the source of \c move, \c stat with \c symlink), as the
+      file-system policy of a sandbox refuses it; links that stay under the root directory work as usual
+    - a \c delete of a directory that holds such a link (or one that cannot be resolved) is refused before anything is
+      removed; such links (which a \c move of a directory can also make of relative links in it) are removed by
+      code that the root directory does not confine
+    - for a path that is created (\c create, \c mkdir, the target of \c copy and \c move), the real path of its
+      nearest existing parent directory is checked, and an existing symbolic link as its last component must lead
+      under the root directory
+    - a path that cannot be resolved (a dangling symbolic link, a loop of links, a directory that cannot be searched)
+      is refused
+    - a listing (and so a \c copy of a directory) leaves out the entries that are symbolic links that lead outside
+      of the root directory
+    - the action is run with
+      @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()" in the real path
+      of the root directory, so that every file that it reaches is under the root directory by its real path, also a
+      file that a \c copy with \c follow_symlinks reaches, and also if a path is changed concurrently after it was
+      checked (a component replaced by a symbolic link, for example): such a file is refused with
+      \c FILESYSTEM-ACCESS-DENIED
+    - a hard link names its file by another path, so a hard link under the root directory to a file elsewhere reaches
+      that file; the root directory must not hold hard links to files that the users of the provider may not reach
+    - on Windows, a path is checked by its name before it is used, without the pinning of the file reached against a
+      concurrent change of the path
+
     @section filedataprovider_relnotes Release Notes
 
     @subsection filedataprovider_v2_2 FileDataProvider v2.2
@@ -259,6 +290,11 @@ module FileDataProvider {
       (the data provider of a file connection, for example); see
       @ref Util::check_caller_file_access() "check_caller_file_access()"
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
+    - the \c lock of a \c root directory holds against symbolic links: paths are checked by their real paths, and
+      the actions are confined to the real path of the root directory, also against a concurrent change of a path;
+      a path in a directory next to the root directory whose name is the root directory's name followed by \c "?" is
+      refused too (see @ref filedataprovider_root_lock)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>)
     - the get request checks text in its encoding and takes the \c encoding_errors field: \c "raise" (the default)
       raises \c INVALID-ENCODING, \c "latin1" returns text that is not valid as \c ISO-8859-1, \c "keep" returns it
       without a check (see @ref encoding_errors)

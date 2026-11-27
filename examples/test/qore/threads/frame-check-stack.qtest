@@ -12,6 +12,7 @@
 %requires QUnit
 %requires ../../TestInterpreter.qm
 %requires ../../QoreBuildTree.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class FrameCheckStackTest
@@ -141,10 +142,10 @@ public class FrameCheckStackTest inherits QUnit::Test {
         # the stacks tried start at the smallest one that a thread can have here (PTHREAD_STACK_MIN is 16KB on
         # macOS, 128KB with glibc on aarch64): the function's frame grows by as much as the smallest stack tried, so
         # that the stacks tried still go from below the size that the frame needs to above it
-        output = runFixture("", ("min-stack",), \status);
-        assertEq(0, status, output);
-        min_stack_kb = output.toInt();
-        assertGt(0, min_stack_kb, "the minimum thread stack: " + output);
+        hash<ExecModeHarness::ModeRunResult> r = runFixture("", ("min-stack",));
+        assertEq(0, r.rc, r.out);
+        min_stack_kb = r.out.toInt();
+        assertGt(0, min_stack_kb, "the minimum thread stack: " + r.out);
         stack_start_kb = max(BaseStackKb, (min_stack_kb + StackStepKb - 1) / StackStepKb * StackStepKb);
         entries = Entries + ((stack_start_kb - BaseStackKb) * 1024 + FrameBytesPerEntryEstimate - 1)
             / FrameBytesPerEntryEstimate;
@@ -162,10 +163,12 @@ public class FrameCheckStackTest inherits QUnit::Test {
         return code;
     }
 
-    #! runs the fixture; returns its output
-    private string runFixture(string env, list<string> args, reference<int> status) {
-        return backquote("ulimit -c 0; " + env + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH="
-            + quote(libdir) + " " + quote(exe) + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+    #! runs the fixture in its default environment; returns its result: its output on stdout and stderr apart from
+    #! the warnings of the module loader, which are not output of the fixture
+    private hash<ExecModeHarness::ModeRunResult> runFixture(string env, list<string> args) {
+        return ExecModeHarness::run_command("ulimit -c 0; " + env + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + quote(exe) + " " + (map quote($1), args).join(" "),
+            NOTHING, "QORE_JIT_TIMING=1");
     }
 
     #! the stack sizes of the threads that call the function with a large frame: from below the size that its frame
@@ -211,7 +214,6 @@ public class FrameCheckStackTest inherits QUnit::Test {
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(code);
         f.close();
-        int status;
         list<string> stacks = callStacks();
         # a literal grown for a larger minimum stack (see setup()) raises the JIT's limit of IR instructions in
         # proportion, so that the function is still compiled to native code, as with Entries entries
@@ -220,9 +222,8 @@ public class FrameCheckStackTest inherits QUnit::Test {
             env += sprintf(" QORE_JIT_MAX_IR_INSTRUCTIONS=%d",
                 (JitMaxIrInstructions * entries + Entries - 1) / Entries);
         }
-        string out = runFixture(env, (file, "jit", "call") + stacks,
-            \status);
-        checkCalls("JIT", out, status, stacks);
+        hash<ExecModeHarness::ModeRunResult> r = runFixture(env, (file, "jit", "call") + stacks);
+        checkCalls("JIT", r.out, r.rc, stacks);
     }
 
     private aotTest() {
@@ -252,9 +253,10 @@ public class FrameCheckStackTest inherits QUnit::Test {
         f.write("%requires BigFrame\nstring sub run() { return sprintf(\"%d\", BigFrame::big(\"z\").size()); }\n");
         f.close();
         list<string> stacks = callStacks();
-        string out = runFixture("QORE_MODULE_DIR=" + quote(qmod_dir), (file, "ast", "call") + stacks, \status);
+        hash<ExecModeHarness::ModeRunResult> r = runFixture("QORE_MODULE_DIR=" + quote(qmod_dir),
+            (file, "ast", "call") + stacks);
         # the thunk was made when the module was compiled
-        checkCalls("AOT", compile_out + out, status, stacks);
+        checkCalls("AOT", compile_out + r.out, r.rc, stacks);
     }
 
     private dataProviderTest() {
@@ -267,12 +269,13 @@ public class FrameCheckStackTest inherits QUnit::Test {
         string module_dir = root + "/qlib" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         # around the stack sizes whose stack the constant initializers of DataProvider need
         foreach int kb in (xrange(170, 234, 2)) {
-            int status;
-            string out = runFixture("QORE_MODULE_DIR=" + quote(module_dir), (file, "ast", "parse", string(kb)),
-                \status);
-            assertEq(0, status, sprintf("%d KB: %s", kb, out));
-            assertTrue(out =~ /\n?[0-9]+: (ok: loaded|ex: (PARSE-)?STACK-LIMIT-EXCEEDED)\n$/,
-                sprintf("%d KB: loaded or a stack error: %s", kb, out));
+            hash<ExecModeHarness::ModeRunResult> r = runFixture("QORE_MODULE_DIR=" + quote(module_dir),
+                (file, "ast", "parse", string(kb)));
+            assertEq(0, r.rc, sprintf("%d KB: %s", kb, r.out));
+            # the result is the last line on stdout, which the fixture flushes when it ends, after its output on
+            # stderr
+            assertTrue(r.stdout =~ /\n?[0-9]+: (ok: loaded|ex: (PARSE-)?STACK-LIMIT-EXCEEDED)\n$/,
+                sprintf("%d KB: loaded or a stack error: %s", kb, r.out));
         }
     }
 }

@@ -14,6 +14,7 @@
 
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class PluginOrderIdentityTest
@@ -81,8 +82,10 @@ for (int i = 0; i < 3; ++i) {
         }
     }
 
-    private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+    #! runs a command in its default environment: its output on stdout and stderr apart from the warnings of the
+    #! module loader, which are not output of the command
+    private static hash<ExecModeHarness::ModeRunResult> run(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private static write(string path, string body) {
@@ -98,9 +101,9 @@ for (int i = 0; i < 3; ++i) {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             # the modules in both orders
             assertEq(Expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s",
-                env, qore_bin, mode, src)), mode);
+                env, qore_bin, mode, src)).out, mode);
             assertEq(Expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s -l pluginorderb "
-                "--exec-mode=%s %s", env, qore_bin, mode, src)), mode + " with pluginorderb loaded first");
+                "--exec-mode=%s %s", env, qore_bin, mode, src)).out, mode + " with pluginorderb loaded first");
         }
     }
 
@@ -114,17 +117,21 @@ for (int i = 0; i < 3; ++i) {
         write(src, "%modern\n%requires pluginorderb\n%requires pluginordera\n" + Functions + Calls);
         foreach string opt in (("-O0", "-O3")) {
             string exe = tmp.path + "/probe" + opt;
-            string out = run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s %s -o %s %s", env, qcc_bin, opt, exe, src));
+            string out = run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s %s -o %s %s", env, qcc_bin, opt, exe,
+                src)).out;
             assertTrue(is_file(exe), sprintf("qcc %s links the executable: %s", opt, out));
             if (!is_file(exe)) {
                 continue;
             }
             *string compile_id = getSubscriptId(out);
-            *string run_id = getSubscriptId(run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s", env, exe)));
+            *string run_id = getSubscriptId(run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s", env, exe)).out);
             assertTrue(exists compile_id && exists run_id && compile_id != run_id,
                 sprintf("the id of pluginordera's operation differs at compile time (%y) and at run time (%y)",
                     compile_id, run_id));
-            assertEq(Expected, run(sprintf("%s %s", env, exe)), "executable " + opt);
+            hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s %s", env, exe));
+            assertEq(0, r.rc, sprintf("executable %s: exit status: %s", opt, r.out));
+            assertEq(Expected, r.stdout, "executable " + opt);
+            assertEq("", r.stderr, "executable " + opt + ": stderr");
             checkMismatch(sprintf("%s %s", env, exe), "executable " + opt);
         }
     }
@@ -151,14 +158,14 @@ for (int i = 0; i < 3; ++i) {
             if (is_file(qmod)) {
                 unlink(qmod);
             }
-            string out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src));
+            string out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src)).out;
             assertTrue(is_file(qmod), sprintf("qcc %s compiles the module: %s", opt, out));
             if (!is_file(qmod)) {
                 continue;
             }
             foreach string mode in (("ir", "jit")) {
                 string cmd = sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, probe);
-                assertEq(Expected, run(cmd), sprintf("module %s, %s", opt, mode));
+                assertEq(Expected, run(cmd).out, sprintf("module %s, %s", opt, mode));
                 checkMismatch(cmd, sprintf("module %s, %s", opt, mode));
             }
         }

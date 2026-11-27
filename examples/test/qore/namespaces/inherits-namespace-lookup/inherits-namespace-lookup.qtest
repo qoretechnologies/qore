@@ -90,9 +90,12 @@ class InheritsNamespaceLookupTest inherits QUnit::Test {
             string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe),
                 shellQuote(dir + "/" + i.script)), \rc);
             assertEq(0, rc, sprintf("%s: qcc: %s", i.script, out));
-            out = backquote(shellQuote(exe) + " 2>&1", \rc);
-            assertEq(0, rc, sprintf("%s: exit status: %s", i.script, out));
-            assertEq(i.out, out, i.script);
+            # the program runs in its default environment; a warning of the module loader on stderr is not its output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(exe), NOTHING,
+                "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", i.script, r.out));
+            assertEq(i.out, r.stdout, i.script);
+            assertEq("", r.stderr, i.script + ": stderr");
         }
     }
 
@@ -106,10 +109,11 @@ class InheritsNamespaceLookupTest inherits QUnit::Test {
         string out = backquote(sprintf("%s -m -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(qmod),
             shellQuote(dir + "/InheritsNamespaceLookup.qm")), \rc);
         assertEq(0, rc, "qcc: " + out);
-        out = backquote(sprintf("%s -l %s -ne %s 2>&1", shellQuote(qore_bin), shellQuote(qmod),
-            shellQuote(ModuleCheck)), \rc);
-        assertEq(0, rc, "exit status: " + out);
-        assertEq(ModuleOutput, out);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -l %s -ne %s",
+            shellQuote(qore_bin), shellQuote(qmod), shellQuote(ModuleCheck)), NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "exit status: " + r.out);
+        assertEq(ModuleOutput, r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     private static string shellQuote(string value) {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileCopyDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileCopyDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -80,8 +80,12 @@ public class FileCopyDataProvider inherits FileDataProviderBase {
             checkPath(\req.target);
         }
         checkReadOnly("copy");
+        # everything read and written, also through the symbolic links that are followed, must be under the root
+        # directory, also if the paths change after they were checked (qore#7821)
         return {
-            "target": copy_path(req.source, req.target, req.follow_symlinks, req.overwrite),
+            "target": runConfined(string sub () {
+                return copy_path(req.source, req.target, req.follow_symlinks, req.overwrite);
+            }),
         };
     }
 

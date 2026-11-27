@@ -1569,7 +1569,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url, {"proxy": opts.proxy});
                 mgr = buildManager(opts, credentials, creator_proof);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
-                cookie_jar = mgr.getCookieJar();
+                cookie_jar = mgr.getCookieJar(creator_proof);
             }
 
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
@@ -1615,11 +1615,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @since RestClientIo 1.0
         */
-        bool setFirstConnectionCallback(*code<nothing()> cb) {
+        bool setFirstConnectionCallback(*code<nothing()> cb, *HttpClientIo::HttpClientCreatorProof proof) {
             if (!owns_mgr) {
                 return False;
             }
-            mgr.setFirstConnectionCallback(cb);
+            mgr.setFirstConnectionCallback(cb, proof);
             return True;
         }
 
@@ -1766,6 +1766,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** @since RestClientIo 1.0
         */
         *HttpClientIo::CookieJar getCookieJar() {
+            # the jar of a client that owns its manager is the manager's, which holds the cookies of the host for code
+            # that was lent the client: the manager refuses restricted code that does not own it
+            if (owns_mgr) {
+                mgr.getCookieJar();
+            }
             return cookie_jar;
         }
 
@@ -1844,8 +1849,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Sets the logger for this client
         setLogger(*LoggerInterface logger) {
-            self.logger = logger;
+            # the manager refuses restricted code that does not own it: set it first, so that a refusal leaves the
+            # client as it was
             mgr.setLogger(logger);
+            self.logger = logger;
         }
 
         #! Sets the per-request timeout override
@@ -6253,10 +6260,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             return;
         }
 
-        auto controller = rcio.getConnectionManager().getController();
         # a request's own timeout replaces the client's
         int to_ms = request_timeout_ms ?? rcio.getTimeout();
-        controller.submit(<SocketPollOperationInfo>{
+        rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
             "spop": self,
             # a request timeout of 0 means no deadline; a negative controller timeout means none
@@ -6818,8 +6824,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 return;
             }
 
-            auto controller = rcio.getConnectionManager().getController();
-            controller.submit(<SocketPollOperationInfo>{
+            rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
                 "sock": poll_info.socket,
                 "spop": self,
                 # a request timeout of 0 means no deadline; a negative controller timeout means none
