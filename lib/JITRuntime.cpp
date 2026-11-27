@@ -8458,6 +8458,8 @@ static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
     }
     const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
     const qore_hash_private* hp = qore_hash_private::get(*hash);
+    // the members are walked directly (qore#7569)
+    hp->assertNotReleasing();
     if (hp->hashdecl && slot >= 0
             && static_cast<size_t>(slot) < hp->size()) {
         const HashMember* member = hp->member_list.front();

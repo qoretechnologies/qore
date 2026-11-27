@@ -160,6 +160,17 @@ void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook{nullptr};
+
+void qore_hash_private::dbgReleaseStep() {
+    assert(releasing);
+    if (qore_dbg_hash_release_step_hook_t hook = qore_dbg_hash_release_step_hook.load()) {
+        hook(this);
+    }
+}
+#endif
+
 bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
     if (!v.hasNode()) {
         return true;
@@ -621,6 +632,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
 }
 
 QoreListNode* qore_hash_private::getKeys() const {
+    assertNotReleasing();
     QoreListNode* list = new QoreListNode(stringTypeInfo);
     qore_list_private::get(*list)->reserve(size());
 
@@ -631,6 +643,7 @@ QoreListNode* qore_hash_private::getKeys() const {
 }
 
 QoreListNode* qore_hash_private::getValues() const {
+    assertNotReleasing();
     ReferenceHolder<QoreListNode> list(new QoreListNode(getValueTypeInfo()), nullptr);
     qore_list_private* l = qore_list_private::get(**list);
     l->reserve(size());
@@ -1559,6 +1572,11 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
         }
 #endif
     }
+#ifdef DEBUG
+    // no code can access the members until the release ends in finishFreeMembers(), on both paths: freeMembers() or
+    // freeNextMember() from free_nested_containers(), which can run in the constructor of the helper (qore#7569)
+    priv->releasing = true;
+#endif
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         priv->freeMembers(xsink);
@@ -1792,10 +1810,20 @@ QoreStringNode* HashIterator::getKeyStringNode() const {
 }
 
 bool HashIterator::next() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool HashIterator::prev() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->prev(h->priv->member_list) : false;
 }
 
@@ -1954,11 +1982,21 @@ QoreStringNode* ConstHashIterator::getKeyStringNode() const {
 }
 
 bool ConstHashIterator::next() {
-   return h ? priv->next(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool ConstHashIterator::prev() {
-   return h ? priv->prev(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->prev(h->priv->member_list) : false;
 }
 
 const char* ConstHashIterator::getKey() const {

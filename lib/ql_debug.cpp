@@ -34344,6 +34344,117 @@ static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeC
 #endif
 }
 
+#ifdef DEBUG
+namespace {
+//! the access to the members of a hash during its release that dbg_hash_access_during_release() makes
+enum class HashReleaseAccess {
+    LOOKUP,
+    LVALUE,
+    ITERATE,
+};
+
+//! the hash of the current dbg_hash_access_during_release() call in this thread, if any
+thread_local QoreHashNode* hash_release_access_target = nullptr;
+//! the access that the current dbg_hash_access_during_release() call in this thread makes
+thread_local HashReleaseAccess hash_release_access = HashReleaseAccess::LOOKUP;
+
+//! runs at each step of the release of each hash while dbg_hash_access_during_release() is armed; accesses the
+//! members of the hash of the call in this thread once
+void dbg_hash_release_access_hook(qore_hash_private* p) {
+    QoreHashNode* h = hash_release_access_target;
+    if (!h || qore_hash_private::get(*h) != p) {
+        return;
+    }
+    hash_release_access_target = nullptr;
+    // each access asserts in a debug build that the hash is not being released; "b" is a member that is not freed
+    // yet at the first step of the release on both paths
+    switch (hash_release_access) {
+        case HashReleaseAccess::LOOKUP:
+            p->findMember("b");
+            break;
+        case HashReleaseAccess::LVALUE: {
+            // the lvalue of an assignment, which can create the member (findCreateMember())
+            hash_assignment_priv ha(*p, "b");
+            break;
+        }
+        case HashReleaseAccess::ITERATE: {
+            ConstHashIterator hi(h);
+            hi.next();
+            break;
+        }
+    }
+}
+}
+#endif
+
+//! accesses the members of a hash during its release, which a debug build asserts never happens (qore#7569)
+/** Makes a hash with the members \c "a", \c "b" and \c "c" and releases it; at the first step of its release, a hook
+    looks up a member (\c "lookup"), takes a member as an lvalue (\c "lvalue") or iterates the members
+    (\c "iterate").  Each access trips an assertion that ends the process: a test runs it in a child process.
+
+    @param access \c "lookup", \c "lvalue" or \c "iterate"
+    @param deep if true, the hash is nested in lists deeply enough for its release to be made by the iterative
+    release of nested containers (qore_hash_private::freeNextMember()), else by qore_hash_private::freeMembers()
+
+    @throw DBG-ARGUMENT-ERROR an unknown access, the hook is armed by another call, or the build is not a debug build
+*/
+static QoreValue f_dbg_hash_access_during_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef DEBUG
+    HARD_QORE_VALUE_PARAM(access, const QoreStringNode, params, 0);
+    bool deep = HARD_QORE_VALUE_BOOL(params, 1);
+    HashReleaseAccess a;
+    if (!strcmp(access->c_str(), "lookup")) {
+        a = HashReleaseAccess::LOOKUP;
+    } else if (!strcmp(access->c_str(), "lvalue")) {
+        a = HashReleaseAccess::LVALUE;
+    } else if (!strcmp(access->c_str(), "iterate")) {
+        a = HashReleaseAccess::ITERATE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown access '%s'; expecting \"lookup\", \"lvalue\" or "
+            "\"iterate\"", access->c_str());
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("a", 1, xsink);
+    h->setKeyValue("b", 2, xsink);
+    h->setKeyValue("c", 3, xsink);
+    QoreHashNode* target = *h;
+    ValueHolder v(h.release(), xsink);
+    if (deep) {
+        // nested more deeply than the recursive release goes (see qore_container_free_helper)
+        for (unsigned i = 0; i < QORE_CONTAINER_FREE_RECURSION_DEPTH + 4; ++i) {
+            ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+            l->push(v.release(), xsink);
+            v = l.release();
+        }
+    }
+
+    qore_dbg_hash_release_step_hook_t expected = nullptr;
+    if (!qore_dbg_hash_release_step_hook.compare_exchange_strong(expected, dbg_hash_release_access_hook)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() is armed by another call");
+        return QoreValue();
+    }
+    // disarms the hook when the release ends
+    struct HookHelper {
+        HookHelper(QoreHashNode* target, HashReleaseAccess a) {
+            hash_release_access_target = target;
+            hash_release_access = a;
+        }
+        ~HookHelper() {
+            hash_release_access_target = nullptr;
+            qore_dbg_hash_release_step_hook.store(nullptr);
+        }
+    } hook_helper(target, a);
+    v = QoreValue();
+    return QoreValue();
+#else
+    xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() requires a debug build");
+    return QoreValue();
+#endif
+}
+
 //! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
 /** The hold is taken once, in QoreListNode::derefImpl() or QoreHashNode::derefImpl(), when the last reference to a
     list or hash that weak references (":=") hold has been released and before its entries are freed; a reference
@@ -39565,6 +39676,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "release");
     qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
+    qns.addBuiltinVariant("dbg_hash_access_during_release", f_dbg_hash_access_during_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "access", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "deep");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
