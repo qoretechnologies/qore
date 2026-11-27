@@ -383,19 +383,24 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             }
             # without a debugger
             foreach string f in (Functions) {
-                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script, f));
-                assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, f)), sprintf("qcc -O%d: %s", opt,
-                    f));
+                # the AST reference and the executable run in their default environment; a warning of the module
+                # loader on stderr is not output (qore#7805)
+                string expected = run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin, script, f));
+                assertEq(expected, run(sprintf("%s %s -b %s", env, exe, f)), sprintf("qcc -O%d: %s", opt, f));
             }
             # with a debugger's request in a handler: the AST interpreter is the reference
             foreach list<auto> r in (Requests) {
                 string args = requestArgs(r);
-                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
-                    args));
+                string expected = run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin, script, args));
                 assertRegex("^RESULT:", expected, args + ": AST");
-                assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, args)), sprintf("qcc -O%d: %s", opt,
-                    args));
+                assertEq(expected, run(sprintf("%s %s -b %s", env, exe, args)), sprintf("qcc -O%d: %s", opt, args));
             }
         }
+    }
+
+    #! runs a command in its default environment and returns its output: the output on stdout followed by the output
+    #! on stderr, apart from the warnings of the module loader, which are not output of the run (qore#7805)
+    private string run(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }

@@ -254,7 +254,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode
         # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
         #   processes, as a module is loaded once in a process
-        # - image-ir-temp-drain (#6742): the script runs in a child process in AST mode and as a qcc executable
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
         # - WebSocketHandlerRestrictedTimers (#6836, batch AO): a sandboxed restricted Program loads the modules first
         #   in child processes that set their own execution modes and in a qcc executable, as a module is loaded once
@@ -271,8 +270,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
-        # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
-        #   without an execution mode
         # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
         # - stdio-sandbox-change (#7670): its checks run in child interpreters that set their own --exec-mode, as the
         #   calls can close or redirect the standard streams of the process that makes them
@@ -282,8 +279,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   child processes that set their own --exec-mode and as qcc executables
         # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
-        # - aot-runtime-identity (#6898): its checks run qcc and the executables it compiles in child processes started
-        #   without an execution mode
         # - AOTModuleBuiltinApiIdentity (#7183): its checks compile modules and load them in child processes of its own
         #   binary started without an execution mode
         # - AOTGuardedMethodEntryReturnKind (#6860): its checks run qcc in child processes started without an execution
@@ -305,9 +300,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
-                                 "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
-                                 "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
                                  "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/alloc-failure/alloc-failure.qtest",
@@ -317,7 +310,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
-                                 "examples/test/ir/image-ir-temp-drain/image-ir-temp-drain.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",

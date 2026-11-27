@@ -106,6 +106,11 @@ ALLOWED = {
         "executable runs through checkExecutable()",
     ("examples/test/ir/AOTStaticModuleMetadata.qtest", '"%s %s --min-stack 2>&1", env, exe)'):
         "the C++ host prints its minimum stack size and returns before qore_init(): no module is loaded",
+    ("examples/test/ir/aot-ir-value-ids/AotIrValueIds.qc", '"%s %s %d %d 2>&1", reseal_bin, path, meta_pos, meta_len)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
+    ("examples/test/ir/aot-section-bounds/AotSectionBounds.qc",
+        '"%s %s %d %d 2>&1", reseal_bin, path, meta_pos, meta_len)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
     ("examples/test/ir/AOTStaticModuleMetadata.qtest", 'env, tmp.path, exe, RegisterStackSize, kb)'):
         "the C++ host's registration runs: its exit status, and finds and regex matches in the output, whose order of "
         "stdout and stderr (the errors before \"registered\") the checks read",
@@ -114,7 +119,7 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 18, "PENDING_AOT3": 14, "PENDING": 16}
+SIZES = {"ALLOWED": 20, "PENDING_AOT3": 14, "PENDING": 0}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -138,27 +143,8 @@ PENDING_AOT3 = {
     "examples/test/qore/vars/weak-store-destructor-exception.qtest": 1,
 }
 PENDING = {
-    # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
-    # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/aot-ir-value-ids/AotIrValueIds.qc": 2,
-    # its two runs have the same text: an image with a patched format version, which the runtime refuses (exit
-    # status and matches of the error, which may stay), and compileAndRun()'s, which compares the output of a
-    # successful run (to convert)
-    "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest": 2,
-    "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest": 4,
-    "examples/test/ir/aot-section-bounds/AotSectionBounds.qc": 1,
-    "examples/test/ir/aot-shadowed-locals/aot-shadowed-locals.qtest": 1,
-    "examples/test/ir/batch-callee-closure-frame/batch-callee-closure-frame.qtest": 1,
-    "examples/test/ir/catch-scope-rethrow/catch-scope-rethrow.qtest": 1,
-    "examples/test/ir/cleared-captured-local/cleared-captured-local.qtest": 1,
-    "examples/test/ir/closure-destroyed-self/closure-destroyed-self.qtest": 1,
-    "examples/test/ir/image-ir-temp-drain/image-ir-temp-drain.qtest": 1,
-    "examples/test/ir/inline-handler-flow-loop/InlineHandlerFlowLoop.qc": 2,
-    "examples/test/ir/inline-handler-second-request/InlineHandlerSecondRequest.qtest": 2,
-    "examples/test/ir/on-block-exit-outer-vars/on-block-exit-outer-vars.qtest": 1,
-    "examples/test/ir/on-error-rethrow/on-error-rethrow.qtest": 1,
-    "examples/test/ir/qcc-load-modules.qtest": 2,
-    "examples/test/ir/static-closure-class-context/static-closure-class-context.qtest": 1,
+    # empty: every test is converted (#7805); the list stays, with its size pinned at 0, so that a new run of a qcc
+    # executable with 2>&1 fails test_tests (a test cannot be added here: the lists only shrink)
 }
 
 

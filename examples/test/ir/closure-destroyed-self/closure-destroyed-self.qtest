@@ -73,6 +73,15 @@ class ClosureDestroyedSelfTest inherits QUnit::Test {
         string exe = tmp.path + DirSep + "closure-destroyed-self";
         string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
         assertTrue(is_file(exe), "qcc: " + compile_out);
-        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "aot");
+        checkExecutable(sprintf("%s %s", env, exe), Expected, "aot");
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

@@ -146,7 +146,8 @@ class AotShadowedLocalsTest inherits QUnit::Test {
             string compile_out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, i.value, exe,
                 worker));
             assertTrue(is_file(exe), sprintf("qcc %s: %s", i.value, compile_out));
-            checkResults(i.key, parseOutput(i.key, backquote(sprintf("%s %s 2>&1", env, exe))));
+            checkResults(i.key, parseOutput(i.key, ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+                "QORE_JIT_TIMING=1").out));
         }
     }
 
