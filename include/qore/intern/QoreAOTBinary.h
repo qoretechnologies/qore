@@ -61,6 +61,7 @@
 #include "qore/intern/SyncParseOptions.h"
 
 class AbstractQoreNode;
+class AbstractQoreZoneInfo;
 class QoreValue;
 class QoreProgram;
 class QoreTypeInfo;
