@@ -18,8 +18,9 @@ A Program whose parse options are locked keeps the restrictions that were locked
 
 Creating code restricts such a Program (`restrictForCreator()`) when it does not have `PO_NO_CHILD_PO_RESTRICTIONS`
 and has restrictions or is locked itself (a locked Program without restrictions still lacks positive options, which
-the new Program must not get), and whenever it is sandboxed (`qore_caller_is_sandboxed()`): an independent or
-evaluation Program of sandboxed code takes its restrictions also when it has `PO_NO_CHILD_PO_RESTRICTIONS`, and does
+the new Program must not get), and whenever it is restricted (`qore_caller_is_restricted()`; code that a trusted,
+governed, sandbox governs is not, qore#7737): an independent or evaluation Program of restricted code takes its
+restrictions also when it has `PO_NO_CHILD_PO_RESTRICTIONS`, and does
 not get `PO_NO_CHILD_PO_RESTRICTIONS` itself, so that its own children inherit them.  The ordinary children of a
 sandboxed Program with `PO_NO_CHILD_PO_RESTRICTIONS` get the options they are created with, as with any parent that has
 it; the sandbox's runtime policy governs their code.  Code without restrictions that is not locked creates an

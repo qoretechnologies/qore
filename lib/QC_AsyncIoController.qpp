@@ -814,14 +814,16 @@ static bool AsyncIoController::running() {
 //! Returns the number of cached operations on the global singleton
 /** @return the number of active operations in the cache, which counts the operations of every caller in the process
 
-    @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which counts
-    the operations of every caller in the process (see @ref sandbox_process_wide_registries)
+    @throw PERMISSION-DENIED code that is restricted or acts for restricted code cannot call this method, which counts
+    the operations of every caller in the process (see @ref sandbox_process_wide_registries and
+    @ref sandbox_manager_classes)
 
     @since %Qore 3.0
 */
 static int AsyncIoController::getCacheSize() {
-    // the operations of every caller of the process-wide controller: not disclosed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the operations of every caller of the process-wide controller: not disclosed to restricted code (issue #6836,
+    // qore#7737)
+    if (qore_caller_is_restricted()) {
         xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
             "number of operations of the global async I/O controller, which counts the operations of every caller in "
             "the process");
@@ -896,7 +898,7 @@ static bool AsyncIoController::getAutostop() {
       behind, which is a bug in %Qore); called from an I/O thread, only that thread is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
-    @note code that is sandboxed or acts for sandboxed code gets the settings of the controller only (\c running,
+    @note code that is restricted or acts for restricted code gets the settings of the controller only (\c running,
     \c autostop, \c shutting_down and \c io_threads): the other keys give the operations of every caller in the
     process (see @ref getCacheSize())
 
@@ -911,8 +913,8 @@ static hash<auto> AsyncIoController::getInfo() {
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     // the keys and counts of the operations of every caller of the process-wide controller are not disclosed to
-    // sandboxed code (qore#7010), as getCacheSize(); its settings are
-    if (qore_caller_is_sandboxed()) {
+    // restricted code (qore#7010, qore#7737), as getCacheSize(); its settings are
+    if (qore_caller_is_restricted()) {
         return ctrl->getSettingsInfo(xsink);
     }
     return ctrl->getInfo(xsink);
@@ -958,8 +960,8 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
 
 //! Returns the logger of the global singleton
 /** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set or if the caller is code
-    that is sandboxed or acts for sandboxed code, which does not get the logger of the process (see
-    @ref sandbox_process_wide_registries)
+    that is restricted or acts for restricted code, which does not get the logger of the process (see
+    @ref sandbox_process_wide_registries and @ref sandbox_manager_classes)
 
     @par Example:
     @code{.py}
@@ -971,8 +973,8 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     @since %Qore 3.0
 */
 static *LoggerInterfaceBase AsyncIoController::getLogger() {
-    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the logger is process-wide and configured by the host: not handed to restricted code (issue #6836, qore#7737)
+    if (qore_caller_is_restricted()) {
         return QoreValue();
     }
     QoreObject* obj;

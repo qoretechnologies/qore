@@ -58,14 +58,15 @@ const char QORE_PROGRAM_CACHE_OWNER[] = "qore-program-cache";
 std::mutex qore_program_cache_create_lock;
 
 // returns 0 if the code that calls the builtin may use the values of the owner in the per-Program cache: code that no
-// sandbox governs, of the Program of a class of the owner (the source Program of the owner's class or of one of its
-// base classes), or raises PROGRAM-CACHE-ERROR and returns -1; with \a owner_dying, the code of a class of the owner
-// that runs in the destructor of the owner is also accepted when sandboxed code released the owner's last reference:
-// the destructor is the code of the owner's class, and the values of an object that is destroyed are released
+// restricting sandbox governs (qore#7737), of the Program of a class of the owner (the source Program of the owner's
+// class or of one of its base classes), or raises PROGRAM-CACHE-ERROR and returns -1; with \a owner_dying, the code
+// of a class of the owner that runs in the destructor of the owner is also accepted when sandboxed code released the
+// owner's last reference: the destructor is the code of the owner's class, and the values of an object that is
+// destroyed are released
 int qore_program_cache_check_caller(const QoreObject* owner, const char* what, ExceptionSink* xsink,
         bool owner_dying = false) {
     QoreProgram* pgm = qore_builtin_caller_program();
-    if (pgm && (!qore_builtin_caller_is_sandboxed()
+    if (pgm && (!qore_builtin_caller_is_restricted()
         || (owner_dying && qore_object_private::get(*owner)->inDestructorOfThisThread()))) {
         const qore_class_private* cls = qore_class_private::get(*owner->getClass());
         if (cls->spgm.load() == pgm) {
@@ -79,8 +80,9 @@ int qore_program_cache_check_caller(const QoreObject* owner, const char* what, E
             }
         }
     }
-    xsink->raiseException("PROGRAM-CACHE-ERROR", "only code that no sandbox governs, of a class of an object of class "
-        "'%s', can %s the values that the object keeps in the per-Program cache", owner->getClassName(), what);
+    xsink->raiseException("PROGRAM-CACHE-ERROR", "only code that no restricting sandbox governs, of a class of an "
+        "object of class '%s', can %s the values that the object keeps in the per-Program cache", owner->getClassName(),
+        what);
     return -1;
 }
 
@@ -1160,10 +1162,16 @@ bool SandboxManager::restricts() {
     return sm->restricts();
 }
 
-//! Returns @ref True if the sandbox trusts the code it governs to use uncontrolled APIs
+//! Returns @ref True if the sandbox trusts the code it governs to use uncontrolled APIs: a trusted (governed) manager
 /** @return @ref True if the policy allows uncontrolled APIs (see setUncontrolledApiPolicy()), @ref False if it refuses
     them (the default); for a combination of the sandboxes of several callers, @ref True only if every member allows
     them
+
+    This is the classification of the manager (see @ref sandbox_manager_classes): a manager that trusts its code is a
+    trusted (governed) manager, which a host attaches to trusted code for its interrupts, limits and I/O policies,
+    and whose code the rules that restrict what code may do (shared objects, injection, private access, the
+    process-wide state of the host, the capabilities of trusted code, cancellation deferral) do not restrict; one that
+    does not is a restricting (enforcing) manager, whose code is restricted.
 
     A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
     %Qore does not see) should refuse it unless the governing sandbox trusts its code, whatever the sandbox restricts:
@@ -1775,7 +1783,8 @@ static nothing SandboxManager::checkNetworkConnect(string host, int port) [dom=N
 
     @param call a callback created outside sandbox execution
     @return a capability for the fixed callback
-    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs registration, or @p call has sandbox provenance
+    @throw SANDBOX-CAPABILITY-ERROR a restricting sandbox governs registration, or @p call has the sandbox provenance
+    of restricted code (a trusted, governed, sandbox does not count; see @ref sandbox_manager_classes)
     @note Register capabilities during trusted initialization, before loading or invoking tenant code. An ordinary
     callWithSystemPolicy() barrier does not remove object or callback provenance.
     @note The arguments of a call to the returned capability are evaluated by the caller, under the caller's own
@@ -1857,15 +1866,17 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       \c SANDBOX-ISOLATION-ERROR before any of that code runs, also in the threads, pool tasks and asynchronous I/O that
       it starts and in nested builds
 
-    @param call a plain callback (not a bound callback or another capability) of code that no sandbox governs,
-    created outside sandbox execution
+    @param call a plain callback (not a bound callback or another capability) of code that no restricting sandbox
+    governs, created outside restricted sandbox execution (the code of a trusted, governed, sandbox is trusted; see
+    @ref sandbox_manager_classes)
 
     @return a capability for the fixed callback
 
     @throw SANDBOX-ISOLATION-ERROR (raised by the capability) the build was to run code of another isolation domain
     than its sandboxed caller's
-    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the creating code, the creating code is sandboxed, or @p call has
-    sandbox provenance, belongs to a sandboxed %Program, or is a bound callback or a capability
+    @throw SANDBOX-CAPABILITY-ERROR a restricting sandbox governs the creating code, the creating code is restricted, or
+    @p call has the sandbox provenance of restricted code, belongs to a restricted %Program, or is a bound callback or
+    a capability (see @ref sandbox_manager_classes)
 
     @note
     - create the capability during trusted startup or module initialization, before any tenant code runs, and keep
@@ -1952,9 +1963,9 @@ static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_
 
     @return the value that @p factory returns
 
-    @throw SANDBOX-CALL-GOVERNED-ERROR the calling code is governed by a sandbox, is sandboxed, or has restricted
-    functional domains; @p factory was created by restricted or sandboxed code; @p governed has no sandbox manager or
-    has been deleted
+    @throw SANDBOX-CALL-GOVERNED-ERROR the calling code is governed by a restricting sandbox, is restricted (see
+    @ref sandbox_manager_classes), or has restricted functional domains; @p factory was created by restricted or
+    sandboxed code; @p governed has no sandbox manager or has been deleted
 
     Exceptions that @p factory raises are raised unchanged; the sandbox and application of the call are removed on
     every exit.
@@ -2006,8 +2017,9 @@ static auto SandboxManager::callGoverned(code factory, Program governed, *softli
 
     @return a capability that starts a new thread running @p call each time it is called, and returns its TID
 
-    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the code creating the capability; @p call has sandbox provenance,
-    or is a bound callback or a capability; the exit hooks of the process have started; or no module is being loaded:
+    @throw SANDBOX-CAPABILITY-ERROR a restricting sandbox governs the code creating the capability (see
+    @ref sandbox_manager_classes); @p call has the sandbox provenance of restricted code, or is a bound callback or a
+    capability; the exit hooks of the process have started; or no module is being loaded:
     the capability can only be created during a module's initialization, before any code it serves runs.  A call of
     the capability raises \c SANDBOX-CAPABILITY-ERROR if it is given arguments, or once the exit hooks of the process
     have started
@@ -2395,23 +2407,25 @@ static nothing SandboxManager::checkProcessWideRegistration(string what) {
     @since %Qore 3.0
 */
 static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_ONLY] {
+    // any manager, also a trusted (governed) one: what such code registers carries its sandbox (qore#7737)
     return !qore_caller_is_sandboxed();
 }
 
 //! Returns @ref True if what the current thread's code creates may be shared by every %Program of the process
 /** Trusted infrastructure that marks the objects it creates for the calling code as shared or not uses it: an object
-    that code which no sandbox governs creates may be shared by every %Program (in a constant or a static variable of
-    a module), so sandboxed code must not change it.
+    that code which no restricting sandbox governs creates may be shared by every %Program (in a constant or a static
+    variable of a module), so restricted code must not change it.  Code that a trusted (governed) sandbox governs (one
+    that allows uncontrolled APIs) creates shared objects, as other trusted code does (see
+    @ref sandbox_manager_classes).
 
-    It decides as isProcessWideRegistrationAllowed() does, but fails closed in the other direction: if the sandbox
-    that governs the code cannot be resolved, it returns @ref True, so that the object is treated as shared and
-    sandboxed code cannot change it, where isProcessWideRegistrationAllowed() returns @ref False, so that the
-    registration is refused.
+    It uses the restricted classification, unlike isProcessWideRegistrationAllowed(), which refuses code that any
+    sandbox governs, and fails closed in the other direction: if the sandbox that governs the code cannot be
+    resolved, it returns @ref True, so that the object is treated as shared and restricted code cannot change it.
 
-    It reveals only whether the calling code is sandboxed, so it is not restricted itself.
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
 
-    @return @ref True if the code is not sandboxed or its sandbox cannot be resolved, @ref False if it is sandboxed or
-    acts for sandboxed code
+    @return @ref True if the code is not restricted or its sandbox cannot be resolved, @ref False if it is restricted
+    or acts for restricted code
 
     @par Example:
     @code{.py}
@@ -2434,7 +2448,8 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
 //! Marks an object as shared by every %Program of the process, so that sandboxed code cannot change or delete it
 /** Trusted library code marks an object that it shares with every %Program (in a constant or a static variable of a
     module, or a cache), typically in the object's constructor when createsSharedObjects() returns @ref True.  Then
-    code that a sandbox governs (see isProcessWideRegistrationAllowed()):
+    code that is restricted or acts for restricted code (see @ref sandbox_manager_classes; code that a trusted,
+    governed, sandbox governs changes the object as trusted code):
     - cannot change a member of the object: an assignment to it or to an element of the value that it holds (also in
       a nested container), the other operators that change an lvalue (such as \c +=, \c push, \c splice,
       \c remove and \c delete), a write through a reference to the member, and the \c += operator with a hash on the
@@ -2511,8 +2526,9 @@ static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns @ref True if the calling code may mark objects as shared with shareObject()
-/** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it (see
-    updateSharedObject()), as long as it does not run for sandboxed code that the scope's code called.  An object
+/** Code that no restricting sandbox governs may (see @ref sandbox_manager_classes), and so may the code of a class of
+    a shared object in an update scope for it (see updateSharedObject()), as long as it does not run for restricted
+    code that the scope's code called.  An object
     that such an update scope creates and caches in the shared object, such as a data type that a shared schema
     builds for sandboxed code, is thereby shared as well.
 
@@ -2529,14 +2545,16 @@ static bool SandboxManager::canShareObjects() {
 //! Returns a value that the given object keeps in the per-%Program cache of the calling code, or @ref nothing
 /** see setProgramCacheValue()
 
-    @param owner the object that keeps the value; the calling code must be code that no sandbox governs, of the
-    %Program of a class of the object (of its class or of one of its base classes)
+    @param owner the object that keeps the value; the calling code must be code that no restricting sandbox governs
+    (see @ref sandbox_manager_classes), of the %Program of a class of the object (of its class or of one of its base
+    classes)
     @param key the key of the value
 
     @return the value set for \a key by \a owner in the cache of the calling code's %Program, or @ref nothing if
     there is none
 
-    @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner
+    @throw PROGRAM-CACHE-ERROR the calling code is restricted (see @ref sandbox_manager_classes), or not of the
+    %Program of a class of \a owner
 
     @since %Qore 3.0
 */
@@ -2578,8 +2596,9 @@ static auto SandboxManager::getProgramCacheValue(object owner, string key) {
 
     The cache is thread-safe.
 
-    @param owner the object that keeps the value; the calling code must be code that no sandbox governs, of the
-    %Program of a class of the object (of its class or of one of its base classes)
+    @param owner the object that keeps the value; the calling code must be code that no restricting sandbox governs
+    (see @ref sandbox_manager_classes), of the %Program of a class of the object (of its class or of one of its base
+    classes)
     @param key the key of the value
     @param value the value to keep; @ref nothing removes nothing, but is kept as a value
     @param max the largest number of values that \a owner keeps in the cache of the %Program; at most 1024
@@ -2588,7 +2607,8 @@ static auto SandboxManager::getProgramCacheValue(object owner, string key) {
     \a owner is; the values of \a owner are given with the group of their last change); the calling code must be
     code that no sandbox governs, of the %Program of a class of \a group as well
 
-    @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner (or of
+    @throw PROGRAM-CACHE-ERROR the calling code is restricted (see @ref sandbox_manager_classes), or not of the
+    %Program of a class of \a owner (or of
     \a group), or \a max is less than 1
 
     @par Example:
@@ -2660,7 +2680,8 @@ static nothing SandboxManager::setProgramCacheValue(object owner, string key, au
     release (and so evict) the values of an object; in the destructor of \a owner, the code of a class of the object
     can also release them when sandboxed code released the object's last reference
 
-    @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner
+    @throw PROGRAM-CACHE-ERROR the calling code is restricted (see @ref sandbox_manager_classes), or not of the
+    %Program of a class of \a owner
 
     @par Example:
     @code{.py}

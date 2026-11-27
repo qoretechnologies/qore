@@ -5,7 +5,8 @@
 
 # SandboxManager::createTrustedBuildCall(): a Program that trusted code builds for a sandboxed caller through the
 # capability keeps no sandbox of the caller (no policy, no interrupts, no limits), threads that the build starts inherit
-# none, the caller's callbacks keep their own provenance, and the capability cannot be created by or for sandboxed code
+# none, the caller's callbacks keep their own provenance, and the capability cannot be created by or for restricted code;
+# the code of a trusted (governed) sandbox creates it as trusted code (qore#7737)
 
 %modern
 %no-child-restrictions
@@ -352,24 +353,33 @@ Program sub mk(string src) {
     }
 
     guards() {
-        # sandboxed code cannot create the capability
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "a sandbox governs or that is sandboxed",
-            \sandboxed.callFunction(),
-            ("create_capability", \build_program()));
-        # nor trusted code that it calls
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "a sandbox governs or that is sandboxed",
-            \sandboxed.callFunction(),
+        # the code of a trusted (governed) sandbox (sandboxed, which allows uncontrolled APIs) creates the capability
+        # as trusted code, also through trusted code that it calls (qore#7737)
+        assertEq(NT_CALLREF, sandboxed.callFunction("create_capability", \build_program()).typeCode());
+        assertEq(NT_CALLREF, sandboxed.callFunction("call", \make_capability(), \build_program()).typeCode());
+        # and so does trusted code with its callbacks and the code of a Program that it created
+        assertEq(NT_CALLREF,
+            SandboxManager::createTrustedBuildCall(sandboxed.callFunction("reader", DeniedFile)).typeCode());
+        # restricted code: a Program with a restricting sandbox (the default policy), which the domain of the method
+        # refuses already, also for trusted code that it calls
+        SandboxManager rsm();
+        rsm.addFilesystemDeniedPath(DeniedFile);
+        Program restricted(PO_MODERN);
+        restricted.setSandboxManager(rsm);
+        restricted.parse(SandboxedSource, "restricted");
+        assertThrows("INVALID-FUNCTION-ACCESS", \restricted.callFunction(), ("create_capability", \build_program()));
+        assertThrows("INVALID-FUNCTION-ACCESS", \restricted.callFunction(),
             ("call", \make_capability(), \build_program()));
-        # a callback that sandboxed code created
-        code c = sandboxed.callFunction("reader", DeniedFile);
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have sandbox provenance",
+        # a callback that restricted code created
+        code c = restricted.callFunction("reader", DeniedFile);
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have restricted sandbox provenance",
             \SandboxManager::createTrustedBuildCall(), c);
-        # code of a Program that sandboxed code created, imported into a trusted Program
-        Program child = sandboxed.callFunction("mk", ProbeSource + "sub export_to(Program h) { h.importFunction(\"probe\", "
-            "\"probe2\"); }");
+        # code of a Program that restricted code created, imported into a trusted Program
+        Program child = restricted.callFunction("mk", ProbeSource + "sub export_to(Program h) { h.importFunction("
+            "\"probe\", \"probe2\"); }");
         Program host(PO_MODERN);
         child.callFunction("export_to", host);
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "belongs to a sandboxed Program",
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "belongs to a restricted Program",
             \SandboxManager::createTrustedBuildCall(), host.getCallReference("probe2"));
         # a capability or a bound callback
         assertThrows("SANDBOX-CAPABILITY-ERROR", "not a bound callback or a capability",
@@ -378,10 +388,13 @@ Program sub mk(string src) {
             \SandboxManager::createTrustedBuildCall(), SandboxManager::createSystemPolicyCall(\build_program()));
         assertThrows("SANDBOX-CAPABILITY-ERROR", "cannot be registered as a system-policy callback",
             \SandboxManager::createSystemPolicyCall(), BuildProgram);
-        # a closure of a trusted Program that trusted code created while the sandboxed code called it
-        code hc = sandboxed.callFunction("call", \host_closure());
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have sandbox provenance",
+        # a closure of a trusted Program that trusted code created while the restricted code called it
+        code hc = restricted.callFunction("call", \host_closure());
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have restricted sandbox provenance",
             \SandboxManager::createTrustedBuildCall(), hc);
+        # one that it created while the code of a trusted (governed) sandbox called it is trusted
+        assertEq(NT_CALLREF,
+            SandboxManager::createTrustedBuildCall(sandboxed.callFunction("call", \host_closure())).typeCode());
         # a callback whose Program has been deleted
         {
             Program del(PO_MODERN);
@@ -405,7 +418,8 @@ Program sub mk(string src) {
         # the object passes itself to a trusted build from its own method: in the build, its methods are still
         # governed by its provenance, also as the same context as the frame of the method that called the capability
         assertEq(Governed, h.run(BuildObjRead));
-        assertEq("SANDBOX-CAPABILITY-ERROR", h.run(BuildObjMk));
+        # its sandbox (sandboxed's) trusts its code, which creates the capability as trusted code (qore#7737)
+        assertEq("created", h.run(BuildObjMk));
     }
 
     creatorSandbox() {
@@ -450,7 +464,7 @@ hash<auto> sub call_own(code cap, string path) {
                 testSkip("dbg_trusted_build_from_flag_only_program() is only available in debug builds");
             }
             assertEq("SANDBOX-CAPABILITY-ERROR", ex.err);
-            assertRegex("that is sandboxed", ex.desc);
+            assertRegex("that is restricted", ex.desc);
             return;
         }
         fail("the capability was created in a Program sandboxed by its flag");
@@ -486,9 +500,9 @@ string sub call_own(code cap, code cb) {
             }
             rethrow;
         }
-        assertRegex("that is sandboxed", creator.callFunction("call_own", cap, \build_program()));
+        assertRegex("that is restricted", creator.callFunction("call_own", cap, \build_program()));
         # also when another Program calls it
-        assertRegex("that is sandboxed", cap(\build_program()));
+        assertRegex("that is restricted", cap(\build_program()));
     }
 
     memory() {

@@ -421,7 +421,10 @@ acts for sandboxed code, with `SANDBOX-REGISTRATION-ERROR`:
 
 Both decide with `qore_caller_is_sandboxed()`: the code of a sandboxed Program or of a Program that sandboxed code
 created, code that such a Program calls, and code that a sandbox governs, also through a policy barrier or a
-system-policy capability; fails closed.  The initialization of library code is not refused, so registrations made in
+system-policy capability; fails closed.  Unlike the rules that restrict what code may do, which use the restricted
+classification (`qore_caller_is_restricted()`: only a sandbox that refuses uncontrolled APIs counts, qore#7737), a
+registration is refused also to code that a trusted (governed) sandbox governs, as what it registers carries that
+sandbox (its interrupts and limits) to every later user.  The initialization of library code is not refused, so registrations made in
 a module's `init` closure or static initializers work whatever code loads the module first.  A registry that is an
 object the caller can also create for itself (`YamlTagHandlerRegistry`) refuses only on the process-wide instance,
 which it creates in its module's initialization, so that it carries no caller's sandbox.
@@ -551,7 +554,7 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 | What the handler gets | Where it comes from |
 |---|---|
 | `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v37; the options the program is declared with before that), and for a library module loaded compiled only those |
-| `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
+| `isSandboxed()` | a restricting sandbox governs the issuing code, or it runs in a restricted Program (`qore_caller_is_restricted()`; a trusted, governed, sandbox does not count, qore#7737) |
 | `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
 
 Restrictions only grow inside a command: a command that a handler issues itself has at least those of the command it is
