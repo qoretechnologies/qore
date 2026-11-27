@@ -131,13 +131,8 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
     */
     testAbortAtDrainStreamEnd() {
         # the debug hook is registered only in debug builds
-        try {
-            call_function("dbg_h2_client_hold_drain_stream_end", False);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
-                testSkip("debug build required for dbg_h2_client_hold_drain_stream_end()");
-            }
-            rethrow;
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("debug build required for dbg_h2_client_hold_drain_stream_end()");
         }
         abortRound(sprintf("https://127.0.0.1:%d/", port), "drain held at the end check", True);
     }
@@ -191,11 +186,12 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
         auto v = q.get(HangGuard);
         assertEq(Type::Binary, v.type(), label + ": the listener gets the stream's data");
 
-        # the hook is disarmed in every case, which also lets a drain that it holds go on
-        on_exit if (hold_drain_at_end) {
+        # the hook is disarmed in every case, which also lets a drain that it holds go on (the hook is registered only
+        # in debug builds, and the test case that holds the drain is skipped in other builds)
+        on_exit if (hold_drain_at_end && Option::HAVE_LIBRARY_DEBUGGING) {
             call_function("dbg_h2_client_hold_drain_stream_end", False);
         }
-        if (hold_drain_at_end) {
+        if (hold_drain_at_end && Option::HAVE_LIBRARY_DEBUGGING) {
             # the next drain takes the stream's data and waits before it checks whether the stream has ended; the
             # server sends data until the connection is gone, so a drain follows
             call_function("dbg_h2_client_hold_drain_stream_end", True);
