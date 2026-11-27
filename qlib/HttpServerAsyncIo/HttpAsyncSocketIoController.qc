@@ -3757,7 +3757,15 @@ public class HttpAsyncSocketIoController {
                 listener.registerQuicConnectStreamQueue(session_id, stream_id,
                     stream_data_queue);
             }
-            # Register the Queue with the H3 poll operation for dispatch tracking
+            # test hook: widens the window between the read of the request and the registration of its Queue, in
+            # which the client can close the stream's session (qore#7836); compiled out without --enable-debug
+            @debug {
+                if (*string delay_ms = getenv("QORE_H3_CONNECT_QUEUE_DELAY_MS")) {
+                    usleep(delay_ms.toInt() * 1000);
+                }
+            }
+            # Register the Queue with the H3 poll operation for dispatch tracking; a Queue of a stream whose session
+            # has closed meanwhile is not registered, and gets the end of the stream (qore#7836)
             h3op.registerStreamQueue(session_id, stream_id, stream_data_queue, !stream_uses_frame_state);
         }
 

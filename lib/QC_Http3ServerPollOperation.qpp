@@ -1573,12 +1573,17 @@ nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) 
     @param queue the Queue that h3RecvDataCallback pushes data to
     @param tunnel @ref True if the stream is a CONNECT tunnel that carries raw data (not a WebSocket connection): a
     server that drains its connections before it stops ends it by pushing @ref nothing to the queue
+
+    If the stream's QUIC session has closed (or the operation is closed), the Queue is not registered: the end of the
+    stream (@ref nothing) is pushed to it, and nothing is kept for the stream (qore#7836)
 */
 nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream_id,
         Queue[Queue] queue, bool tunnel = False) [flags=NAMED_ARGS] {
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
 
-    // Store the QoreObject ref in internal_members to prevent GC
+    // Store the QoreObject ref in internal_members to prevent GC; stored before the Queue is registered, so that a
+    // release of the stream's registrations that the close of its session records after the registration finds it
+    // (qore#7802)
     QoreValue queue_arg = args->retrieveEntry(2);
     {
         AutoLocker ml(priv->stream_member_lock);
@@ -1599,11 +1604,25 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
         }
         self->setMemberValue("stream_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
             queue_objs, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
     }
 
-    // Register the C++ Queue pointer in the priv class
-    // Queue inherits from QoreQueue — empty() is available via the QoreQueue base
-    priv->registerStreamQueue(skey, *queue, tunnel);
+    // Register the C++ Queue pointer in the priv class; a Queue of a stream whose session has closed is not registered
+    // (its end is pushed to it), and its object is then not kept either (qore#7836)
+    if (!priv->registerStreamQueue((int64_t)session_id, skey, *queue, tunnel)) {
+        ExceptionSink release_xsink;
+        {
+            ValueHolder removed(&release_xsink);
+            {
+                AutoLocker ml(priv->stream_member_lock);
+                removed = h3_take_member_key(self, "stream_queue_objs", skey.c_str(), &release_xsink);
+            }
+            // released after the lock
+        }
+        release_xsink.clear();
+    }
 }
 
 //! Registers a stream data listener
