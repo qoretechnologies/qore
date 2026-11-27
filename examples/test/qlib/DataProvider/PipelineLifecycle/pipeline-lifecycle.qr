@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# runs a DataProviderPipeline lifecycle case given as the first argument; run by PipelineLifecycle.qtest
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires DataProvider
+
+/** Each case prints what it checks and ends the script normally; the program must then end (qore#7771): it waits for
+    every thread before it releases its global variables, so a queue thread of a pipeline in a global variable that
+    waited for data kept it from ending.  The callback cases check that an error of the pipeline's thread callback is
+    raised by the call that starts the run, which hung before (qore#7777).
+*/
+
+#! adds a value to each record
+class AddProc inherits DataProvider::AbstractDataProcessor {
+    private {
+        int add;
+    }
+
+    constructor(int add) {
+        self.add = add;
+    }
+
+    string className() {
+        return "AddProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        enqueue(_data + add);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! records the records that it gets, and the threads that it gets them in
+class SinkProc inherits DataProvider::AbstractDataProcessor {
+    public {
+        list<auto> recs();
+        hash<string, bool> tids();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    string className() {
+        return "SinkProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        m.lock();
+        on_exit m.unlock();
+        push recs, _data;
+        tids{gettid()} = True;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    list<auto> getSorted() {
+        m.lock();
+        on_exit m.unlock();
+        return sort(recs);
+    }
+}
+
+# the pipeline of the global cases; the program releases it after it has waited for its threads
+our DataProviderPipeline pipe;
+
+# the pipeline of the top-level case, a variable of the script's top-level code
+*DataProviderPipeline top_pipe;
+
+# the number of thread callback calls
+our int callbacks = 0;
+
+# True if every thread callback call raises an error
+our bool fail_all = False;
+
+# the number of the thread callback call that raises an error, if not 0
+our int fail_at = 0;
+
+# the error log messages
+our list<string> errors = ();
+
+sub thread_callback() {
+    ++callbacks;
+    if (fail_all || callbacks == fail_at) {
+        throw "CB-ERROR", sprintf("callback %d failed", callbacks);
+    }
+}
+
+hash<PipelineOptionInfo> sub opts(*bool callback) {
+    hash<PipelineOptionInfo> rv = <PipelineOptionInfo>{
+        "name": "lifecycle",
+        "error_log": sub (string fmt) { push errors, vsprintf(fmt, argv); },
+    };
+    if (callback) {
+        rv.thread_callback = \thread_callback();
+    }
+    return rv;
+}
+
+#! submits a record and prints the error that the submission raises
+sub submit_error(DataProviderPipeline p, auto rec) {
+    try {
+        p.submit(rec);
+        printf("submitted: no error\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("submit error: %s: %s\n", ex.err, ex.desc);
+    }
+    printf("processing: %y\n", p.isProcessing());
+}
+
+#! prints the error log messages about the callback's error
+sub print_errors() {
+    printf("errors logged: %d (callback error: %y)\n", errors.size(),
+        (select errors, $1 =~ /CB-ERROR/).size() == errors.size());
+    errors = ();
+}
+
+string c = shift ARGV;
+switch (c) {
+    # a pipeline in a global variable that processed a record
+    case "global": {
+        SinkProc sink();
+        pipe = new DataProviderPipeline(opts());
+        pipe.append(new AddProc(1));
+        pipe.append(sink);
+        pipe.submit(1);
+        pipe.waitDone();
+        printf("records: %y\n", sink.getSorted());
+        break;
+    }
+
+    # a pipeline in a variable of the top-level code that processed a record
+    case "top-level": {
+        SinkProc sink();
+        top_pipe = new DataProviderPipeline(opts());
+        top_pipe.append(new AddProc(1));
+        top_pipe.append(sink);
+        top_pipe.submit(1);
+        top_pipe.waitDone();
+        printf("records: %y\n", sink.getSorted());
+        break;
+    }
+
+    # a pipeline in a global variable that processed no data
+    case "global-idle": {
+        pipe = new DataProviderPipeline(opts());
+        pipe.append(new AddProc(1));
+        printf("processing: %y\n", pipe.isProcessing());
+        break;
+    }
+
+    # a pipeline in a global variable with fan-out queues, and two runs: each run has its own queue threads
+    case "global-fanout": {
+        SinkProc sink();
+        pipe = new DataProviderPipeline(opts(True));
+        pipe.append(0, new AddProc(1));
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, new AddProc(10));
+        pipe.append(q1, sink);
+        pipe.append(q2, new AddProc(20));
+        pipe.append(q2, sink);
+        printf("callbacks before the run: %d\n", callbacks);
+        for (int run = 0; run < 2; ++run) {
+            pipe.submit(1);
+            pipe.submit(2);
+            pipe.waitDone();
+            printf("run %d: records: %y callbacks: %d\n", run, sink.getSorted(), callbacks);
+            sink.recs = ();
+        }
+        break;
+    }
+
+    # a pipeline in a global variable whose run is aborted
+    case "global-abort": {
+        pipe = new DataProviderPipeline(opts());
+        pipe.append(new AddProc(1));
+        pipe.submit(1);
+        pipe.abort(True);
+        printf("processing: %y\n", pipe.isProcessing());
+        break;
+    }
+
+    # a pipeline copied from one in a global variable, kept in another global variable
+    case "global-copy": {
+        SinkProc sink();
+        DataProviderPipeline orig(opts());
+        orig.append(new AddProc(1));
+        orig.append(sink);
+        pipe = orig.copy();
+        pipe.submit(1);
+        pipe.waitDone();
+        printf("records: %y\n", sink.getSorted());
+        break;
+    }
+
+    # the thread callback raises an error in every queue thread
+    case "callback-throws": {
+        fail_all = True;
+        DataProviderPipeline p(opts(True));
+        printf("constructed: callbacks: %d\n", callbacks);
+        p.append(new AddProc(1));
+        submit_error(p, 1);
+        print_errors();
+        # the run did not start; the next submission starts it again and gets the error again
+        submit_error(p, 1);
+        print_errors();
+        p.waitDone();
+        remove p;
+        printf("destroyed\n");
+        break;
+    }
+
+    # the thread callback raises an error in the second of three queue threads: the first one is ended, and the next
+    # run, with a callback that succeeds, processes the data
+    case "callback-throws-fanout": {
+        SinkProc sink();
+        pipe = new DataProviderPipeline(opts(True));
+        pipe.append(0, new AddProc(1));
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, sink);
+        pipe.append(q2, new AddProc(10));
+        pipe.append(q2, sink);
+        # the first run: the callback of the second thread raises an error, which is raised, and the first thread is
+        # ended
+        fail_at = 2;
+        submit_error(pipe, 1);
+        print_errors();
+        # the next run: every callback succeeds
+        fail_at = 0;
+        pipe.submit(1);
+        pipe.waitDone();
+        printf("records: %y callbacks: %d\n", sink.getSorted(), callbacks);
+        break;
+    }
+
+    # a pipeline in a global variable whose thread callback raises an error
+    case "callback-throws-global": {
+        fail_all = True;
+        pipe = new DataProviderPipeline(opts(True));
+        pipe.append(new AddProc(1));
+        submit_error(pipe, 1);
+        print_errors();
+        break;
+    }
+
+    default:
+        throw "BAD-CASE", sprintf("unknown case %y", c);
+}
+
+printf("end of script\n");
