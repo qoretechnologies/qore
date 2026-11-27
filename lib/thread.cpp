@@ -8726,6 +8726,8 @@ QoreThreadProgramMarker qore_thread_program_marker() {
         marker.sandboxed_caller = td->sandboxed_caller;
         marker.foreign_entries = td->foreign_code_entries.size();
         marker.code_pgm = td->runtime_po_state.code_pgm;
+        marker.sandbox_context = td->sandbox_context;
+        marker.inherited_sandbox_context = td->inherited_sandbox_context;
     }
     return marker;
 }
@@ -8771,9 +8773,11 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
         return false;
     }
     // only restricted code counts (qore#7737): code that a trusted (governed) sandbox governs changes shared objects
-    // as trusted code.  Only the Programs entered since the marker are looked at: a callback with the provenance of
-    // restricted code that runs in the code of the scope's own Program (called inside a scope that the host or the
-    // code of a trusted sandbox opened) counts as the scope's code, as it did before qore#7737 for the host's scopes
+    // as trusted code.  Only the Programs and the contexts entered since the marker are looked at, and the class of
+    // the code that runs: a callback with the provenance of restricted code that runs in the code of the scope's own
+    // Program (called inside a scope that the host or the code of a trusted sandbox opened) counts as the scope's
+    // code, as it did before qore#7737 for the host's scopes (the code of a trusted library's objects that were built
+    // for restricted code, and the scope's own closure when restricted code called the class)
     auto restricted = [] (const QoreProgram* pgm) -> bool {
         return qore_program_is_restricted(pgm);
     };
@@ -8783,6 +8787,24 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
         return true;
     }
     if (restricted(td->current_pgm)) {
+        return true;
+    }
+    // the code of a class that restricted code declared (qore#7737), which is restricted wherever it runs: also in the
+    // Program of the scope when no restricted Program is on the stack, as after its sandbox was relaxed to trust its
+    // code (see qore_calling_class_is_restricted()); the code of the scope runs in a class that is not (see
+    // qore_object_private::runSharedUpdate())
+    if (qore_calling_class_is_restricted()) {
+        return true;
+    }
+    // a context of a thread, task or continued operation that records restricted code, applied since the marker
+    // (qore#7737): the code runs for restricted code; a context that the thread had when the marker was taken is the
+    // context of the code that opened the scope
+    auto restricted_ctx = [] (const QoreSandboxContext* ctx) -> bool {
+        return ctx && (ctx->restricted || (ctx->manager && !ctx->manager->trustsUncontrolledApis()));
+    };
+    if ((td->sandbox_context != marker.sandbox_context && restricted_ctx(td->sandbox_context))
+            || (td->inherited_sandbox_context != marker.inherited_sandbox_context
+                && restricted_ctx(td->inherited_sandbox_context))) {
         return true;
     }
     // code compiled in a restricted Program that runs in another Program, entered since the marker and not left yet,

@@ -2831,6 +2831,10 @@ struct QoreThreadProgramMarker {
     //! the Program that compiled the code that ran in another Program when the marker was taken, if any
     //! (QoreRuntimePoState::code_pgm)
     const QoreProgram* code_pgm = nullptr;
+    //! the context of the thread's continued operation when the marker was taken (qore#7737)
+    const QoreSandboxContext* sandbox_context = nullptr;
+    //! the context that the thread or task inherited when the marker was taken (qore#7737)
+    const QoreSandboxContext* inherited_sandbox_context = nullptr;
 };
 
 //! Returns the current point of the calling thread's Program context stack
@@ -2841,8 +2845,11 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 //! Program, a destructor), or code that such code called
 /** A Program counts if qore_program_is_restricted() reports it restricted: code that a trusted (governed) sandbox
     governs changes shared objects as trusted code (qore#7737); code compiled in a restricted Program that runs in
-    another Program counts as the code of the restricted Program (qore#7202).  Fails closed: true if \a marker is not
-    on the thread's Program context stack
+    another Program counts as the code of the restricted Program (qore#7202).  The code of a class that restricted
+    code declared counts wherever it runs (qore_calling_class_is_restricted()), and so does code that runs under a
+    context of a thread, task or continued operation that records restricted code and that was applied since \a marker
+    was taken (qore#7737); a provenance frame does not (the code of the scope's Program that runs with it is the
+    scope's code).  Fails closed: true if \a marker is not on the thread's Program context stack
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
