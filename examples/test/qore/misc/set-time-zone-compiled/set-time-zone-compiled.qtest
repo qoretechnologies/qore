@@ -109,7 +109,12 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         string output = backquote(sprintf("%s%s -O%d -o %s %s 2>&1", env(module_dir), shellQuote(qccBin()), opt,
             shellQuote(program), shellQuote(fixture(name))));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected(name), backquote(env(module_dir) + shellQuote(program) + " 2>&1"), name + " qcc");
+        # the program runs in its default environment; a warning of the module loader on stderr is not its output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(env(module_dir) + shellQuote(program),
+            NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, name + " qcc: exit status: " + r.out);
+        assertEq(expected(name), r.stdout, name + " qcc");
+        assertEq("", r.stderr, name + " qcc: stderr");
     }
 
     #! the programs that use TzMod from its source

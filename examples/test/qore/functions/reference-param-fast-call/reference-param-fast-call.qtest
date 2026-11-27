@@ -143,7 +143,12 @@ class ReferenceParamFastCallTest inherits QUnit::Test {
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qccBin()), opt, shellQuote(program),
             shellQuote(path(name))));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected(name), backquote(shellQuote(program) + " 2>&1"));
+        # the program runs in its default environment; a warning of the module loader on stderr is not its output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "exit status: " + r.out);
+        assertEq(expected(name), r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     private static writeFile(string path, string text) {
