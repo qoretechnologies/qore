@@ -26,7 +26,6 @@ FIXED_TMP = re.compile(r"""["']/tmp/""")
 
 #: the sources of tests that have a fixed path in /tmp (qore#7817); remove an entry when its test is converted
 KNOWN = frozenset((
-    "examples/test/ir/AOTSmoke.qc",
     "examples/test/ir/IRExecModeSmoke.qtest",
     "examples/test/ir/benchmark_exec_modes.qr",
     "examples/test/ir/benchmark_execution_speed.qr",

@@ -11,6 +11,7 @@
 %requires QUnit
 %requires ../TestInterpreter.qm
 %requires FsUtil
+%requires Util
 %requires ../ExecModeHarness.qm
 
 %include AOTSmoke.qc
