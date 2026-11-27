@@ -277,7 +277,7 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     }
     // any other code: withheld if sandboxed code is in the chain of callers
     if (chain_sandboxed < 0) {
-        chain_sandboxed = qore_caller_is_sandboxed() ? 1 : 0;
+        chain_sandboxed = qore_receiver_caller_is_sandboxed(receiver) ? 1 : 0;
     }
     return chain_sandboxed;
 }
@@ -544,6 +544,12 @@ QoreHashNode* QoreSerializable::serializeToData(const QoreValue val, int64 flags
 QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags, true);
     return serializeToDataIntern(val, context, xsink);
+}
+
+QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink) {
+    QoreInternalSerializationContext context(xsink, flags);
+    context.caller.setReceiver(&self);
+    return serializeToDataIntern(&self, context, xsink);
 }
 
 void QoreSerializable::serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,
@@ -1919,7 +1925,7 @@ void QoreSerializable::serialize(const QoreValue val, OutputStream& stream, int6
 
 
 void QoreSerializable::serialize(const QoreObject& self, OutputStream& stream, int64 flags, ExceptionSink* xsink) {
-    ReferenceHolder<QoreHashNode> h(serializeToData(&self, flags, xsink), xsink);
+    ReferenceHolder<QoreHashNode> h(serializeReceiverToData(self, flags, xsink), xsink);
     if (*xsink) {
         return;
     }

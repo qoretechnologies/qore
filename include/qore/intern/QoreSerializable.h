@@ -204,12 +204,20 @@ public:
         return unrestricted;
     }
 
+    //! sets the object that a builtin method of Serializable serializes: its own provenance does not count for the
+    //! calling code (see qore_receiver_caller_is_sandboxed())
+    DLLLOCAL void setReceiver(const QoreObject* obj) {
+        receiver = obj;
+    }
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
     //! true once class_ctx was read (or for a trusted API, which does not use it)
     bool class_ctx_known = false;
-    //! qore_caller_is_sandboxed(), when it is needed: -1 = not known yet
+    //! the object that a builtin method of Serializable serializes, if any
+    const QoreObject* receiver = nullptr;
+    //! qore_receiver_caller_is_sandboxed(), when it is needed: -1 = not known yet
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
     bool unrestricted = false;
@@ -322,6 +330,9 @@ public:
 
     //! Serializes \a val for trusted code with all state (Program::serializeToData(), qore#7146)
     DLLLOCAL static QoreHashNode* serializeToDataTrusted(QoreValue val, int64 flags, ExceptionSink* xsink);
+
+    //! Serializes the receiver of a builtin method of Serializable for the code that called the method (qore#7146)
+    DLLLOCAL static QoreHashNode* serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink);
 
     //! Serializes \a val for trusted code with all state to \a stream (Program::serialize(), qore#7146)
     DLLLOCAL static void serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,

@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class SandboxSerializationProvenanceTest
+
+#! a class of the host with non-public state
+class SspTrusted inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "PRIV-STATE";
+    }
+
+    string getPriv() {
+        return priv;
+    }
+}
+
+#! the host's code outside a class that serializes a value
+hash<SerializationInfo> sub host_ser(auto v) {
+    return Serializable::serializeToData(v);
+}
+
+#! a class of the host that serializes the objects of other classes
+class SspSerializer {
+    static hash<SerializationInfo> ser(auto v) {
+        return Serializable::serializeToData(v);
+    }
+
+    static binary serMethod(Serializable v) {
+        return v.serialize();
+    }
+}
+
+#! a class of the host whose method serializes a value for the code that calls it
+class SspHolder {
+    public {
+        auto value;
+    }
+
+    constructor(auto value) {
+        self.value = value;
+    }
+
+    hash<SerializationInfo> ser() {
+        return Serializable::serializeToData(value);
+    }
+}
+
+#! objects that the host's code creates while sandboxed code calls it carry the sandbox of their creation; when the
+#! host itself later serializes them, no sandboxed code calls it, and it gets their non-public state (qore#7146)
+public class SandboxSerializationProvenanceTest inherits QUnit::Test {
+    private {
+        SandboxManager manager();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+    }
+
+    constructor() : QUnit::Test("SandboxSerializationProvenance", "1.0") {
+        p.setSandboxManager(manager);
+        p.parse("auto sub call(code c) { return c(); }\n"
+            "auto sub call_arg(code c, auto arg) { return c(arg); }\n"
+            "binary sub ser_method(Serializable v) { return v.serialize(); }\n"
+            "code sub sb_closure() { return binary sub (Serializable v) { return v.serialize(); }; }\n", "sandboxed");
+
+        addTestCase("host class", \hostClassTest());
+        addTestCase("qlib class", \qlibClassTest());
+        addTestCase("sandboxed callers", \sandboxedCallerTest());
+        set_return_value(main());
+    }
+
+    #! returns an object that the host's code creates while sandboxed code calls it
+    private object createUnderSandbox(code factory) {
+        return p.callFunction("call", factory);
+    }
+
+    #! checks that the host gets all state of an object through each form of serialization
+    private checkHostCalls(object o, code check) {
+        check(Serializable::deserialize(o.serialize()), "serialize()");
+        check(Serializable::deserialize(Serializable::serialize(o)), "Serializable::serialize()");
+        check(Serializable::deserialize(o.serializeToData()), "serializeToData()");
+        check(Serializable::deserialize(Serializable::serializeToData(o)), "Serializable::serializeToData()");
+        check(Serializable::deserialize(host_ser(o)), "host function");
+        check(Serializable::deserialize(SspSerializer::ser(o)), "host class");
+        check(Serializable::deserialize(SspSerializer::serMethod(o)), "host class with a method call");
+        hash<auto> h = Serializable::deserialize(Serializable::serialize({"value": o}));
+        check(h.value, "a container of the object");
+    }
+
+    hostClassTest() {
+        object o = createUnderSandbox(object sub () { return new SspTrusted(); });
+        checkHostCalls(o, sub (SspTrusted d, string desc) {
+            assertEq("PRIV-STATE", d.getPriv(), desc);
+        });
+    }
+
+    qlibClassTest() {
+        # a class of a library module with non-public state
+        object o = createUnderSandbox(object sub () { return new QoreDataType(StringType); });
+        checkHostCalls(o, sub (QoreDataType d, string desc) {
+            assertEq("string", d.getName(), desc);
+            assertEq("str", d.acceptsValue("str"), desc);
+        });
+    }
+
+    sandboxedCallerTest() {
+        object o = createUnderSandbox(object sub () { return new SspTrusted(); });
+        # sandboxed code serializes it
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("ser_method", o));
+        # the host's code that sandboxed code calls serializes it, also the method of an object that the host created
+        # under the sandbox
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("call_arg", \host_ser(), o));
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("call_arg",
+            \SspSerializer::serMethod(), o));
+        # the provenance of the code that runs for the sandbox counts: the method of an object that the host created
+        # under the sandbox, which serializes another object
+        SspHolder holder = createUnderSandbox(object sub () { return new SspHolder(new SspTrusted()); });
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("call", \holder.ser()));
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \holder.ser());
+        # a closure that the host created while sandboxed code called it, which the host calls later
+        code ser = p.callFunction("call", code sub () {
+            return binary sub (Serializable v) { return v.serialize(); };
+        });
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", ser, (o,));
+        # a call reference to the host's code that sandboxed code created, which the host calls
+        code ref = p.callFunction("call", code sub () { return \host_ser(); });
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", ref, (o,));
+        # a closure of the sandboxed Program that the host calls
+        code sbc = p.callFunction("sb_closure");
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", sbc, (o,));
+        assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", sbc, (new SspTrusted(),));
+        # the same object, serialized by the host itself
+        assertEq("PRIV-STATE", Serializable::deserialize(SspSerializer::serMethod(o)).getPriv());
+        assertEq("PRIV-STATE", Serializable::deserialize(o.serialize()).getPriv());
+    }
+}

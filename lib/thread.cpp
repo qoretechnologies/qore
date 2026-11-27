@@ -1144,6 +1144,9 @@ public:
     // (qore_scope_creator_is_sandboxed())
     const QoreSandboxContext* thread_start_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+    //! the provenance frames applied for the receivers of method calls, innermost last, with their receivers
+    //! (qore_receiver_caller_is_sandboxed()); a frame that could not be recorded is not in it
+    std::vector<std::pair<const QoreSandboxProvenanceHelper*, const QoreObject*>> receiver_provenance;
 
     //! a capability set of the thread, set by a ThreadCapabilityScope (qorus#867)
     struct CapabilityScope {
@@ -10146,8 +10149,31 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
         if (captured) {
             captured->ref();
             apply(captured);
+            if (context) {
+                ThreadData* td = thread_data.get();
+                try {
+                    td->receiver_provenance.emplace_back(this, object);
+                } catch (std::bad_alloc&) {
+                    // not recorded: the frame counts for its receiver too (fails closed)
+                }
+            }
         }
     }
+}
+
+bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()
+            && td->receiver_provenance.back().first == td->sandbox_provenance
+            && td->receiver_provenance.back().second == receiver) {
+        // the innermost frame is the receiver's own: the walk starts below it
+        const QoreSandboxProvenanceHelper* frame = td->sandbox_provenance;
+        td->sandbox_provenance = frame->getPrevious();
+        bool rv = qore_caller_is_sandboxed();
+        td->sandbox_provenance = frame;
+        return rv;
+    }
+    return qore_caller_is_sandboxed();
 }
 
 QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink) {
@@ -10213,6 +10239,9 @@ QoreSandboxProvenanceHelper::~QoreSandboxProvenanceHelper() {
         assert(td && td->sandbox_provenance == this);
         td->sandbox_budgets.leave(td->tid, this);
         td->sandbox_provenance = previous;
+        if (!td->receiver_provenance.empty() && td->receiver_provenance.back().first == this) {
+            td->receiver_provenance.pop_back();
+        }
         context->deref();
     }
 }

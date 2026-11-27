@@ -2609,6 +2609,21 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
 
+//! Returns qore_caller_is_sandboxed() for a builtin method that serializes its receiver (qore#7146)
+/** The innermost frame of provenance is not counted if it was applied for a call of a method of the receiver (see
+    QoreSandboxProvenanceHelper): the call of the method, or, if that call applied no frame as the innermost one had
+    the same context, the call of the receiver's method that called it.  The method serializes the object for the code
+    that called it, as Serializable::serialize() with the object as its argument does, which applies no provenance, so
+    the code that called it decides.  Every other frame of provenance counts (the method calls of other objects, call
+    references, closures and destructors), as do the Programs of the stack, the code of sandboxed Programs that runs in
+    other Programs and the sandboxes of continued operations and of the code that started the thread
+
+    @param receiver the object whose method serializes it, or nullptr
+
+    Fails closed as qore_caller_is_sandboxed()
+*/
+DLLLOCAL bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver);
+
 //! Returns true if the barrier of a trusted build (SandboxManager::createTrustedBuildCall()) would hide nothing of the
 //! calling code: no sandboxed caller recorded by a parse or module load, no sandbox that governs the code or that it
 //! acts for, and no restrictions of the calling code that what the code creates would record (qore#7684)

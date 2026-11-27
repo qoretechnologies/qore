@@ -257,7 +257,7 @@ hash<SerializationInfo> h = obj.serializeToData();
     every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 hash<SerializationInfo> Serializable::serializeToData(*int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return s->serializeToData(self, flags, xsink);
+    return QoreSerializable::serializeReceiverToData(*self, flags, xsink);
 }
 
 //! converts the object to binary data representing the object
