@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Crear registro"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "El nombre de la tabla de Salesforce (también llamada \"sobject\"), ej.: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Buscar un solo registro"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "El nombre de la tabla de Salesforce (también llamada \"sobject\"), ej.: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "Buscar registros coincidentes"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "El nombre de la tabla de Salesforce (también llamada \"sobject\"), ej.: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Actualizar registros"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
@@ -436,7 +436,7 @@
           "message": "El nombre de la tabla de Salesforce (también llamada \"sobject\"), ej.: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "Insertar o actualizar registros"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
@@ -460,7 +460,7 @@
           "message": "El nombre de la tabla de Salesforce (también llamada \"sobject\"), ej.: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Eliminar registros"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {

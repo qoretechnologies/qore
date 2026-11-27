@@ -2532,7 +2532,9 @@ if (x || y)
     do not extend the life of the value and also do not participate in object graph cycles (i.e. recursive
     references) and therefore can be used to break up large graphs of objects to improve garbage collector
     performance with such graphs, however the programmer must ensure that the value has a valid
-    strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
+    strong reference elsewhere or the value will go out of scope.  A callback that an object holds and that uses the
+    object captures it weakly, so that the object can be destroyed: for example, a datasource mutation observer that
+    queries the datasource that it observes (see @ref sql_mutation_observer_capture).  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
     reference raises \c HASH-ERROR or \c LIST-ERROR.  A @ref new "new" expression made from it, and a value made
     from it with another type, by a @ref cast "cast" or the conversion of a variable, a parameter, a member or a return

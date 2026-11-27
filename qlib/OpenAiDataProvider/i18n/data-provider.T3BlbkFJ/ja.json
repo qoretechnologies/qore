@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "マルチチャット"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
@@ -860,7 +860,7 @@
           "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "シンプルチャット"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "ファイルをアップロード"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "ファイル名"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "ファイルを削除"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "削除するファイルのIDまたはOpenAIファイル名"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
+          "source": "Create an assistant",
           "message": "アシスタントを作成"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "モデルが出力時に有効なJSONを生成しなければならないことを指定します"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
+          "source": "Update assistant",
           "message": "アシスタントの更新"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "モデルが出力時に有効なJSONを生成しなければならないことを指定します"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
+          "source": "Delete assistant",
           "message": "アシスタントの削除"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "削除するアシスタントのID"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
+          "source": "Create a thread",
           "message": "スレッドを作成"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "オブジェクトに添付可能な 16 個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存するのに役立ちます。キーは最大 64 文字、値は最大 512 文字です"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
+          "source": "Update thread",
           "message": "スレッドの更新"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "オブジェクトに添付可能な 16 個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存するのに役立ちます。キーは最大 64 文字、値は最大 512 文字です"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
+          "source": "Delete thread",
           "message": "スレッドの削除"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "スレッド ID"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "モデルでリクエストを処理"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "レスポンスのストリーミング"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
+          "source": "Create a conversation",
           "message": "会話を作成"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "オブジェクトに添付可能な最大16個のキー・値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存したり、APIまたはダッシュボード経由でオブジェクトを検索したりするのに役立ちます。キーは最大64文字の文字列で、値は最大512文字の文字列です"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "会話の取得"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "会話のID"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
+          "source": "Update a conversation",
           "message": "会話の更新"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6920,7 +6920,7 @@
           "message": "オブジェクトに添付可能な最大16個のキー・値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存したり、APIまたはダッシュボード経由でオブジェクトを検索したりするのに役立ちます。キーは最大64文字の文字列で、値は最大512文字の文字列です"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
+          "source": "Delete a conversation",
           "message": "会話の削除"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "会話のID"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "会話アイテムの一覧表示"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
+          "source": "Add items to a conversation",
           "message": "会話にアイテムを追加"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "会話アイテムの取得"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7468,7 +7468,7 @@
           "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
+          "source": "Delete a conversation item",
           "message": "会話アイテムの削除"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7504,7 +7504,7 @@
           "message": "会話内のアイテム。リストは選択された会話から設定されます"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
+          "source": "Cancel a response",
           "message": "レスポンスをキャンセル"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "取得するレスポンスのID"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "レスポンス入力アイテムの一覧表示"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
@@ -7624,7 +7624,7 @@
           "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
+          "source": "Generate an image",
           "message": "画像を生成"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "音声を文字起こし"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {

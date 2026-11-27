@@ -101,11 +101,24 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Data Provider Labels Are in Sentence Case
+    @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" renders a display name
+    in sentence case in English and without a locale (ex: \c "max_tokens_per_request" -> \c "Max tokens per request"),
+    and the data provider modules' action names follow; code that compares a display name with a literal in title
+    case must change (<a href="https://github.com/qoretechnologies/qore/issues/6784">issue 6784</a>).
+
     @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
     The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
     tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
     elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
     @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
+
+    @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
+    Code with sandboxed callers cannot serialize (\c SERIALIZATION-ERROR), show with \c %%y or set by
+    deserialization the non-public state of classes declared by trusted code that it has no private access to, unless
+    a class inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted hosts use
+    @ref Qore::Program::serialize() "Program::serialize()" and @ref Qore::Program::deserialize() "Program::deserialize()",
+    and a class parsed before its %Program got a sandbox counts as trusted (see @ref sandbox_serialization).
 
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
@@ -131,9 +144,9 @@
     limit is set (a body that a handler reads as a stream is not limited); set the
     @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
 
-    @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
-    A streamed HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, also
-    one that the I/O thread sends, so that a very slow client cannot hold it; see
+    @par HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
+    An HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, streamed or
+    buffered, until the client has taken it, so that a very slow client cannot hold it; see
     @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate", which \c 0 disables
     (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
 
@@ -1440,6 +1453,13 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Process-Wide Values Built on First Use as Trusted Code
+    @ref Qore::Thread::LazySharedValue "LazySharedValue" and @ref Qore::Thread::LazySharedMap "LazySharedMap" build
+    process-wide state once, as trusted code, for whichever caller needs it first, so that it is marked as shared and
+    takes neither the sandbox nor the restrictions of that caller (see @ref sandbox_lazy_shared_values;
+    <a href="https://github.com/qoretechnologies/qore/issues/7684">issue 7684</a>).
+
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as
@@ -2972,13 +2992,33 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
+      thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
+      running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
+    - @ref Qore::split() "split()", @ref <string>::split() and @ref <binary>::split() with an empty separator return
+      the whole subject when it contains a NUL character instead of never ending
+      (<a href="https://github.com/qoretechnologies/qore/issues/7710">issue 7710</a>)
+    - keys chosen to share the internal hash value of hash keys can no longer make the key lookups of a hash slow: a
+      hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
+      @ref hash_key_hardening;
+      <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
+    - an operand of an operator keeps the value of the variable that it read when a later operand changes the
+      variable in place, as in <tt>a == (a += x)</tt>, in the AST interpreter as in the other execution modes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7722">issue 7722</a>)
     - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
       extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)
+    - a builtin class that a module creates as a subclass of a class whose base classes are still being added (such
+      as a class created from Java by the \c jni module) gets the ancestors that the parent class gets afterwards,
+      so that its objects are instances of them and keep their private data
+      (<a href="https://github.com/qoretechnologies/qore/issues/7614">issue 7614</a>)
+    - @ref Qore::Serializable "Serializable" did not apply the member access of the classes declared by trusted code to
+      sandboxed code, which could read and set their non-public state through serialization (see
+      @ref sandbox_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7146">issue 7146</a>)
     - a builtin function variant that a binary module adds at run time to a function of a Program's namespace that the
       Program shares with the static system namespace or a module's namespace is the Program's only; it was added to
       every Program (<a href="https://github.com/qoretechnologies/qore/issues/7588">issue 7588</a>)
@@ -2990,9 +3030,9 @@
       add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
       assertion of a debug build (<a href="https://github.com/qoretechnologies/qore/issues/7622">issue 7622</a>)
     - fixed a memory-safety issue with the builtin declarations that a binary module adds to a Program at run time,
-      in a namespace or one at a time, which are now freed with their Program only once nothing uses them
-      (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>,
-      <a href="https://github.com/qoretechnologies/qore/issues/7649">issue 7649</a>)
+      which are now freed with their Program only once nothing, also in another Program, uses them (issues
+      <a href="https://github.com/qoretechnologies/qore/issues/7540">7540</a>, <a href="https://github.com/qoretechnologies/qore/issues/7649">7649</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7680">7680</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - fixed a memory-safety issue with a child @ref Qore::Program "Program" that outlives its parent: the parent's
@@ -4823,6 +4863,11 @@
       derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
       @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
       @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - sandboxed code cannot copy a @ref sandbox_shared_objects "shared object" unless a class of the copy declares a
+      \c copy() method, which resets what the class guards for a shared object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7667">issue 7667</a>)
+    - sandboxed code cannot serialize a @ref sandbox_shared_objects "shared object"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7673">issue 7673</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement
@@ -4895,6 +4940,10 @@
       \c SHARED-OBJECT-ERROR for it, as for an object marked with
       @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
       affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
+    - fixed a memory leak when a deleted object, held by a strong or a
+      @ref weak_assignment_operator "weak reference", is converted to \c softlist or \c softlist<T>; the converted
+      value is unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/7759">issue 7759</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

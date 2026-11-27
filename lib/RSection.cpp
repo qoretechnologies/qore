@@ -32,6 +32,10 @@
 #include <qore/Qore.h>
 #include <qore/intern/RSection.h>
 
+#ifdef DEBUG
+std::atomic<void (*)(qore_rsection_priv* rs, QoreThreadLock& m, bool woken)> qore_rsection_wait_hook{nullptr};
+#endif
+
 // does not block if the rsection cannot be acquired, returns -1 if the lock cannot be acquired and sets a notification
 int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn, uint64_t scan) {
     assert(has_notify);
@@ -78,9 +82,21 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn, uint64_t sc
         // Shared holders are scans, and a scan never blocks: it releases every lock it holds before waiting,
         // and it never takes an RSet write lock, so waiting for the shared holders to leave always ends.
         // Waiting is also what keeps a scan that has to change a recursive set from being starved: while
-        // rsection_waiting is set, tryRSectionLockSharedNotifyWaitRead() admits no new scan.
+        // rsection_waiting is set, tryRSectionLockSharedNotifyWaitRead() admits no new scan.  The last shared
+        // holder wakes every waiter, as the waiter woken can find the lock taken by another thread and return
+        // below; see wakeRSectionWaitersIntern().
         ++rsection_waiting;
+#ifdef DEBUG
+        if (auto hook = qore_rsection_wait_hook.load()) {
+            hook(this, l, false);
+        }
+#endif
         rsection_cond.wait(l);
+#ifdef DEBUG
+        if (auto hook = qore_rsection_wait_hook.load()) {
+            hook(this, l, true);
+        }
+#endif
         --rsection_waiting;
     }
 

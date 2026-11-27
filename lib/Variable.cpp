@@ -311,6 +311,23 @@ Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(r
     val.v.setPtr(ref, ro);
 }
 
+void qore_delete_type_decl_refs(QoreTypeDeclRefs* refs) {
+    delete refs;
+}
+
+void Var::refTypeDecls() {
+    assert(!type_decl_refs);
+    if (!typeInfo) {
+        return;
+    }
+    // released with the partial references if an allocation fails
+    std::unique_ptr<QoreTypeDeclRefs> refs(new QoreTypeDeclRefs);
+    refs->addMortal(typeInfo);
+    if (!refs->empty()) {
+        type_decl_refs = refs.release();
+    }
+}
+
 const Var* Var::parseGetVar() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
     return is_ref ? val.v.getPtr()->parseGetVar() : this;
@@ -6012,15 +6029,15 @@ namespace {
 //! Removes a reference from the thread's references being resolved (see qore_reference_fast_resolution_enter())
 class ReferenceFastResolutionHelper {
 public:
-    DLLLOCAL ReferenceFastResolutionHelper(const lvalue_ref* r) : r(r) {
+    ReferenceFastResolutionHelper(const lvalue_ref* r) : r(r) {
     }
 
-    DLLLOCAL ~ReferenceFastResolutionHelper() {
+    ~ReferenceFastResolutionHelper() {
         thread_ref_remove(r);
     }
 
-    DLLLOCAL ReferenceFastResolutionHelper(const ReferenceFastResolutionHelper&) = delete;
-    DLLLOCAL ReferenceFastResolutionHelper& operator=(const ReferenceFastResolutionHelper&) = delete;
+    ReferenceFastResolutionHelper(const ReferenceFastResolutionHelper&) = delete;
+    ReferenceFastResolutionHelper& operator=(const ReferenceFastResolutionHelper&) = delete;
 
 private:
     const lvalue_ref* r;

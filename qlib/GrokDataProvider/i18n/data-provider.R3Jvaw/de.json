@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Multi-Chat"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Eine eindeutige Kennung, die Ihren Endbenutzer zur Missbrauchsüberwachung darstellt"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Einfacher Chat"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Eine eindeutige Kennung, die Ihren Endbenutzer zur Missbrauchsüberwachung darstellt"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Anfrage mit einem Modell verarbeiten"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Nicht abschneiden; Fehler zurückgeben, wenn der Kontext das Limit überschreitet"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Antwort streamen"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "Nicht abschneiden; Fehler zurückgeben, wenn der Kontext das Limit überschreitet"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Antwort erstellen"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "Nicht abschneiden; Fehler zurückgeben, wenn der Kontext das Limit überschreitet"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Antwort abrufen"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -4564,7 +4564,7 @@
           "message": "Die eindeutige Kennung der abzurufenden Antwort"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Antwort löschen"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -4600,7 +4600,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Antwort"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
-          "source": "Get Deferred Completion",
+          "source": "Get deferred completion",
           "message": "Verzögerte Completion abrufen"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {

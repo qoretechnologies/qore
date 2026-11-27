@@ -16,7 +16,7 @@
           "message": "Читання та запис повідомлень охорони здоров'я з розділювачами [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) для робочих процесів інтеграції та трансформації.\n\n**Можливості**:\n- Збереження структури повідомлень і власних сегментів `Z` без необхідності фіксованої схеми\n- Читання власних розділювачів із `MSH` та обробка керівних послідовностей HL7\n- Надання одного розібраного сегмента на запис через DataProvider API\n- Серіалізація розібраних повідомлень або простих записів сегментів назад у текст HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "Читати повідомлення HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Залишити текст у вхідному кодуванні таким, як його прочитано, без перевірки"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "Читати вбудовані дані HL7 v2"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Вбудовані дані повідомлення HL7 v2. Використовуйте цей параметр, коли повідомлення вже знаходиться в пам'яті."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "Записати повідомлення HL7 v2"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Шлях для запису серіалізованого повідомлення HL7 v2."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "Завантажити схему HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Якщо `True`, ігнорувати кеш схем у пам'яті та перезавантажити артефакт схеми."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "Короткі відомості про схему HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

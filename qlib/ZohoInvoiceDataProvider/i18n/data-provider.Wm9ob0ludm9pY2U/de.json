@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Rechnung erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -496,7 +496,7 @@
           "message": "ID der PDF-Vorlage, die für diese Rechnung verwendet werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Rechnung aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -652,7 +652,7 @@
           "message": "ID der PDF-Vorlage, die für diese Rechnung verwendet werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Delete Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Die zu löschende Rechnung"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Rechnung abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Die abzurufende Rechnung"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Rechnungen auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Rechnungen nach Rechnungsnummer suchen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Rechnung per E-Mail senden"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -864,7 +864,7 @@
           "message": "E-Mail-Text"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.display_name": {
-          "source": "Mark Invoice Status",
+          "source": "Mark invoice status",
           "message": "Rechnungsstatus markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Als Entwurf markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Create Recurring Invoice",
+          "source": "Create recurring invoice",
           "message": "Wiederkehrende Rechnung erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "ID der für generierte Rechnungen zu verwendenden PDF-Vorlage"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Update Recurring Invoice",
+          "source": "Update recurring invoice",
           "message": "Wiederkehrende Rechnung aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "ID der für generierte Rechnungen zu verwendenden PDF-Vorlage"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Get Recurring Invoice",
+          "source": "Get recurring invoice",
           "message": "Wiederkehrende Rechnung abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Die abzurufende wiederkehrende Rechnung"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.display_name": {
-          "source": "List Recurring Invoices",
+          "source": "List recurring invoices",
           "message": "Wiederkehrende Rechnungen auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Nach Kunde filtern"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.display_name": {
-          "source": "Mark Recurring Invoice Status",
+          "source": "Mark recurring invoice status",
           "message": "Status der wiederkehrenden Rechnung markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Wiederkehrende Rechnung fortsetzen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Kontakt erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Interne Notizen zu diesem Kontakt (für Kunden nicht sichtbar)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Kontakt aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Interne Notizen zu diesem Kontakt (für Kunden nicht sichtbar)"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Kontakt löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Der zu löschende Kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Kontakt abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Der abzurufende Kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Kontakte nach E-Mail-Adresse suchen"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact Status",
+          "source": "Mark contact status",
           "message": "Kontaktstatus kennzeichnen"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Als inaktiv markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Ausgabe erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Belegnummer oder andere Referenz"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Ausgabe aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Belegnummer oder andere Referenz"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Ausgabe löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Die zu löschende Ausgabe"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Ausgabe abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "Die abzurufende Ausgabe"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "Ausgaben auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Ausgaben an oder vor diesem Datum filtern (`YYYY-MM-DD`)"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Create Recurring Expense",
+          "source": "Create recurring expense",
           "message": "Wiederkehrende Ausgabe erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Gibt an, ob diese Ausgabe einem Kunden in Rechnung gestellt werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Update Recurring Expense",
+          "source": "Update recurring expense",
           "message": "Wiederkehrende Ausgabe aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Gibt an, ob diese Ausgabe einem Kunden in Rechnung gestellt werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Delete Recurring Expense",
+          "source": "Delete recurring expense",
           "message": "Wiederkehrende Ausgabe löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2376,7 +2376,7 @@
           "message": "Die zu löschende wiederkehrende Ausgabe"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Get Recurring Expense",
+          "source": "Get recurring expense",
           "message": "Wiederkehrende Ausgabe abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2404,7 +2404,7 @@
           "message": "Die abzurufende wiederkehrende Ausgabe"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.display_name": {
-          "source": "List Recurring Expenses",
+          "source": "List recurring expenses",
           "message": "Wiederkehrende Ausgaben auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Zoho Invoice-Organisation"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Zahlung erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Wechselkurs, wenn die Zahlung in einer anderen Währung erfolgt"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Zahlung aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Wechselkurs, wenn die Zahlung in einer anderen Währung erfolgt"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Zahlung löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "Die zu löschende Zahlung"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Zahlung abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Die abzurufende Zahlung"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Zahlungen auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Zahlungen nach Schecknummer, Transaktions-ID oder anderer Referenz suchen"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Zahlung erstatten"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Rückerstattungsbetrag"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Kostenvoranschlag erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "ID der PDF-Vorlage, die für diesen Kostenvoranschlag verwendet werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Kostenvoranschlag aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "ID der PDF-Vorlage, die für diesen Kostenvoranschlag verwendet werden soll"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Kostenvoranschlag löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Der zu löschende Kostenvoranschlag"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Kostenvoranschlag abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "Der abzurufende Kostenvoranschlag"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "Kostenvoranschläge auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Nach Kunde filtern"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.display_name": {
-          "source": "Mark Estimate Status",
+          "source": "Mark estimate status",
           "message": "Kostenvoranschlagsstatus kennzeichnen"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Als abgelehnt markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Projekt erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Budgetwert (Betrag oder Stunden, abhängig vom Budgettyp)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Projekt aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Budgetwert (Betrag oder Stunden, abhängig vom Budgettyp)"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Projekt abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -3616,7 +3616,7 @@
           "message": "Das abzurufende Projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Projekte auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Projekte nach Name suchen (Teilübereinstimmung)"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.display_name": {
-          "source": "Mark Project Status",
+          "source": "Mark project status",
           "message": "Projektstatus markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Als inaktiv markieren"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Artikel erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Dienstleistungen"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Element aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -3916,7 +3916,7 @@
           "message": "Dienstleistungen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Element löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -3944,7 +3944,7 @@
           "message": "Das zu löschende Element"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Element abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "Das abzurufende Element"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Artikel auflisten"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "Zoho Invoice-Organisation"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Neue Rechnung"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.short_desc": {
@@ -4020,7 +4020,7 @@
           "message": "Wie oft nach neuen Rechnungen gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Neuer Kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4048,7 +4048,7 @@
           "message": "Wie oft nach neuen Kontakten gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Neuer Kostenvoranschlag"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -4076,7 +4076,7 @@
           "message": "Wie oft nach neuen Kostenvoranschlägen gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Neue Ausgabe"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Wie oft nach neuen Ausgaben gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Neues Element"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.short_desc": {
@@ -4132,7 +4132,7 @@
           "message": "Wie oft nach neuen Artikeln gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Neues Projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.short_desc": {

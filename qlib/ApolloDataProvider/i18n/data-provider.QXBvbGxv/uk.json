@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Створити контакт"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -432,7 +432,7 @@
           "message": "ID користувача, якому належить цей контакт"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Оновити контакт"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Поточне розташування контакту"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Пошук контактів"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Отримати контакт"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -588,7 +588,7 @@
           "message": "ID контакту"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
+          "source": "Create an account",
           "message": "Створити обліковий запис"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -644,7 +644,7 @@
           "message": "ID користувача-власника"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
+          "source": "Update an account",
           "message": "Оновити акаунт"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -704,7 +704,7 @@
           "message": "ID користувача-власника"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Пошук акаунтів"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "Отримати обліковий запис"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "ID облікового запису"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
+          "source": "Create a deal",
           "message": "Створити угоду"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -848,7 +848,7 @@
           "message": "ID пов'язаного облікового запису"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
+          "source": "Update a deal",
           "message": "Оновити угоду"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ID користувача-власника"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Список угод"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
+          "source": "Get a deal",
           "message": "Отримати угоду"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
@@ -964,7 +964,7 @@
           "message": "ID угоди"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
-          "source": "Enrich Person",
+          "source": "Enrich person",
           "message": "Збагатити дані людини"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "URL LinkedIn особи"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
-          "source": "Bulk Enrich People",
+          "source": "Bulk enrich people",
           "message": "Масове збагачення даних людей"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Список об'єктів відомостей про людей, кожен із яких містить такі поля, як `email`, `first_name`, `last_name`, `organization_name`, `domain`"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Enrich Organization",
+          "source": "Enrich organization",
           "message": "Збагатити дані організації"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Домен організації для збагачення"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
-          "source": "Bulk Enrich Organizations",
+          "source": "Bulk enrich organizations",
           "message": "Масове збагачення даних організацій"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "Список доменів організацій для збагачення"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
-          "source": "Search People",
+          "source": "Search people",
           "message": "Пошук людей"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "Результатів на сторінку (макс. 100)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
+          "source": "Search organizations",
           "message": "Пошук організацій"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Результатів на сторінку (макс. 100)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Контакт створено"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Спрацьовує, коли створюється новий контакт в Apollo"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Контакт оновлено"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Спрацьовує, коли контакт оновлюється в Apollo"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
+          "source": "Account created",
           "message": "Обліковий запис створено"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Спрацьовує, коли в Apollo створюється новий обліковий запис"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
+          "source": "Deal created",
           "message": "Угоду створено"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {

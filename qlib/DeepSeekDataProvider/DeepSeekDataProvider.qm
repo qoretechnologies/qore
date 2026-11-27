@@ -75,7 +75,7 @@ module DeepSeekDataProvider {
             "path": "/chat-completion",
             "action": "chat-completion",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
-            "display_name": "Chat Completion",
+            "display_name": "Chat completion",
             "short_desc": "Generate a chat completion from a DeepSeek model",
             "desc": "Generate answers, analyze images, or call functions from a conversation history.\n\n"
                 "Use `thinking` to control reasoning and `response_format` for JSON output. "

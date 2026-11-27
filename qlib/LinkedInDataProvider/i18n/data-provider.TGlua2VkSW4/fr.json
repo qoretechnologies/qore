@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Obtenir l'utilisateur actuel"
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Récupère le profil du membre connecté : nom, adresse e-mail, photo de profil et paramètres régionaux.\n\nLe champ `urn` est l'URN `urn:li:person:{id}` du membre, ce qui correspond à ce que les API LinkedIn attendent lorsqu'un membre doit être désigné."
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
-          "source": "Create Text Post",
+          "source": "Create text post",
           "message": "Créer une publication de texte"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
-          "source": "Create Article Post",
+          "source": "Create article post",
           "message": "Créer une publication d'article"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Image Post",
+          "source": "Create image post",
           "message": "Créer une publication avec image"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
-          "source": "Create Video Post",
+          "source": "Create video post",
           "message": "Créer un post vidéo"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Multi-Image Post",
+          "source": "Create multi-image post",
           "message": "Créer une publication multi-images"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
-          "source": "Reshare Post",
+          "source": "Reshare post",
           "message": "Repartager le post"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Empêcher le repartage de la publication"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update Post",
+          "source": "Update post",
           "message": "Mettre à jour le post"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Le nouveau texte du post, remplaçant le texte existant.\n\nLes mentions et les hashtags s'écrivent **en ligne** : `@[Qore Technologies](urn:li:organization:2414183)` mentionne une organisation et `#coding` est un hashtag."
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete Post",
+          "source": "Delete post",
           "message": "Supprimer le post"
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "L'URN du post à supprimer"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Obtenir la publication"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "La dernière version, qui peut être `DRAFT` ou `PROCESSING` plutôt que publiée"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
-          "source": "Upload Image",
+          "source": "Upload image",
           "message": "Téléverser une image"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "L'URN de l'entité qui détiendra la ressource. Par défaut, le membre authentifié (`urn:li:person:...`) ; un URN d'organisation (`urn:li:organization:...`) nécessite un rôle d'administrateur ou d'administrateur de contenu sur cette page et la portée `w_organization_social`"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
-          "source": "Upload Video",
+          "source": "Upload video",
           "message": "Mettre en ligne une vidéo"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {

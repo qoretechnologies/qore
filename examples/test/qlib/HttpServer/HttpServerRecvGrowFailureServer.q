@@ -22,10 +22,9 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    The HTTP server of HttpServerRecvGrowFailure.qtest: it writes the port of its listener and the size of its address
-    space to its standard output, returns the error of a read of a request body whose memory could not grow that it
-    logged for "GET /error/<n>" once it has logged n such errors, and ends when it gets "GET /quit".  Its argument
-    "measure" makes it write the same line and end.
+    The HTTP server of HttpServerRecvGrowFailure.qtest: it writes the port of its listener to its standard output once
+    it is running, returns the error of a read of a request body whose memory could not grow that it logged for
+    "GET /error/<n>" once it has logged n such errors, and ends when it gets "GET /quit".
 */
 
 %modern
@@ -117,11 +116,6 @@ class GrowFailureHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! returns the size of the address space of the process in kilobytes
-int sub vm_size() {
-    return (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmSize:\s+([0-9]+)/)[0].toInt();
-}
-
 BodyErrorCapture capture();
 GrowFailureHandler handler(capture);
 Logger logger("test", LoggerLevel::getLevelError());
@@ -135,9 +129,7 @@ HttpServer server(<HttpServerOptionInfo>{
 server.setDefaultHandler("grow", handler);
 int port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
 server.waitForAsyncIo();
-printf("port %d vm %d\n", port, vm_size());
+printf("port %d\n", port);
 flush();
-if (ARGV[0] != "measure") {
-    handler.quit.waitForZero();
-}
+handler.quit.waitForZero();
 delete server;

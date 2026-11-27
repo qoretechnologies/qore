@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Index durchsuchen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Nach Daten in einem ElasticSearch-Index suchen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Dokument hinzufügen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Ein Dokument zu ElasticSearch hinzufügen / Daten in ElasticSearch erfassen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Massenoperationen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Massenindexierungs-, Erstellungs-, Aktualisierungs- und Löschvorgänge für ElasticSearch-Dokumente ausführen"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Scroll-Suche"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

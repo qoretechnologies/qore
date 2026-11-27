@@ -122,7 +122,7 @@ module BflDataProvider {
                 "path": "/generate-image",
                 "action": "generate-image",
                 "billing": <DataProviderBillingInfo>{"unit": "credit"},
-                "display_name": "Generate Image",
+                "display_name": "Generate image",
                 "short_desc": "Generate an image from a text prompt (async)",
                 "desc": "Generates an image with the selected model, waits for completion, and downloads verified media. "
                     "The response retains `result.sample` and service metadata and adds `media.data` with the image bytes.\n\n"

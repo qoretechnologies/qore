@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
-          "source": "List Workspace Repositories",
+          "source": "List workspace repositories",
           "message": "Elenca i repository dell'area di lavoro"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Recupera repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Il repository su cui operare, specificato come slug o come UUID tra parentesi graffe.\n\nTutti gli altri elementi nell'ambito di un repository (commit, branch, pull request) vengono elencati a partire da questo repository, pertanto la sua modifica comporterà una nuova lettura degli stessi."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
-          "source": "Create Repository",
+          "source": "Create repository",
           "message": "Crea repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Privato"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Criteri di fork"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
@@ -540,7 +540,7 @@
           "message": "Lingua"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Ha issue"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
@@ -548,7 +548,7 @@
           "message": "\nIl tracker delle issue per questo repository è abilitato. Le funzionalità dell'Issue Tracker\nnon sono supportate per i repository negli spazi di lavoro\namministrati tramite admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Ha wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
@@ -560,7 +560,7 @@
           "message": "Progetto"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -568,7 +568,7 @@
           "message": "Descrizione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Ha repository visibili pubblicamente"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -576,7 +576,7 @@
           "message": "\nIndica se il progetto contiene repository visibili al pubblico.\nNota che i progetti privati non possono contenere repository pubblici."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "È privato"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -656,11 +656,11 @@
           "message": "Proprietario"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nome visualizzazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.bGlua3M.display_name": {
@@ -768,7 +768,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aggiornato il"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -796,7 +796,7 @@
           "message": "repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Aggiorna repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
@@ -836,11 +836,11 @@
           "message": "Descrizione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "È privato"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Criteri di fork"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
@@ -864,7 +864,7 @@
           "message": "Lingua"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Ha issue"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
@@ -872,7 +872,7 @@
           "message": "\nIl tracker delle issue per questo repository è abilitato. Le funzionalità dell'Issue Tracker\nnon sono supportate per i repository negli spazi di lavoro\namministrati tramite admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Ha wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
@@ -884,7 +884,7 @@
           "message": "Progetto"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -892,7 +892,7 @@
           "message": "Descrizione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Ha repository visibili pubblicamente"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -900,7 +900,7 @@
           "message": "\nIndica se il progetto contiene repository visibili al pubblico.\nNota che i progetti privati non possono contenere repository pubblici."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "È privato"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1016,11 +1016,11 @@
           "message": "Proprietario"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nome visualizzazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.bGlua3M.display_name": {
@@ -1140,7 +1140,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aggiornato il"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -1176,7 +1176,7 @@
           "message": "Mainbranch"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.display_name": {
-          "source": "Default Merge Strategy",
+          "source": "Default merge strategy",
           "message": "Strategia di fusione predefinita"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Nome"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.display_name": {
-          "source": "Merge Strategies",
+          "source": "Merge strategies",
           "message": "Strategie di fusione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.short_desc": {
@@ -1308,11 +1308,11 @@
           "message": "Utente"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nome visualizzazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.bGlua3M.display_name": {
@@ -1464,7 +1464,7 @@
           "message": "Approvato"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.display_name": {
-          "source": "Participated On",
+          "source": "Participated on",
           "message": "Partecipato il"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Repository"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1520,7 +1520,7 @@
           "message": "Descrizione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Criteri di fork"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.desc": {
@@ -1540,7 +1540,7 @@
           "message": "no_forks"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.display_name": {
-          "source": "Full Name",
+          "source": "Full name",
           "message": "Nome completo"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "La concatenazione del nome utente del proprietario del repository e del nome slugificato, ad esempio \"evzijst/interruptingcow\". Questa stringa è la stessa usata negli URL di Bitbucket."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Ha issue"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.desc": {
@@ -1560,7 +1560,7 @@
           "message": "\nIl tracker delle issue per questo repository è abilitato. Le funzionalità dell'Issue Tracker\nnon sono supportate per i repository negli spazi di lavoro\namministrati tramite admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Ha wiki"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.desc": {
@@ -1568,7 +1568,7 @@
           "message": "\nIl wiki per questo repository è abilitato. Le funzionalità\nwiki non sono supportate per i repository negli spazi di lavoro\namministrati tramite admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "È privato"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.bGFuZ3VhZ2U.display_name": {
@@ -1712,7 +1712,7 @@
           "message": "Progetto"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1720,7 +1720,7 @@
           "message": "Descrizione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Ha repository visibili pubblicamente"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -1728,7 +1728,7 @@
           "message": "\nIndica se il progetto contiene repository visibili al pubblico.\nNota che i progetti privati non possono contenere repository pubblici."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "È privato"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1772,7 +1772,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aggiornato il"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXVpZA.display_name": {
@@ -1804,7 +1804,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aggiornato il"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXVpZA.display_name": {
@@ -1832,7 +1832,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Elimina repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Il repository su cui operare, specificato come slug o come UUID tra parentesi graffe.\n\nTutti gli altri elementi nell'ambito di un repository (commit, branch, pull request) vengono elencati a partire da questo repository, pertanto la sua modifica comporterà una nuova lettura degli stessi."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
-          "source": "Redirect To",
+          "source": "Redirect to",
           "message": "Reindirizza a"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Se un repository è stato spostato in una nuova posizione, usa questo parametro per\nmostrare agli utenti un messaggio chiaro nell'interfaccia utente di Bitbucket che informa dello\nspostamento del repository. Tuttavia, una richiesta GET a questo endpoint restituirà\ncomunque un errore 404.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Elenca rami"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Elenca commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Ottieni commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
-          "source": "List Commit Reports",
+          "source": "List commit reports",
           "message": "Elenca report del commit"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Elenca i commenti del commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Commenta commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Il percorso del file a cui è ancorato questo commento."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Inizia da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -2384,7 +2384,7 @@
           "message": "Il numero di riga di partenza nella vecchia versione del file, se il commento è su più righe. Nulla in caso contrario."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "commit_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
-          "source": "Approve Commit",
+          "source": "Approve commit",
           "message": "Approva commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
-          "source": "Unapprove Commit",
+          "source": "Unapprove commit",
           "message": "Rimuovi approvazione commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Elenca deployment"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Elenca pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
@@ -2664,7 +2664,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Crea pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "I membri a cui richiedere una revisione, sotto forma di UUID dell'account.\n\nBitbucket dichiara questo come un elenco di oggetti utente; qui viene presentato come un elenco di ID e inviato nel formato previsto dall'API.\n\nQuesto valore viene inviato come elenco di oggetti utente di Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Chiudi ramo di origine"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "pullrequest"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Recupera pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "L'ID della pull request."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Aggiorna pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "I membri a cui richiedere una revisione, sotto forma di UUID dell'account.\n\nBitbucket dichiara questo come un elenco di oggetti utente; qui viene presentato come un elenco di ID e inviato nel formato previsto dall'API.\n\nQuesto valore viene inviato come elenco di oggetti utente di Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Chiudi ramo di origine"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Un flag booleano che indica se la pull request è una bozza."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Pull Request Comments",
+          "source": "List pull request comments",
           "message": "Elenca commenti pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Pull Request",
+          "source": "Comment on pull request",
           "message": "Commenta pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Il percorso del file a cui è ancorato questo commento."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Inizia da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Il numero di riga di partenza nella vecchia versione del file, se il commento è su più righe. Nulla in caso contrario."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3260,7 +3260,7 @@
           "message": "Il testo come digitato da un utente."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.ZGVsZXRlZA.display_name": {
@@ -3300,7 +3300,7 @@
           "message": "Il percorso del file a cui è ancorato questo commento."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Inizia da"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Il numero di riga di partenza nella vecchia versione del file, se il commento è su più righe. Nulla in caso contrario."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Da"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aggiornato il"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXNlcg.display_name": {
@@ -3416,11 +3416,11 @@
           "message": "Utente"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nome visualizzazione"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.bGlua3M.display_name": {
@@ -3476,7 +3476,7 @@
           "message": "pullrequest_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
-          "source": "Get Pull Request Comment",
+          "source": "Get pull request comment",
           "message": "Recupera commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
@@ -3536,7 +3536,7 @@
           "message": "L'ID del commento."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
-          "source": "Update Pull Request Comment",
+          "source": "Update pull request comment",
           "message": "Aggiorna commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "Il percorso del file a cui è ancorato questo commento."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Inizia da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Il numero di riga di partenza nella vecchia versione del file, se il commento è su più righe. Nulla in caso contrario."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Da"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "La riga di ancoraggio del commento nella nuova versione del file. Se il commento è su più righe, si tratta del numero di riga finale nella nuova versione del file."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
-          "source": "Delete Pull Request Comment",
+          "source": "Delete pull request comment",
           "message": "Elimina commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
@@ -3788,7 +3788,7 @@
           "message": "L'ID del commento."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
-          "source": "Search Code in a Workspace",
+          "source": "Search code in a workspace",
           "message": "Cerca codice in un'area di lavoro"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
@@ -3848,7 +3848,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
-          "source": "Search Code in a User's Repositories",
+          "source": "Search code in a user's repositories",
           "message": "Cerca codice nei repository di un utente"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
-          "source": "Search Code in a Team's Repositories",
+          "source": "Search code in a Team's repositories",
           "message": "Cerca codice nei repository di un team"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "Elenca workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Quanti record restituire in una pagina, fino a 100. Bitbucket documenta questo per ogni raccolta, ma non lo dichiara quasi su nessuna."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Ottieni workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Il workspace in cui operare, specificato come slug o come UUID tra parentesi graffe.\n\nTutti gli altri elementi nell'ambito di un workspace (repository, membri) vengono elencati a partire da questo workspace, pertanto la sua modifica comporterà una nuova lettura degli stessi."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Elenca membri del workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
-          "source": "List Workspace Projects",
+          "source": "List workspace projects",
           "message": "Elenca progetti del workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Cerca record"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Trova un singolo record"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Crea record"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aggiorna record"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Elimina record"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {
@@ -4268,7 +4268,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nuovo commit"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
@@ -4280,7 +4280,7 @@
           "message": "Si attiva per ogni nuovo commit nel repository monitorato, in qualsiasi ramo.\n\nL'evento contiene il record del commit restituito da Bitbucket, inclusi hash, messaggio, autore e data."
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
-          "source": "New Deployment",
+          "source": "New deployment",
           "message": "Nuovo deployment"
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Si attiva per ogni nuovo deployment nel repository monitorato.\n\nL'evento contiene il record del deployment restituito da Bitbucket, inclusi l'ambiente di destinazione, lo stato raggiunto e la release distribuita."
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Nuova pull request"
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {

@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "建立聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -604,7 +604,7 @@
           "message": "聯絡人生命週期階段的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "更新聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "聯絡人生命週期階段的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "刪除聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -904,7 +904,7 @@
           "message": "要刪除之聯絡人的唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -948,7 +948,7 @@
           "message": "最多結果數"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "取得聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "聯絡人 ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "建立帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "母客戶/母公司的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "更新帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "母客戶/母公司的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "刪除帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "要刪除的帳戶唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "列出帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "最多結果數"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "取得帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "帳戶 ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create Deal",
+          "source": "Create deal",
           "message": "建立交易"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "贏得交易的機率（`0` 至 `100`）"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update Deal",
+          "source": "Update deal",
           "message": "更新交易"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "贏得交易的機率（`0` 至 `100`）"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
-          "source": "Delete Deal",
+          "source": "Delete deal",
           "message": "刪除交易"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "要刪除的交易唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "列出交易"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "最多結果數"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get Deal",
+          "source": "Get deal",
           "message": "取得交易"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "交易 ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "建立任務"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "任務類型的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "更新任務"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -2308,7 +2308,7 @@
           "message": "任務類型的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "刪除任務"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "要刪除的任務唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "最多結果數"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "取得任務"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "任務 ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "建立約會"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "要關聯的聯絡人、客戶或交易的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Update Appointment",
+          "source": "Update appointment",
           "message": "更新預約"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "要關聯的聯絡人、客戶或交易的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Delete Appointment",
+          "source": "Delete appointment",
           "message": "刪除預約"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "要刪除的預約唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
-          "source": "List Appointments",
+          "source": "List appointments",
           "message": "列出預約"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "最多結果數"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
-          "source": "Get Appointment",
+          "source": "Get appointment",
           "message": "取得預約"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "預約 ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "建立備忘錄"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "要關聯的聯絡人、客戶或交易的 ID"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "更新記事"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "記事的已更新內容/本文"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "刪除備註"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "要刪除的備註唯一識別碼"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact Event",
+          "source": "New contact event",
           "message": "新聯絡人事件"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "輪詢在 Freshsales 中建立的新聯絡人"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
-          "source": "New Deal Event",
+          "source": "New deal event",
           "message": "新交易事件"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "輪詢在 Freshsales 中建立的新交易"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
-          "source": "New Account Event",
+          "source": "New account event",
           "message": "新帳戶事件"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "輪詢在 Freshsales 中建立的新帳戶"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task Event",
+          "source": "New task event",
           "message": "新任務事件"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "輪詢在 Freshsales 中建立的新任務"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment Event",
+          "source": "New appointment event",
           "message": "新預約事件"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Utwórz osadzenia"
         },
         "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Base64 — zakodowane dane binarne (wydajne dla typów kompaktowych)"
         },
         "app.Vm95YWdlQUk.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Zmień ranking dokumentów"
         },
         "app.Vm95YWdlQUk.action.cmVyYW5r.short_desc": {

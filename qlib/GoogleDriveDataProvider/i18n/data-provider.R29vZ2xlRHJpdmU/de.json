@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Dateien auflisten"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Der von einer vorherigen Auflistung zurückgegebene `next_page_token`-Wert, der zum Abrufen der nächsten Seite verwendet wird"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Dateiinformationen abrufen"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Die Drive-Kennung der Datei; Drive adressiert Dateien über eine unveränderliche ID statt über einen Pfad, sodass zwei Dateien im selben Ordner denselben Namen haben können"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Datei herunterladen"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Die Drive-Kennung der Datei; Drive adressiert Dateien über eine unveränderliche ID statt über einen Pfad, sodass zwei Dateien im selben Ordner denselben Namen haben können"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
-          "source": "Export Document",
+          "source": "Export document",
           "message": "Dokument exportieren"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Klartext; verfügbar für Docs"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Datei hochladen"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Eine Beschreibung, die mit der Datei gespeichert werden soll"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Textdatei erstellen"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Der mit der neuen Datei zu speichernde MIME-Typ"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
-          "source": "Replace File Content",
+          "source": "Replace file content",
           "message": "Dateiinhalt ersetzen"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Der Dateiname"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Ordner erstellen"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Der Ordner, in dem der neue Ordner erstellt werden soll; falls nicht festgelegt, wird das `My Drive`-Stammverzeichnis des Benutzers verwendet"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Datei kopieren"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Der Ordner, in dem die Kopie abgelegt werden soll; falls nicht festgelegt, wird die Kopie neben dem Original abgelegt"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Datei verschieben"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Der Ordner, in den die Datei verschoben werden soll"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
-          "source": "Rename File",
+          "source": "Rename file",
           "message": "Datei umbenennen"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Eine neue Beschreibung, die mit der Datei gespeichert werden soll; die vorhandene Beschreibung bleibt unverändert, wenn dies nicht festgelegt ist"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Datei löschen"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Löscht die Datei endgültig, anstatt sie in den Papierkorb zu verschieben. **Dies kann nicht rückgängig gemacht werden**; lassen Sie dies deaktiviert, um die Datei in den Papierkorb zu verschieben, wo sie weiterhin wiederhergestellt werden kann"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
-          "source": "Share File",
+          "source": "Share file",
           "message": "Datei freigeben"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Eine Benachrichtigungs-E-Mail an den Empfänger senden"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
-          "source": "Restore from Trash",
+          "source": "Restore from trash",
           "message": "Aus dem Papierkorb wiederherstellen"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Die Drive-Kennung der Datei, die aus dem Papierkorb wiederhergestellt werden soll"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
-          "source": "Create Shortcut",
+          "source": "Create shortcut",
           "message": "Verknüpfung erstellen"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Der Ordner, in dem die Verknüpfung erstellt werden soll; falls nicht festgelegt, wird das `My Drive`-Stammverzeichnis des Benutzers verwendet"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
-          "source": "List Shared Drives",
+          "source": "List shared drives",
           "message": "Geteilte Ablagen auflisten"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Der von einer vorherigen Auflistung zurückgegebene `next_page_token`-Wert"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
-          "source": "Get Storage Quota",
+          "source": "Get storage quota",
           "message": "Speicherkontingent abrufen"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
@@ -1576,7 +1576,7 @@
           "message": "Gibt zurück, wie viel Speicherplatz des Kontos belegt und wie viel verfügbar ist.\n\nNützlich vor einem großen Upload: Drive lehnt Uploads ab, die das Kontingent überschreiten würden, und meldet dies als gewöhnlichen Schreibfehler statt als Kapazitätsproblem. Dateien im Papierkorb zählen weiterhin zum Kontingent; `usage_in_drive_trash` entspricht also dem Speicherplatz, der durch das Leeren freigegeben würde."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
-          "source": "List Permissions",
+          "source": "List permissions",
           "message": "Berechtigungen auflisten"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Die Drive-Kennung der Datei, deren Berechtigungen aufgelistet werden sollen"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
-          "source": "Remove Permission",
+          "source": "Remove permission",
           "message": "Berechtigung entfernen"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Die Kennung der zu entziehenden Berechtigung, wie von `list-permissions` oder `share-file` zurückgegeben"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Dateirevisionen auflisten"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Die Drive-Kennung der Datei, deren Versionen aufgelistet werden sollen"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
-          "source": "Get File Revision",
+          "source": "Get file revision",
           "message": "Dateirevision abrufen"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Die Kennung der Revision, wie von `list-revisions` zurückgegeben"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
-          "source": "Delete File Revision",
+          "source": "Delete file revision",
           "message": "Dateirevision löschen"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Die Kennung der Revision, wie von `list-revisions` zurückgegeben"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files",
+          "source": "Find files",
           "message": "Dateien suchen"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Wie viele Dateien pro Anfrage abgerufen werden sollen; Drive begrenzt dies auf maximal `1000`.\n\nDies beeinflusst, wie der Durchlauf in Anfragen unterteilt wird, nicht wie viele Datensätze zurückgegeben werden – der Iterator ruft weitere Seiten bei Bedarf ab"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Neue Datei"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Diese geteilte Ablage (früher „Teamablage“) anstelle der eigenen `My Drive` des Benutzers überwachen.\n\nEine geteilte Ablage verfügt über einen eigenen Änderungs-Feed, sodass eine Überwachung das eine oder das andere abdeckt, anstatt beides"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Neuer Ordner"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {

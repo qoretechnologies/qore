@@ -258,7 +258,7 @@ namespace Priv {
         },
         {
             "operation": "search-all",
-            "display_name": "Search All",
+            "display_name": "Search all",
             "short_desc": "Search all FHIR %s resource pages",
             "desc": "Search FHIR `%s` resources and follow Bundle `next` pagination links.",
             "mutates_state": False,
@@ -277,7 +277,7 @@ namespace Priv {
         },
         {
             "operation": "conditional-update",
-            "display_name": "Conditional Update",
+            "display_name": "Conditional update",
             "short_desc": "Conditionally update a FHIR %s resource",
             "desc": "Conditionally update a FHIR `%s` resource by search criteria.",
         },
@@ -462,7 +462,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/metadata/capability-statement",
             "action": "get-capability-statement",
-            "display_name": "Get Capability Statement",
+            "display_name": "Get capability statement",
             "short_desc": "Read FHIR server metadata",
             "desc": "Read the server `CapabilityStatement` from the FHIR `metadata` endpoint.",
             "action_code": DPAT_API,
@@ -475,7 +475,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/metadata/smart-configuration",
             "action": "get-smart-configuration",
-            "display_name": "Get SMART Configuration",
+            "display_name": "Get SMART configuration",
             "short_desc": "Read SMART on FHIR discovery metadata",
             "desc": "Read the SMART on FHIR discovery document from "
                 "`.well-known/smart-configuration`.",
@@ -489,7 +489,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/read",
             "action": "read-resource",
-            "display_name": "Read Resource",
+            "display_name": "Read resource",
             "short_desc": "Read a FHIR resource by type and ID",
             "desc": "Read one FHIR resource instance using its `resource_type` and logical `id`.",
             "action_code": DPAT_API,
@@ -507,7 +507,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/search",
             "action": "search-resources",
-            "display_name": "Search Resources",
+            "display_name": "Search resources",
             "short_desc": "Search FHIR resources with query parameters",
             "desc": "Search a FHIR resource type. The `params` hash accepts FHIR search parameter "
                 "names, including modifiers, chained parameters, `_include`, and `_revinclude`.",
@@ -530,7 +530,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/search-all",
             "action": "search-all-resources",
-            "display_name": "Search All Resources",
+            "display_name": "Search all resources",
             "short_desc": "Search FHIR resources and follow pagination",
             "desc": "Search a FHIR resource type and follow Bundle `next` pagination links. The `params` hash "
                 "remains available for advanced search parameters.",
@@ -553,7 +553,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/create",
             "action": "create-resource",
-            "display_name": "Create Resource",
+            "display_name": "Create resource",
             "short_desc": "Create a FHIR resource",
             "desc": "Create a FHIR resource with an optional `If-None-Exist` conditional create header "
                 "for idempotent writes.",
@@ -575,7 +575,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/submit-bundle",
             "action": "submit-bundle",
-            "display_name": "Submit Bundle",
+            "display_name": "Submit bundle",
             "short_desc": "Submit a FHIR transaction or batch Bundle",
             "desc": "Submit a FHIR `Bundle` with `type` set to `transaction` or `batch` to the FHIR "
                 "service base. Use this action when related resource writes must be processed together by "
@@ -594,7 +594,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/update",
             "action": "update-resource",
-            "display_name": "Update Resource",
+            "display_name": "Update resource",
             "short_desc": "Update a FHIR resource",
             "desc": "Update a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header "
                 "for optimistic concurrency.",
@@ -616,7 +616,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/conditional-update",
             "action": "conditional-update-resource",
-            "display_name": "Conditional Update Resource",
+            "display_name": "Conditional update resource",
             "short_desc": "Conditionally update a FHIR resource",
             "desc": "Conditionally update a FHIR resource by type and search parameters.",
             "action_code": DPAT_API,
@@ -633,7 +633,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/patch",
             "action": "patch-resource",
-            "display_name": "Patch Resource",
+            "display_name": "Patch resource",
             "short_desc": "Patch a FHIR resource",
             "desc": "Patch a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header "
                 "for optimistic concurrency.",
@@ -655,7 +655,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/delete",
             "action": "delete-resource",
-            "display_name": "Delete Resource",
+            "display_name": "Delete resource",
             "short_desc": "Delete a FHIR resource",
             "desc": "Delete a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header "
                 "for optimistic concurrency.",
@@ -677,7 +677,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/resources/validate",
             "action": "validate-resource",
-            "display_name": "Validate Resource",
+            "display_name": "Validate resource",
             "short_desc": "Call the FHIR $validate operation",
             "desc": "Validate a FHIR resource by delegating to the server's `$validate` operation. "
                 "Use `resource_type` and `id` for type-level or instance-level validation.",
@@ -701,7 +701,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/terminology/validate-code",
             "action": "validate-code",
-            "display_name": "Validate Code",
+            "display_name": "Validate code",
             "short_desc": "Call a terminology $validate-code operation",
             "desc": "Validate a code by delegating to a FHIR terminology endpoint. The `path` value is a "
                 "relative CodeSystem or ValueSet path such as `CodeSystem/example`.",
@@ -720,7 +720,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/terminology/lookup-code",
             "action": "lookup-code",
-            "display_name": "Lookup Code",
+            "display_name": "Lookup code",
             "short_desc": "Call a terminology $lookup operation",
             "desc": "Look up code display, designation, and property metadata by delegating to a FHIR "
                 "terminology endpoint. The `path` value is a relative CodeSystem path such as "
@@ -740,7 +740,7 @@ namespace Priv {
             "app": FhirRestDataProvider::AppName,
             "path": "/terminology/translate-code",
             "action": "translate-code",
-            "display_name": "Translate Code",
+            "display_name": "Translate code",
             "short_desc": "Call a terminology $translate operation",
             "desc": "Translate a code through a FHIR ConceptMap by delegating to a terminology endpoint. "
                 "The `path` value is a relative ConceptMap path such as `ConceptMap/example`.",

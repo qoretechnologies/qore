@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "列出儲存貯體"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "來自先前呼叫的 `next_page_token`，用於擷取下一頁"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
-          "source": "Get Bucket",
+          "source": "Get bucket",
           "message": "取得儲存桶"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "應擷取其中繼資料的儲存桶名稱"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "列出物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "來自先前呼叫的 `next_page_token`，用於擷取下一頁"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Object Metadata",
+          "source": "Get object metadata",
           "message": "取得物件中繼資料"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "要擷取的內容世代；省略時將使用即時版本"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Update Object Metadata",
+          "source": "Update object metadata",
           "message": "更新物件中繼資料"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
@@ -712,7 +712,7 @@
           "message": "要更新其中繼資料的內容世代；省略時將使用線上版本"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "上傳物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "僅在物件目前的世代與此值相符時執行寫入；傳入 `0` 則僅在物件尚不存在時寫入，從而使上傳成為安全建立而非覆寫"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "下載物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "要下載的內容世代；省略時將使用即時版本"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "刪除物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "要刪除的內容世代；省略時將刪除即時版本。在啟用了版本控制的儲存桶中，刪除即時版本會保留較早的世代，且必須指定特定世代才能永久移除"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "複製物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "複本的使用者自訂中繼資料（鍵/值組）；省略時將保留來源的中繼資料"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "組合物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "組合後物件的使用者自訂中繼資料（鍵/值組）"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "建立簽署的 URL"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

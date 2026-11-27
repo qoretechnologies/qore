@@ -16,7 +16,7 @@
           "message": "用於透過 FTP 和 FTPS 交換檔案的通用 FTP 伺服器"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "已接收 FTP 檔案"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

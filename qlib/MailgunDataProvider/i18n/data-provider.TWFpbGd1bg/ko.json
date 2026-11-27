@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "이메일 전송"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "회신용 이메일 주소"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "이메일 유효성 검사"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "유효성을 검사할 이메일 주소"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
+          "source": "Add mailing list member",
           "message": "메일링 리스트 멤버 추가"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -604,7 +604,7 @@
           "message": "`True`인 경우 멤버가 이미 존재하면 업데이트합니다 (기본값: `False`)"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
+          "source": "Get mailing list member",
           "message": "메일링 리스트 멤버 조회"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -640,7 +640,7 @@
           "message": "조회할 멤버의 이메일 주소"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
+          "source": "Delete mailing list member",
           "message": "메일링 리스트 멤버 삭제"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -676,7 +676,7 @@
           "message": "제거할 멤버의 이메일 주소"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
+          "source": "List mailing list members",
           "message": "메일링 리스트 멤버 목록 조회"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
@@ -724,7 +724,7 @@
           "message": "반환할 최대 멤버 수"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
+          "source": "Create route",
           "message": "라우트 생성"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
@@ -784,7 +784,7 @@
           "message": "이 라우트의 역할에 대한 설명"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
+          "source": "List routes",
           "message": "라우트 목록 조회"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
@@ -808,7 +808,7 @@
           "message": "반환할 최대 라우트 수"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
+          "source": "List mailing lists",
           "message": "메일링 리스트 목록 조회"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "반환할 최대 메일링 리스트 수"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "도메인 목록 조회"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
@@ -880,7 +880,7 @@
           "message": "반환할 최대 도메인 수"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "이메일 링크 클릭됨"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "클릭 이벤트를 모니터링할 도메인 선택"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
+          "source": "Email delivered",
           "message": "이메일 전달됨"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
@@ -928,7 +928,7 @@
           "message": "전달 이벤트를 모니터링할 도메인을 선택하세요"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "이메일 열림"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
@@ -952,7 +952,7 @@
           "message": "열람 이벤트를 모니터링할 도메인을 선택하세요"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
+          "source": "Permanent failure",
           "message": "영구적 실패"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
@@ -976,7 +976,7 @@
           "message": "영구적 실패 이벤트를 모니터링할 도메인 선택"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
+          "source": "Temporary failure",
           "message": "일시적 실패"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "일시적 실패 이벤트를 모니터링할 도메인 선택"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
+          "source": "Spam complaint",
           "message": "스팸 불만 제기"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
-          "source": "Text to Speech",
+          "source": "Text to speech",
           "message": "Text zu Sprache"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Die Versions-ID des Aussprachewörterbuchs, das verwendet werden soll"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
-          "source": "Speech to Speech",
+          "source": "Speech to speech",
           "message": "Speech to Speech"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "PCM 16-Bit, 16 kHz Mono, Little-Endian – geringere Latenz"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
-          "source": "Text to Sound Effects",
+          "source": "Text to sound effects",
           "message": "Text zu Soundeffekten"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Wenn `True`, wird ein nahtloser Loop-Soundeffekt erstellt"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
-          "source": "Audio Isolation",
+          "source": "Audio isolation",
           "message": "Audio-Isolierung"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Die Audiodaten, aus denen die Stimme isoliert werden soll. Hintergrundgeräusche werden entfernt und nur die Stimme bleibt erhalten"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
-          "source": "Speech to Text",
+          "source": "Speech to text",
           "message": "Sprache zu Text"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "PCM 16-Bit, 16 kHz Mono, Little-Endian – geringere Latenz"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
-          "source": "Voice Design",
+          "source": "Voice design",
           "message": "Voice Design"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Beispieltext, der von den generierten Stimmenvorschauen gesprochen wird"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
-          "source": "List Voices",
+          "source": "List voices",
           "message": "Stimmen auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "In absteigender Reihenfolge sortieren"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "Stimme abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Die eindeutige Kennung der abzurufenden Stimme"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
-          "source": "Create Voice",
+          "source": "Create voice",
           "message": "Stimme erstellen"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Schlüssel-Wert-Labels, die mit der Stimme verknüpft werden sollen"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
-          "source": "Edit Voice",
+          "source": "Edit voice",
           "message": "Stimme bearbeiten"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Schlüssel-Wert-Labels, die mit der Stimme verknüpft werden sollen"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "Stimme löschen"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Stimme"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Verfügbare ElevenLabs-KI-Modelle und deren Funktionen auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
-          "source": "List History",
+          "source": "List history",
           "message": "Verlauf auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "Die Verlaufselement-ID, nach der für die Paginierung begonnen werden soll"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Get History Item",
+          "source": "Get history item",
           "message": "Verlaufseintrag abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Verlaufseintrags"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Delete History Item",
+          "source": "Delete history item",
           "message": "Verlaufselement löschen"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Verlaufselements"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
-          "source": "Get History Audio",
+          "source": "Get history audio",
           "message": "Verlaufs-Audio abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Die eindeutige Kennung des Verlaufseintrags, für den Audio abgerufen werden soll"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
-          "source": "Create Dubbing",
+          "source": "Create dubbing",
           "message": "Synchronisation erstellen"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Wenn `True`, werden Obszönitäten im Transkript zensiert. **Hinweis**: Dies ist eine Beta-Funktion"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
-          "source": "Get Dubbing Status",
+          "source": "Get dubbing status",
           "message": "Synchronisationsstatus abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Synchronisationsprojekts"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
-          "source": "Get Dubbing Audio",
+          "source": "Get dubbing audio",
           "message": "Synchronisiertes Audio abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Der Sprachcode für das herunterzuladende synchronisierte Audio (z. B. `es`, `fr`, `de`)"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
-          "source": "Delete Dubbing",
+          "source": "Delete dubbing",
           "message": "Synchronisation löschen"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Synchronisationsprojekts"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
-          "source": "List Dubbing Projects",
+          "source": "List dubbing projects",
           "message": "Synchronisationsprojekte auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Nur Synchronisationsprojekte anderer anzeigen"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Create Pronunciation Dictionary",
+          "source": "Create pronunciation dictionary",
           "message": "Aussprachewörterbuch erstellen"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Workspace-Mitglieder können das Wörterbuch nur anzeigen"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
-          "source": "List Pronunciation Dictionaries",
+          "source": "List pronunciation dictionaries",
           "message": "Aussprachewörterbücher auflisten"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Der für die Paginierung zu verwendende Cursor zum Abrufen der nächsten Ergebnisseite"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Get Pronunciation Dictionary",
+          "source": "Get pronunciation dictionary",
           "message": "Aussprachewörterbuch abrufen"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Aussprachewörterbuchs"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
-          "source": "Add Pronunciation Rules",
+          "source": "Add pronunciation rules",
           "message": "Ausspracheregeln hinzufügen"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {

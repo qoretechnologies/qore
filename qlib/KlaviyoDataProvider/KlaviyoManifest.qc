@@ -375,7 +375,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/profiles",
                 "operation_id": "get_profiles",
-                "display_name": "List Profiles",
+                "display_name": "List profiles",
                 "short_desc": "Lists profiles",
                 "desc": "Lists the profiles in the account, newest first by default.\n\n"
                     "`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each "
@@ -427,7 +427,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/profiles/{id}",
                 "operation_id": "get_profile",
-                "display_name": "Get Profile",
+                "display_name": "Get profile",
                 "short_desc": "Retrieves a specific profile",
                 "desc": "Retrieves one profile by its Klaviyo ID",
                 "groups": (GroupProfiles,),
@@ -457,7 +457,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/profiles",
                 "operation_id": "create_profile",
-                "display_name": "Create Profile",
+                "display_name": "Create profile",
                 "short_desc": "Creates a new profile",
                 "desc": "Creates a profile.\n\n"
                     "A profile needs at least one identifier - an e-mail address, a phone number or an "
@@ -488,7 +488,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/profile-import",
                 "operation_id": "create_or_update_profile",
-                "display_name": "Create Or Update Profile",
+                "display_name": "Create or update profile",
                 "short_desc": "Creates a new profile or updates an existing one",
                 "desc": "Creates a profile, or updates the one already carrying the identifier given.\n\n"
                     "Klaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or "
@@ -531,7 +531,7 @@ public class KlaviyoManifest {
                 "method": "PATCH",
                 "path": "/api/profiles/{id}",
                 "operation_id": "update_profile",
-                "display_name": "Update Profile",
+                "display_name": "Update profile",
                 "short_desc": "Updates an existing profile",
                 "desc": "Updates a profile that already exists, named by its Klaviyo ID.\n\n"
                     "Only the attributes supplied are changed. A custom property supplied here "
@@ -575,7 +575,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/lists",
                 "operation_id": "get_lists",
-                "display_name": "List Lists",
+                "display_name": "List lists",
                 "short_desc": "Lists all lists",
                 "desc": "Lists the account's lists.\n\n"
                     "A **list** holds profiles that opted in explicitly, where a **segment** is a rule "
@@ -617,7 +617,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/lists",
                 "operation_id": "create_list",
-                "display_name": "Create List",
+                "display_name": "Create list",
                 "short_desc": "Creates a new list",
                 "desc": "Creates a list.\n\n"
                     "`optInProcess` decides whether a profile added to the list has to confirm by e-mail "
@@ -647,7 +647,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/lists/{id}",
                 "operation_id": "get_list",
-                "display_name": "Get List",
+                "display_name": "Get list",
                 "short_desc": "Retrieves a specific list",
                 "desc": "Retrieves one list by its Klaviyo ID.\n\n"
                     "`additionalFields` adds the list's profile count, which Klaviyo does not return "
@@ -671,7 +671,7 @@ public class KlaviyoManifest {
                 "method": "PATCH",
                 "path": "/api/lists/{id}",
                 "operation_id": "update_list",
-                "display_name": "Update List",
+                "display_name": "Update list",
                 "short_desc": "Updates an existing list",
                 "desc": "Updates a list that already exists, named by its Klaviyo ID.\n\n"
                     "Only the attributes supplied are changed.",
@@ -704,7 +704,7 @@ public class KlaviyoManifest {
                 "method": "DELETE",
                 "path": "/api/lists/{id}",
                 "operation_id": "delete_list",
-                "display_name": "Delete List",
+                "display_name": "Delete list",
                 "short_desc": "Deletes a list",
                 "desc": "Deletes a list.\n\n"
                     "The profiles on it are **not** deleted; they simply stop being members. Klaviyo "
@@ -723,7 +723,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/segments",
                 "operation_id": "get_segments",
-                "display_name": "List Segments",
+                "display_name": "List segments",
                 "short_desc": "Lists segments",
                 "desc": "Lists the account's segments.\n\n"
                     "A **segment** is a rule Klaviyo evaluates continuously, so its membership changes on "
@@ -765,7 +765,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/segments/{id}",
                 "operation_id": "get_segment",
-                "display_name": "Get Segment",
+                "display_name": "Get segment",
                 "short_desc": "Retrieves a specific segment",
                 "desc": "Retrieves one segment by its Klaviyo ID.\n\n"
                     "`additionalFields` adds the segment's profile count and its `definition` - the rule "
@@ -789,7 +789,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/segments",
                 "operation_id": "create_segment",
-                "display_name": "Create Segment",
+                "display_name": "Create segment",
                 "short_desc": "Creates a new segment",
                 "desc": "Creates a segment.\n\n"
                     "`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is "
@@ -826,7 +826,7 @@ public class KlaviyoManifest {
                 "method": "PATCH",
                 "path": "/api/segments/{id}",
                 "operation_id": "update_segment",
-                "display_name": "Update Segment",
+                "display_name": "Update segment",
                 "short_desc": "Updates an existing segment",
                 "desc": "Updates a segment that already exists, named by its Klaviyo ID.\n\n"
                     "Only the attributes supplied are changed. Replacing `definition` re-evaluates the "
@@ -867,7 +867,7 @@ public class KlaviyoManifest {
                 "method": "DELETE",
                 "path": "/api/segments/{id}",
                 "operation_id": "delete_segment",
-                "display_name": "Delete Segment",
+                "display_name": "Delete segment",
                 "short_desc": "Deletes a segment",
                 "desc": "Deletes a segment.\n\n"
                     "The profiles it matched are **not** deleted; the rule simply stops being evaluated. "
@@ -886,7 +886,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/tags",
                 "operation_id": "get_tags",
-                "display_name": "List Tags",
+                "display_name": "List tags",
                 "short_desc": "Lists tags",
                 "desc": "Lists the account's tags.\n\n"
                     "A tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
@@ -924,7 +924,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/tags/{id}",
                 "operation_id": "get_tag",
-                "display_name": "Get Tag",
+                "display_name": "Get tag",
                 "short_desc": "Retrieves a specific tag",
                 "desc": "Retrieves one tag by its Klaviyo ID",
                 "groups": (GroupTags,),
@@ -943,7 +943,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/tags",
                 "operation_id": "create_tag",
-                "display_name": "Create Tag",
+                "display_name": "Create tag",
                 "short_desc": "Creates a new tag",
                 "desc": "Creates a tag.\n\n"
                     "A tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new "
@@ -969,7 +969,7 @@ public class KlaviyoManifest {
                 "method": "PATCH",
                 "path": "/api/tags/{id}",
                 "operation_id": "update_tag",
-                "display_name": "Update Tag",
+                "display_name": "Update tag",
                 "short_desc": "Renames an existing tag",
                 "desc": "Renames a tag.\n\n"
                     "A tag's name is the only attribute it has, so this action changes the name and nothing "
@@ -993,7 +993,7 @@ public class KlaviyoManifest {
                 "method": "DELETE",
                 "path": "/api/tags/{id}",
                 "operation_id": "delete_tag",
-                "display_name": "Delete Tag",
+                "display_name": "Delete tag",
                 "short_desc": "Deletes a tag",
                 "desc": "Deletes a tag.\n\n"
                     "The campaigns, flows, lists and segments it was applied to are **not** deleted; they "
@@ -1012,7 +1012,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/campaigns",
                 "operation_id": "get_campaigns",
-                "display_name": "List Campaigns",
+                "display_name": "List campaigns",
                 "short_desc": "Lists campaigns",
                 "desc": "Lists campaigns on the given channel.\n\n"
                     "**`channel` is required**: Klaviyo does not list campaigns across channels, so a "
@@ -1056,7 +1056,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/campaigns/{id}",
                 "operation_id": "get_campaign",
-                "display_name": "Get Campaign",
+                "display_name": "Get campaign",
                 "short_desc": "Retrieves a specific campaign",
                 "desc": "Retrieves one campaign by its Klaviyo ID",
                 "groups": (GroupCampaigns,),
@@ -1082,7 +1082,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/campaigns",
                 "operation_id": "create_campaign",
-                "display_name": "Create Campaign",
+                "display_name": "Create campaign",
                 "short_desc": "Creates a new campaign",
                 "desc": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a "
                     "send job for it.\n\n"
@@ -1136,7 +1136,7 @@ public class KlaviyoManifest {
                 "method": "PATCH",
                 "path": "/api/campaigns/{id}",
                 "operation_id": "update_campaign",
-                "display_name": "Update Campaign",
+                "display_name": "Update campaign",
                 "short_desc": "Updates an existing campaign",
                 "desc": "Updates a campaign that already exists, named by its Klaviyo ID.\n\n"
                     "Only the attributes supplied are changed. Klaviyo rejects a change to a campaign that "
@@ -1182,7 +1182,7 @@ public class KlaviyoManifest {
                 "method": "DELETE",
                 "path": "/api/campaigns/{id}",
                 "operation_id": "delete_campaign",
-                "display_name": "Delete Campaign",
+                "display_name": "Delete campaign",
                 "short_desc": "Deletes a campaign",
                 "desc": "Deletes a campaign.\n\n"
                     "Klaviyo answers with no content. A campaign that has already been sent keeps its "
@@ -1198,7 +1198,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/campaign-send-jobs",
                 "operation_id": "send_campaign",
-                "display_name": "Send Campaign",
+                "display_name": "Send campaign",
                 "short_desc": "Sends a campaign",
                 "desc": "Sends a campaign immediately, by creating a send job for it.\n\n"
                     "The campaign must be complete and ready to send; Klaviyo rejects a send job for a "
@@ -1231,7 +1231,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/events",
                 "operation_id": "get_events",
-                "display_name": "List Events",
+                "display_name": "List events",
                 "short_desc": "Lists events",
                 "desc": "Lists the events recorded in the account, newest first by default.\n\n"
                     "This listing is exported so that the event picker on other actions has values to "
@@ -1282,7 +1282,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/events/{id}",
                 "operation_id": "get_event",
-                "display_name": "Get Event",
+                "display_name": "Get event",
                 "short_desc": "Retrieves a specific event",
                 "desc": "Retrieves one event by its Klaviyo ID",
                 "groups": (GroupEvents,),
@@ -1309,7 +1309,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/metrics",
                 "operation_id": "get_metrics",
-                "display_name": "List Metrics",
+                "display_name": "List metrics",
                 "short_desc": "Lists metrics",
                 "desc": "Lists the metrics defined in the account.\n\n"
                     "A **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and "
@@ -1333,7 +1333,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/metrics/{id}",
                 "operation_id": "get_metric",
-                "display_name": "Get Metric",
+                "display_name": "Get metric",
                 "short_desc": "Retrieves a specific metric",
                 "desc": "Retrieves one metric by its Klaviyo ID.\n\n"
                     "A **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and "

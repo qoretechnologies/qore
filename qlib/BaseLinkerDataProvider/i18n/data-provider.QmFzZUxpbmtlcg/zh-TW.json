@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "透過 `getOrders` 返回 BaseLinker 訂單資料流。支援透過 `id_from`/`date_from` 進行游標分頁，並可依狀態、電子郵件和來源管道篩選。BaseLinker 將每次呼叫的每頁大小固定為 100 筆訂單。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "取得訂單"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
@@ -372,7 +372,7 @@
           "message": "BaseLinker 訂單識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
-          "source": "Add Order",
+          "source": "Add order",
           "message": "新增訂單"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
@@ -928,7 +928,7 @@
           "message": "每單位重量（公斤）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
-          "source": "Set Order Fields",
+          "source": "Set order fields",
           "message": "設定訂單欄位"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "5 星"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Set Order Status",
+          "source": "Set order status",
           "message": "設定訂單狀態"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "新訂單狀態識別碼；請參閱 `list-order-statuses`。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
-          "source": "Set Order Payment",
+          "source": "Set order payment",
           "message": "設定訂單付款"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "由付款閘道指派的識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "刪除訂單"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "要刪除的 BaseLinker 訂單 ID 陣列（每次呼叫最多 1000 筆）。"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Add Order Product",
+          "source": "Add order product",
           "message": "新增訂單產品"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "市集拍賣或刊登 ID（eBay、Allegro、Amazon 等）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
-          "source": "Set Order Product Fields",
+          "source": "Set order product fields",
           "message": "設定訂單產品欄位"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "市集拍賣或刊登 ID（eBay、Allegro、Amazon 等）。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Delete Order Product",
+          "source": "Delete order product",
           "message": "刪除訂單商品"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "要刪除的明細項目識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
-          "source": "List Order Returns",
+          "source": "List order returns",
           "message": "列出退貨單"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "透過 `getOrderReturns` 傳回 BaseLinker 退貨單串流。支援透過 `id_from` 進行游標分頁，並可依狀態及確認日期進行篩選。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
-          "source": "Get Order Return",
+          "source": "Get order return",
           "message": "取得退貨單"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "BaseLinker 退貨單識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
-          "source": "Add Order Return",
+          "source": "Add order return",
           "message": "新增訂單退貨"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "每單位重量（公斤）。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
-          "source": "Set Order Return Fields",
+          "source": "Set order return fields",
           "message": "設定退貨單欄位"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "BaseLinker 中設定的自訂訂單退貨額外欄位的 `{\"<extra_field_id>\": <value>}` 對應。文字欄位接受字串；檔案欄位接受 `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` 雜湊，其中 base64 編碼的檔案不得超過 2 MB。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
-          "source": "Set Order Return Status",
+          "source": "Set order return status",
           "message": "設定退貨單狀態"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "目標退貨狀態識別碼；值取自 BaseLinker 的 `getOrderReturnStatusList` 端點，並透過 `order_return_statuses` 參考資料呈現。"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
-          "source": "Set Order Return Refund",
+          "source": "Set order return refund",
           "message": "設定退貨單退款"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "由退款提供商指派的識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
-          "source": "List Inventories",
+          "source": "List inventories",
           "message": "列出庫存目錄"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "透過 `getInventories` 列出所有 BaseLinker 庫存（目錄）。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
-          "source": "List Inventory Products",
+          "source": "List inventory products",
           "message": "列出庫存商品"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "透過 `getInventoryProductsList` 列出 BaseLinker 庫存中的商品。支援頁碼分頁，並可依分類、EAN、SKU、名稱、價格範圍和庫存範圍進行篩選。"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Get Inventory Product",
+          "source": "Get inventory product",
           "message": "取得庫存商品"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "BaseLinker 庫存商品識別碼"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Add / Update Inventory Product",
+          "source": "Add / update inventory product",
           "message": "新增/更新庫存商品"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "`{\"<product_id>\": <quantity>}` 的對應，其中每個鍵為此組合商品中包含的商品識別碼，值為件數。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Delete Inventory Product",
+          "source": "Delete inventory product",
           "message": "刪除庫存商品"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "要刪除的商品"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
-          "source": "List Inventory Stock",
+          "source": "List inventory stock",
           "message": "列出庫存量"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "透過 `getInventoryProductsStock` 列出 BaseLinker 庫存商品庫存量。每筆資料包含以 `product_id` 為索引鍵的倉庫 → 數量雜湊。"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
-          "source": "Update Inventory Stock",
+          "source": "Update inventory stock",
           "message": "更新庫存量"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "形狀為 `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}` 的巢狀 Map。對於非子型號商品，請使用商品 ID 作為內部索引鍵前綴（例如 `0|bl_123`）。每次呼叫最多 1000 個商品。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
-          "source": "List Inventory Prices",
+          "source": "List inventory prices",
           "message": "列出庫存價格"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "透過 `getInventoryProductsPrices` 列出 BaseLinker 庫存商品價格。每筆資料包含以 `product_id` 為索引鍵的價格群組 → 價格雜湊。"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
-          "source": "Update Inventory Prices",
+          "source": "Update inventory prices",
           "message": "更新庫存價格"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "形狀為 `{\"<product_id>\": {\"<price_group_id>\": <price>}}` 的巢狀 Map。每次呼叫最多 1000 個商品。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
-          "source": "List Inventory Manufacturers",
+          "source": "List inventory manufacturers",
           "message": "列出庫存製造商"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "透過 `getInventoryManufacturers` 列出 BaseLinker 庫存製造商。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
-          "source": "List Inventory Categories",
+          "source": "List inventory categories",
           "message": "列出庫存分類"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
@@ -3124,7 +3124,7 @@
           "message": "透過 `getInventoryCategories` 列出 BaseLinker 庫存分類。若提供 `inventory_id`，結果將限定在該目錄中。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
-          "source": "List Order Packages",
+          "source": "List order packages",
           "message": "列出訂單包裹"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
@@ -3136,7 +3136,7 @@
           "message": "透過 `getOrderPackages` 列出與 BaseLinker 訂單關聯的物流包裹（貨件）。"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
-          "source": "Add Courier Package",
+          "source": "Add courier package",
           "message": "新增快遞包裹"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "包裹寬度"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
-          "source": "Get Courier Label",
+          "source": "Get courier label",
           "message": "取得快遞標籤"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "承運商指派的追蹤號碼／包裹號碼。請提供此項或 `package_id`。"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
-          "source": "Delete Courier Package",
+          "source": "Delete courier package",
           "message": "刪除快遞包裹"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "當設為 `True` 時，即使承運商拒絕取消，也會從 BaseLinker 移除該包裹。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "列出物流業者"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "透過 `getCouriersList` 列出為此 BaseLinker 帳號設定的物流業者。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
-          "source": "List Courier Services",
+          "source": "List courier services",
           "message": "列生物流服務"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "透過 `getCourierServices` 列出指定物流業者的可用服務（產品／層級選項）。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Courier Accounts",
+          "source": "List courier accounts",
           "message": "列生物流帳號"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "透過 `getCourierAccounts` 列出為指定物流業者設定的物流帳號憑證。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
-          "source": "List Courier Fields",
+          "source": "List courier fields",
           "message": "列生物流欄位"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "透過 `getCourierFields` 列出指定物流業者的自訂欄位結構描述（必填／選填輸入）。在以程式設計方式建構 `createPackage` 承載資料時很有用。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
-          "source": "List Order Statuses",
+          "source": "List order statuses",
           "message": "列出訂單狀態"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
@@ -3432,7 +3432,7 @@
           "message": "透過 `getOrderStatusList` 列出 BaseLinker 中設定的訂單狀態。"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
-          "source": "List Order Sources",
+          "source": "List order sources",
           "message": "列出訂單來源"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
@@ -3444,7 +3444,7 @@
           "message": "透過 `getOrderSources` 列出 BaseLinker 中設定的訂單來源（市集／商店）。"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "已建立訂單"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "當在 BaseLinker 中建立新訂單時觸發。（輪詢自 `getJournalList` `log_type` 1。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
-          "source": "Order Downloaded",
+          "source": "Order downloaded",
           "message": "訂單已下載"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "當從連線的商店下載訂單時觸發。（輪詢自 `getJournalList` `log_type` 2。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
-          "source": "Order Paid",
+          "source": "Order paid",
           "message": "訂單已付款"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "當訂單被標記為已付款時觸發。（輪詢自 `getJournalList` `log_type` 3。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
-          "source": "Order Removed",
+          "source": "Order removed",
           "message": "訂單已移除"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
@@ -3492,7 +3492,7 @@
           "message": "當訂單被移除時觸發。（輪詢自 `getJournalList` `log_type` 4。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
-          "source": "Orders Merged",
+          "source": "Orders merged",
           "message": "訂單已合併"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
@@ -3504,7 +3504,7 @@
           "message": "當兩個或多個訂單合併時觸發。（輪詢自 `getJournalList` `log_type` 5。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
-          "source": "Order Split",
+          "source": "Order split",
           "message": "訂單拆分"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
@@ -3516,7 +3516,7 @@
           "message": "當訂單被拆分時觸發。（輪詢自 `getJournalList` `log_type` 6。）"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
-          "source": "Invoice Issued",
+          "source": "Invoice issued",
           "message": "發票已開立"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
@@ -3528,7 +3528,7 @@
           "message": "當開立發票時觸發。（輪詢自 `getJournalList` `log_type` 7。）"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
-          "source": "Receipt Issued",
+          "source": "Receipt issued",
           "message": "收據已開立"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "當開立收據時觸發。（從 `getJournalList` `log_type` 8 輪詢。）"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
-          "source": "Package Created",
+          "source": "Package created",
           "message": "包裹已建立"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "當建立快遞包裹時觸發。（從 `getJournalList` `log_type` 9 輪詢。）"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
-          "source": "Package Deleted",
+          "source": "Package deleted",
           "message": "包裹已刪除"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "當刪除快遞包裹時觸發。（從 `getJournalList` `log_type` 10 輪詢。）"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Delivery Data Edited",
+          "source": "Delivery data edited",
           "message": "配送資料已編輯"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "當訂單上的配送資料被編輯時觸發。（輪詢自 `getJournalList` `log_type` 11。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
-          "source": "Order Product Added",
+          "source": "Order product added",
           "message": "訂單商品已新增"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "當商品被新增至訂單時觸發。（輪詢自 `getJournalList` `log_type` 12。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
-          "source": "Order Product Edited",
+          "source": "Order product edited",
           "message": "訂單商品已編輯"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "當訂單上的商品品項被編輯時觸發。（輪詢自 `getJournalList` `log_type` 13。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
-          "source": "Order Product Removed",
+          "source": "Order product removed",
           "message": "訂單商品已移除"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
@@ -3612,7 +3612,7 @@
           "message": "當商品品項從訂單中移除時觸發。（輪詢自 `getJournalList` `log_type` 14。）"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
-          "source": "Blacklist Entry Added",
+          "source": "Blacklist entry added",
           "message": "已新增黑名單項目"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "當買家被新增至黑名單時觸發。（從 `getJournalList` `log_type` 15 輪詢。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Order Data Edited",
+          "source": "Order data edited",
           "message": "訂單資料已編輯"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3636,7 +3636,7 @@
           "message": "當一般訂單資料被編輯時觸發。（輪詢自 `getJournalList` `log_type` 16。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
-          "source": "Order Copied",
+          "source": "Order copied",
           "message": "訂單已複製"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "當訂單被複製時觸發。（輪詢自 `getJournalList` `log_type` 17。）"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Order Status Changed",
+          "source": "Order status changed",
           "message": "訂單狀態已變更"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
@@ -3660,7 +3660,7 @@
           "message": "當訂單狀態變更時觸發。（輪詢自 `getJournalList` `log_type` 18。）"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
-          "source": "Invoice Deleted",
+          "source": "Invoice deleted",
           "message": "發票已刪除"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "當發票被刪除時觸發。（輪詢自 `getJournalList` `log_type` 19。）"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
-          "source": "Receipt Deleted",
+          "source": "Receipt deleted",
           "message": "收據已刪除"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
@@ -3684,7 +3684,7 @@
           "message": "當刪除收據時觸發。（從 `getJournalList` `log_type` 20 輪詢。）"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
-          "source": "Invoice Edited",
+          "source": "Invoice edited",
           "message": "發票已編輯"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "當發票被編輯時觸發。（輪詢自 `getJournalList` `log_type` 21。）"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
-          "source": "Package Status Changed",
+          "source": "Package status changed",
           "message": "包裹狀態已變更"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {

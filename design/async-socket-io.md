@@ -147,8 +147,10 @@ current program is `nullptr`, and any %Qore machinery that reads program state f
 `q_sprintf()` reading `PO_BROKEN_SPRINTF` to render the message, above all — has nothing to read.
 
 `QoreLoggerBridge` therefore enters the logger object's program for the duration of each call, which
-also contributes to that program's thread count so it cannot finish teardown mid-log; a logger whose
-program is already past its teardown gate drops the message instead.  Anything else that calls into
+also contributes to that program's thread count so it cannot finish teardown mid-log.  A logger whose
+program is already past its teardown gate cannot take the message: `QoreLoggerBridge::logV()` reports it as not
+logged, and the message goes to the next logger (the controller's logger after the global async I/O logger), and
+then, for an error such as the exception of a callback, to stderr (qore#7698).  Anything else that calls into
 %Qore from the I/O thread needs the same treatment.
 
 Because the I/O thread reuses one `ExceptionSink` for a whole loop iteration, an exception raised by
@@ -163,19 +165,21 @@ The global controller has a single logger for the whole process (`AsyncIoControl
 controller's own messages, it receives the messages of `qore_async_io_log()` (QUIC, HTTP/2, protocol negotiation) when
 no global async I/O logger is set (`set_async_io_logger()`).
 
-Each `HttpServer` sets its logger on the controller in `init()` (`setControllerLogger()`), so that an application
-that configures only its server's logger, as qorus-core does, gets these messages too.  The server records the
-logger it replaced, and `stop()` gives it back (`restoreControllerLogger()`), under the static
-`HttpServer::controller_logger_lck`:
+Each `HttpServer` created with a logger sets it on the controller in `init()` (`setControllerLogger()`), so that an
+application that configures only its server's logger, as qorus-core does, gets these messages too.  A server created
+without a logger leaves the controller's logger alone: its own logger has no appender, and the controller's messages,
+such as the exception of a callback, would be discarded instead of going to the controller's logger otherwise or to
+stderr (qore#7698).  The server records the logger it replaced, and `stop()` gives it back
+(`restoreControllerLogger()`), under the static `HttpServer::controller_logger_lck`:
 
 - if the controller's logger is still the server's, it gets back the logger that the server replaced;
 - if a later server replaced the server's logger, that server gets the logger to restore when it stops;
 - if anything else replaced it since (the application calling `AsyncIoController::setLogger()`), it is left alone.
 
-So the controller's logger is that of the server created last of those still running, or the one it had before
-the servers set theirs.  Before this, a server's logger stayed on the controller until the next server replaced it:
-the controller kept a stopped server's logger and its appenders (open files, a log callback) and, through an appender
-that refers back to the server, the server itself, which was then destroyed only at Program teardown, after its
+So the controller's logger is that of the server created last of those still running with a logger, or the one it had
+before the servers set theirs.  Before this, a server's logger stayed on the controller until the next server replaced
+it: the controller kept a stopped server's logger and its appenders (open files, a log callback) and, through an
+appender that refers back to the server, the server itself, which was then destroyed only at Program teardown, after its
 Program had been deleted (its destructors failed with `PROGRAM-ERROR`).  An application's own controller logger was
 replaced for good by the first server.
 
@@ -558,8 +562,7 @@ eyeballs left behind by a canceled connect, whose peer later closed it, was writ
 A submit made on the I/O thread (a `continuePoll()` in Phase 2) queues the new operation in `new_entry_ids`, for which no
 event comes, so the thread does not block in its poll while the list has entries: before, the operation's first step
 waited for the next unrelated event, or forever.  The result of an operation that another step of the same batch canceled or
-replaced is dropped in Phase 3 and its hashes are cleared, as the POLLOUT re-queue on kqueue reads the results again after
-Phase 3 (`runDirectReplaceExtraFd()` covers both).
+replaced is dropped in Phase 3 and its hashes are cleared (`runDirectReplaceExtraFd()` covers both).
 
 `AsyncIoController::getInfo()` reports per I/O thread `extra_fds` (the extra fds registered now) and
 `orphan_registrations` (not 0 only if a retire path has a defect).  Tests: `asyncio_extra_fd_retire.qtest`, and

@@ -1,0 +1,7 @@
+HashDataType (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized
+QoreDataField (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized
+HashDataType (shared: False): the tenant: SERIALIZATION-ERROR; trusted code: serialized
+OpenApi3Schema (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized
+SchemaObject (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized
+SwaggerSchema (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized
+SchemaObject (shared: True): the tenant: SHARED-OBJECT-ERROR; trusted code: serialized

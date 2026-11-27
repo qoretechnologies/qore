@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Пошук повідомлень"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Токен сторінки для отримання певної сторінки результатів у списку"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Отримати повідомлення"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "ID повідомлення для отримання"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Отримати вкладення"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Ідентифікатор вкладення для отримання"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Новий електронний лист"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування; невстановлене значення або `0` означає відсутність обмеження.\n\nОбмеження застосовується від **найстарішого** кінця черги, тому курсор відстеження продовжує безперервно просуватися, а решта повідомлень передається в наступних циклах, а не пропускається. Використовуйте це, щоб обмежити обсяг роботи за один цикл, коли може накопичитися велика черга"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Нові вкладення електронних листів"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування; невстановлене значення або `0` означає відсутність обмеження.\n\nОбмеження застосовується від **найстарішого** кінця черги, тому курсор відстеження продовжує безперервно просуватися, а решта повідомлень передається в наступних циклах, а не пропускається. Використовуйте це, щоб обмежити обсяг роботи за один цикл, коли може накопичитися велика черга"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Перемістити повідомлення в кошик"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "Ідентифікатор повідомлення для переміщення в кошик; події спостереження містять це значення як `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Видалити повідомлення"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Ідентифікатор повідомлення для остаточного видалення; події стеження містять це значення як `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Надіслати повідомлення"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Значення заголовка `References`: значення `Message-ID` повідомлень у розмові, на яку надається відповідь, від найстарішого, розділені пробілами та разом із кутовими дужками. Якщо не задано, використовується `in_reply_to`. Події спостереження містять заголовок `References` вихідного повідомлення"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Пошук повідомлень із метаданими"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Заголовки повідомлення, які потрібно отримати для кожного відповідного повідомлення; ігнорується, якщо `format` не дорівнює `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Відновити повідомлення з кошика"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Ідентифікатор повідомлення, яке потрібно відновити з кошика; події спостереження містять це значення як `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Змінити мітки повідомлення"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Ідентифікатори міток, які потрібно видалити з повідомлення; мітка визначається за її ідентифікатором (напр. `INBOX`, `UNREAD`, `Label_12`), а не за назвою"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Список міток"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Перелічує всі мітки в обліковому записі — як системні мітки Gmail (`INBOX`, `UNREAD`, `STARRED` тощо), так і створені користувачем, кожну з ідентифікатором, який приймають `modify-message-labels` і параметр пошуку `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Створити мітку"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Не показувати повідомлення з цією міткою в списку повідомлень"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Створити чернетку"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Значення заголовка `References`: значення `Message-ID` повідомлень у розмові, на яку надається відповідь, від найстарішого, розділені пробілами та разом із кутовими дужками. Якщо не задано, використовується `in_reply_to`. Події спостереження містять заголовок `References` вихідного повідомлення"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Пошук чернеток"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Токен сторінки для отримання певної сторінки результатів у списку"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Отримати чернетку"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Повне повідомлення у вигляді даних MIME, закодованих у base64url, у `raw`; тіло не розбирається"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Надіслати чернетку"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Ідентифікатор чернетки, яку потрібно надіслати; `list-drafts` і `create-draft` повертають це значення як `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Видалити чернетку"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

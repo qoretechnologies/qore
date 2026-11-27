@@ -243,7 +243,9 @@ nothing GssClientContext::reset() {
 
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails
     @throw KRB5-SANDBOX-ERROR if the active network sandbox policy cannot
-    be enforced while MIT GSSAPI contacts the KDC
+    be enforced while MIT GSSAPI contacts the KDC, or if code that a sandbox
+    governs gives no credential (the default credentials of the process are
+    not visible to it, see @ref krb5sec_cache_isolation)
 */
 hash<GssStepInfo> GssClientContext::step() {
     return ctx->step(nullptr, xsink);
@@ -257,7 +259,9 @@ hash<GssStepInfo> GssClientContext::step() {
     @throw KRB5-TOKEN-ERROR if \a token_hex is not valid hexadecimal
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails
     @throw KRB5-SANDBOX-ERROR if the active network sandbox policy cannot
-    be enforced while MIT GSSAPI contacts the KDC
+    be enforced while MIT GSSAPI contacts the KDC, or if code that a sandbox
+    governs gives no credential (the default credentials of the process are
+    not visible to it, see @ref krb5sec_cache_isolation)
 */
 hash<GssStepInfo> GssClientContext::step(string token_hex) {
     if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {

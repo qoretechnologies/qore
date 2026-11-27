@@ -252,6 +252,15 @@ public class QoreDataField inherits AbstractDataField {
         return rv;
     }
 
+    #! Makes a copy of the field that belongs to the code that makes it
+    /** The copy is not a shared object (see AbstractDataField::copy(), which resets its shared state): what the class
+        does for a field that is a shared object keeps no state of its own (updateFieldType() freezes the new type of
+        a field that is a shared object, which the copy no longer is) (qore#7728, qore#7667)
+    */
+    copy() {
+        # no own guarded state
+    }
+
     #! Updates the field type
     /** @param type the final or replacement field type
         @return this field
@@ -272,7 +281,8 @@ public class QoreDataField inherits AbstractDataField {
         }
         # the type of a field that is a shared object is shared as well (qore#7728)
         if (SandboxManager::isSharedObject(self)) {
-            type.freeze();
+            # a type that sandboxed code created cannot be marked: it cannot be held by a shared field (qore#7740)
+            Priv::freeze_for_shared(type);
         }
         self.type = type;
         if (converted) {

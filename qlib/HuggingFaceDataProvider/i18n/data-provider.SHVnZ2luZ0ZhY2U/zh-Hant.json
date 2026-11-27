@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "列出模型"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -500,7 +500,7 @@
           "message": "是否包含模型卡中繼資料，例如碳排放、指標及資料集標籤"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "取得模型"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
@@ -524,7 +524,7 @@
           "message": "`namespace/name` 格式的模型儲存庫 ID（例如 `meta-llama/Llama-3.1-8B`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "建立模型"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -572,7 +572,7 @@
           "message": "儲存庫是否應設為私人。預設值：`False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "更新模型"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -652,7 +652,7 @@
           "message": "是否停用此存放庫的討論功能"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "刪除模型"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -676,7 +676,7 @@
           "message": "要刪除的 `namespace/name` 格式模型儲存庫 ID"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "列出資料集"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -800,7 +800,7 @@
           "message": "是否擷取所有中繼資料，包括最後修改時間、SHA、檔案和標籤"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "取得資料集"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -824,7 +824,7 @@
           "message": "`namespace/name` 格式的資料集儲存庫 ID（例如 `stanfordnlp/imdb`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "建立資料集"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "儲存庫是否應設為私人。預設值：`False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "更新資料集"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -952,7 +952,7 @@
           "message": "是否停用此存放庫的討論功能"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "刪除資料集"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -976,7 +976,7 @@
           "message": "要刪除的 `namespace/name` 格式資料集儲存庫 ID"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "列出空間"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "是否擷取所有中繼資料，包括最後修改時間、SHA、檔案和標籤"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "取得聊天室"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "`namespace/name` 格式的 Space 儲存庫 ID（例如 `gradio/chatbot`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create Space",
+          "source": "Create space",
           "message": "建立 Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "儲存庫是否應設為私人。預設值：`False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update Space",
+          "source": "Update space",
           "message": "更新 Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "是否停用此 Space 的討論功能"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete Space",
+          "source": "Delete space",
           "message": "刪除 Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "要刪除的 `namespace/name` 格式 Space 儲存庫 ID"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
-          "source": "Chat Completions",
+          "source": "Chat completions",
           "message": "聊天補全"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {

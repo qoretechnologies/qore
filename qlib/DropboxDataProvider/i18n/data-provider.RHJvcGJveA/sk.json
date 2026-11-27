@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
-          "source": "List Folder",
+          "source": "List folder",
           "message": "Zoznam priečinka"
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Hľadať iba súbory s týmito príponami, zadanými bez úvodnej bodky a oddelenými čiarkami"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Získať informácie o súbore"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Cesta k súboru alebo priečinku, ktorého metaúdaje sú požadované"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Cesta k súboru na stiahnutie"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Odoslať súbor"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Nezobrazovať používateľovi oznámenie na ploche o tejto zmene; užitočné pri hromadnom nahrávaní"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Vytvoriť textový súbor"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Nezobrazovať používateľovi oznámenie na ploche o tejto zmene"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
-          "source": "Get Temporary Link",
+          "source": "Get temporary link",
           "message": "Získať dočasný odkaz"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Cesta k súboru, pre ktorý sa má vygenerovať dočasný odkaz"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Vytvoriť priečinok"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Vybrať názov, ktorý nekoliduje, namiesto zlyhania, ak už súbor v cieľovom umiestnení existuje"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File or Folder",
+          "source": "Delete file or folder",
           "message": "Odstrániť súbor alebo priečinok"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Cesta k súboru alebo priečinku na odstránenie; odstránením priečinka sa odstráni všetko v ňom"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File or Folder",
+          "source": "Copy file or folder",
           "message": "Skopírovať súbor alebo priečinok"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Vybrať názov, ktorý nekoliduje, namiesto zlyhania, ak už súbor v cieľovom umiestnení existuje"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
-          "source": "Move or Rename File or Folder",
+          "source": "Move or rename file or folder",
           "message": "Presunúť alebo premenovať súbor či priečinok"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Vybrať názov, ktorý nekoliduje, namiesto zlyhania, ak už súbor v cieľovom umiestnení existuje"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Zoznam revízií súboru"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Maximálny počet revízií na vrátenie"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
-          "source": "Restore File Revision",
+          "source": "Restore file revision",
           "message": "Obnoviť revíziu súboru"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Identifikátor revízie na obnovenie, ako ho vrátil `list-file-revisions`"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Create Shared Link",
+          "source": "Create shared link",
           "message": "Vytvoriť zdieľaný odkaz"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Kedy odkaz prestane fungovať; vyžaduje platený účet Dropbox"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
-          "source": "List Shared Links",
+          "source": "List shared links",
           "message": "Zoznam zdieľaných odkazov"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Zobraziť iba odkazy vytvorené pre samotnú cestu, s vylúčením odkazov na nadradený priečinok, ktoré k nej tiež poskytujú prístup"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Revoke Shared Link",
+          "source": "Revoke shared link",
           "message": "Zrušiť zdieľaný odkaz"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Zdieľaný odkaz na zrušenie, ako ho vrátil `create-shared-link` alebo `list-shared-links`"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
-          "source": "Get Account Info",
+          "source": "Get account info",
           "message": "Získať informácie o účte"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Vráti informácie o účte Dropbox, pod ktorým sa pripojenie overuje: komu patrí, e-mailovú adresu, pod ktorou je zaregistrovaný, a typ účtu.\n\nTyp účtu je dôležitý pre niekoľko ďalších akcií: zdieľaný odkaz nemôže byť chránený heslom na účte typu `basic` a viditeľnosť odkazu `team_only` vyžaduje účet `business`."
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
-          "source": "Get Space Usage",
+          "source": "Get space usage",
           "message": "Získať využitie priestoru"
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "URL, ktorú má Dropbox načítať.\n\n**Dropbox ju načíta zo svojich vlastných serverov**, takže URL musí byť dostupná z verejného internetu a obsah nikdy neprechádza cez tento systém"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
-          "source": "Check Job Status",
+          "source": "Check job status",
           "message": "Skontrolovať stav úlohy"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Dávkové kopírovanie spustené operáciou `copy-batch`"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete Files (Batch)",
+          "source": "Delete files (batch)",
           "message": "Odstrániť súbory (dávkovo)"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Cesty na odstránenie.\n\nDropbox vykonáva dávku na pozadí, ak je veľká, takže odpoveď môže namiesto samotných výsledkov uvádzať úlohu na sledovanie"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
-          "source": "Move Files (Batch)",
+          "source": "Move files (batch)",
           "message": "Presunúť súbory (dávkovo)"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Vybrať názov, ktorý nekoliduje, namiesto zlyhania, ak už súbor v cieľovom umiestnení existuje"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
-          "source": "Copy Files (Batch)",
+          "source": "Copy files (batch)",
           "message": "Kopírovať súbory (hromadne)"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Vybrať názov, ktorý nekoliduje, namiesto zlyhania, ak už súbor v cieľovom umiestnení existuje"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
-          "source": "Permanently Delete",
+          "source": "Permanently delete",
           "message": "Natrvalo odstrániť"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Cesta k súboru alebo priečinku na trvalé odstránenie"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
-          "source": "Get Thumbnail",
+          "source": "Get thumbnail",
           "message": "Získať miniatúru"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "2048 × 1536 pixelov"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
-          "source": "Get Preview",
+          "source": "Get preview",
           "message": "Získať ukážku"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Cesta k dokumentu, ktorý sa má vykresliť ako ukážka vo formáte PDF"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
-          "source": "Share File with People",
+          "source": "Share file with people",
           "message": "Zdieľať súbor s používateľmi"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Správa, ktorá sa má zahrnúť do e-mailového oznámenia; ignoruje sa, keď je nastavené `quiet`"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
-          "source": "List File Members",
+          "source": "List file members",
           "message": "Zoznam členov súboru"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Maximálny počet členov na vrátenie"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files in a Folder",
+          "source": "Find files in a folder",
           "message": "Nájsť súbory v priečinku"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Koľko položiek načítať na jednu požiadavku; Dropbox to považuje za odporúčanie.\n\nToto ovplyvňuje, ako je prechádzanie rozdelené do požiadaviek, nie koľko záznamov sa vráti – iterátor načíta ďalšie stránky podľa potreby"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
-          "source": "Find Files by Search",
+          "source": "Find files by search",
           "message": "Nájsť súbory vyhľadávaním"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "Koľko zhôd načítať na jednu požiadavku.\n\nToto ovplyvňuje, ako je prechádzanie rozdelené na požiadavky, nie to, koľko záznamov sa vráti"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Nový súbor"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Koľko identít položiek si sledovanie pamätá, aby rozlíšilo nový súbor od upraveného (predvolene `100000`).\n\nDropbox hlási vytvorenie a úpravu identicky, takže rozdiel môže vyplývať iba z pamätania si toho, čo už bolo videné. Sledovanie, ktoré dosiahne tento limit, zaznamená varovanie; zúžte ho pomocou `path` a `recursive` namiesto navyšovania tejto hodnoty"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Nový priečinok"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Koľko identít položiek si sledovanie pamätá, aby rozlíšilo nový súbor od upraveného (predvolene `100000`).\n\nDropbox hlási vytvorenie a úpravu identicky, takže rozdiel môže vyplývať iba z pamätania si toho, čo už bolo videné. Sledovanie, ktoré dosiahne tento limit, zaznamená varovanie; zúžte ho pomocou `path` a `recursive` namiesto navyšovania tejto hodnoty"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "File Modified",
+          "source": "File modified",
           "message": "Súbor bol upravený"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {

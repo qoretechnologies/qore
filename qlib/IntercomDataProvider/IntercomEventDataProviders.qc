@@ -317,7 +317,7 @@ public class IntercomNewContactDataProvider inherits IntercomWatchDataProviderBa
         const EventName = "new-contact";
 
         #! The event display name
-        const DisplayName = "New Contact";
+        const DisplayName = "New contact";
 
         #! The event short description
         const ShortDesc = "Fires when a contact is created";
@@ -480,7 +480,7 @@ public class IntercomNewConversationDataProvider inherits IntercomWatchDataProvi
         const EventName = "new-conversation";
 
         #! The event display name
-        const DisplayName = "New Conversation";
+        const DisplayName = "New conversation";
 
         #! The event short description
         const ShortDesc = "Fires when a conversation is created";

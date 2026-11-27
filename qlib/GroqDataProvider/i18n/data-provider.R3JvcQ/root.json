@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Inspect a model before selecting it for inference",
@@ -364,8 +364,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
-          "message": "Create Response"
+          "source": "Create response",
+          "message": "Create response"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Generate a response with structured output and tool calls",
@@ -868,8 +868,8 @@
           "message": "Do Not Store"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
-          "message": "Transcribe Audio"
+          "source": "Transcribe audio",
+          "message": "Transcribe audio"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
           "source": "Turn a recording into text in its original language",
@@ -1116,8 +1116,8 @@
           "message": "Segment"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.display_name": {
-          "source": "Translate Audio",
-          "message": "Translate Audio"
+          "source": "Translate audio",
+          "message": "Translate audio"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.short_desc": {
           "source": "Translate a recording into English text",
@@ -1332,8 +1332,8 @@
           "message": "Sampling temperature between `0` and `1`."
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.display_name": {
-          "source": "Generate Speech",
-          "message": "Generate Speech"
+          "source": "Generate speech",
+          "message": "Generate speech"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.short_desc": {
           "source": "Turn text into spoken audio for customers and audiences",
@@ -1464,8 +1464,8 @@
           "message": "Speech speed from `0.5` to `5`, where supported by the model."
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload batch requests or a pre-trained LoRA adapter",
@@ -1628,8 +1628,8 @@
           "message": "LoRA Adapter"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
-          "message": "List Files"
+          "source": "List files",
+          "message": "List files"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.short_desc": {
           "source": "Find uploaded files and batch result files",
@@ -1640,8 +1640,8 @@
           "message": "Find uploaded files and batch result files.\n\nReturns the resources made available by the authenticated listing endpoint."
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Inspect the size and purpose of an uploaded file",
@@ -1664,8 +1664,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download original input or completed batch results",
@@ -1688,8 +1688,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Remove a file that is no longer needed",
@@ -1712,8 +1712,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
-          "message": "Create Batch"
+          "source": "Create batch",
+          "message": "Create batch"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.short_desc": {
           "source": "Submit a file of inference requests for batch processing",
@@ -1784,8 +1784,8 @@
           "message": "Custom key/value metadata for tracking this batch."
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
-          "message": "List Batches"
+          "source": "List batches",
+          "message": "List batches"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.short_desc": {
           "source": "Find batches and inspect their current processing state",
@@ -1796,8 +1796,8 @@
           "message": "Find batches and inspect their current processing state.\n\nReturns the resources made available by the authenticated listing endpoint."
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
-          "message": "Get Batch"
+          "source": "Get batch",
+          "message": "Get batch"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Inspect progress and locate output files for a batch",
@@ -1820,8 +1820,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
-          "message": "Cancel Batch"
+          "source": "Cancel batch",
+          "message": "Cancel batch"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancel outstanding requests in a batch",
@@ -1844,8 +1844,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Register LoRA Adapter",
-          "message": "Register LoRA Adapter"
+          "source": "Register LoRA adapter",
+          "message": "Register LoRA adapter"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.short_desc": {
           "source": "Register a pre-trained adapter for specialized inference",
@@ -1908,8 +1908,8 @@
           "message": "LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.display_name": {
-          "source": "List LoRA Adapters",
-          "message": "List LoRA Adapters"
+          "source": "List LoRA adapters",
+          "message": "List LoRA adapters"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.short_desc": {
           "source": "Find adapters available to your organization",
@@ -1920,8 +1920,8 @@
           "message": "Find adapters available to your organization.\n\n**Enterprise access required.** Upload an externally trained LoRA adapter with `purpose` set to `fine_tuning`. Groq hosts adapters and does not train models. See the [LoRA guide](https://console.groq.com/docs/lora).\n\nReturns the resources made available by the authenticated listing endpoint."
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.display_name": {
-          "source": "Get LoRA Adapter",
-          "message": "Get LoRA Adapter"
+          "source": "Get LoRA adapter",
+          "message": "Get LoRA adapter"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.short_desc": {
           "source": "Inspect a registered adapter and its model identifier",
@@ -1944,8 +1944,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Delete LoRA Adapter",
-          "message": "Delete LoRA Adapter"
+          "source": "Delete LoRA adapter",
+          "message": "Delete LoRA adapter"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.short_desc": {
           "source": "Remove a registered adapter from your organization",
@@ -1968,8 +1968,8 @@
           "message": "Select the existing resource to inspect or manage."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
-          "message": "Chat Completion"
+          "source": "Chat completion",
+          "message": "Chat completion"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a Groq-hosted open-weight model",
@@ -2836,8 +2836,8 @@
           "message": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation."
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List the models currently available on the Groq API",

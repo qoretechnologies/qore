@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Pobierz listę zamówień"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Wyklucz zamówienia, których `parent_id` znajduje się na tej liście"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Pobierz zamówienie"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Unikalny identyfikator zamówienia do pobrania"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Utwórz zamówienie"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "Zaktualizuj zamówienie"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Usuń zamówienie"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Jeśli `True`, trwale usuń zamówienie; w przeciwnym razie przenieś do kosza"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Update Order Status",
+          "source": "Update order status",
           "message": "Zaktualizuj status zamówienia"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "Status zamówienia: kosz"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Create Order Note",
+          "source": "Create order note",
           "message": "Utwórz notatkę do zamówienia"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Jeśli `True`, notatka jest widoczna dla klienta"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.display_name": {
-          "source": "List Order Notes",
+          "source": "List order notes",
           "message": "Wyświetl notatki do zamówienia"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Tylko notatki wewnętrzne"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Delete Order Note",
+          "source": "Delete order note",
           "message": "Usuń notatkę do zamówienia"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Jeśli `True`, trwale usuń notatkę"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "Utwórz zwrot środków"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Jeśli `True`, zwrot jest przetwarzany przez bramkę płatności"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Wyświetl listę zwrotów"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Bieżąca strona kolekcji (zaczynając od 1)"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Wyświetl listę produktów"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Wyklucz produkty, których `parent_id` znajduje się na tej liście"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Pobierz produkt"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Unikalny identyfikator produktu do pobrania"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Utwórz produkt"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -4732,7 +4732,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Zaktualizuj produkt"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -5892,7 +5892,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Usuń produkt"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Jeśli `True`, usuwa produkt trwale; w przeciwnym razie przenosi go do kosza"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.display_name": {
-          "source": "Update Stock Quantity",
+          "source": "Update stock quantity",
           "message": "Zaktualizuj ilość w magazynie"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Jeśli `True`, zarządzanie stanem magazynowym jest włączone (wartość domyślna: `True`)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Create Variation",
+          "source": "Create variation",
           "message": "Utwórz wariant"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6228,7 +6228,7 @@
           "message": "URL obrazu"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Update Variation",
+          "source": "Update variation",
           "message": "Zaktualizuj wariant"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "URL obrazu"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.display_name": {
-          "source": "List Variations",
+          "source": "List variations",
           "message": "Wyświetl warianty"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.short_desc": {
@@ -6552,7 +6552,7 @@
           "message": "Ogranicz wyniki do pasujących do wyszukiwanego ciągu"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Create Category",
+          "source": "Create category",
           "message": "Utwórz kategorię"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.short_desc": {
@@ -6672,7 +6672,7 @@
           "message": "URL obrazu"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Update Category",
+          "source": "Update category",
           "message": "Zaktualizuj kategorię"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "Opis kategorii"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.display_name": {
-          "source": "Delete Category",
+          "source": "Delete category",
           "message": "Usuń kategorię"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "Wymagane ustawienie wartości `True`, ponieważ kategorie nie obsługują kosza"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Delete Variation",
+          "source": "Delete variation",
           "message": "Usuń wariant"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6828,7 +6828,7 @@
           "message": "Jeśli `True`, usuwa wariant trwale; w przeciwnym razie przenosi go do kosza"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.display_name": {
-          "source": "Get Variation",
+          "source": "Get variation",
           "message": "Pobierz wariant"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.short_desc": {
@@ -6864,7 +6864,7 @@
           "message": "Unikalny identyfikator wariantu"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.display_name": {
-          "source": "List Categories",
+          "source": "List categories",
           "message": "Wyświetl kategorie"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.short_desc": {
@@ -6996,7 +6996,7 @@
           "message": "Liczba produktów"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Utwórz tag"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -7044,7 +7044,7 @@
           "message": "Opis tagu"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Zaktualizuj tag"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.short_desc": {
@@ -7104,7 +7104,7 @@
           "message": "Opis tagu"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Usuń tag"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -7140,7 +7140,7 @@
           "message": "Wymagane ustawienie wartości `True`, ponieważ tagi nie obsługują kosza"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Lista tagów"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.short_desc": {
@@ -7260,7 +7260,7 @@
           "message": "Liczba produktów"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Wyświetl listę klientów"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Pobierz klienta"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "Unikalny identyfikator klienta do pobrania"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Utwórz klienta"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -7792,7 +7792,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Zaktualizuj klienta"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Usuń klienta"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -8236,7 +8236,7 @@
           "message": "Identyfikator użytkownika, do którego mają zostać ponownie przypisane wpisy i linki"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.display_name": {
-          "source": "List Coupons",
+          "source": "List coupons",
           "message": "Wyświetl kupony"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.short_desc": {
@@ -8372,7 +8372,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "Pobierz kupon"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -8396,7 +8396,7 @@
           "message": "Unikalny identyfikator kuponu do pobrania"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "Utwórz kupon"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -8696,7 +8696,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "Zaktualizuj kupon"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "Wartość meta (dowolny typ serializowalny do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "Usuń kupon"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -9044,7 +9044,7 @@
           "message": "Jeśli `True`, usuwa kupon trwale; w przeciwnym razie przenosi go do kosza"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Wyświetl listę webhooków"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "Tytuł"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Utwórz webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9436,7 +9436,7 @@
           "message": "Status webhooka: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Zaktualizuj webhook"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9664,7 +9664,7 @@
           "message": "Status webhooka: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Usuń webhook"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9700,7 +9700,7 @@
           "message": "Jeśli `True`, usuwa webhook trwale"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.display_name": {
-          "source": "Sales Report",
+          "source": "Sales report",
           "message": "Raport sprzedaży"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.short_desc": {
@@ -9764,7 +9764,7 @@
           "message": "Ten rok"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.display_name": {
-          "source": "Top Sellers Report",
+          "source": "Top sellers report",
           "message": "Raport najlepiej sprzedających się produktów"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "Ten rok"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.display_name": {
-          "source": "Orders Totals",
+          "source": "Orders totals",
           "message": "Sumy zamówień"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.short_desc": {
@@ -9840,7 +9840,7 @@
           "message": "Pobierz łączną liczbę zamówień pogrupowaną według statusu z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.display_name": {
-          "source": "Products Totals",
+          "source": "Products totals",
           "message": "Sumy produktów"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.short_desc": {
@@ -9852,7 +9852,7 @@
           "message": "Pobierz łączną liczbę produktów pogrupowaną według typów z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.display_name": {
-          "source": "Customers Totals",
+          "source": "Customers totals",
           "message": "Sumy klientów"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "Pobierz łączną liczbę klientów pogrupowaną według ról z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.display_name": {
-          "source": "List Shipping Zones",
+          "source": "List shipping zones",
           "message": "Wyświetl listę stref wysyłki"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "Pobierz wszystkie strefy wysyłki skonfigurowane w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Wyświetl listę metod wysyłki"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "Unikalny identyfikator strefy wysyłki"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "Utwórz stawkę podatku"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -10068,7 +10068,7 @@
           "message": "Klasa podatkowa, do której należy ta stawka"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.display_name": {
-          "source": "Get Tax Rate",
+          "source": "Get tax rate",
           "message": "Pobierz stawkę podatku"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.short_desc": {
@@ -10092,7 +10092,7 @@
           "message": "Unikalny identyfikator stawki podatku"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.display_name": {
-          "source": "Update Tax Rate",
+          "source": "Update tax rate",
           "message": "Zaktualizuj stawkę podatkową"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.short_desc": {
@@ -10272,7 +10272,7 @@
           "message": "Klasa podatkowa, do której należy ta stawka"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.display_name": {
-          "source": "Delete Tax Rate",
+          "source": "Delete tax rate",
           "message": "Usuń stawkę podatkową"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "Wymagane ustawienie wartości `True`, ponieważ stawki podatkowe nie obsługują kosza"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "Pobierz listę stawek podatkowych"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Kolejność wyświetlania"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.display_name": {
-          "source": "Get Setting",
+          "source": "Get setting",
           "message": "Pobierz ustawienie"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.short_desc": {
@@ -10432,7 +10432,7 @@
           "message": "Identyfikator ustawienia w grupie"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.display_name": {
-          "source": "Update Setting",
+          "source": "Update setting",
           "message": "Zaktualizuj ustawienie"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Nowa wartość ustawienia"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.display_name": {
-          "source": "System Status",
+          "source": "System status",
           "message": "Stan systemu"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.short_desc": {
@@ -10492,7 +10492,7 @@
           "message": "Pobierz informacje o stanie systemu WooCommerce, w tym o środowisku, bazie danych, aktywnych wtyczkach, motywie i ustawieniach."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Zamówienie utworzone"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -10504,7 +10504,7 @@
           "message": "Uruchamiane po utworzeniu nowego zamówienia w WooCommerce. Pełne dane zamówienia są zawarte w ładunku (payload). **Uwaga:** Uruchamia się również w przypadku zamówień z nieudaną płatnością."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "Zaktualizowano zamówienie"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -10516,7 +10516,7 @@
           "message": "Uruchamia się, gdy zamówienie zostanie zaktualizowane w WooCommerce. **Uwaga:** może uruchamiać się wielokrotnie dla jednej akcji użytkownika; zdeduplikuj po stronie odbiorcy."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Order Deleted",
+          "source": "Order deleted",
           "message": "Zamówienie usunięte"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Uruchamiane po usunięciu zamówienia w WooCommerce. **Uwaga:** Ładunek (payload) może zawierać tylko minimalne dane (tylko identyfikator zamówienia), ponieważ dane zamówienia zostały usunięte."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.display_name": {
-          "source": "Order Restored",
+          "source": "Order restored",
           "message": "Zamówienie przywrócone"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Uruchamia się, gdy zamówienie zostanie przywrócone z kosza w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Utworzono produkt"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Uruchamia się po utworzeniu nowego produktu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Zaktualizowano produkt"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Uruchamia się po zaktualizowaniu produktu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.display_name": {
-          "source": "Product Deleted",
+          "source": "Product deleted",
           "message": "Usunięto produkt"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.short_desc": {
@@ -10576,7 +10576,7 @@
           "message": "Uruchamia się po usunięciu produktu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.display_name": {
-          "source": "Product Restored",
+          "source": "Product restored",
           "message": "Produkt przywrócony"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.short_desc": {
@@ -10588,7 +10588,7 @@
           "message": "Uruchamia się po przywróceniu produktu z kosza w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Utworzono klienta"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -10600,7 +10600,7 @@
           "message": "Uruchamiane po utworzeniu nowego klienta w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Zaktualizowano klienta"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -10612,7 +10612,7 @@
           "message": "Uruchamiane po zaktualizowaniu klienta w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.display_name": {
-          "source": "Customer Deleted",
+          "source": "Customer deleted",
           "message": "Usunięto klienta"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.short_desc": {
@@ -10624,7 +10624,7 @@
           "message": "Uruchamiane po usunięciu klienta w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.display_name": {
-          "source": "Coupon Created",
+          "source": "Coupon created",
           "message": "Kupon utworzony"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.short_desc": {
@@ -10636,7 +10636,7 @@
           "message": "Uruchamia się po utworzeniu nowego kuponu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.display_name": {
-          "source": "Coupon Updated",
+          "source": "Coupon updated",
           "message": "Kupon zaktualizowany"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.short_desc": {
@@ -10648,7 +10648,7 @@
           "message": "Uruchamia się po zaktualizowaniu kuponu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.display_name": {
-          "source": "Coupon Deleted",
+          "source": "Coupon deleted",
           "message": "Kupon usunięty"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "Uruchamia się po usunięciu kuponu w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.display_name": {
-          "source": "Coupon Restored",
+          "source": "Coupon restored",
           "message": "Kupon przywrócony"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.short_desc": {
@@ -10672,7 +10672,7 @@
           "message": "Uruchamia się po przywróceniu kuponu z kosza w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.display_name": {
-          "source": "Payment Complete",
+          "source": "Payment complete",
           "message": "Płatność zrealizowana"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.short_desc": {
@@ -10684,7 +10684,7 @@
           "message": "Uruchamia się po opłaceniu zamówienia. Uruchamia się tylko dla zamówień o wcześniejszym statusie `pending`, `on-hold`, `failed` lub `cancelled`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.display_name": {
-          "source": "Order Status: Pending",
+          "source": "Order status: pending",
           "message": "Status zamówienia: Oczekujące"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.short_desc": {
@@ -10696,7 +10696,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `pending` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.display_name": {
-          "source": "Order Status: Processing",
+          "source": "Order status: processing",
           "message": "Status zamówienia: W trakcie realizacji"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.short_desc": {
@@ -10708,7 +10708,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `processing` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.display_name": {
-          "source": "Order Status: Completed",
+          "source": "Order status: completed",
           "message": "Status zamówienia: Zrealizowane"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.short_desc": {
@@ -10720,7 +10720,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `completed` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.display_name": {
-          "source": "Order Status: On Hold",
+          "source": "Order status: on hold",
           "message": "Status zamówienia: Wstrzymane"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.short_desc": {
@@ -10732,7 +10732,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `on-hold` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.display_name": {
-          "source": "Order Status: Refunded",
+          "source": "Order status: refunded",
           "message": "Status zamówienia: Zwrócone"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.short_desc": {
@@ -10744,7 +10744,7 @@
           "message": "Uruchamia się, gdy status zamówienia zmieni się na `refunded` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.display_name": {
-          "source": "Order Status: Failed",
+          "source": "Order status: failed",
           "message": "Status zamówienia: Nieudane"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.short_desc": {
@@ -10756,7 +10756,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `failed` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.display_name": {
-          "source": "Order Status: Cancelled",
+          "source": "Order status: cancelled",
           "message": "Status zamówienia: Anulowane"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.short_desc": {
@@ -10768,7 +10768,7 @@
           "message": "Uruchamiane, gdy status zamówienia zmieni się na `cancelled` w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.display_name": {
-          "source": "Product Added to Cart",
+          "source": "Product added to cart",
           "message": "Produkt dodany do koszyka"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.short_desc": {
@@ -10780,7 +10780,7 @@
           "message": "Uruchamia się po dodaniu produktu do koszyka klienta. Ładunek zawiera tylko `action` i `arg` (klucz pozycji koszyka)."
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.display_name": {
-          "source": "Product Low Stock",
+          "source": "Product low stock",
           "message": "Niski stan magazynowy produktu"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.short_desc": {
@@ -10792,7 +10792,7 @@
           "message": "Uruchamia się, gdy stan magazynowy produktu osiągnie niski próg magazynowy skonfigurowany w WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.display_name": {
-          "source": "Product Out of Stock",
+          "source": "Product out of stock",
           "message": "Brak produktu w magazynie"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.short_desc": {

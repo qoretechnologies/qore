@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.display_name": {
-          "source": "Get User Info",
+          "source": "Get user info",
           "message": "Ottieni informazioni utente"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Ottieni informazioni sull'utente corrente"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Ottieni informazioni sul server"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.short_desc": {

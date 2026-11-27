@@ -16,7 +16,7 @@
           "message": "Přístup k souborovému systému serveru"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Zkopírovat soubor"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Mají se přepsat existující cílové soubory?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
+          "source": "Follow symlinks",
           "message": "Následovat symbolické odkazy"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Mají se následovat symbolické odkazy?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
+          "source": "Create file",
           "message": "Vytvořit soubor"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Režim přístupových práv nového souboru (výchozí `0664`)"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Smazat soubor"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
@@ -148,7 +148,7 @@
           "message": "Cesta k souboru"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získat soubor"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Kódování řetězce, které se má použít, pokud `text` = `True` (výchozí: `UTF-8`)"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Chyby kódování"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -208,7 +208,7 @@
           "message": "Co dává text, který není platný ve svém kódování znaků, pokud `text` = `True`: `raise` (výchozí) vyvolá chybu `INVALID-ENCODING`, `latin1` vrátí text jako `ISO-8859-1` a `keep` jej vrátí v kódování bez kontroly"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
+          "source": "Max len",
           "message": "Max. délka"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Maximální délka vrácených dat v bajtech"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Vypísat soubory"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
@@ -244,7 +244,7 @@
           "message": "Cesta k souboru"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
+          "source": "Create directory",
           "message": "Vytvořit adresář"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
@@ -280,7 +280,7 @@
           "message": "Režim pro nový soubor (výchozí `0775`)"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Přesunout soubor"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
@@ -328,7 +328,7 @@
           "message": "Mají se přepsat existující cílové soubory?"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
+          "source": "Get info",
           "message": "Získat informace"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {

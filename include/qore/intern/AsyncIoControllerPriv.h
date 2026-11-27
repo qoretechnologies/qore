@@ -3054,6 +3054,18 @@ private:
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink,
         AsyncIoSyncRelease* sync_release);
 
+    //! Releases the poll info that a pending operation waited with, off the async I/O thread, and clears it
+    /** Called when a step returns the operation's next poll info: the previous one can hold the last references to
+        objects (as a socket object that a step created), whose destructors must not run on the I/O thread, where an
+        exception that one raised would also keep the I/O thread from waiting for the operation's new poll info
+        (qore#7713).  The release runs with a reference to the operation, in its Program, as that of an unused step
+        result.
+
+        @param pinfo the operation; its poll info is nullptr on return
+        @param xsink exception sink for immediate releases
+    */
+    DLLLOCAL void releaseOpPollInfo(PollInfo& pinfo, ExceptionSink* xsink);
+
 #ifdef DEBUG
 public:
     //! Debug-only: holds the references that the I/O threads of every controller release off the I/O thread
@@ -3773,7 +3785,8 @@ private:
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     /** @return false if there is no logger to take the message (neither the controller's own logger nor a global
-        one); a logger that is not enabled for the level counts as taking it
+        one), or if none of them can take it, because its Program is being torn down (qore#7698); a logger that is not
+        enabled for the level counts as taking it
     */
     DLLLOCAL bool log(int level, const char* fmt, ...) const;
 
@@ -3787,7 +3800,8 @@ private:
 
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
-    /** @return false if the controller has no logger; the message is then not logged
+    /** @return false if the controller has no logger, or if its logger cannot take the message, because its Program
+        is being torn down (qore#7698); the message is then not logged
     */
     DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr) const;
 

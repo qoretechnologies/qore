@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "Vytvoriť zásielku"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Ak je nastavené `True`, sadzby sa vygenerujú asynchrónne. Predvolená hodnota je `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Získať zásielku"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Jedinečný identifikátor zásielky, ktorú chcete získať"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "Vyhľadať zásielky"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -1760,7 +1760,7 @@
           "message": "Získať zoznam zásielok zo služby Shippo s voliteľným filtrovaním podľa dátumu vytvorenia."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
-          "source": "Create Label by Rate",
+          "source": "Create label by rate",
           "message": "Vytvoriť štítok podľa sadzby"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Ak je nastavené `True`, štítok sa vygeneruje asynchrónne. Predvolená hodnota je `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Získať prepravný štítok"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Jedinečný identifikátor transakcie (prepravného štítku), ktorú chcete získať"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
-          "source": "Search Shipping Labels",
+          "source": "Search shipping labels",
           "message": "Vyhľadať prepravné štítky"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Doručenie zlyhalo"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Vytvoriť objednávku"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Akékoľvek poznámky alebo špeciálne pokyny k objednávke"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Získať objednávku"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Jedinečný identifikátor objednávky, ktorú chcete získať"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Zoznam objednávok"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -2712,7 +2712,7 @@
           "message": "Odoslané"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
-          "source": "Validate Address",
+          "source": "Validate address",
           "message": "Overiť adresu"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Označuje, či je adresa rezidenčnou adresou"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
-          "source": "New Parcel",
+          "source": "New parcel",
           "message": "Nový balík"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "Spustí sa, keď sa v Shippo pomocou cyklického dopytovania zistí nový balík. Poskytuje podrobnosti o balíku vrátane rozmerov a hmotnosti."
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
-          "source": "New Shipment",
+          "source": "New shipment",
           "message": "Nová zásielka"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Spustí sa, keď sa v Shippo pomocou cyklického dopytovania zistí nová zásielka. Poskytuje podrobnosti o zásielke vrátane adries, balíkov a dostupných sadzieb."
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
-          "source": "New Shipping Label",
+          "source": "New shipping label",
           "message": "Nový prepravný štítok"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Spustí sa, keď sa v Shippo pomocou cyklického dopytovania zistí nový prepravný štítok (transakcia). Poskytuje podrobnosti o štítku vrátane sledovacieho čísla a adresy URL štítku."
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
-          "source": "New Order",
+          "source": "New order",
           "message": "Nová objednávka"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {

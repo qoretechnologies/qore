@@ -72,7 +72,7 @@ public const CdsEntityEvents = {
         "entity_set": "accounts",
         "logical_name": "account",
         "id_field": "accountid",
-        "display_name": "New or Updated Account",
+        "display_name": "New or updated account",
         "short_desc": "Fires when an account is created or changed",
         "desc": "Fires for each account created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.",
@@ -81,7 +81,7 @@ public const CdsEntityEvents = {
         "entity_set": "incidents",
         "logical_name": "incident",
         "id_field": "incidentid",
-        "display_name": "New or Updated Case",
+        "display_name": "New or updated case",
         "short_desc": "Fires when a case is created or changed",
         "desc": "Fires for each case created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
@@ -90,7 +90,7 @@ public const CdsEntityEvents = {
         "entity_set": "contacts",
         "logical_name": "contact",
         "id_field": "contactid",
-        "display_name": "New or Updated Contact",
+        "display_name": "New or updated contact",
         "short_desc": "Fires when a contact is created or changed",
         "desc": "Fires for each contact created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.",
@@ -99,7 +99,7 @@ public const CdsEntityEvents = {
         "entity_set": "invoices",
         "logical_name": "invoice",
         "id_field": "invoiceid",
-        "display_name": "New or Updated Invoice",
+        "display_name": "New or updated invoice",
         "short_desc": "Fires when an invoice is created or changed",
         "desc": "Fires for each invoice created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.",
@@ -108,7 +108,7 @@ public const CdsEntityEvents = {
         "entity_set": "leads",
         "logical_name": "lead",
         "id_field": "leadid",
-        "display_name": "New or Updated Lead",
+        "display_name": "New or updated lead",
         "short_desc": "Fires when a lead is created or changed",
         "desc": "Fires for each lead created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.",
@@ -117,7 +117,7 @@ public const CdsEntityEvents = {
         "entity_set": "opportunities",
         "logical_name": "opportunity",
         "id_field": "opportunityid",
-        "display_name": "New or Updated Opportunity",
+        "display_name": "New or updated opportunity",
         "short_desc": "Fires when an opportunity is created or changed",
         "desc": "Fires for each opportunity created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.",
@@ -126,7 +126,7 @@ public const CdsEntityEvents = {
         "entity_set": "salesorders",
         "logical_name": "salesorder",
         "id_field": "salesorderid",
-        "display_name": "New or Updated Order",
+        "display_name": "New or updated order",
         "short_desc": "Fires when an order is created or changed",
         "desc": "Fires for each order created in the organisation, and, when the condition is "
             "`updated`, again on every subsequent change.\n\nDataverse calls this table "
@@ -480,7 +480,7 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
         const EventName = "new-custom-entity";
 
         #! The event display name
-        const DisplayName = "New or Updated Custom Entity";
+        const DisplayName = "New or updated custom entity";
 
         #! The event short description
         const ShortDesc = "Fires for each record created or changed in any Dataverse table";

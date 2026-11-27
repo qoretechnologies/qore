@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "Створити відправлення"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Якщо `True`, тарифи генеруватимуться асинхронно. За замовчуванням — `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Отримати відправлення"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Унікальний ідентифікатор відправлення для отримання"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "Пошук відправлень"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -1760,7 +1760,7 @@
           "message": "Отримати список відправлень із Shippo з можливістю фільтрації за датою створення."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
-          "source": "Create Label by Rate",
+          "source": "Create label by rate",
           "message": "Створити етикетку за тарифом"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Якщо `True`, етикетка генеруватиметься асинхронно. За замовчуванням — `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Отримати транспортну етикетку"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Унікальний ідентифікатор транзакції (транспортної етикетки) для отримання"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
-          "source": "Search Shipping Labels",
+          "source": "Search shipping labels",
           "message": "Пошук транспортних етикеток"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Помилка доставки"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Створити замовлення"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Будь-які примітки чи особливі вказівки до замовлення"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Отримати замовлення"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Унікальний ідентифікатор замовлення для отримання"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Список замовлень"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -2712,7 +2712,7 @@
           "message": "Відправлено"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
-          "source": "Validate Address",
+          "source": "Validate address",
           "message": "Перевірити адресу"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Вказує, чи є адреса житловим приміщенням"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
-          "source": "New Parcel",
+          "source": "New parcel",
           "message": "Нова посилка"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "Спрацьовує, коли в Shippo виявлено нову посилку через опитування. Надає деталі посилки, включно з розмірами та вагою."
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
-          "source": "New Shipment",
+          "source": "New shipment",
           "message": "Нове відправлення"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Спрацьовує, коли в Shippo виявлено нове відправлення через опитування. Надає деталі відправлення, включно з адресами, посилками та доступними тарифами."
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
-          "source": "New Shipping Label",
+          "source": "New shipping label",
           "message": "Нова транспортна етикетка"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Спрацьовує, коли в Shippo виявлено нову транспортну етикетку (транзакцію) через опитування. Надає деталі етикетки, включно з номером відстеження та URL-адресою етикетки."
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
-          "source": "New Order",
+          "source": "New order",
           "message": "Нове замовлення"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {

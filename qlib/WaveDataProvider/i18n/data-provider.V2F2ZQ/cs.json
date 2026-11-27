@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
-          "source": "Approve Invoice",
+          "source": "Approve invoice",
           "message": "Schválit fakturu"
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Faktura ke schválení"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvořit zákazníka"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Interní poznámky k zákazníkovi (pro zákazníka neviditelné)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Vytvořit produkt"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Jednotková cena produktu nebo služby"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
-          "source": "Create Sales Tax",
+          "source": "Create sales tax",
           "message": "Vytvořit daň z prodeje"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Zda je daň vratná (lze ji nárokovat zpět)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "Vytvořit transakci"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
@@ -700,7 +700,7 @@
           "message": "Popis transakce"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Vytvořit účet"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Kód měny pro účet"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
-          "source": "Create Income/Expense",
+          "source": "Create income/expense",
           "message": "Vytvořit příjem/výdaj"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Záznam výdaje"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Vytvořit fakturu"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Číslo objednávky (PO) spojené s fakturou"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Smazat zákazníka"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Zákazník ke smazání"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "Odeslat fakturu"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Faktura k odeslání"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Nové interní poznámky o zákazníkovi"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Volitelné proměnné, které se mají předat dotazu GraphQL"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Vyhledat zákazníky"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Maximální počet výsledků k vrácení"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Vyhledat faktury"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Maximální počet výsledků k vrácení"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Hledat produkty"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Maximální počet výsledků k vrácení"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "Zákazník k načtení"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
-          "source": "Get Customer by Email",
+          "source": "Get customer by email",
           "message": "Získat zákazníka podle e-mailu"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "E-mailová adresa zákazníka, který se má načíst"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "Invoice Created",
+          "source": "Invoice created",
           "message": "Faktura vytvořena"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Spouštět pouze pro faktury v této firmě (volitelné)"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Získat fakturu"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Faktura k načtení"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Produkt k načtení"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Vyhledat účty"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {

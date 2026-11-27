@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -396,7 +396,7 @@
           "message": "依訂單來源商店篩選訂單"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "取得訂單"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
@@ -420,7 +420,7 @@
           "message": "不重複的 ShipStation 訂單 ID"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "建立訂單"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "要套用至訂單的標籤 ID 陣列"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "更新訂單"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "要套用至訂單的標籤 ID 陣列"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "刪除訂單"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2488,7 +2488,7 @@
           "message": "要刪除的 ShipStation 訂單 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
-          "source": "Mark Order as Shipped",
+          "source": "Mark order as shipped",
           "message": "將訂單標記為已出貨"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "是否將出貨資訊通知銷售管道 (市集)"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
-          "source": "Add Tag to Order",
+          "source": "Add tag to order",
           "message": "新增標籤至訂單"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "選取要新增至訂單的標籤"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
-          "source": "Remove Tag from Order",
+          "source": "Remove tag from order",
           "message": "從訂單中移除標籤"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
@@ -2644,7 +2644,7 @@
           "message": "選取要從訂單中移除的標籤"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
-          "source": "Assign User to Order",
+          "source": "Assign user to order",
           "message": "指派使用者至訂單"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "選取要指派給訂單的使用者"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
-          "source": "Unassign User from Order",
+          "source": "Unassign user from order",
           "message": "從訂單取消指派使用者"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "要從中取消指派使用者的訂單 ID 陣列"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
-          "source": "List Carriers",
+          "source": "List carriers",
           "message": "列出物流商"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "擷取連線至您 ShipStation 帳戶的所有物流商清單。"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
-          "source": "Get Carrier",
+          "source": "Get carrier",
           "message": "取得貨運商"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
@@ -2740,7 +2740,7 @@
           "message": "選取要擷取詳細資訊的貨運商"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
-          "source": "List Services",
+          "source": "List services",
           "message": "列出服務"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "選取物流商以列出可用的服務"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "列出包裹類型"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "選取物流商以列出可用的包裹類型"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
-          "source": "Add Funds",
+          "source": "Add funds",
           "message": "儲值資金"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
@@ -2824,7 +2824,7 @@
           "message": "要儲值至貨運商帳戶的金額 (以 USD 為單位)"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "從 ShipStation 擷取客戶清單，支援選用篩選。"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "不重複的 ShipStation 客戶 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "從 ShipStation 擷取產品清單，支援依 SKU、名稱或類別進行選用篩選。"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "取得產品"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "不重複的 ShipStation 產品 ID"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "更新產品"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "報關的原產國代碼"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "列出貨件"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -3184,7 +3184,7 @@
           "message": "依物流商篩選出貨"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "列出履約"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "從 ShipStation 擷取履約清單（已完成出貨）。"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
-          "source": "Void Label",
+          "source": "Void label",
           "message": "作廢標籤"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "要作廢標籤的唯一 ShipStation 貨件 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
-          "source": "List Stores",
+          "source": "List stores",
           "message": "列出商店"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "擷取連線至您 ShipStation 帳戶的所有商店（銷售通路）清單。"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
-          "source": "Get Store",
+          "source": "Get store",
           "message": "取得商店"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "選取要擷取詳細資訊的商店"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
-          "source": "Update Store",
+          "source": "Update store",
           "message": "更新商店"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "用於同步訂單狀態的狀態對應陣列"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Deactivate Store",
+          "source": "Deactivate store",
           "message": "停用商店"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "選取要停用的商店"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Reactivate Store",
+          "source": "Reactivate store",
           "message": "重新啟用商店"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3400,7 +3400,7 @@
           "message": "選取要重新啟用的商店"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
-          "source": "Refresh Store",
+          "source": "Refresh store",
           "message": "重新整理商店"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
@@ -3436,7 +3436,7 @@
           "message": "開始重新整理的日期。若未提供，則重新整理最近的訂單。"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
-          "source": "List Marketplaces",
+          "source": "List marketplaces",
           "message": "列出市集"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "擷取所有可連線至 ShipStation 的市集清單。"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "列出倉儲"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "擷取您 ShipStation 帳戶中的所有倉庫（發貨地點）清單。"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "取得資料倉儲"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "選取要擷取詳細資訊的倉庫"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "建立倉儲"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "此倉庫是否應作為新訂單的預設倉庫"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "更新倉儲"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -4192,7 +4192,7 @@
           "message": "此倉庫是否應作為新訂單的預設倉庫"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "擷取所有可用於訂單的標籤清單。"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "列出使用者"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "擷取您 ShipStation 帳戶中的所有使用者清單。"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "訂單已建立/已更新"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "可選依特定商店篩選事件"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
-          "source": "Order Created/Updated (with Items)",
+          "source": "Order created/updated (with items)",
           "message": "訂單已建立/已更新（包含項目）"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "可選依特定商店篩選事件"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
-          "source": "Label Created",
+          "source": "Label created",
           "message": "標籤已建立"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "可選依特定商店篩選事件"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
-          "source": "Label Created (with Items)",
+          "source": "Label created (with items)",
           "message": "標籤已建立（包含項目）"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {

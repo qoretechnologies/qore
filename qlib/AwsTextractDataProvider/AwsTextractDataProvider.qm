@@ -96,7 +96,7 @@ module AwsTextractDataProvider {
                 "path": "/detect-document-text",
                 "action": "detect-document-text",
                 "billing": <DataProviderBillingInfo>{"unit": "page"},
-                "display_name": "Detect Document Text",
+                "display_name": "Detect document text",
                 "short_desc": "Extract lines and words from a document",
                 "desc": "Calls Textract's `DetectDocumentText` API to extract the "
                     "text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns "
@@ -126,7 +126,7 @@ module AwsTextractDataProvider {
                 "path": "/analyze-document",
                 "action": "analyze-document",
                 "billing": <DataProviderBillingInfo>{"unit": "page"},
-                "display_name": "Analyze Document",
+                "display_name": "Analyze document",
                 "short_desc": "Extract tables, forms, signatures, layout, and query answers",
                 "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "
                     "structural features.  `feature_types` selects which features "

@@ -35,7 +35,7 @@ class SharedTypeCacheTest inherits QUnit::Test {
             addTestCase("execution mode " + mode, sub () {
                 # the checks run in the tenant's Program and in the code of the DataProvider module, which choose
                 # their own execution, so the native compilation of the fixture is not checked
-                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+                assertEq(expected, ExecModeHarness::run_stdout(command(execution_mode), ExecModeHarness::NativeCheck::None));
             });
         }
         # no IR tier case: the checks do not depend on how the fixture's own code is compiled

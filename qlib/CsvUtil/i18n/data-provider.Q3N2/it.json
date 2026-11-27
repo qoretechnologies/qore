@@ -16,7 +16,7 @@
           "message": "Lettura e scrittura di dati di file CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Leggi file CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "se `true` (predefinito `false`), se una riga viene analizzata con un numero di colonne o campi diverso dalle altre righe, viene generata un'eccezione `CSVFILEITERATOR-DATA-ERROR`\n\nTenere presente che l'abilitazione di questa opzione comporterà un calo delle prestazioni"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Leggi dati CSV inline"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "se `true` (predefinito `false`), se una riga viene analizzata con un numero di colonne o campi diverso dalle altre righe, viene generata un'eccezione `CSVFILEITERATOR-DATA-ERROR`\n\nTenere presente che l'abilitazione di questa opzione comporterà un calo delle prestazioni"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Profila dati CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Il carattere di virgolette dei campi (predefinito: `\"`); i campi vengono letti con esso e i separatori nei campi tra virgolette non vengono contati quando si rileva il separatore"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riga di intestazione"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "La riga con i nomi delle colonne, oppure 0 se non c'è"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "La riga (numerata da 1) con i nomi delle colonne, oppure `0` se i dati non ne hanno; se non indicata, la riga di intestazione viene individuata dai dati. Usarla quando la persona che conosce il file indica dove si trovano i nomi delle colonne"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Numero massimo di righe"
@@ -972,7 +984,7 @@
           "message": "Se `True` (predefinito), i valori di esempio e i controesempi vengono oscurati secondo la loro forma: le lettere diventano `x` o `X` e le cifre `9`, così un profilo può essere condiviso senza i dati"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Scrivi dati CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1208,7 @@
           "message": "Impostare su `false` per sopprimere l'output delle intestazioni; il valore predefinito è `true`, ovvero emettere le intestazioni se presenti"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Crea dati CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

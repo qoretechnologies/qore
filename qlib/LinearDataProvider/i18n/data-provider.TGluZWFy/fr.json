@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Créer un ticket"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Le ticket parent pour créer un sous-ticket"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
+          "source": "Search issues",
           "message": "Rechercher des tickets"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Obtenir le ticket"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Le ticket à récupérer"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Mettre à jour le problème"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
@@ -848,7 +848,7 @@
           "message": "L'ID du ticket parent (pour en faire un sous-ticket)"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
+          "source": "Archive issue",
           "message": "Archiver le ticket"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Le ticket à archiver"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
+          "source": "Create comment",
           "message": "Créer un commentaire"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Le corps/contenu du commentaire au format Markdown"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Créer un projet"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "La date d'achèvement cible du projet"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "Rechercher des projets"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
+          "source": "Create cycle",
           "message": "Créer un cycle"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "La date de fin du cycle"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
+          "source": "Search cycles",
           "message": "Rechercher des cycles"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "Créer une étiquette"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "L'équipe dans laquelle créer l'étiquette (laisser vide pour les étiquettes de l'espace de travail)"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
+          "source": "Search labels",
           "message": "Rechercher des étiquettes"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
+          "source": "Search teams",
           "message": "Rechercher des équipes"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
+          "source": "Get team",
           "message": "Obtenir l'équipe"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "L'équipe à récupérer"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
+          "source": "Issue created",
           "message": "Ticket créé"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Déclencher uniquement pour les tickets créés dans cette équipe (facultatif)"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
+          "source": "Issue updated",
           "message": "Ticket mis à jour"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Déclencher uniquement pour les tickets mis à jour dans cette équipe (facultatif)"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
+          "source": "Comment created",
           "message": "Commentaire créé"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {

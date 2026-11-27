@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Créer des plongements"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Nombre maximal de textes traités par le sidecar par lot d'encodeur interne. Lorsqu'il n'est pas défini, la valeur par défaut du sidecar (`256`) est utilisée. Des valeurs plus faibles réduisent la pression mémoire au détriment du débit."
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
+          "source": "Get health",
           "message": "Obtenir l'état de santé"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Renvoie le statut de vivacité (liveness) du sidecar (généralement `\"ok\"`) et les données de pression mémoire de l'hôte. Les routeurs en amont peuvent utiliser le champ `pressure` pour piloter l'escalade de temporisation (backoff) entre le routage local et cloud."
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
+          "source": "Get metrics",
           "message": "Obtenir les métriques"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {

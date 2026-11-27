@@ -8,7 +8,7 @@
           "message": "YAML-Dokumentdaten von einem bestimmten Dateispeicherort lesen.\n\nDie YAML-Datei kann ein oder mehrere Dokumente enthalten, die durch `---`-Markierungen getrennt sind. Jedes Dokument wird als separater Datensatz iteriert.\n\n**Wichtige Optionen**\n- `path`: der Dateispeicherort, von dem gelesen werden soll (erforderlich)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n- `skip_empty_documents`: leere Dokumente überspringen (Standard: `True`)\n- `max_documents`: maximale Anzahl der zu lesenden Dokumente (`0` = unbegrenzt)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "YAML-Dokumentdatei lesen"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "Direkt als Zeichenkette bereitgestellte YAML-Inline-Daten lesen.\n\nDie YAML-Daten können ein oder mehrere Dokumente enthalten, die durch `---`-Markierungen getrennt sind. Jedes Dokument wird als separater Datensatz iteriert.\n\n**Wichtige Optionen**\n- `data`: die zu parsende YAML-Zeichenkette (erforderlich)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n- `skip_empty_documents`: leere Dokumente überspringen (Standard: `True`)\n- `max_documents`: maximale Anzahl der zu lesenden Dokumente (`0` = unbegrenzt)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "YAML-Inline-Daten lesen"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "YAML-Dokumentdatensätze als Multi-Dokument-Stream an einen bestimmten Dateispeicherort schreiben.\n\nDatensätze werden gesammelt und beim Abschluss der Aktion mit `---`-Dokumenttrennzeichen geschrieben.\n\n**Wichtige Optionen**\n- `path`: der Ausgabedateispeicherort (erforderlich)\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "YAML-Dokumentdatei schreiben"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "Erzeugt aus Datensätzen einen YAML-Stream mit mehreren Dokumenten und gibt ihn als Daten zurück, zum Beispiel um ihn an eine E-Mail anzuhängen oder mit einer anderen Aktion hochzuladen.\n\nJeder Datensatz wird zu einem YAML-Dokument, getrennt durch `---`-Markierungen; die Aktion gibt die erzeugten Daten in `data` und die Anzahl der Dokumente in `record_count` zurück.\n\n**Wichtige Optionen**\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "YAML-Inline-Daten schreiben"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

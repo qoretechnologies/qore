@@ -1,0 +1,177 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_LazySharedValue.cpp
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_LazySharedValue.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/qore_thread_intern.h"
+
+//! A value that trusted code shares with every caller and that is built the first time that a caller needs it, as trusted code
+/** A LazySharedValue replaces the lazy initialization of process-wide state (\c "static *T v; ... v ?? (v = build())")
+    in library code, which builds the state on the thread of whichever caller needs it first, in that caller's sandbox:
+    there @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" is @ref False, so
+    the objects that the build creates for every caller are not marked as shared (see @ref sandbox_shared_objects), and
+    they take the sandbox and the restrictions of that caller (see @ref sandbox_lazy_shared_values).
+
+    The builder that trusted code gives to the constructor runs once, on the thread of the first caller of get(), as
+    trusted code: unless the barrier of a trusted build would hide nothing of the calling code (no sandbox, no sandboxed
+    code that it acts for, no restrictions that what it creates would record, and no code of a %Program that lends the
+    objects that it creates), it runs as a trusted build (see @ref Qore::SandboxManager::createTrustedBuildCall()
+    "SandboxManager::createTrustedBuildCall()"), so that @ref Qore::SandboxManager::createsSharedObjects()
+    "SandboxManager::createsSharedObjects()" is @ref True in it and nothing that it creates takes the caller's sandbox
+    or restrictions; otherwise it runs directly, which is the same for such a caller.  The value that it returns is
+    published and returned to every later caller without a lock.
+
+    Other threads that need the value while it is being built wait for it: their own sandbox's interrupts and limits
+    end their wait (the build continues), and they can give a timeout.  If the builder raises an exception, nothing is
+    published, the exception is raised to the caller that ran it, and the next caller builds the value again; the
+    time budget of a caller's call counts the build that it runs.  A builder that needs its own value raises
+    \c SHARED-INIT-ERROR, which every call that builds the value raises again, and a wait that would close a cycle of
+    waits of builders on other threads raises \c SHARED-INIT-CYCLE, which only the order of the threads causes: the
+    thread that closes the cycle gets it, and another order of the same calls can succeed.
+
+    The mode of the object is fixed when it is created.  An object that code which may create a trusted build of the
+    builder creates (code that is not sandboxed and does not act for sandboxed code, with a builder of trusted code,
+    as for @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") is
+    process-shared, and its value is built as described above.  An object that other code creates (sandboxed code, a
+    trusted deputy acting for it, or code that gives a builder of sandboxed code), such as one of a module that a
+    sandboxed %Program loads by its path, is private (see isProcessShared()): its value is also built once and for
+    every caller of get(), but as a plain call of the builder, which runs with the provenance and the restrictions of
+    its own code, also when trusted code calls get(); nothing that it builds is marked as shared, and its value is not
+    checked, as it crosses no trust boundary.  A builder that is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") is refused in
+    both modes.
+
+    @note
+    - the builder runs only when get() is first called, never when the object is created: an exception that it raises
+      is raised to the caller of get() that ran it (for a value that a module creates when it is loaded, at its first
+      use, not when the module is loaded)
+    - an object that library code creates later than its initialization, for whichever caller needs it first, is
+      private if that caller is sandboxed or acts for sandboxed code, and then builds its value as that caller's code
+      would; code that must have a process-shared object creates it during module initialization or trusted startup
+      (and keeps it in a \c private:internal static member), or checks isProcessShared(), or gives the constructor's
+      \c require_shared option, which refuses to create a private object
+    - the builder must build only from trusted metadata, and must not call code
+      that its callers supply
+    - the value is returned as it is: the builder must mark (@ref Qore::SandboxManager::shareObject()
+      "SandboxManager::shareObject()", or the \c freeze() of the data provider types) or otherwise protect the objects
+      that it shares; the check of the value before it is published refuses objects and callable values that
+      sandboxed or restricted code created (in lists and hashes, not in the members of objects), but not objects that
+      are not marked and that their callers can change
+    - a thread that waits for a value that another thread builds holds the locks that it holds: a builder must not
+      take a lock that a caller of get() can hold while it calls get(), or the two threads wait for each other
+
+    @par Example:
+    @code{.py}
+class MySchema {
+    private:internal {
+        static LazySharedValue schema(\MySchema::load());
+    }
+
+    static OpenApi3Schema get() {
+        return schema.get();
+    }
+
+    private:internal static OpenApi3Schema load() {
+        return OpenApi3Loader::fromFile(get_module_dir() + "/schema.json");
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+qclass LazySharedValue [arg=QoreLazySharedValue* v; ns=Qore::Thread];
+
+//! Creates the object with the builder of its value
+/** @param builder the code that builds the value; it takes no arguments; a plain callback (not a bound callback or a
+    capability) of code that no sandbox governs
+
+    @param require_shared if @ref True, the object must be process-shared: the constructor raises an exception
+    instead of creating a private object (see the class description)
+
+    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()"), or
+    @p require_shared is @ref True and the object would be private
+*/
+LazySharedValue::constructor(code builder, bool require_shared = False) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreLazySharedValue> v(new QoreLazySharedValue(builder, require_shared, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    bool shared = v->isProcessShared();
+    self->setPrivate(CID_LAZYSHAREDVALUE, v.release());
+    // a process-shared object is shared state of trusted code: sandboxed code cannot delete it (see
+    // SandboxManager::shareObject())
+    if (shared && qore_caller_creates_shared_objects()) {
+        qore_object_private::get(*self)->setShared();
+    }
+}
+
+//! Copying is not supported
+/** @throw LAZYSHAREDVALUE-COPY-ERROR objects of this class cannot be copied
+*/
+LazySharedValue::copy() {
+    xsink->raiseException("LAZYSHAREDVALUE-COPY-ERROR", "objects of class LazySharedValue cannot be copied");
+}
+
+//! Returns the value, building it the first time
+/** @param timeout_ms the most to wait for another thread that builds the value; 0 (the default) or less for no limit
+
+    @return the value
+
+    @throw SHARED-INIT-ERROR the value is needed by its own builder, or the builder returned an object or callable
+    value that sandboxed or restricted code created
+    @throw SHARED-INIT-CYCLE the wait for another thread's build would close a cycle of waits of builders
+    @throw SHARED-INIT-TIMEOUT the timeout ran out while another thread built the value
+
+    @note see the class description for the lock order of the wait
+*/
+auto LazySharedValue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+    return v->get(timeout_ms, xsink);
+}
+
+//! Returns @ref True if the value is built as trusted code for every caller, @ref False for a private value
+/** @return @ref True if the object is process-shared (see the class description), @ref False if it is private
+
+    @since %Qore 3.0
+*/
+bool LazySharedValue::isProcessShared() [flags=RET_VALUE_ONLY] {
+    return v->isProcessShared();
+}
+
+//! Returns @ref True if the value has been built
+/** @return @ref True if the value has been built
+*/
+bool LazySharedValue::isBuilt() [flags=RET_VALUE_ONLY] {
+    return v->isBuilt();
+}

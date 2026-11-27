@@ -1473,7 +1473,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                                 msg.sprintf("the reply received exceeds the maximum size of %zu bytes; the limit can "
                                     "be changed with Socket::setMaxLineSize()", max_line);
                                 qore_poll_pipeline_ops(this).setError("SOCKET-LINE-TOO-LARGE", msg.c_str(), xsink);
-                                xsink->raiseException("SOCKET-LINE-TOO-LARGE", msg.c_str());
+                                xsink->raiseException("SOCKET-LINE-TOO-LARGE", "%s", msg.c_str());
                                 return nullptr;
                             }
                         }

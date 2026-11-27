@@ -75,7 +75,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/isolation-forest",
             "action": "isolation-forest",
-            "display_name": "Detect Unusual Data Points",
+            "display_name": "Detect unusual data points",
             "short_desc": "Finds anomalies by isolating unusual records from normal ones",
             "desc": "Catches fraudulent transactions, sensor malfunctions, and security "
                 "intrusions by flagging records that stand out from normal data. For example, "
@@ -109,7 +109,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/dbscan-clustering",
             "action": "dbscan-clustering",
-            "display_name": "Find Natural Groups in Data",
+            "display_name": "Find natural groups in data",
             "short_desc": "Discovers groups based on data density without specifying how many",
             "desc": "Discovers delivery zones, support ticket themes, or network traffic "
                 "hotspots by automatically finding natural groups in data — without needing "
@@ -144,7 +144,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/kmeans-clustering",
             "action": "kmeans-clustering",
-            "display_name": "Divide Data into Groups",
+            "display_name": "Divide data into groups",
             "short_desc": "Assigns each record to one of a specified number of groups",
             "desc": "Segments customers into spending tiers, classifies products into price "
                 "categories, or groups sensor readings into operational modes. You specify how "
@@ -180,7 +180,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/pca",
             "action": "pca",
-            "display_name": "Simplify Complex Data",
+            "display_name": "Simplify complex data",
             "short_desc": "Reduces many fields to fewer combined values preserving key patterns",
             "desc": "Simplifies complex data for visualization, noise removal, and faster "
                 "downstream analysis by compressing many fields into fewer meaningful values. "
@@ -214,7 +214,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/holt-winters",
             "action": "holt-winters",
-            "display_name": "Forecast Future Values",
+            "display_name": "Forecast future values",
             "short_desc": "Predicts future values accounting for trends and seasonal patterns",
             "desc": "Forecasts monthly revenue, daily server load, or weekly inventory needs "
                 "by learning trends and seasonal patterns from historical data. For example, "
@@ -251,7 +251,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/linear-regression",
             "action": "linear-regression",
-            "display_name": "Predict Values from Input Data",
+            "display_name": "Predict values from input data",
             "short_desc": "Learns a formula to predict a target value from input fields",
             "desc": "Predicts property prices from square footage and location, estimates "
                 "delivery times from distance and package weight, or forecasts demand from "
@@ -289,7 +289,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/lof",
             "action": "lof",
-            "display_name": "Detect Local Outliers",
+            "display_name": "Detect local outliers",
             "short_desc": "Finds points that are unusual compared to their neighbors",
             "desc": "Finds transactions that are unusual for a specific customer segment, or "
                 "sensor readings that are anomalous for a particular equipment type — even "
@@ -322,7 +322,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/gmm",
             "action": "gmm",
-            "display_name": "Group Data with Probabilities",
+            "display_name": "Group data with probabilities",
             "short_desc": "Assigns each record to groups with probability scores",
             "desc": "Identifies overlapping customer segments, classifies data with genuine "
                 "uncertainty, or detects mixed populations — where each record gets a "
@@ -359,7 +359,7 @@ module DataProviderML {
                 "app": MLApp::AppName,
                 "path": "/onnx-model",
                 "action": "onnx-model",
-                "display_name": "Run Pre-Trained Model",
+                "display_name": "Run pre-trained model",
                 "short_desc": "Runs a pre-trained ONNX model on data records",
                 "desc": "Runs pre-trained neural networks, gradient-boosted models, or other "
                     "complex models trained in Python or R — without needing those tools "
@@ -404,7 +404,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/registry-model",
             "action": "registry-model",
-            "display_name": "Run Registered Model",
+            "display_name": "Run registered model",
             "short_desc": "Runs a pre-trained model loaded from the model registry",
             "desc": "Loads a trained ML model from the model registry by name and runs "
                 "inference on each batch of records. Supports any model type registered "
@@ -446,7 +446,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/seasonal-decomposition",
             "action": "seasonal-decomposition",
-            "display_name": "Separate Trends and Seasonal Patterns",
+            "display_name": "Separate trends and seasonal patterns",
             "short_desc": "Breaks time series data into trend, seasonal, and leftover parts",
             "desc": "Answers 'is this increase real growth or just a seasonal spike?' by "
                 "separating a time series into its component parts. For example, monthly sales "
@@ -481,7 +481,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/standard-scaler",
             "action": "standard-scaler",
-            "display_name": "Put All Fields on the Same Scale",
+            "display_name": "Put all fields on the same scale",
             "short_desc": "Makes fields comparable by adjusting each to a common scale",
             "desc": "Makes fields with different ranges directly comparable. For example, if "
                 "\"age\" ranges from 18–65 and \"income\" ranges from 20,000–200,000, comparing "
@@ -519,7 +519,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/min-max-scaler",
             "action": "min-max-scaler",
-            "display_name": "Normalize Values to a Range",
+            "display_name": "Normalize values to a range",
             "short_desc": "Converts field values to a fixed range like 0 to 1",
             "desc": "Converts field values to fit within a specific range (default `0.0` to "
                 "`1.0`). For example, temperatures ranging from -20°C to 45°C become `0.0` "
@@ -563,7 +563,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/imputer",
             "action": "imputer",
-            "display_name": "Fill In Missing Data",
+            "display_name": "Fill in missing data",
             "short_desc": "Automatically fills gaps in your data using smart defaults",
             "desc": "Automatically fills in missing values in your data so downstream analysis "
                 "and ML steps can process complete records. For example, if 5%% of your sensor "
@@ -607,7 +607,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/classification-metrics",
             "action": "classification-metrics",
-            "display_name": "Score Your Category Predictions",
+            "display_name": "Score your category predictions",
             "short_desc": "Checks how often your model picks the right category",
             "desc": "Measures how well your model assigns items to the right category by "
                 "comparing what it predicted against what the correct answer actually was. "
@@ -643,7 +643,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/regression-metrics",
             "action": "regression-metrics",
-            "display_name": "Score Your Number Predictions",
+            "display_name": "Score your number predictions",
             "short_desc": "Checks how close your predicted numbers are to the actual values",
             "desc": "Measures how close your model's predicted numbers are to the real values. "
                 "For example, if your model predicts house prices, this tells you how far off "
@@ -678,7 +678,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/clustering-metrics",
             "action": "clustering-metrics",
-            "display_name": "Score Your Data Groupings",
+            "display_name": "Score your data groupings",
             "short_desc": "Checks whether your groups are distinct and meaningful",
             "desc": "Measures whether the groups in your data are clearly separated or overlap "
                 "too much. For example, after segmenting customers into \"budget\", \"regular\", "
@@ -712,7 +712,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/logistic-regression",
             "action": "logistic-regression",
-            "display_name": "Categorize Records",
+            "display_name": "Categorize records",
             "short_desc": "Predicts which category each record belongs to based on its features",
             "desc": "Classifies records into categories — such as spam vs. not spam, risk levels, "
                 "or product types — by learning from labeled examples. For example, given customer "
@@ -751,7 +751,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/knn-classification",
             "action": "knn-classification",
-            "display_name": "Classify by Similarity",
+            "display_name": "Classify by similarity",
             "short_desc": "Predicts each record's category based on its nearest neighbors",
             "desc": "Classifies records by finding the most similar records in the training "
                 "data and using majority voting. For example, to classify a flower species, "
@@ -788,7 +788,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/knn-regression",
             "action": "knn-regression",
-            "display_name": "Predict Numbers by Similarity",
+            "display_name": "Predict numbers by similarity",
             "short_desc": "Predicts a numeric value based on similar records",
             "desc": "Predicts a numeric value for each record by averaging the target values "
                 "of the most similar records in the training data. For example, to estimate "
@@ -823,7 +823,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/decision-tree-classification",
             "action": "decision-tree-classification",
-            "display_name": "Classify with Decision Rules",
+            "display_name": "Classify with decision rules",
             "short_desc": "Learns if/then rules from data to categorize records",
             "desc": "Classifies records by learning a tree of if/then rules — for example, "
                 "\"if income > 50,000 and credit score > 700 then approve the loan.\" The "
@@ -860,7 +860,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/decision-tree-regression",
             "action": "decision-tree-regression",
-            "display_name": "Predict Numbers with Decision Rules",
+            "display_name": "Predict numbers with decision rules",
             "short_desc": "Learns if/then rules from data to estimate numeric values",
             "desc": "Predicts numeric values by learning a tree of decision rules — for "
                 "example, \"if square footage > 2000 and bedrooms >= 3 then estimate price "
@@ -894,7 +894,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/random-forest-classification",
             "action": "random-forest-classification",
-            "display_name": "Classify with Multiple Decision Trees",
+            "display_name": "Classify with multiple decision trees",
             "short_desc": "Combines many decision trees for more accurate categorization",
             "desc": "Classifies records by growing many decision trees on random subsets of "
                 "the data and combining their votes. More accurate than a single tree because "
@@ -931,7 +931,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/random-forest-regression",
             "action": "random-forest-regression",
-            "display_name": "Predict Numbers with Multiple Trees",
+            "display_name": "Predict numbers with multiple trees",
             "short_desc": "Combines many decision trees for more accurate numeric predictions",
             "desc": "Predicts numeric values by growing many decision trees on random subsets "
                 "of the data and averaging their predictions. More accurate than a single tree "
@@ -965,7 +965,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/gbt-classification",
             "action": "gbt-classification",
-            "display_name": "Classify with Gradient Boosting",
+            "display_name": "Classify with gradient boosting",
             "short_desc": "Sequentially builds trees that correct each other's mistakes",
             "desc": "Classifies records using gradient boosting — the enterprise standard for "
                 "tabular data (fraud detection, churn prediction, credit scoring). Each tree "
@@ -1001,7 +1001,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/gbt-regression",
             "action": "gbt-regression",
-            "display_name": "Predict Numbers with Gradient Boosting",
+            "display_name": "Predict numbers with gradient boosting",
             "short_desc": "Sequentially builds trees for accurate numeric predictions",
             "desc": "Predicts numeric values using gradient boosting — the enterprise standard "
                 "for tabular data. Each tree corrects the residual errors of the previous "
@@ -1036,7 +1036,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/rolling-stats",
             "action": "rolling-stats",
-            "display_name": "Compute Rolling Statistics",
+            "display_name": "Compute rolling statistics",
             "short_desc": "Enriches each record with rolling window statistics for numeric fields",
             "desc": "Monitors trends, detects anomalies, and tracks volatility in time series "
                 "data by computing rolling statistics over a sliding window of recent records. "
@@ -1071,7 +1071,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/ewma",
             "action": "ewma",
-            "display_name": "Smooth with Moving Average",
+            "display_name": "Smooth with moving average",
             "short_desc": "Enriches each record with an exponential weighted moving average",
             "desc": "Smooths noisy signals and tracks trends by computing exponential weighted "
                 "moving averages (EWMA) for specified numeric fields. Unlike a simple moving "
@@ -1102,7 +1102,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/data-profile",
             "action": "data-profile",
-            "display_name": "Profile Data Quality",
+            "display_name": "Profile data quality",
             "short_desc": "Profiles data quality for specified fields in a batch of records",
             "desc": "Computes a data quality profile for each specified field: missing rates, "
                 "type distribution, value ranges, cardinality, and outlier detection. Use this "
@@ -1135,7 +1135,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/schema-validation",
             "action": "schema-validation",
-            "display_name": "Validate Record Schema",
+            "display_name": "Validate record schema",
             "short_desc": "Validates each record against a schema",
             "desc": "Enforce data quality rules before processing — reject orders with "
                 "negative prices, ensure `customer_id` is always present, or restrict status "
@@ -1177,7 +1177,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/text-normalize",
             "action": "text-normalize",
-            "display_name": "Clean Up Text",
+            "display_name": "Clean up text",
             "short_desc": "Standardizes text by removing noise, HTML, and inconsistent formatting",
             "desc": "Cleans messy text before further processing — for example, stripping HTML "
                 "from web-scraped content, lowercasing product descriptions for consistent "
@@ -1202,7 +1202,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/tokenize",
             "action": "tokenize",
-            "display_name": "Count Tokens in Text",
+            "display_name": "Count tokens in text",
             "short_desc": "Measures how many tokens a text field contains for a given AI model",
             "desc": "Counts tokens in a text field using the same tokenizer your AI model uses. "
                 "Each record passes through with a new `{field}_token_count` field.\n\n"
@@ -1237,7 +1237,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/chunk-text",
             "action": "chunk-text",
-            "display_name": "Split Text into Searchable Chunks",
+            "display_name": "Split text into searchable chunks",
             "short_desc": "Breaks documents into overlapping pieces sized for AI search",
             "desc": "Splits long text into overlapping pieces that fit within an AI model's "
                 "input limit. Each input record produces one or more output records with "
@@ -1274,7 +1274,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/embed-text",
             "action": "embed-text",
-            "display_name": "Convert Text to Search Vectors",
+            "display_name": "Convert text to search vectors",
             "short_desc": "Turns text into numeric vectors for AI-powered similarity search",
             "desc": "Converts text into numeric vectors (embeddings) that capture its meaning, "
                 "so similar texts end up close together in vector space. Records are batched "
@@ -1317,7 +1317,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/extract-structured",
             "action": "extract-structured",
-            "display_name": "Extract Structured Data from Text",
+            "display_name": "Extract structured data from text",
             "short_desc": "Pulls structured fields from unstructured text using an LLM",
             "desc": "Uses an LLM to extract typed structured data from a text field — for "
                 "example, pulling names and addresses from emails, line items from invoices, "
@@ -1353,7 +1353,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/rerank-text",
             "action": "rerank-text",
-            "display_name": "Re-rank Search Results by Relevance",
+            "display_name": "Re-rank search results by relevance",
             "short_desc": "Scores and re-orders search results using a cross-encoder model",
             "desc": "Improves search precision by scoring each candidate passage against the "
                 "query using a cross-encoder model. Unlike embedding-based search which "
@@ -1397,7 +1397,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/semantic-chunk-text",
             "action": "semantic-chunk-text",
-            "display_name": "Split Text at Semantic Boundaries",
+            "display_name": "Split text at semantic boundaries",
             "short_desc": "Chunks text where topics change instead of at fixed token counts",
             "desc": "Splits text into chunks at semantic boundaries rather than arbitrary "
                 "token counts. Groups related sentences together by comparing embedding "
@@ -1442,7 +1442,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/guardrail-filter",
             "action": "guardrail-filter",
-            "display_name": "Block Unsafe Records",
+            "display_name": "Block unsafe records",
             "short_desc": "Drops records that contain PII, prompt injections, or policy violations",
             "desc": "Evaluates each record's text field against configured guardrail rules and "
                 "drops records that fail. Use this before an LLM call to prevent PII, prompt "
@@ -1467,7 +1467,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/guardrail-transform",
             "action": "guardrail-transform",
-            "display_name": "Check and Annotate Text Safety",
+            "display_name": "Check and annotate text safety",
             "short_desc": "Enriches records with guardrail results and optionally redacts PII",
             "desc": "Evaluates each record's text field against configured guardrail rules and "
                 "enriches the record with results. Records always pass through (unlike the "
@@ -1498,7 +1498,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/document-ocr",
             "action": "document-ocr",
-            "display_name": "Extract Text from Any Document",
+            "display_name": "Extract text from any document",
             "short_desc": "Reads text from PDFs, images, and scanned documents automatically",
             "desc": "Extracts text from any document format your users might upload — PDF "
                 "files, photos of documents, scanned images, screenshots, and more.\n\n"
@@ -1543,7 +1543,7 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/vision-extraction",
             "action": "vision-extraction",
-            "display_name": "Analyze Images with Vision AI",
+            "display_name": "Analyze images with vision AI",
             "short_desc": "Uses a vision LLM to describe images, extract tables, or read text",
             "desc": "Sends images to a vision-capable LLM (GPT-4o, Claude) for analysis. "
                 "Useful when OCR alone cannot handle complex layouts, charts, diagrams, "

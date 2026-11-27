@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Hledat na webu"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Omezuje hledání s tématem `news` na posledních N dní.\n\n**Nahrazeno parametrem `time_range`**, který platí pro každé téma; tato volba je stále přijímána, aby stávající postupy dál fungovaly."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "Číst stránky"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Vrátit, kolik tento požadavek stál kreditů, jako `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "Projít web"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Vrátit, kolik tento požadavek stál kreditů, jako `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "Zmapovat web"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Vrátit, kolik tento požadavek stál kreditů, jako `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "Spustit výzkum"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Způsob kódování obsahu. Výchozí hodnota je `base64`, což je jediné kódování podporované dokumenty Tavily."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "Získat výzkumnou zprávu"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Výzkumná úloha, která se má přečíst, tak jak ji akce **Spustit výzkum** vrátila v `request_id`.\n\nRozevírací seznam ukazuje výzkumné úlohy spuštěné tímto účtem, převzaté z protokolu využití.  Protokol se zapisuje několik minut po spuštění úlohy, takže právě spuštěná úloha v něm ještě není: použijte pak `request_id`, které vrátila akce **Spustit výzkum**."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "Získat spotřebu kreditů"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Ohlásit využití pouze tohoto projektu, nikoli celého účtu.  Odesílá se v hlavičce `X-Project-ID`.\n\nTavily nezveřejňuje koncový bod, který by projekty vypisoval, takže to nelze nabídnout jako rozevírací seznam; hodnotu vezměte z nástěnky Tavily."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "Vypsat protokoly využití API"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

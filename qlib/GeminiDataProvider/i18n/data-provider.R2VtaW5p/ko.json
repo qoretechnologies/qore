@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "콘텐츠 생성"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -808,7 +808,7 @@
           "message": "검색 증강 생성(RAG)에 사용할 파일 검색 저장소의 이름입니다. 모델이 저장소의 문서를 검색하여 관련 콘텐츠를 기반으로 응답을 생성합니다"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Simple Chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "모델의 동작과 컨텍스트를 설정하는 선택적 시스템 지침 텍스트"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
-          "source": "Stream Content",
+          "source": "Stream content",
           "message": "Stream Content"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "검색 증강 생성(RAG)에 사용할 파일 검색 저장소의 이름입니다. 모델이 저장소의 문서를 검색하여 관련 콘텐츠를 기반으로 응답을 생성합니다"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "콘텐츠 임베드"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "모델에서 생성된 콘텐츠"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "배치 임베딩"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "텍스트의 선택적 제목입니다. `taskType`이(가) `RETRIEVAL_DOCUMENT`인 경우에만 적용됩니다"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "토큰 수 계산"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "모델에서 생성된 콘텐츠"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "파일 업로드"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "업로드된 파일의 선택적 표시 이름입니다. 제공되지 않으면 업로드된 파일의 파일 이름이 사용됩니다"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "파일 삭제"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "삭제할 파일의 리소스 이름(예: `files/abc-123`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Create Cached Content",
+          "source": "Create cached content",
           "message": "캐시된 콘텐츠 생성"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2400,7 +2400,7 @@
           "message": "모델에서 생성된 콘텐츠"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Delete Cached Content",
+          "source": "Delete cached content",
           "message": "캐시된 콘텐츠 삭제"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "삭제할 캐시된 콘텐츠의 리소스 이름"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Update Cached Content",
+          "source": "Update cached content",
           "message": "Update Cached Content"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "캐시된 콘텐츠의 새 유효 기간(TTL)(예: 1시간의 경우 `3600s`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Create File Search Store",
+          "source": "Create file search store",
           "message": "파일 검색 저장소 생성"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "새 파일 검색 저장소의 사람이 읽을 수 있는 표시 이름"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Delete File Search Store",
+          "source": "Delete file search store",
           "message": "파일 검색 저장소 삭제"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "삭제할 파일 검색 저장소의 리소스 이름"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
-          "source": "Import File to Search Store",
+          "source": "Import file to search store",
           "message": "파일을 검색 저장소로 가져오기"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {

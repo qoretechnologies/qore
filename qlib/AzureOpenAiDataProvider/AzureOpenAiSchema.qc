@@ -107,13 +107,9 @@ public class AzureOpenAiSchema {
         const SchemaFileName = "azure-openai-v1.json";
     }
 
-    private {
-        static list<OpenApi3::OpenApi3Schema> schemas = ();
-        static list<RestSchemaActions::RestSchemaActionSet> action_sets = ();
-    }
-
     private:internal {
-        static Mutex lck();
+        #! the parsed schemas and the action sets, built once for every caller as trusted code (qore#7684)
+        static LazySharedValue state(\AzureOpenAiSchema::buildState());
     }
 
     #! Returns the parsed v1 schema
@@ -122,9 +118,7 @@ public class AzureOpenAiSchema {
         @throw REST-SCHEMA-ACTION-ERROR a manifest and schema disagree
     */
     static OpenApi3::OpenApi3Schema getSchema() {
-        AutoLock al(lck);
-        initIntern();
-        return schemas[0];
+        return state.get().schemas[0];
     }
 
     #! Returns the parsed deployment-based audio schema
@@ -132,9 +126,7 @@ public class AzureOpenAiSchema {
         @throw REST-SCHEMA-ACTION-ERROR a manifest and schema disagree
     */
     static OpenApi3::OpenApi3Schema getAudioSchema() {
-        AutoLock al(lck);
-        initIntern();
-        return schemas[1];
+        return state.get().schemas[1];
     }
 
     #! Returns the primary v1 action set
@@ -148,9 +140,7 @@ public class AzureOpenAiSchema {
         @throw REST-SCHEMA-ACTION-ERROR a manifest and schema disagree
     */
     static list<RestSchemaActions::RestSchemaActionSet> getActionSets() {
-        AutoLock al(lck);
-        initIntern();
-        return action_sets;
+        return state.get().action_sets;
     }
 
     #! Returns the complete catalog action definitions for this app or an alias
@@ -199,11 +189,8 @@ public class AzureOpenAiSchema {
         return Priv::AzureOpenAiModuleDir + DirSep + SchemaFileName;
     }
 
-    #! Constructs both partitions under the lock and publishes only fully validated action sets
-    private static initIntern() {
-        if (action_sets) {
-            return;
-        }
+    #! Constructs both partitions; only fully validated action sets are published
+    private:internal static hash<auto> buildState() {
         list<OpenApi3::OpenApi3Schema> parsed = (
             OpenApi3::OpenApi3Loader::fromFile(getSchemaPath()),
             OpenApi3::OpenApi3Loader::fromFile(Priv::AzureOpenAiModuleDir + "/azure-openai-audio.json"),
@@ -214,8 +201,7 @@ public class AzureOpenAiSchema {
         RestSchemaActions::RestSchemaActionSet audio(parsed[1], AzureOpenAiAudioManifest::Manifest,
             NOTHING, (primary,),
             NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
-        schemas = parsed;
-        action_sets = (primary, audio);
+        return {"schemas": parsed, "action_sets": (primary, audio)};
     }
 }
 }

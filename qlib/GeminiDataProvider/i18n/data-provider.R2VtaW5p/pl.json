@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Generuj zawartość"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Nazwa magazynu wyszukiwania plików do użycia w generowaniu wspomaganym wyszukiwaniem (RAG). Model przeszuka dokumenty magazynu, aby ugruntować swoją odpowiedź w oparciu o odpowiednią zawartość"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Prosty czat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Opcjonalny tekst instrukcji systemowej, który ustawia zachowanie i kontekst dla modelu"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
-          "source": "Stream Content",
+          "source": "Stream content",
           "message": "Generuj zawartość strumieniowo"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Nazwa magazynu wyszukiwania plików do użycia w generowaniu wspomaganym wyszukiwaniem (RAG). Model przeszuka dokumenty magazynu, aby ugruntować swoją odpowiedź w oparciu o odpowiednią zawartość"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Osadź zawartość"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Treść z modelu"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Osadzanie wsadowe"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Opcjonalny tytuł tekstu. Ma zastosowanie tylko wtedy, gdy `taskType` to `RETRIEVAL_DOCUMENT`"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Zlicz tokeny"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Treść z modelu"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Prześlij plik"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Opcjonalna nazwa wyświetlana dla przesłanego pliku. Jeśli nie zostanie podana, używana jest nazwa z przesłanego pliku"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Usuń plik"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Nazwa zasobu pliku do usunięcia (np. `files/abc-123`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Create Cached Content",
+          "source": "Create cached content",
           "message": "Utwórz buforowaną zawartość"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2400,7 +2400,7 @@
           "message": "Treść z modelu"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Delete Cached Content",
+          "source": "Delete cached content",
           "message": "Usuń buforowaną zawartość"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Nazwa zasobu buforowanej zawartości do usunięcia"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Update Cached Content",
+          "source": "Update cached content",
           "message": "Zaktualizuj buforowaną zawartość"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Nowy czas wygaśnięcia (TTL) dla buforowanej zawartości (np. `3600s` dla jednej godziny)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Create File Search Store",
+          "source": "Create file search store",
           "message": "Utwórz magazyn wyszukiwania plików"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Czytelna dla człowieka nazwa wyświetlana nowego magazynu wyszukiwania plików"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Delete File Search Store",
+          "source": "Delete file search store",
           "message": "Usuń magazyn wyszukiwania plików"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Nazwa zasobu magazynu wyszukiwania plików do usunięcia"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
-          "source": "Import File to Search Store",
+          "source": "Import file to search store",
           "message": "Zaimportuj plik do magazynu wyszukiwania"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {

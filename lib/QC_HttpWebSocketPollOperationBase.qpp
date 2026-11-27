@@ -130,7 +130,8 @@ int HttpWebSocketPollOperationPriv::checkSendProgress(ExceptionSink* xsink) {
         return -1;
     }
     if (send_rate.update(progress, true, now_ms)) {
-        xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of " QLLD " bytes/s",
+        // the rate is an int64_t, which QLLD (for int64) does not match on every platform
+        xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of %" PRId64 " bytes/s",
             send_rate.getMinRate());
         setError(xsink);
         return -1;
@@ -173,7 +174,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 releaseSendOp(xsink);
                 if (send_rate_below) {
                     send_rate_below = false;
-                    xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of " QLLD
+                    xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of %" PRId64
                         " bytes/s", send_rate.getMinRate());
                     setError(xsink);
                     return nullptr;

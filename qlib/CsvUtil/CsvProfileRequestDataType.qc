@@ -71,6 +71,14 @@ public class CsvProfileRequestDataType inherits HashDataType {
                     "quoted fields are not counted when the separator is detected",
                 "example_value": "'",
             },
+            "header_row": {
+                "display_name": "Header Row",
+                "short_desc": "The row holding the column names, or 0 for none",
+                "type": SoftIntOrNothingType,
+                "desc": "The 1-based row holding the column names, or `0` if the data has none; when not given, the "
+                    "header row is found from the data. Use it when the person who knows the file says where the "
+                    "column names are",
+            },
             "max_rows": {
                 "display_name": "Maximum Rows",
                 "short_desc": "The maximum number of rows read",
