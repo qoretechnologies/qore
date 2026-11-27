@@ -1182,6 +1182,18 @@ public:
     // (qore_scope_creator_is_sandboxed())
     const QoreSandboxContext* thread_start_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+    //! the provenance frames applied for the receivers of method calls, innermost last, with their receivers
+    //! (qore_receiver_caller_is_restricted()); a frame that could not be recorded is not in it
+    struct ReceiverProvenance {
+        const QoreSandboxProvenanceHelper* frame;
+        const QoreObject* receiver;
+        //! true if the frame was applied by the call of a builtin method of Serializable that serializes its receiver
+        bool serializing = false;
+        DLLLOCAL ReceiverProvenance(const QoreSandboxProvenanceHelper* frame, const QoreObject* receiver)
+                : frame(frame), receiver(receiver) {
+        }
+    };
+    std::vector<ReceiverProvenance> receiver_provenance;
 
     //! a capability set of the thread, set by a ThreadCapabilityScope (qorus#867)
     struct CapabilityScope {
@@ -8211,13 +8223,18 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
     @return false if \a visit ended the walk, true otherwise
 */
 template <typename V>
-static bool visit_thread_provenance(ThreadData* td, bool policy, bool skip_inherited, V& visit) {
+static bool visit_thread_provenance(ThreadData* td, bool policy, bool skip_inherited, V& visit,
+        const QoreSandboxProvenanceHelper* skip_frame = nullptr) {
     assert(td);
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
         if (policy && td->trusted_policy_depth && frame == td->trusted_policy_boundary) {
             break;
+        }
+        // the frame of the receiver of a builtin method that serializes it (qore_receiver_caller_is_restricted())
+        if (frame == skip_frame) {
+            continue;
         }
         // the provenance of the code that loads a module is not that of the module's initialization
         if (mib && frame == mib->provenance) {
@@ -8250,13 +8267,14 @@ static bool visit_thread_provenance(ThreadData* td, bool policy, bool skip_inher
     return true;
 }
 
-static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
+static QoreSandboxManager* find_thread_provenance_ref(bool policy,
+        const QoreSandboxProvenanceHelper* skip_frame = nullptr) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return nullptr;
     }
     QoreSandboxManagerCollector collect;
-    visit_thread_provenance(td, policy, false, collect);
+    visit_thread_provenance(td, policy, false, collect, skip_frame);
     return collect.combine();
 }
 
@@ -8320,9 +8338,9 @@ bool qore_caller_tenant_isolated() {
 }
 
 static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_id_t* pgm_id = nullptr,
-        bool policy = false) {
+        bool policy = false, const QoreSandboxProvenanceHelper* skip_frame = nullptr) {
     ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);
-    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy), nullptr);
+    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy, skip_frame), nullptr);
     if (!provenance) {
         return base.release();
     }
@@ -8761,8 +8779,11 @@ bool qore_calling_code_is_sandboxed() {
     reports restricted, a hidden sandboxed caller that was restricted, and a governing sandbox that refuses uncontrolled
     APIs (for a composition: any member that refuses them); the walk is the same, so that both classifications see
     the same code
+    @param skip_frame a provenance frame that does not count (the frame that the call of a builtin method of
+    Serializable applied for the object that it serializes; qore#7146)
 */
-static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool restricted_only) {
+static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool restricted_only,
+        const QoreSandboxProvenanceHelper* skip_frame = nullptr) {
     // the ID is 0 unless a sandboxed (or restricted) Program is found
     if (pgm_id) {
         *pgm_id = 0;
@@ -8863,8 +8884,8 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool rest
         }
 #endif
         qore_program_id_t sm_pgm_id = 0;
-        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(pgm_id ? &sm_pgm_id : nullptr),
-            nullptr);
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(pgm_id ? &sm_pgm_id : nullptr,
+            false, skip_frame), nullptr);
         // a composition trusts its code only if every member does (QoreSandboxManager::trustsUncontrolledApis())
         if (!sm || (restricted_only && sm->trustsUncontrolledApis())) {
             // the walk above ends at the first Program whose own manager governs alone, so a trusting one hides the
@@ -8889,6 +8910,10 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool rest
                     // the provenance of the code that loads a module is not that of the module's initialization
                     if (mib && frame == mib->provenance) {
                         break;
+                    }
+                    // the frame that the call of a builtin method of Serializable applied for its object (qore#7146)
+                    if (frame == skip_frame) {
+                        continue;
                     }
                     if (frame->getContext()->restricted) {
                         if (pgm_id) {
@@ -11298,14 +11323,77 @@ QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const QoreObject* objec
     set(object);
 }
 
+// records the frame that \a frame applied for \a object (qore#7146); out of line and cold, so that the common path of
+// QoreSandboxProvenanceHelper::set() (an object without provenance) keeps its code
+[[gnu::noinline, gnu::cold]] static void qore_record_receiver_provenance(const QoreSandboxProvenanceHelper* frame,
+        const QoreObject* object) {
+    ThreadData* td = thread_data.get();
+    try {
+        td->receiver_provenance.emplace_back(frame, object);
+    } catch (std::bad_alloc&) {
+        // not recorded: the frame counts for its receiver too (fails closed)
+    }
+}
+
 void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
     if (object) {
         auto* captured = qore_object_private::get(*object)->sandbox_provenance;
         if (captured) {
             captured->ref();
             apply(captured);
+            if (context) {
+                qore_record_receiver_provenance(this, object);
+            }
         }
     }
+}
+
+void qore_mark_serializing_receiver_frame(const QoreSandboxProvenanceHelper& frame) {
+    // only a frame that the call applied: none if the innermost frame had the same context
+    if (!frame.getContext()) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    if (td && !td->receiver_provenance.empty() && td->receiver_provenance.back().frame == &frame) {
+        td->receiver_provenance.back().serializing = true;
+    }
+}
+
+bool qore_clear_serializing_receiver_frame(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && !td->receiver_provenance.empty()) {
+        ThreadData::ReceiverProvenance& rp = td->receiver_provenance.back();
+        if (rp.serializing && rp.receiver == receiver && rp.frame == td->sandbox_provenance) {
+            rp.serializing = false;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {
+        const ThreadData::ReceiverProvenance& rp = td->receiver_provenance.back();
+        // as qore_receiver_caller_is_restricted(), for any sandboxed code (the owner rule of qore#7033 decides by it)
+        if (rp.serializing && rp.frame == td->sandbox_provenance && rp.receiver == receiver) {
+            return qore_caller_sandbox_state_intern(nullptr, false, rp.frame) != 0;
+        }
+    }
+    return qore_caller_is_sandboxed();
+}
+
+bool qore_receiver_caller_is_restricted(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {
+        const ThreadData::ReceiverProvenance& rp = td->receiver_provenance.back();
+        // the innermost frame was applied by the call of the builtin method that serializes the receiver: it does not
+        // count; restricted code as the restriction rules decide it (qore#7737); unknown (-1) counts (fails closed)
+        if (rp.serializing && rp.frame == td->sandbox_provenance && rp.receiver == receiver) {
+            return qore_caller_sandbox_state_intern(nullptr, true, rp.frame) != 0;
+        }
+    }
+    return qore_caller_is_restricted();
 }
 
 QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink) {
@@ -11371,6 +11459,9 @@ QoreSandboxProvenanceHelper::~QoreSandboxProvenanceHelper() {
         assert(td && td->sandbox_provenance == this);
         td->sandbox_budgets.leave(td->tid, this);
         td->sandbox_provenance = previous;
+        if (!td->receiver_provenance.empty() && td->receiver_provenance.back().frame == this) {
+            td->receiver_provenance.pop_back();
+        }
         context->deref();
     }
 }

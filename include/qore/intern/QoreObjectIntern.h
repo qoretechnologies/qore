@@ -514,8 +514,10 @@ public:
         serialize a shared object, as the data would give it all of the object's members, also the private ones.
 
         @param xsink for the exception
+        @param chain_sandboxed true if sandboxed code is in the chain of callers, as the serialization decided it
+        once (QoreSerializationCaller::chainSandboxed())
     */
-    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink, bool chain_sandboxed) const;
 
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()

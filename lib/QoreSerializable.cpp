@@ -262,6 +262,19 @@ bool qore_serialization_calling_code_trusted() {
     return !qore_caller_is_restricted();
 }
 
+bool qore_serializable_receiver_function(const QoreFunction* func) {
+    // by the class ID and the name, not by the identity of the function: nothing guarantees that the copies of a class
+    // in other Programs (the classes that a Program declares or imports) share the builtin method functions of the
+    // root namespace's class; a sandbox cannot declare a class with the ID of Serializable or add a method to it, so
+    // the match cannot be spoofed, and a call that does not match keeps its frame, which counts (fails closed)
+    const QoreClass* cls = func ? func->getClass() : nullptr;
+    if (!cls || cls->getID() != CID_SERIALIZABLE || static_cast<const MethodFunctionBase*>(func)->isStatic()) {
+        return false;
+    }
+    const char* name = func->getName();
+    return !strcmp(name, "serialize") || !strcmp(name, "serializeToData");
+}
+
 bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool internal) {
     if (unrestricted) {
         return false;
@@ -281,8 +294,16 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
         return false;
     }
     // any other code: withheld if restricted code is in the chain of callers (qore#7737)
+    return chainSandboxed();
+}
+
+void QoreSerializationCaller::decideReceiverCaller() {
+    receiver_caller_trusted = receiver && !qore_receiver_caller_is_sandboxed(receiver);
+}
+
+bool QoreSerializationCaller::chainSandboxed() {
     if (chain_sandboxed < 0) {
-        chain_sandboxed = qore_caller_is_restricted() ? 1 : 0;
+        chain_sandboxed = qore_receiver_caller_is_restricted(receiver) ? 1 : 0;
     }
     return chain_sandboxed;
 }
@@ -579,6 +600,19 @@ QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int6
     return serializeToDataIntern(val, context, xsink);
 }
 
+QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink) {
+    QoreInternalSerializationContext context(xsink, flags);
+    context.caller.setReceiver(&self);
+    // the exemption of the receiver's provenance frame is decided once, at the start of the call; the code that the
+    // call runs afterwards (the serialization hooks of the object's classes, the methods of an output stream that the
+    // call writes to) sees the frame unmarked for the rest of the call, so that it counts for that code, as for the
+    // static form (qore#7146)
+    context.caller.chainSandboxed();
+    context.caller.decideReceiverCaller();
+    qore_clear_serializing_receiver_frame(&self);
+    return serializeToDataIntern(&self, context, xsink);
+}
+
 void QoreSerializable::serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(serializeToDataTrusted(val, flags, xsink), xsink);
@@ -645,7 +679,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {
-            if (opriv->checkSharedSerialize(xsink)) {
+            if (opriv->checkSharedSerialize(xsink, context.caller.chainSandboxed())) {
                 return context.imap.end();
             }
         }
@@ -669,8 +703,9 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
     // created the object (qore#7033); a trusted API gives all state to calling code that the owner rules do not apply
     // to, as its output is never given to sandboxed code (Program::serialize(), Serializable::serializeTrusted(),
-    // qore#7146)
-    bool non_public = context.caller.ownerRuleLifted()
+    // qore#7146); the code that called a builtin method that serializes its receiver is judged without the receiver's
+    // provenance frame, as the caller of the static form is (qore#7146)
+    bool non_public = context.caller.ownerRuleLifted() || context.caller.receiverCallerTrusted()
         || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
@@ -1970,7 +2005,7 @@ void QoreSerializable::serialize(const QoreValue val, OutputStream& stream, int6
 
 
 void QoreSerializable::serialize(const QoreObject& self, OutputStream& stream, int64 flags, ExceptionSink* xsink) {
-    ReferenceHolder<QoreHashNode> h(serializeToData(&self, flags, xsink), xsink);
+    ReferenceHolder<QoreHashNode> h(serializeReceiverToData(self, flags, xsink), xsink);
     if (*xsink) {
         return;
     }

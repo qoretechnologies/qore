@@ -521,6 +521,11 @@ authenticate();
       that serializes a value that a sandboxed caller gave it gets a \c SERIALIZATION-ERROR exception for a non-public
       member or static variable with a value, and trusted code that formats such a value, for example in the
       description of an exception, leaves those members out; trusted code that no sandboxed code calls gets all state
+    - the methods of @ref Qore::Serializable "Serializable" that serialize their object decide for the code that called
+      them, as the static forms do, not for the sandbox that created the object; a call of the method of an object of
+      a class of a sandboxed %Program (one that its code declared, or its copy of an imported class) enters that
+      %Program, so trusted code serializes such an object with the static form,
+      @ref Qore::Serializable::serialize() "Serializable::serialize(obj)"
 
     A trusted host that needs the state of the objects of a sandboxed %Program's calls, for example to deliver the
     arguments of a call that the %Program makes through the host to another %Program, serializes them with

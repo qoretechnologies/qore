@@ -1322,10 +1322,12 @@ int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, Exc
     return -1;
 }
 
-int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink, bool chain_sandboxed) const {
     assert(isShared());
-    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
-    if (!qore_caller_is_restricted()) {
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange(); the
+    // provenance of the receiver of a builtin method that serializes it does not count, as decided once for the
+    // serialization (QoreSerializationCaller::chainSandboxed(), qore#7146)
+    if (!chain_sandboxed) {
         return 0;
     }
     if (qore_shared_object_trace()) {
