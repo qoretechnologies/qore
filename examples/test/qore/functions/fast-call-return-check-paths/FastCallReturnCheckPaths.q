@@ -173,7 +173,7 @@ for (int i = 0; i < 300; ++i) {
 }
 printf("warm-up %d\n", t);
 foreach string name in (("direct", "direct given", "recursive", "recursive given", "closure", "closure given",
-        "method", "method given", "static", "static given", "missing destructor")) {
+        "method", "method given", "static", "static given", "missing destructor", "missing")) {
     try {
         switch (name) {
             case "direct": call_direct("bad"); break;
@@ -187,6 +187,9 @@ foreach string name in (("direct", "direct given", "recursive", "recursive given
             case "static": call_static("bad"); break;
             case "static given": call_static_given("bad", True); break;
             case "missing destructor": call_missing("bad", True); break;
+            # without the destructor's exception, the missing return is raised at the function's declaration, as
+            # in the AST interpreter (qore#7787)
+            case "missing": call_missing("bad", False); break;
         }
         printf("%s: no exception\n", name);
     } catch (hash<ExceptionInfo> ex) {
