@@ -5826,4 +5826,12 @@ private:
 template <typename T, typename Tag>
 thread_local T* QoreThreadLocalObject<T, Tag>::ptr = nullptr;
 
+//! tells the async I/O controllers that a thread may be started again (a thread has ended and been joined, or the default
+//! thread stack size has changed): a controller whose callback worker could not be started, with work queued for it,
+//! starts one (qore#7834)
+/** Takes no lock unless such a controller is registered, and then only the leaf lock of the registry; needs no Qore
+    thread data (the reaper calls it) and never raises an exception
+*/
+DLLLOCAL void qore_async_io_worker_start_possible() noexcept;
+
 #endif

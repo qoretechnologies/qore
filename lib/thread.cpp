@@ -13471,6 +13471,8 @@ private:
                     abort();
                 }
                 qore_counter_ops(thread_counter).dec();
+                // a thread has ended and its resources are free: a callback worker may start again (qore#7834)
+                qore_async_io_worker_start_possible();
                 lock.lock();
                 if (afterJoinLocked()) {
                     return;
@@ -13496,6 +13498,8 @@ private:
             }
             arg.reset();
             qore_counter_ops(tp_thread_counter).dec();
+            // a thread has ended and its resources are free: a callback worker may start again (qore#7834)
+            qore_async_io_worker_start_possible();
             lock.lock();
             if (afterJoinLocked()) {
                 return;

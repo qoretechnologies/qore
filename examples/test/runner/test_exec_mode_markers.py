@@ -250,6 +250,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   raise unhandled exceptions at the same time
         # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - asyncio_callback_worker_start_failure (#7834): its checks run in child processes without an execution mode,
+        #   whose callback workers are only those they start and whose output the test checks
         # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
         #   whose standard output and error output it reads
         # - asyncio_poll_complete_notify (#6804): its checks run in child processes without an execution mode, whose
@@ -388,6 +390,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_callback_worker_start_failure.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
