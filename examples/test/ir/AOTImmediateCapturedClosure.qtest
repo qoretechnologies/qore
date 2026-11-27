@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-immediate-captured-closure-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -149,8 +160,8 @@ printf(\"%s\\n\", exercise());
 ";
 }
 
-string source_path = "/tmp/qore-aot-immediate-captured-closure-" + string(getpid()) + ".qr";
-string exe_path = "/tmp/qore-aot-immediate-captured-closure-" + string(getpid());
+string source_path = tmp.path + "/immediate-captured-closure.qr";
+string exe_path = tmp.path + "/immediate-captured-closure";
 string disabled_exe_path = exe_path + "-disabled";
 {
     File source();
@@ -171,7 +182,7 @@ string disabled_compile_out = backquote(sprintf(
 if (!is_file(exe_path) || !is_file(disabled_exe_path)) {
     printf("immediate captured closure AOT compile failed:\n%sDisabled:\n%s",
         compile_out, disabled_compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 string native_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -185,5 +196,5 @@ if (ast_out != expected || jit_out != expected || native_out != expected
     printf("immediate captured closure mismatch\nAST:\n%sJIT:\n%sNative:\n%sDisabled:\n%sCompile:\n%sDisabled compile:\n%s",
         ast_out, jit_out, native_out, disabled_out, compile_out,
         disabled_compile_out);
-    exit(2);
+    test_exit(2);
 }

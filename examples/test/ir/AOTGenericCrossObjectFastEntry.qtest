@@ -3,7 +3,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-generic-cross-object-fast-entry-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -76,7 +87,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-generic-cross-object-fast-entry-" + string(getpid());
+string root = tmp.path + "/generic-cross-object-fast-entry";
 string provider_dir = root + "/provider";
 string consumer_dir = root + "/consumer";
 mkdir(root);
@@ -101,7 +112,7 @@ if (!is_file(provider_qo)
         || provider_compile !~ /method fast entry '[^']*CrossInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/) {
     printf("provider compile failed or omitted generic entries:\n%s",
         provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string provider_index = backquote(sprintf(
@@ -112,7 +123,7 @@ if (provider_index !~ /\"symbol_index_version\", \"value\": \"37\"/
         || provider_index !~ /\"native_symbol\": \"CrossStaticSelector[^\"]*_generic_fast_h[0-9a-f]{16}\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossStaticSelector<int>>\\|M:<int>\"/
         || provider_index !~ /\"native_symbol\": \"CrossInstanceSelector[^\"]*_generic_fast_h[0-9a-f]{16}\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossInstanceSelector<int>>\"/) {
     printf("provider generic metadata mismatch:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 # Prove the consumer uses only source-stripped provider metadata.
@@ -130,7 +141,7 @@ string consumer_compile = backquote(sprintf(
 string consumer_qo = consumer_dir + "/cross-consumer.qo";
 if (!is_file(consumer_qo)) {
     printf("consumer compile failed:\n%s", consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
@@ -139,7 +150,7 @@ if (undefined_symbols !~ /crossGenericSelect[^\n]*_generic_fast_h[0-9a-f]{16}/
         || undefined_symbols !~ /CrossInstanceSelector[^\n]*_generic_fast_h[0-9a-f]{16}/) {
     printf("consumer did not import all generic fast entries:\n%scompile:\n%s",
         undefined_symbols, consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string exe_path = root + "/cross-object";
@@ -148,7 +159,7 @@ string link_out = backquote(sprintf(
     libqore_dir, qcc_bin, exe_path, provider_qo, consumer_qo));
 if (!is_file(exe_path)) {
     printf("cross-object link failed:\n%s", link_out);
-    exit(2);
+    test_exit(2);
 }
 
 string actual = backquote(sprintf(
@@ -157,5 +168,5 @@ string expected = "1500000:ok:yes:z:True\n";
 if (actual != expected) {
     printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",
         expected, actual);
-    exit(2);
+    test_exit(2);
 }

@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-explicit-object-string-measure-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -17,8 +27,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-explicit-object-string-measure-"
-    + string(getpid());
+string root = tmp.path + "/explicit-object-string-measure";
 mkdir(root);
 
 string hot_source = root + "/hot.qr";
@@ -69,7 +78,7 @@ if (!is_file(hot_enabled) || !is_file(hot_fusion_disabled)
     printf("compile failed:\nenabled:\n%sfusion disabled:\n%s"
         + "facts disabled:\n%s", hot_enabled_compile,
         hot_fusion_disabled_compile, hot_facts_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string hot_enabled_output = backquote(sprintf(
@@ -85,7 +94,7 @@ if (hot_enabled_output != hot_ast
         + "fusion disabled:\n%sfacts disabled:\n%s",
         hot_ast, hot_enabled_output, hot_fusion_disabled_output,
         hot_facts_disabled_output);
-    exit(2);
+    test_exit(2);
 }
 
 string hot_enabled_undefined =
@@ -106,7 +115,7 @@ if (hot_enabled_undefined !~ /qore_rt_check_valid_object_call_receiver/
     printf("unexpected lowering:\nenabled:\n%sfusion disabled:\n%s"
         + "facts disabled:\n%s", hot_enabled_undefined,
         hot_fusion_disabled_undefined, hot_facts_disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string safety_source = root + "/safety.qr";
@@ -185,7 +194,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
     if (output != safety_ast) {
         printf("safety output mismatch in %s:\nast:\n%sactual:\n%s",
             mode, safety_ast, output);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -211,5 +220,5 @@ if (!is_file(safety_enabled) || !is_file(safety_disabled)
         + "disabled compile:\n%senabled:\n%sdisabled:\n%sast:\n%s",
         safety_enabled_compile, safety_disabled_compile,
         safety_enabled_output, safety_disabled_output, safety_ast);
-    exit(2);
+    test_exit(2);
 }

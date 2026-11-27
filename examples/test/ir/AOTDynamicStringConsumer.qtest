@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-dynamic-string-consumer-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -83,7 +94,7 @@ string consumer_code = "int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-dynamic-string-consumer-" + string(getpid());
+string root = tmp.path + "/dynamic-string-consumer";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -116,12 +127,12 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 if (provider_compile !~ /string-consumers=1/) {
     printf("implicit-self dynamic string consumer fusion mismatch:\n%s",
         provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -137,12 +148,12 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /string-consumers=6/) {
     printf("dynamic string consumer fusion mismatch:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
@@ -152,7 +163,7 @@ if (enabled_undefined !~ /qore_rt_string_concat_multi_search/
         || disabled_undefined =~ /qore_rt_string_concat_multi_(search|substr)/) {
     printf("dynamic string helper mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -166,7 +177,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -176,5 +187,5 @@ string disabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
 if (ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

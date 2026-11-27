@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-generic-static-method-fast-entry-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -111,7 +121,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-generic-static-method-fast-entry-" + string(getpid());
+string root = tmp.path + "/generic-static-method-fast-entry";
 mkdir(root);
 string source_path = root + "/generic-static-method.qr";
 File source_file();
@@ -127,7 +137,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -144,7 +154,7 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled_path) || !is_file(disabled_path)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /method fast entry '[^']*GenericStaticSelector[^']*_generic_fast_h[0-9a-f]{16}'/
         || enabled_compile =~ /method fast entry '[^']*ConflictingStaticSelector[^']*_generic_fast'/
@@ -152,7 +162,7 @@ if (enabled_compile !~ /method fast entry '[^']*GenericStaticSelector[^']*_gener
         || disabled_compile =~ /_generic_fast/) {
     printf("generic static specialization mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string path in ((enabled_path, disabled_path)) {
@@ -161,6 +171,6 @@ foreach string path in ((enabled_path, disabled_path)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
