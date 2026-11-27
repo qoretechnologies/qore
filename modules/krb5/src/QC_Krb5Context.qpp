@@ -317,7 +317,9 @@ Krb5Credentials Krb5Context::acquireCredentialsWithPassword(Krb5Principal[QoreKr
     has no matching entry, or the KDC rejects the request
     @throw KRB5-SANDBOX-ERROR if the keytab backend or any option-specified
     cache is not allowed by the sandbox, or if the active network sandbox
-    policy cannot be enforced while MIT Kerberos contacts the KDC
+    policy cannot be enforced while MIT Kerberos contacts the KDC, or for
+    code that a sandbox governs, a keytab file is not a regular file with one
+    link (see @ref krb5sec_sandbox)
     @throw FILESYSTEM-ACCESS-DENIED if the keytab or any option-specified
     cache lies outside the filesystem sandbox
 */
