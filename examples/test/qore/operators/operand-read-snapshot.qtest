@@ -15,6 +15,33 @@
 
 our list<int> g_list;
 
+#! the destructors of ReleaseTracker objects and the marks of the release test, in the order in which they ran
+our list<string> g_release_log;
+
+#! an object whose destructor is logged
+class ReleaseTracker {
+    public {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        push g_release_log, "dtor " + n;
+    }
+}
+
+string sub release_mark(string m) {
+    push g_release_log, "mark " + m;
+    return "";
+}
+
+string sub release_arg(auto v) {
+    return "arg";
+}
+
 #! a class whose constructor takes an argument, for a declaration that constructs its value in an operand
 class ArgTaker {
     constructor(auto x) {
@@ -32,6 +59,7 @@ class OperandReadSnapshotTest inherits QUnit::Test {
         addTestCase("other change operators", \testOtherChanges());
         addTestCase("other operators", \testOtherOperators());
         addTestCase("a later operand without an effect", \testNoEffect());
+        addTestCase("the value that an operand read is released when the operator returns", \testRelease());
         set_return_value(main());
     }
 
@@ -151,5 +179,19 @@ class OperandReadSnapshotTest inherits QUnit::Test {
         assertEq(-1n, n - (n += 1n), "number -");
         n = 1.5n + 1n;
         assertEq(8.75n, n * (n += 1n), "number *");
+    }
+
+    #! the snapshot of the value that an operand read is released when the operator returns, not at the end of the
+    #! statement, as in the other execution modes: it does not keep the objects in the value (qore#7722)
+    testRelease() {
+        g_release_log = ();
+        {
+            *list<auto> l = ((new ReleaseTracker("fold1"),), (new ReleaseTracker("fold2"),));
+            # the fold's left operand reads the first element of the list; clearing the list releases both objects
+            # before the mark, in the same statement
+            string s = release_arg(foldl $1 + $2, l) + ((l = NOTHING) ?? "") + release_mark("fold");
+            assertEq("arg", s);
+        }
+        assertEq(("dtor fold1", "dtor fold2", "mark fold"), g_release_log, "foldl");
     }
 }
