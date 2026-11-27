@@ -168,7 +168,7 @@ static const QoreTypeInfo* qore_plus_container_type(qore_type_t lt, const QoreTy
 }
 
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink)
         return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);

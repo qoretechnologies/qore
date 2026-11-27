@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Vyhľadať správy"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Token stránky na načítanie konkrétnej stránky výsledkov v zozname"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Získať správu"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "ID správy, ktorú chcete získať"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Získať prílohu"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "ID prílohy na načítanie"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nový e-mail"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Maximálny počet správ doručených v jednom cykle dopytovania; nenastavená hodnota alebo `0` znamená bez obmedzenia.\n\nLimit sa uplatňuje od **najstarších** položiek v nevybavenom zozname, takže kurzor sledovania stále postupuje súvisle a zostávajúce správy sa doručia v nasledujúcich cykloch namiesto toho, aby sa preskočili. Použite ho na obmedzenie objemu práce, ktorú môže vykonať jeden cyklus, keď sa môže nahromadiť veľké množstvo nevybavených položiek"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nové prílohy e-mailov"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Maximálny počet správ doručených v jednom cykle dopytovania; nenastavená hodnota alebo `0` znamená bez obmedzenia.\n\nLimit sa uplatňuje od **najstarších** položiek v nevybavenom zozname, takže kurzor sledovania stále postupuje súvisle a zostávajúce správy sa doručia v nasledujúcich cykloch namiesto toho, aby sa preskočili. Použite ho na obmedzenie objemu práce, ktorú môže vykonať jeden cyklus, keď sa môže nahromadiť veľké množstvo nevybavených položiek"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Presunúť správu do koša"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "ID správy, ktorá sa má presunúť do koša; udalosti sledovania nesú túto hodnotu ako `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Odstrániť správu"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -852,7 +852,7 @@
           "message": "ID správy, ktorá sa má natrvalo vymazať; udalosti sledovania nesú túto hodnotu ako `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Odoslať správu"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Hodnota hlavičky `References`: hodnoty `Message-ID` správ v konverzácii, na ktorú sa odpovedá, od najstaršej, oddelené medzerami a vrátane lomených zátvoriek. Ak nie je nastavená, použije sa `in_reply_to`. Udalosti sledovania nesú hlavičku `References` pôvodnej správy"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Vyhľadať správy s metadátami"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Hlavičky správy, ktoré sa majú načítať pre každú zodpovedajúcu správu; ignoruje sa, ak `format` nie je `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Obnoviť správu z koša"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "ID správy, ktorá sa má obnoviť z koša; udalosti sledovania nesú túto hodnotu ako `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Zmeniť štítky správy"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "ID štítkov, ktoré sa majú zo správy odobrať; štítok je identifikovaný svojím ID (napr. `INBOX`, `UNREAD`, `Label_12`), nie názvom"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Vypísať štítky"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Vypíše všetky štítky v účte, systémové štítky Gmailu (`INBOX`, `UNREAD`, `STARRED` a ďalšie) aj štítky vytvorené používateľom, každý s ID, ktoré prijímajú `modify-message-labels` a možnosť vyhľadávania `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Vytvoriť štítok"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Nezobrazovať správy s týmto štítkom v zozname správ"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Vytvoriť koncept"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Hodnota hlavičky `References`: hodnoty `Message-ID` správ v konverzácii, na ktorú sa odpovedá, od najstaršej, oddelené medzerami a vrátane lomených zátvoriek. Ak nie je nastavená, použije sa `in_reply_to`. Udalosti sledovania nesú hlavičku `References` pôvodnej správy"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Vyhľadať koncepty"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Token stránky na načítanie konkrétnej stránky výsledkov v zozname"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Získať koncept"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Celá správa ako údaje MIME kódované pomocou base64url v `raw`; telo sa neparsuje"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Odoslať koncept"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "ID konceptu, ktorý sa má odoslať; `list-drafts` a `create-draft` vracajú túto hodnotu ako `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Vymazať koncept"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Chat-Vervollständigung"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Pseudonyme Kennung für Caching und Scheduling-Isolation. Verwenden Sie Buchstaben, Ziffern, Unterstriche oder Bindestriche; maximal 512 Zeichen. Exkludieren Sie persönliche Informationen."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Verfügbare Modelle für Ihre Workflows finden."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
+          "source": "Get balance",
           "message": "Guthaben abrufen"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Verfügbaren Kredit vor Ausführung von KI-Workflows prüfen.\n\nGibt Kreditverfügbarkeit und Kontostände zurück, ohne Tokens zu generieren."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
+          "source": "Fill in the middle",
           "message": "Lücke ausfüllen"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Anzahl alternativer Token-Wahrscheinlichkeiten von `0` bis `20`."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Antwort erstellen"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Pseudonyme Kennung für Caching und Scheduling-Isolation. Verwenden Sie Buchstaben, Ziffern, Unterstriche oder Bindestriche; maximal 512 Zeichen. Exkludieren Sie persönliche Informationen."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
+          "source": "Upload image file",
           "message": "Bild hochladen"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Löschen Sie die Datei automatisch nach `3600` bis `2592000` Sekunden. Auslassen, um sie beizubehalten."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
+          "source": "List image files",
           "message": "Bild-Dateien auflisten"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Benutzerdaten"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
+          "source": "Get image file",
           "message": "Bild-Datei abrufen"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Wählen Sie eine hochgeladene Bilddatei aus."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
+          "source": "Delete image file",
           "message": "Bild-Datei löschen"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {

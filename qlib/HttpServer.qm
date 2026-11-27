@@ -244,7 +244,9 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       @ref Qore::Socket::readHTTPChunkedBody() "readHTTPChunkedBody()" and its variants; a body with a
       \c Content-Length up to its length, which the server reads before the handler gets the request, except the
       part that it did not read of a body that a stream handler gets in parts (see
-      @ref HttpServer::Http1BodyReader "Http1BodyReader");
+      @ref HttpServer::Http1BodyReader "Http1BodyReader"); @ref Qore::Socket::isDataAvailable() "isDataAvailable()"
+      tells whether data of that body is available, and returns @ref False "False" once it is read (the data that
+      follows is the next request's);
     - has a character encoding and timeouts of its own, which do not change the connection's, and gives the
       connection's information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()";
     - gives each send and read a timeout of at most the server's \c handler_socket_max_timeout option (see
@@ -255,7 +257,9 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       (@ref Qore::Socket::readHTTPHeader() "readHTTPHeader()"), for shutdown() and close() (a handler closes the
       connection with the \c close key of its response; code that is not sandboxed aborts it at once, as when a
       response is cut off midway, with @ref HttpServer::http_abort_connection() "http_abort_connection()"), and for
-      the methods that connect, bind, accept or upgrade a socket or change the connection's settings;
+      the methods that connect, bind, accept or upgrade a socket or change the connection's settings, and for every
+      other method of the connection's other uses (TLS settings, HTTP/2 and HTTP/3 streams, poll operations, the
+      server's own settings and queues);
     - ends before the server answers the request (when the handler's code returns, or when the request is answered
       before its handler gets it) or reads the next request: its sends and reads then raise
       \c HTTP-HANDLER-SOCKET-ERROR.
@@ -288,6 +292,59 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     address and certificate are not those of this socket's @ref Qore::Socket::getPeerInfo() "getPeerInfo()" and
     @ref Qore::Socket::getRemoteCertificate() "getRemoteCertificate()": the request context gives them, in
     \c cx."peer-info" and \c cx."client-cert" (see @ref httpserverutil_request_context).
+
+    @section httpserver_http2_errors HTTP/2 Errors and the End of an HTTP/2 Connection
+
+    The server logs the HTTP/2 error frames of a connection at warning level, with the client's address and port
+    (see <a href="https://github.com/qoretechnologies/qore/issues/7770">issue 7770</a>):
+    - each \c GOAWAY frame with an error code other than \c NO_ERROR that it sends or receives: its error code, the
+      last stream ID and its debug data
+    - each \c RST_STREAM frame with an error code other than \c NO_ERROR and \c CANCEL that it sends or receives: its
+      stream ID and error code
+    - each frame that it receives and that is not valid (the cause of a stream error or of a connection error): its
+      type, stream ID, flags and length, and the error
+
+    At most 16 such messages are logged for a connection, and then one that says that further ones are not logged.
+    The messages go to the logger of the asynchronous I/O (see @ref Qore::set_async_io_logger() "set_async_io_logger()"),
+    or, if it has none, to the logger of the global
+    @ref Qore::AsyncIoController::setLogger() "AsyncIoController", which an HttpServer with a logger sets when it
+    starts.
+
+    After it has sent the \c GOAWAY frame of a connection error, the server closes the connection (RFC 9113 section
+    5.4.1), as it does when a \c GOAWAY frame has been sent or received and no stream of the connection has work left.
+
+    The server ends its half of the stream of an HTTP/2 WebSocket connection (RFC 8441) when the WebSocket connection
+    has closed: after the closing handshake, after the close timeout, or at once after its close frame when the
+    handler has no close timeout.  If the client has not ended its half then, the server resets the stream with
+    <tt>RST_STREAM(NO_ERROR)</tt> (RFC 9113 section 8.1), as it does for a request whose response it sent before the
+    end of the request; without a close timeout, the client's close frame is then not received.  A stream that the
+    client does not end would otherwise stay open for the life of the connection and count against the connection's
+    \c SETTINGS_MAX_CONCURRENT_STREAMS.  Any other \c CONNECT tunnel stays open until each side has ended its half.
+
+    @section httpserver_lifetime The Lifetime of a Server and Its Requests
+
+    Each request holds its server while the server processes it, from its dispatch until its response has been
+    handed to the server's I/O (sent, or queued for the I/O thread, which sends it).  A server whose last reference
+    the program releases while requests run is therefore destroyed after the last of them, in that request's thread,
+    and all of them are processed by the live server, with the methods that a subclass reimplements (such as
+    @ref HttpServer::HttpServer::log() "log()" or @ref HttpServer::HttpServer::getTtl() "getTtl()"), and answered.  The destructor stops the server as
+    @ref HttpServer::HttpServer::stop() "stop()" does, without waiting for the request that runs it: its drain sends
+    the responses that are queued, the last request's too (with a \c drain_timeout of zero or less, which means no
+    drain, they can be lost).  A request that releases the last reference itself destroys the server in the same way
+    when it ends.
+
+    As long as requests keep arriving before the requests in progress have ended, the server is held: a server under
+    sustained load is destroyed only when there is a moment without requests in progress.  To stop a server at once,
+    call @ref HttpServer::HttpServer::stop() "stop()" before releasing it.
+
+    A connection that a request hands over to a handler that serves it after the request has ended (a WebSocket
+    connection of the WebSocketHandler module, an event stream), and a persistent session while it waits for its next
+    request, do not hold the server: the program's release of the server destroys it, which closes them.  A handler
+    that serves a connection in its request's thread holds the server until it returns, as the request does.
+
+    Before HttpServer 1.7, only the call of a request's handler held the server: a release while no handler ran
+    destroyed the server in the thread that released it, while its other requests ran (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>).
 
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
@@ -383,6 +440,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a request holds its server until its response has been handed to the server's I/O: a server that the program
+      releases while requests run is destroyed after the last of them, in its thread, and all of them are answered
+      (see @ref httpserver_lifetime;
+      <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>)
     - the HTML error pages of a server that code restricted from external information created do not show the
       hostname (see @ref sandbox_ambient_host_data)
     - a listener can serve only its own handlers
@@ -396,6 +457,15 @@ log("started listener on %s", lh.desc);
       (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
     - the parse option @ref Qore::Option::HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION
       "HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION" tells that this module has these behaviours
+    - the stop of a listener (@ref HttpServer::HttpServer::stopListenerID() "stopListenerID()") drains its
+      connections: the requests and responses in progress on the listener and on its paired QUIC listener complete,
+      at most the \c drain_timeout option, then the connections that are left are closed before the stop returns
+      (except that of a request that runs the stop); the server's lock of its listeners is not held while the stop
+      waits; the other listeners are not affected; before, the stop waited only for
+      the handlers of the listener, and could cut off a response that was being sent, and the connections were closed
+      after the stop returned; the parse option @ref Qore::Option::HAVE_HTTPSERVER_LISTENER_STOP_DRAIN
+      "HAVE_HTTPSERVER_LISTENER_STOP_DRAIN" tells that this module behaves so
+      (<a href="https://github.com/qoretechnologies/qore/issues/7692">issue 7692</a>)
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
@@ -1446,6 +1516,18 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! True while stop() is in progress
         bool stopping = False;
 
+        #! The IDs of the listeners whose stop stopListenerID(), stopListener(), stopListenerIDNoWait() or
+        #! removeHandlerFromListenerID() runs: listener ID -> a Counter that reaches zero when the stop has ended;
+        #! protected by lm, which the stop itself does not hold (qore#7692)
+        hash<string, Counter> stop_reserved = {};
+
+        #! The IDs of the listeners whose stop has started (stopListenerAccepting()) and has not ended
+        #! (listenerStopped()): listener ID -> True; protected by lm (qore#7692)
+        hash<string, bool> draining_lids = {};
+
+        #! True while #draining_lids has an entry; read on each reply before the listener is asked whether it drains
+        bool listeners_draining = False;
+
         #! Signaled with stop_m when a stop in progress has ended
         Condition stop_cond();
 
@@ -1578,6 +1660,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     private:internal {
+        #! the test hook that a stop of a listener calls when it waits for the stop that another call runs (see
+        #! dbgSetListenerStopWaitHook())
+        static *code<*bool(HttpServer, int)> dbg_stop_wait_hook;
         #! The capability of the server's dispatch to make the raw request of a request current (qore#6843)
         /** Claimed by the initialization of the module; without it, no raw request is current, and stream requests are
             refused (see AbstractHttpRequestHandler::claimServerDispatch())
@@ -1761,6 +1846,10 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
 
     #! calls stop() and destroys the object
     /** If a stop is in progress (for example one started with stopNoWait()), waits for it to end first
+
+        A request holds its server until its response has been handed to the server's I/O, so a server whose last
+        reference the program releases while requests run is destroyed after the last of them, in its thread (see
+        @ref httpserver_lifetime)
     */
     destructor() {
         stopIntern(True, True);
@@ -2319,6 +2408,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # when the listener is stopped/deleted (on_error handles setup failures)
         c.add();
         on_error c.done();
+        http_listener.setServerStopWaitGroup(c);
 
         # the fast routes of the server, if any, are answered for the HTTP/3 requests of the listener's sessions; the
         # socket is kept so that routes created later are attached to it as well; a listener that serves only its
@@ -2344,6 +2434,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener,
             opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs,
             http_listener.getMaxRequestBodySize());
+        # the listener drains its sessions with the controller when it stops (qore#7692)
+        http_listener.setDrainController(asyncIo, drain_timeout);
 
         listeners{lid} = http_listener;
         nmap{lname} = lid;
@@ -2624,8 +2716,29 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             lm.enter();
             on_exit lm.exit();
 
+            # every stop of a listener is reserved, however it started, so that a blocking stop of the listener waits
+            # for it (see reserveListenerStopUnlocked()); the reservation ends in listenerStopped() (qore#7692)
+            if (!stop_reserved{lid}) {
+                stop_reserved{lid} = new Counter(1);
+            }
+            # the listener releases the reservation itself if it cannot notify the server (qore#7509)
+            l.setStopReservation(stop_reserved{lid});
+            # the listener (and its QUIC listener) drain from now on: see sendReply() (qore#7692)
+            draining_lids{lid} = True;
+            listeners_draining = True;
             if (quic_listener_map.hasKey(lid)) {
                 quic_l = listeners{string(quic_listener_map{lid})};
+                # only a QUIC listener that has not stopped: listenerStopped() removes the entry; its stop, which this
+                # stop runs, is reserved too, so that a blocking stop of the QUIC listener waits for it (its own
+                # stopListenerAccepting() keeps the reservation, and its listenerStopped() ends it)
+                if (quic_l) {
+                    string qid = string(quic_listener_map{lid});
+                    draining_lids{qid} = True;
+                    if (!stop_reserved{qid}) {
+                        stop_reserved{qid} = new Counter(1);
+                    }
+                    quic_l.setStopReservation(stop_reserved{qid});
+                }
                 # clients are no longer told to use the QUIC listener of this listener
                 remove quic_port_map{lid};
                 remove quic_alt_svc_max_age{lid};
@@ -2673,6 +2786,15 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         on_exit {
             lm.exit();
         }
+        # the reservation of the stop (see reserveListenerStopUnlocked()) ends, and the calls that wait for the stop
+        # return, also when an exception is raised below; the listener no longer drains (qore#7692)
+        on_exit {
+            if (*Counter reserved = remove stop_reserved{l.getID()}) {
+                Priv::StopReservation::end(reserved);
+            }
+            remove draining_lids{l.getID()};
+            listeners_draining = boolean(draining_lids);
+        }
 
         # Remove listener from async I/O controller if running
         if (asyncIo) {
@@ -2699,6 +2821,10 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # If this TCP listener had an auto-created QUIC listener, stop it too
         if (quic_listener_map.hasKey(lid)) {
             int quic_lid = remove quic_listener_map{lid};
+            # the QUIC listener no longer drains when it has stopped (also if it stopped before, qore#7692)
+            if (!listeners.hasKey(string(quic_lid))) {
+                remove draining_lids{string(quic_lid)};
+            }
             remove quic_port_map{lid};
             remove quic_alt_svc_max_age{lid};
             {
@@ -2917,6 +3043,14 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # Flush any remaining async callbacks (from listener stops)
         ctrl.flushCallbacks();
 
+        # no listener drains any more (qore#7692)
+        {
+            lm.enter();
+            on_exit lm.exit();
+            draining_lids = {};
+            listeners_draining = False;
+        }
+
         threadPool.stop();
 
         {
@@ -2947,35 +3081,93 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! stops a single listener based on its name or bind address; does not return until all connections on the listener have closed
-    /** @param bind listener bind address
+    /** The connections of the listener are drained first, as with stopListenerID() (qore#7692)
+
+        @param bind listener bind address
 
         @throw INVALID-LISTENER-ERROR invalid listener bind address
         @throw HTTP-SERVER-ERROR cannot stop last listener
     */
     stopListener(softstring bind) {
-        lm.enter();
-        on_exit lm.exit();
+        *int id;
+        *HttpListener l;
+        *Counter in_progress;
+        {
+            lm.enter();
+            on_exit lm.exit();
 
-        *int id = smap{bind};
-        if (!id) {
-            id = nmap{bind};
+            id = smap{bind};
+            if (!id) {
+                id = nmap{bind};
+            }
+
+            if (!id) {
+                throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with name or bind address %y", bind);
+            }
+            l = reserveListenerStopUnlocked(id, \in_progress);
         }
-
-        if (!id) {
-            throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with name or bind address %y", bind);
+        if (in_progress) {
+            waitListenerStop(id, in_progress);
+            return;
         }
-
-        if (protect_last_listener && (elements smap == 1)) {
-            throw "HTTP-SERVER-ERROR", "cannot stop last listener";
+        # the stop runs without lm: it waits for the requests of the listener, whose handlers can call the server
+        # (qore#7692); the reservation ends in listenerStopped(), which the stop calls also when it raises an exception
+        if (l) {
+            l.stop();
         }
-
-        listeners{id}.stop();
     }
 
     #! stops a single listener based on its listener ID; does not return until all connections on the listener have closed
     /** From the start of the stop, the listener accepts no new connection, its paired QUIC listener no new session,
         and the QUIC listener is no longer advertised in the \c Alt-Svc header; the requests in progress are served
-        (qore#7690)
+        (qore#7690).
+
+        The stop then drains the connections of the listener and of its paired QUIC listener (qore#7692):
+        - a request in progress is answered, and its response is sent completely: an HTTP/1.1 response says
+          \c Connection: \c close and the connection is closed after it (a request that arrives on a persistent
+          connection before the server closed it is answered so too); an HTTP/2 client is sent a \c GOAWAY frame and
+          an HTTP/3 session a \c GOAWAY notice, and the connection or session is closed when its requests have ended;
+          an idle connection is closed at once
+        - the dedicated connections (WebSocket) are closed with their protocol's closing handshake, the streaming
+          handlers are told to stop, and a protocol upgrade, a CONNECT tunnel or an event stream that a handler
+          starts on the listener is refused with a 503 response
+        - the drain waits at most the server's \c drain_timeout option (see
+          @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"); a drain timeout of zero means no drain
+        - then every connection of the listener that is left is closed, and an accept in progress ends first; an
+          HTTP/1.1 request whose handler still runs is waited for, and its connection closed; when the stop returns,
+          the connections of the listener are closed, except that of a request that runs the stop (see below)
+
+        The connections of the other listeners of the server are not affected.  The server's lock of its listeners is
+        not held while the stop waits, so the handlers of the listener's requests can call the server.
+
+        A stop that runs in a request of the listener does not wait for that request:
+        - an HTTP/1.1 request is answered when the stop has returned, and its connection is closed after the response
+        - for an HTTP/2 request, the drain does not wait for the request's connection, which is closed with the other
+          connections of the listener: the response of the request that runs the stop is not sent, nor are the
+          responses in progress on the other streams of that connection
+        - for an HTTP/3 request, whose sessions the QUIC listener drains together, the drain does not wait for any
+          session of the paired QUIC listener: the response of the request that runs the stop is not sent, and the
+          responses in progress for the other clients of the QUIC listener can be cut off
+
+        @note The stop waits for the HTTP/1.1 requests of the listener whose handlers still run, without a timeout, and
+        a request whose handler never runs can stay counted:
+        - a request whose handler-pool task cannot run its handler because the async target's
+          @ref HttpServerAsyncIo::HttpAsyncTarget::saveDispatchContext() "saveDispatchContext()" raises an exception
+          (for example a target of an application that saves its thread-local state there, on an internal failure)
+          is not answered and stays counted: a later stop of the listener waits for the drain timeout, and then until
+          the server is stopped
+        - a request whose queued task the server's handler pool cancels stays counted; the pool cancels a queued task
+          only while the server stops and a thread cannot be started (a thread limit), and a stop of the listener that
+          runs at the same time then waits until the server's stop has ended, or, if the server's stop runs in one of
+          its own requests and its thread to stop the handler pool cannot be started, forever
+
+        @note Stops of listeners that wait for each other (a request of listener A stops listener B while a request of
+        B stops A, or a cycle of more listeners) wait forever: each stop waits for the requests of its listener
+
+        A call for a listener whose stop is in progress (started by any means) waits for that stop to end, unless it
+        runs in a request of the listener or of its paired QUIC listener, or in a thread that holds the server's lock
+        of its listeners (code that the server's stop() runs for a listener, such as its stop notification), where
+        it returns at once.  A stop that has started but has not yet stopped accepting connections is not waited for.
 
         @param id listener id
 
@@ -2983,40 +3175,159 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTP-SERVER-ERROR cannot stop last listener
     */
     stopListenerID(softint id) {
-        lm.enter();
-        on_exit lm.exit();
-
-        if (!listeners.hasKey(id)) {
-            throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
+        *HttpListener l;
+        *Counter in_progress;
+        {
+            lm.enter();
+            on_exit lm.exit();
+            l = reserveListenerStopUnlocked(id, \in_progress);
         }
-
-        if (protect_last_listener && (smap.size() == 1)) {
-            throw "HTTP-SERVER-ERROR", "cannot stop last listener";
+        if (in_progress) {
+            waitListenerStop(id, in_progress);
+            return;
         }
-
-        listeners{id}.stop();
+        # the stop runs without lm: it waits for the requests of the listener, whose handlers can call the server
+        # (qore#7692); the reservation ends in listenerStopped(), which the stop calls also when it raises an exception
+        if (l) {
+            l.stop();
+        }
     }
 
     #! starts the shutdown process for a listener based on its listener ID; returns immediately
-    /** @param id listener id
+    /** The stop, which runs in the background, drains the connections of the listener first, as with
+        stopListenerID() (qore#7692)
+
+        @param id listener id
 
         @throw INVALID-LISTENER-ERROR invalid listener ID
         @throw HTTP-SERVER-ERROR cannot stop last listener
     */
     stopListenerIDNoWait(softint id) {
-        lm.enter();
-        on_exit lm.exit();
+        *HttpListener l;
+        *Counter in_progress;
+        {
+            lm.enter();
+            on_exit lm.exit();
+            l = reserveListenerStopUnlocked(id, \in_progress);
+        }
+        # the background thread does not hold the server (a request can release its last reference meanwhile); the
+        # reservation ends in listenerStopped()
+        if (l) {
+            try {
+                background l.stop();
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread was started: the reservation ends here
+                endListenerStopReservation(id);
+                rethrow;
+            }
+        }
+    }
 
+    #! Reserves the stop of a listener for stopListenerID(), stopListener() or stopListenerIDNoWait(); lm must be held
+    /** The listener is checked and reserved under lm, which the stop itself does not hold (qore#7692): a listener
+        whose stop is reserved does not count as a listener left for the \c protect_last_listener check
+
+        @param in_progress set to the Counter of the stop in progress if the stop is reserved already and the caller
+        does not run in a request of the listener: the caller waits for it with waitListenerStop()
+
+        @return the listener, or @ref nothing if its stop is reserved already (it is in progress)
+
+        @throw INVALID-LISTENER-ERROR invalid listener ID
+        @throw HTTP-SERVER-ERROR cannot stop last listener
+    */
+    private *HttpListener reserveListenerStopUnlocked(softint id, reference<*Counter> in_progress) {
         if (!listeners.hasKey(id)) {
             throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
         }
-
-        if (protect_last_listener && (smap.size() == 1)) {
-            throw "HTTP-SERVER-ERROR", "cannot stop last listener";
+        if (stop_reserved{id}) {
+            # a call in a request of the listener (or of its paired QUIC listener) does not wait for the stop, which
+            # waits for that request; nor does a call in a thread that held lm already (the stop's end needs it, see
+            # listenerStopped())
+            if (lm.numInside() == 1 && !listeners{id}.isRequestOfListener()) {
+                in_progress = stop_reserved{id};
+            }
+            return;
         }
-
-        background listeners{id}.stop();
+        if (protect_last_listener) {
+            int left = 0;
+            foreach softstring lid in (smap.iterator()) {
+                if (!stop_reserved{lid}) {
+                    ++left;
+                }
+            }
+            if (left <= 1) {
+                throw "HTTP-SERVER-ERROR", "cannot stop last listener";
+            }
+        }
+        stop_reserved{id} = new Counter(1);
+        listeners{id}.setStopReservation(stop_reserved{id});
+        return listeners{id};
     }
+
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that a stop of a listener calls when it waits for the stop that another call runs; a debug
+    #! build of the library only
+    /** For tests (qore#7692): the hook is process-wide (it is called for the listeners of every server in the
+        process), so only trusted code with process control can set it, and the method exists only in a debug build
+        of the library
+
+        @param hook the hook, called with the server and the listener ID in the thread of the call before it waits, or
+        @ref nothing to remove it; if it returns @ref True, the call does not wait; an exception that it raises is
+        ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetListenerStopWaitHook(*code<*bool(HttpServer, int)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the listener stop wait hook of HTTP servers");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the listener stop wait hook of HTTP servers from a context with "
+                "restricted process control";
+        }
+        dbg_stop_wait_hook = hook;
+    }
+    #! @endcond
+%endif
+
+    #! Reserves the stop of a listener that has no handler left (see removeHandlerFromListenerID()); lm must be held
+    /** @return @ref True if the stop was reserved here; the caller ends the reservation with
+        endListenerStopReservation() if the listener is not stopped
+    */
+    private bool reserveHandlerlessStopUnlocked(softint id, HttpListener l) {
+        if (l.hasHandlers() || stop_reserved{id}) {
+            return False;
+        }
+        stop_reserved{id} = new Counter(1);
+        l.setStopReservation(stop_reserved{id});
+        return True;
+    }
+
+    #! Waits for the stop of a listener that another call runs (see reserveListenerStopUnlocked())
+    private waitListenerStop(softint id, Counter in_progress) {
+        # test hook (a debug build of the library only): the call waits for the stop in progress, unless the hook
+        # returns True (a test that records a wait that must not happen, so that it fails instead of hanging)
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_stop_wait_hook) {
+            try {
+                if (dbg_stop_wait_hook(self, id)) {
+                    return;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        in_progress.waitForZero();
+    }
+
+    #! Ends the reservation of the stop of a listener whose stop did not run
+    private endListenerStopReservation(softint id) {
+        lm.enter();
+        on_exit lm.exit();
+        if (*Counter reserved = remove stop_reserved{id}) {
+            Priv::StopReservation::end(reserved);
+        }
+    }
+
 
     #! sets the default request handler when no other handler can be matched
     setDefaultHandler(string name, HttpServer::AbstractHttpRequestHandler obj) {
@@ -3236,27 +3547,60 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw INVALID-LISTENER-ERROR invalid listener id passed
     */
     bool removeHandlerFromListenerID(softstring id, string handler_name) {
-        lm.enter();
-        on_exit lm.exit();
 
-        if (!listeners.hasKey(id)) {
-            throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
-        }
-        listeners{id}.removeHandler(handler_name);
+        HttpListener l;
+        *HttpListener quic_l;
+        softint quic_lid = 0;
+        bool reserved = False;
+        bool quic_reserved = False;
+        {
+            lm.enter();
+            on_exit lm.exit();
 
-        # also remove the propagated handler from the paired QUIC listener
-        if (*int quic_id = quic_listener_map{id}) {
-            if (listeners.hasKey(quic_id)) {
-                try {
-                    listeners{quic_id}.removeHandler(handler_name + "-h3");
-                } catch () {
-                    # handler may not exist on the QUIC listener (e.g., added before QUIC pairing)
+            if (!listeners.hasKey(id)) {
+                throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
+            }
+            l = listeners{id};
+            l.removeHandler(handler_name);
+
+            # also remove the propagated handler from the paired QUIC listener
+            if (*int quic_id = quic_listener_map{id}) {
+                if (listeners.hasKey(quic_id)) {
+                    quic_l = listeners{quic_id};
+                    quic_lid = quic_id;
+                    try {
+                        quic_l.removeHandler(handler_name + "-h3");
+                    } catch () {
+                        # handler may not exist on the QUIC listener (e.g., added before QUIC pairing)
+                    }
                 }
-                HttpServer::HttpListener::stopIfNoHandlers(listeners{quic_id});
+            }
+
+            # the stop of a listener left without handlers is reserved, as for stopListenerID()
+            reserved = reserveHandlerlessStopUnlocked(id, l);
+            if (quic_l) {
+                quic_reserved = reserveHandlerlessStopUnlocked(quic_lid, quic_l);
             }
         }
 
-        return HttpServer::HttpListener::stopIfNoHandlers(listeners{id});
+        # a listener without handlers is stopped without lm: the stop waits for its requests, whose handlers can call
+        # the server (qore#7692); a reservation of a listener that is not stopped (a handler was added meanwhile, or a
+        # stop raised an exception before it ran) ends here (the stop of a listener ends its reservation itself)
+        bool quic_stopped = False;
+        bool stopped = False;
+        on_exit {
+            if (quic_reserved && !quic_stopped) {
+                endListenerStopReservation(quic_lid);
+            }
+            if (reserved && !stopped) {
+                endListenerStopReservation(id);
+            }
+        }
+        if (quic_l) {
+            quic_stopped = HttpServer::HttpListener::stopIfNoHandlers(quic_l);
+        }
+        stopped = HttpServer::HttpListener::stopIfNoHandlers(l);
+        return stopped;
     }
 
     #! remove request handler from a listener given the listener's id
@@ -3270,27 +3614,60 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw INVALID-LISTENER-ERROR invalid listener id passed
     */
     bool removeHandlerFromListenerID(softstring id, HttpServer::AbstractHttpRequestHandler handler) {
-        lm.enter();
-        on_exit lm.exit();
 
-        if (!listeners.hasKey(id)) {
-            throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
-        }
-        listeners{id}.removeHandler(handler);
+        HttpListener l;
+        *HttpListener quic_l;
+        softint quic_lid = 0;
+        bool reserved = False;
+        bool quic_reserved = False;
+        {
+            lm.enter();
+            on_exit lm.exit();
 
-        # also remove the same handler from the paired QUIC listener
-        if (*int quic_id = quic_listener_map{id}) {
-            if (listeners.hasKey(quic_id)) {
-                try {
-                    listeners{quic_id}.removeHandler(handler);
-                } catch () {
-                    # handler may not exist on the QUIC listener
+            if (!listeners.hasKey(id)) {
+                throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
+            }
+            l = listeners{id};
+            l.removeHandler(handler);
+
+            # also remove the same handler from the paired QUIC listener
+            if (*int quic_id = quic_listener_map{id}) {
+                if (listeners.hasKey(quic_id)) {
+                    quic_l = listeners{quic_id};
+                    quic_lid = quic_id;
+                    try {
+                        quic_l.removeHandler(handler);
+                    } catch () {
+                        # handler may not exist on the QUIC listener
+                    }
                 }
-                HttpServer::HttpListener::stopIfNoHandlers(listeners{quic_id});
+            }
+
+            # the stop of a listener left without handlers is reserved, as for stopListenerID()
+            reserved = reserveHandlerlessStopUnlocked(id, l);
+            if (quic_l) {
+                quic_reserved = reserveHandlerlessStopUnlocked(quic_lid, quic_l);
             }
         }
 
-        return HttpServer::HttpListener::stopIfNoHandlers(listeners{id});
+        # a listener without handlers is stopped without lm: the stop waits for its requests, whose handlers can call
+        # the server (qore#7692); a reservation of a listener that is not stopped (a handler was added meanwhile, or a
+        # stop raised an exception before it ran) ends here (the stop of a listener ends its reservation itself)
+        bool quic_stopped = False;
+        bool stopped = False;
+        on_exit {
+            if (quic_reserved && !quic_stopped) {
+                endListenerStopReservation(quic_lid);
+            }
+            if (reserved && !stopped) {
+                endListenerStopReservation(id);
+            }
+        }
+        if (quic_l) {
+            quic_stopped = HttpServer::HttpListener::stopIfNoHandlers(quic_l);
+        }
+        stopped = HttpServer::HttpListener::stopIfNoHandlers(l);
+        return stopped;
     }
 
     #! turns on or off header and body logging options for receive operations for the given listener
@@ -4556,6 +4933,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the requests read from the sockets accepted from the listener give their fields as the server's option
             # says (qore#6851)
             l.setHttpFieldsAtTopLevel(http_fields_at_top_level);
+            l.setServerStopWaitGroup(c);
 
             # Register listener in maps BEFORE adding to async I/O controller
             # This prevents a race where an accept could arrive before registration is complete
@@ -4642,6 +5020,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     quic_port_map{id} = quic_info.port;
                     quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
                     quic_listener_map{id} = quic_info.id;
+                    # the TCP listener's stop drains the QUIC listener at the same time (qore#7692)
+                    l.setQuicDrainPartner(listeners{string(quic_info.id)});
                     updateAltSvcHeader();
                     log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
                         quic_info.port, id);
@@ -4711,6 +5091,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
                     l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
                     l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+                # the listener drains its connections with the controller when it stops (qore#7692)
+                l.setDrainController(asyncIo, drain_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 # the listener could not be started: it is not kept registered and counted, and its paired QUIC
                 # listener and Alt-Svc entry are removed with it (qore#7436)
@@ -5387,7 +5769,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** Called only for a request whose handler gets the socket of its request; the callers of handleRequest() end it
         when it returns, and handleRequest() before the server answers the request
     */
-    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
+    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10, int stream_max_body) {
         # the callers end the socket of each request when the request is handled: a socket of a previous request on
         # the object that is still live is ended here all the same
         if (request_helper.h1_view) {
@@ -5398,12 +5780,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (request_helper.hs_state) {
             request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state,
                 request_helper.hs_state.h1Reset(real, head, http10, handler_socket_max_timeout),
-                handler_socket_max_timeout);
+                handler_socket_max_timeout, stream_max_body);
         } else {
             # a new state, started for the request: its first generation
             request_helper.hs_state = new HandlerSocketState(real, head, http10, handler_socket_max_timeout);
             request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state, 1,
-                handler_socket_max_timeout);
+                handler_socket_max_timeout, stream_max_body);
         }
         request_helper.h1_state = 0;
         request_helper.h1_view = True;
@@ -5632,7 +6014,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     || SandboxManager::isRestricted();
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
-                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
+                # the limit of a body that the request's handler reads as a stream, which the socket of the request
+                # accepts as its maximum size of a chunked body from any code (qore#7567)
+                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0",
+                    cx."header-info".max_request_body_size ?? 0);
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -6178,19 +6563,35 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         }
     }
 
+    #! Returns @ref True if a new long-lived connection is refused while the server stops or the listener drains
+    /** A stopping server takes no new long-lived connection, which would hold its drain until the drain timeout: a
+        protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event stream
+        is refused with a 503 response (qore#5899); nor does a draining listener (qore#7692).  Called by sendReply()
+        only while the server stops or a listener drains, so that a reply pays only that test otherwise
+
+        @return @ref True if the response is refused (logged here): the caller answers with 503 and closes the
+        connection
+    */
+    private bool refusesLongLived(HttpListener listener, hash<auto> rv, hash<auto> cx, hash<auto> hdr) {
+        if ((rv."code" == 101 || hdr.method == "CONNECT"
+                || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))
+                && (stopping || listener.isDraining())) {
+            listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
+                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
+                cx.handler_name);
+            return True;
+        }
+        return False;
+    }
+
     # sends a reply to a request
     # If async_response_out is provided, capture response info instead of sending
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
-        # a stopping server takes no new long-lived connection, which would hold its drain until the drain timeout:
-        # a protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event
-        # stream is refused (qore#5899)
-        if (stopping && (rv."code" == 101 || hdr.method == "CONNECT"
-                || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))) {
-            listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
-                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
-                cx.handler_name);
+        # a stopping server, or a draining listener, takes no new long-lived connection (see refuseLongLived())
+        # no local is declared and no reference is taken here: each costs every call of this method
+        if ((stopping || listeners_draining) && refusesLongLived(listener, rv, cx, hdr)) {
             cx.close = True;
             rv = <HttpResponseInfo>{
                 "code": 503,
@@ -6812,7 +7213,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                                 }
                                 reg_done = True;
                             }
-                            asyncIo.registerH1WebSocketConnection(s, ws_poll_op, asyncTarget, ws_listener, reg_cx);
+                            # the connection is drained and closed with its listener (qore#7692)
+                            asyncIo.registerH1WebSocketConnection(s, ws_poll_op, asyncTarget, ws_listener, reg_cx,
+                                listener);
                         };
                     }
 
@@ -7325,6 +7728,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 if (!server_header) {
                     async_response_out.code = rv."code";
                     async_response_out.hdr = rv.hdr;
+                } else {
+                    # the server sent the header itself: the response that doResponse() recorded for the controller
+                    # would send it again before the first event (qore#7551)
+                    remove async_response_out.code;
+                    remove async_response_out.hdr;
+                    remove async_response_out.body;
+                    remove async_response_out.input_stream;
+                    remove async_response_out.chunked;
+                    remove async_response_out.send_callback;
+                    remove async_response_out.send_timeout;
                 }
                 async_response_out.streaming = True;
                 async_response_out.stream_type =
@@ -7803,6 +8216,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # connection WaitGroup for dedicated socket threads
         WaitGroup dThreads();
 
+        #! the server's reservation of the stop of this listener (see setStopReservation())
+        *Counter stop_reservation;
+
+        #! the server's count of its listeners that have not stopped (see setServerStopWaitGroup())
+        *WaitGroup server_stop_wg;
+
         bool exit = False;
         bool stopped = False;
         #! set once the listener's dedicated socket handlers have been signalled to stop
@@ -7886,6 +8305,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
         static *code<nothing(HttpListener)> dbg_stopping_hook;
+
+        #! the test hook that each request calls when it starts (see dbgSetRequestHook())
+        static *code<nothing(HttpListener)> dbg_request_hook;
+
+        #! the test hook that stop() calls at each phase of the listener's drain and stop (see dbgSetStopPhaseHook())
+        static *code<nothing(HttpListener, string)> dbg_stop_phase_hook;
+
+        #! the async I/O controller that the listener is registered with, which drains its connections when it stops
+        #! (qore#7692): a weak reference, as the controller's registration of the listener refers to the listener
+        *HttpServerAsyncIo::HttpAsyncSocketIoController drain_io;
+
+        #! the server's drain timeout when the listener was registered (the \c drain_timeout option)
+        timeout drain_timeout = 0;
+
+        #! the QUIC listener paired with this TCP listener, drained with it (a weak reference)
+        *HttpListener drain_partner;
+
+        #! set when the drain of the listener has started (qore#7692)
+        bool draining = False;
+
+    }
+
+    private:internal {
     }
 
     #! Creates the object with the given parameters
@@ -7924,6 +8366,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         self.stopc = opts.stopc;
 
         own_handlers_only = opts.own_handlers_only;
+        # the HTTP/1.1 requests of the listener that the async I/O controller dispatches, which its stop waits for
+        # (qore#7692); the listener's view for its handlers has none
+        dispatch_counter = new Counter();
         if (opts.handler_info) {
             addHandlers(opts.handler_info);
         }
@@ -8140,6 +8585,41 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return NOTHING;
     }
 
+    #! Answers a request on the async callback dispatcher worker if its handler answers it inline
+    /** Called by HttpServerNativeAsyncTarget::tryInlineRequest() for a request that can be answered inline.  The
+        request holds the server until its response has been handed to the server's I/O (see processNativeRequest()):
+        its result takes a reference to the server to the controller, which releases it in the callback that runs the
+        request, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
+
+        @param info connection and request information
+
+        @return result info for the controller to act on, or @ref nothing if the request's handler does not answer it
+        inline
+
+        @since HttpServer 1.7
+    */
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        *hash<HttpServerAsyncIo::HttpRequestResultInfo> rv;
+        {
+            *HttpServer server_hold = serv;
+            *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(info.hdr);
+            if (handler && (handler.handlerCodeIsRestricted()
+                    ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
+                        handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
+                    : handler.canHandleInline(info.cx, info.hdr))) {
+                rv = processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
+            }
+            remove server_hold;
+        }
+        # the request released the last reference to the server (the program released it while the request ran, and
+        # the request has no response to give that would hold the server): its stop closed the connections (qore#6508)
+        if (!serv) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+        }
+        return rv;
+    }
+
     #! Lightweight inline request processing — no context setup, logging, auth
     /** This method processes a request on the async callback dispatcher worker, bypassing
         the full processNativeRequest() path. It is only called when the handler's
@@ -8209,6 +8689,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "return_to_idle": !close,
                 "ttl": serv.getTtl(),
                 "after_send": after_send,
+                # the response holds the server until the controller has given it to its I/O (see tryInlineRequest())
+                "request_hold": serv,
             };
         } catch (hash<ExceptionInfo> ex) {
             string err = sprintf("inline handler %s: %s: %s", handler.className(), ex.err, ex.desc);
@@ -8231,16 +8713,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return whether listener was stopped
     */
     static bool stopIfNoHandlers(HttpServer::HttpListener listener) {
-        listener.m.lock();
-        on_error listener.m.unlock();
-
-        if (listener.handler_ref_cnt == 0) {
-            listener.m.unlock();
-            listener.stop();
-            return True;
+        {
+            # the lock is released once, before the stop: an error that the stop raises is not hidden by a second
+            # release (LOCK-ERROR)
+            AutoLock al(listener.m);
+            if (listener.handler_ref_cnt) {
+                return False;
+            }
         }
-        listener.m.unlock();
-        return False;
+        listener.stop();
+        return True;
     }
 
     hash getListenerSocketInfo() {
@@ -8274,7 +8756,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     # Returns True if informational messages of this listener will be logged
     private bool isLogInfoEnabled() {
         # nothing is logged through a server that has been destroyed (qore#6508)
-        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : (serv ? serv.isLogInfoEnabled() : False);
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serverLogInfoEnabled();
     }
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
@@ -8665,6 +9147,85 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+    #! @cond nodoc
+    # only called by the server that creates the listener: its count of its listeners that have not stopped, which
+    # the listener's stop releases itself when it cannot call the server (qore#7509)
+    setServerStopWaitGroup(WaitGroup wg) {
+        server_stop_wg = wg;
+    }
+    #! @endcond
+
+    #! returns True if the server logs messages at the info level
+    /** False for a server that has been deleted, or that is being destroyed in another thread, which cannot be called
+        then (qore#7509): the listener's stop logs after it released the server's destructor, as the other log methods
+        do
+    */
+    private bool serverLogInfoEnabled() {
+        if (!serv) {
+            return False;
+        }
+        try {
+            return serv.isLogInfoEnabled();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the server's idle timeout for the wait of a persistent session for its next request
+    /** @return the timeout, or @ref nothing if the server is gone or is being destroyed in another thread, whose
+        calls are refused (qore#7509): its stop closes the session
+    */
+    private *date getSessionTtl() {
+        *HttpServer server = serv;
+        if (!server) {
+            return NOTHING;
+        }
+        try {
+            return server.getTtl();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns @ref True if the server logs the stacks of exceptions; @ref False if it is gone or being destroyed
+    /** The error handlers of a persistent session's thread call it outside of the session's requests, which hold the
+        server (qore#7509)
+    */
+    private bool serverDebug() {
+        *HttpServer server = serv;
+        if (!server) {
+            return False;
+        }
+        try {
+            return server.getDebug();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+        return False;
+    }
+
+    #! releases the server's count of this listener when the listener stops while the server is being destroyed
+    private serverStopDone() {
+        if (server_stop_wg) {
+            try {
+                server_stop_wg.done();
+            } catch (hash<ExceptionInfo> ex) {
+                # as in HttpServer::listenerStopped(): the count can have been released already
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     #! Returns @ref True once the listener has stopped
     /** The server's count of running listeners was decremented for the listener when it stopped
     */
@@ -8680,6 +9241,53 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     final setStarted() {
         started = True;
+    }
+
+    #! Sets the async I/O controller that the listener is registered with, and the server's drain timeout (qore#7692)
+    /** The stop of the listener drains its connections with the controller: see stop()
+    */
+    final setDrainController(HttpServerAsyncIo::HttpAsyncSocketIoController io, timeout drain_timeout) {
+        drain_io := io;
+        self.drain_timeout = drain_timeout;
+    }
+
+    #! Sets the QUIC listener paired with this TCP listener, whose sessions the stop of this listener drains at the
+    #! same time (qore#7692)
+    final setQuicDrainPartner(*HttpListener quic_l) {
+        drain_partner := quic_l;
+    }
+
+    #! Returns @ref True once the drain of the listener has started (qore#7692)
+    /** While the listener drains, the server refuses a protocol upgrade, a CONNECT tunnel or an event stream that a
+        handler starts on it
+    */
+    bool isDraining() {
+        return draining;
+    }
+
+    #! Returns @ref True if the calling thread runs a request of this listener or of its paired QUIC listener
+    /** A call that would wait for the stop of the listener does not wait then: the stop waits for that request
+        (qore#7692)
+    */
+    bool isRequestOfListener() {
+        *HttpListener partner = drain_partner;
+        # a request that the server's handler code runs
+        *Priv::RequestHelper r = Priv::current_request;
+        if (r && (r.isRequestOf(cThreads) || (partner && r.isRequestOf(partner.cThreads)))) {
+            return True;
+        }
+        # a request that the async I/O controller runs: also an inline request or the preparation of a request (on a
+        # callback dispatcher worker), and the code that runs when a handler has returned
+        *HttpServerAsyncIo::HttpAsyncSocketIoController io = drain_io;
+        if (!io) {
+            return False;
+        }
+        try {
+            return io.isCallerRequestOf(self) || (partner && io.isCallerRequestOf(partner));
+        } catch (hash<ExceptionInfo> ex) {
+            # the controller is gone
+            return False;
+        }
     }
     #! @endcond
 
@@ -8703,9 +9311,67 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
         dbg_stopping_hook = hook;
     }
+
+    #! Sets the test hook that each request calls when it starts; a debug build of the library only
+    /** For tests: the hook is called in the request's thread, before the request is set up, for each request that
+        processNativeRequest() runs (the requests that are not answered inline).  It is process-wide (it is called for
+        the listeners of every server in the process), so only trusted code with process control can set it, and the
+        method exists only in a debug build of the library
+
+        @param hook the hook, called with the listener in the thread of the request, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetRequestHook(*code<nothing(HttpListener)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the request hook of HTTP listeners");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the request hook of HTTP listeners from a context with restricted "
+                "process control";
+        }
+        dbg_request_hook = hook;
+    }
+
+    #! Sets the test hook that stop() calls at each phase of the listener's stop; a debug build of the library only
+    /** For tests: the hook is called with the listener and the phase, in the thread of the stop:
+        - \c "drain-started": the drain of the listener's connections has started
+        - \c "drain-ended": the drain ended, every connection that it counts has been closed
+        - \c "drain-timeout": the drain timeout expired before the drain ended
+        - \c "closing-connections": the connections of the listener that are left are about to be closed (twice: before
+          and after the stop waits for the requests whose handlers still run)
+        - \c "connections-closed": the connections of the listener that were left have been closed
+        - \c "stopped": the stop has ended, and the server has been notified
+
+        An exception that the hook raises is ignored.  The hook is process-wide (it is called for the listeners of
+        every server in the process), so only trusted code with process control can set it, and the method exists
+        only in a debug build of the library
+
+        @param hook the hook, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetStopPhaseHook(*code<nothing(HttpListener, string)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the stop phase hook of HTTP listeners");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the stop phase hook of HTTP listeners from a context with "
+                "restricted process control";
+        }
+        dbg_stop_phase_hook = hook;
+    }
     #! @endcond
 %endif
 
+    #! Stops the listener; returns when the connections of the listener are closed
+    /** The listener accepts no new connection (qore#7690), its connections are drained, at most the server's
+        \c drain_timeout option, and those that are left are closed (qore#7692); see
+        @ref HttpServer::HttpServer::stopListenerID() "HttpServer::stopListenerID()".  A stop in progress or done is
+        not run again.
+
+        @param silent if @ref True, nothing is logged
+    */
     stop(*bool silent) {
         # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
         # ends only when the stop has returned to it: the request released the last reference to the server, whose
@@ -8731,6 +9397,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             exit = True;
         }
 
+        # the stop holds the server until it has notified it (qore#7509): the stop calls the server, and a reference
+        # that such a call takes was the last one once the requests that the stop waits for had released theirs, so
+        # the server was destroyed in the stop before the stop had released the server's count of the listener, which
+        # the destructor's stop waits for; the hold is released last (on_exit blocks run in reverse order)
+        *HttpServer server_hold = serv;
+        on_exit remove server_hold;
         # the stop ends with the server's notification also when it raises an exception: the server waits for the
         # stop of each of its listeners (qore#7690)
         on_exit finishStop(silent);
@@ -8741,16 +9413,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # no new connection or session is accepted from here on, before the stop waits for the requests in progress;
         # the listener is no longer advertised as an HTTP/3 alternative service (qore#7690); best effort: an error
         # here does not prevent the stop
-        if (serv) {
-            try {
-                serv.stopListenerAccepting(self);
-            } catch (hash<ExceptionInfo> ex) {
-                if (!silent) {
-                    logError("error refusing new connections on listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err,
-                        ex.desc);
-                }
-            }
-        }
+        serverCall("refusing new connections", "stopListenerAccepting",
+            sub (HttpServer s) { s.stopListenerAccepting(self); }, silent);
 
         # test hook (a debug build of the library only): the listener is marked as stopping, so that another stop
         # returns at once, and accepts no new connection (see dbgSetStoppingHook())
@@ -8759,12 +9423,68 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
-    #! Waits for the requests in progress of the listener whose stop has started, and stops its connections
-    /** Called by stop(), also when it raised an exception; an error removing the listener from the async I/O
-        controller, closing its socket or closing its dedicated connections is logged, and the next steps are taken
-        (qore#7690)
+    #! Drains and closes the connections of the listener whose stop has started, and stops its dedicated connections
+    /** Called by stop(), also when it raised an exception (qore#7690):
+        -# the drain of the listener's connections starts (with the server's \c drain_timeout option greater than
+           zero; qore#7692), and that of its paired QUIC listener: see
+           @ref HttpServerAsyncIo::HttpAsyncSocketIoController::startListenerDrain() "HttpAsyncSocketIoController::startListenerDrain()";
+           the dedicated connections are closed with their protocol's closing handshake, and the streaming handlers
+           are told to stop, as they have no end that a drain could wait for
+        -# the stop waits for the requests and responses in progress, at most the drain timeout
+        -# the connections of the listener that are left are closed; the requests whose handlers still run are waited
+           for, and their connections closed
+        -# the handler threads of the listener are waited for, the listener is removed from the async I/O controller,
+           its socket is closed and its dedicated connections are stopped
+
+        An error in a step is logged, and the next steps are taken.
     */
     private stopConnections(*bool silent) {
+        if (drainStart(silent)) {
+            stopPhase("drain-started");
+            # the dedicated connections (WebSocket) are closed with their protocol's closing handshake, all at the same
+            # time, and the streaming handlers are told to stop
+            try {
+                closeHandlerConnections(getDedicatedSocketHandlers(), id, silent ? NOTHING : sub (string fmt, ...) {
+                    logError("%s", vsprintf(fmt, argv));
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("error closing the dedicated connections of listener %d: %s: %s: %s", id,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                }
+            }
+            try {
+                signalHandlersToStop();
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("error stopping the streaming handlers of listener %d: %s: %s: %s", id, get_ex_pos(ex),
+                        ex.err, ex.desc);
+                }
+            }
+            stopPhase(drainWait(silent) ? "drain-ended" : "drain-timeout");
+        }
+        # the connections that are left are closed; then the requests whose handlers still run are waited for, and
+        # the connections that their results registered are closed too
+        drainClose(silent);
+        stopPhase("connections-closed");
+        drainWaitDispatches(silent);
+        drainClose(silent);
+
+        # the paired QUIC listener is stopped here, not by the server's notification of this stop (listenerStopped()),
+        # which holds the server's lock of its listeners: the stop waits for the requests of the QUIC listener, whose
+        # handlers can call the server; its drain ran with this one's (qore#7692)
+        *HttpListener partner = drain_partner;
+        if (partner) {
+            try {
+                partner.stop(silent);
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("error stopping the QUIC listener %d of listener %d: %s: %s: %s", partner.getID(), id,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                }
+            }
+        }
+
         # wait for all connection threads to terminate
         cThreads.wait();
 
@@ -8780,16 +9500,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # By cancelling first, the callbacks fire with canceled=True (clean path,
         # no replenishment), and the fd is removed from the event loop before close.
         # listenerStopped() will skip the redundant removeListener() call.
-        try {
-            if (serv) {
-                serv.removeAsyncListener(self);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (!silent) {
-                logError("error removing listener %d from the async I/O controller: %s: %s: %s", id, get_ex_pos(ex),
-                    ex.err, ex.desc);
-            }
-        }
+        # a server that is being destroyed in another thread stops its I/O controller itself (qore#7509)
+        serverCall("removing the listener from the async I/O controller", "removeAsyncListener",
+            sub (HttpServer s) { s.removeAsyncListener(self); }, silent);
 
         # Close the listener socket to release the bound port.
         try {
@@ -8850,9 +9563,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # log call can trigger server destruction.  The server destructor calls
         # stop() -> c.wait(), so c.done() (inside listenerStopped) must complete
         # first to avoid a deadlock.
-        if (serv) {
-            serv.listenerStopped(self);
-        }
+        # a server that is being destroyed in another thread cannot be called (qore#7509): its destructor waits for
+        # this listener's stop in its count of listeners, and a call that stops the listener for its reservation of
+        # the stop; both are released here
+        serverCall("notifying the server of the stop", "listenerStopped",
+            sub (HttpServer s) { s.listenerStopped(self); }, silent, sub () {
+                serverStopDone();
+                endStopReservation();
+            });
         # the stop notification is called here, not through the server: the server's notification above can let the
         # destruction of the server end in another thread, which clears 'serv', and the notification was then not
         # called (qore#6967); it is called only for a listener that started (qore#7430)
@@ -8866,6 +9584,173 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         if (!silent) {
             log("stopped listener");
+        }
+        stopPhase("stopped");
+    }
+
+    #! Calls the server in the stop of the listener; an error is logged and the stop continues
+    /** The stop calls the server only through this method: to stop accepting, to remove the listener from the async
+        I/O controller and to notify the server of the stop (qore#7690, qore#7692).
+
+        A server whose destructor runs in another thread refuses the call (OBJECT-ALREADY-DELETED, qore#7509): its
+        destructor stops the server itself; \a on_refusal then runs instead of the call, and nothing is logged.  Only
+        the refusal of the call itself is taken as one, not the same error raised by the server's code
+
+        @param action the action, for the log message of an error
+        @param method the name of the server's method that \a c calls
+        @param c the call
+        @param silent if @ref True, an error is not logged
+        @param on_refusal the code that runs if the server refuses the call
+    */
+    private serverCall(string action, string method, code<nothing(HttpServer)> c, *bool silent,
+            *code<nothing()> on_refusal) {
+        try {
+            if (serv) {
+                c(serv);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (HttpListener::refusedCall(ex, method)) {
+                if (on_refusal) {
+                    on_refusal();
+                }
+                return;
+            }
+            if (!silent) {
+                logError("listener %d: error %s: %s: %s: %s", id, action, get_ex_pos(ex), ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Returns @ref True if the exception was raised by the call of the given method of the server whose destructor
+    #! runs in another thread, which refuses the call (qore#7509), and not by the method's code
+    private static bool refusedCall(hash<ExceptionInfo> ex, string method) {
+        if (ex.err != "OBJECT-ALREADY-DELETED") {
+            return False;
+        }
+        # the refusal is raised at the call: the innermost frame is the method's, and the message is the refusal's for
+        # the method; an error that the method's code raises has the frames of its code
+        *hash<auto> frame = ex.callstack[0];
+        return frame && regex(frame.function ?? "", "::" + method + "$")
+            && regex(ex.desc ?? "", "^cannot call [^ ]*::" + method + "\\(\\) on an object that has already been "
+                "deleted$");
+    }
+
+    #! @cond nodoc
+    #! Sets the server's reservation of the stop of this listener (qore#7692), which a refused notification of the
+    #! server releases (see finishStop(), qore#7509)
+    setStopReservation(Counter reservation) {
+        stop_reservation = reservation;
+    }
+    #! @endcond
+
+    #! Releases the server's reservation of the stop of this listener when the server cannot be notified (qore#7509)
+    private endStopReservation() {
+        if (*Counter reservation = remove stop_reservation) {
+            Priv::StopReservation::end(reservation);
+        }
+    }
+
+    #! Starts the drain of the listener's connections and of its paired QUIC listener's sessions (qore#7692)
+    /** The drain calls the async I/O controller directly; an error is logged and the stop continues
+
+        @return @ref True if a drain runs: the listener is registered with an async I/O controller and the server's
+        \c drain_timeout option is greater than zero
+    */
+    private bool drainStart(*bool silent) {
+        if (drain_timeout <= 0) {
+            return False;
+        }
+        *HttpServerAsyncIo::HttpAsyncSocketIoController io = drain_io;
+        if (!io) {
+            return False;
+        }
+        bool rv = False;
+        foreach *HttpListener sl in ((self, drain_partner)) {
+            if (!sl) {
+                continue;
+            }
+            # a protocol upgrade, a CONNECT tunnel or an event stream started on the listener from now on is refused
+            sl.draining = True;
+            try {
+                if (io.startListenerDrain(sl, drain_timeout)) {
+                    rv = True;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("listener %d: error starting the drain of listener %d: %s: %s: %s", id, sl.id,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Waits for the drain of the listener and of its paired QUIC listener, at most the drain timeout (qore#7692)
+    /** @return @ref True if the drains ended, @ref False if the drain timeout expired first or an error occurred
+    */
+    private bool drainWait(*bool silent) {
+        *HttpServerAsyncIo::HttpAsyncSocketIoController io = drain_io;
+        if (!io) {
+            return False;
+        }
+        bool rv = True;
+        foreach *HttpListener sl in ((self, drain_partner)) {
+            if (!sl) {
+                continue;
+            }
+            try {
+                if (!io.waitListenerDrain(sl)) {
+                    rv = False;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                rv = False;
+                if (!silent) {
+                    logError("listener %d: error waiting for the drain of listener %d: %s: %s: %s", id, sl.id,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Closes the connections of the listener that are left (qore#7692); an error is logged
+    private drainClose(*bool silent) {
+        stopPhase("closing-connections");
+        try {
+            *HttpServerAsyncIo::HttpAsyncSocketIoController io = drain_io;
+            if (io) {
+                io.closeListenerConnections(self);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (!silent) {
+                logError("error closing the connections of listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                    ex.desc);
+            }
+        }
+    }
+
+    #! Waits for the HTTP/1.1 requests of the listener whose handlers run (qore#7692); an error is logged
+    private drainWaitDispatches(*bool silent) {
+        try {
+            *HttpServerAsyncIo::HttpAsyncSocketIoController io = drain_io;
+            if (io) {
+                io.waitListenerDispatches(self);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (!silent) {
+                logError("error waiting for the requests of listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                    ex.desc);
+            }
+        }
+    }
+
+    #! Calls the test hook of the stop phases (a debug build of the library only, see dbgSetStopPhaseHook())
+    private stopPhase(string phase) {
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_stop_phase_hook) {
+            try {
+                dbg_stop_phase_hook(self, phase);
+            } catch (hash<ExceptionInfo> ex) {
+            }
         }
     }
 
@@ -8964,7 +9849,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     log(string fmt, ...) {
         # this is called several times for every request: the message is built only if it is logged, by the
         # listener's logger or, for a listener without one, by the server's
-        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : (!serv || !serv.isLogInfoEnabled())) {
+        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : !serverLogInfoEnabled()) {
             return;
         }
         softlist<auto> args = fmt;
@@ -9382,17 +10267,38 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, hash<auto> header_info) {
         cThreads.add();
         RequestHelper request_helper(cThreads, dThreads);
-        request_helper.log_info = isLogInfoEnabled();
         # a stop of this listener that runs in this thread does not wait for this request (see stop())
         *Priv::RequestHelper prev_request = Priv::current_request;
         Priv::current_request = request_helper;
+        # The request holds the server until its response has been handed to the server's I/O (qore#7509): a server
+        # that the program releases while requests run is destroyed after the last of them, in its thread, instead of
+        # in the thread that released it, whose destructor would refuse the calls of the requests
+        # (OBJECT-ALREADY-DELETED), and every request is answered.  A response for the async I/O controller to send
+        # takes a reference to the server with it (HttpRequestResultInfo::request_hold, see translateToRequestResult()):
+        # the controller releases it in the request's dispatch once it has given the response to its I/O, so the stop
+        # of a destructor that runs then finds the response sent or queued, and drains it; the request's dispatch is
+        # counted then, so the stop does not wait for it (see HttpAsyncSocketIoController::waitDrain()).  The hold
+        # below is released when this method returns, where the request is current (Priv::current_request) and counted
+        # (see stop()).  A persistent session's thread does not hold the server while it waits for the session's next
+        # request (see handleQueuedPersistentConnection()); a connection handed to a handler (dedicated, streaming)
+        # does not hold it.
+        *HttpServer server_hold = serv;
         on_exit {
+            # the request is current until the end, also when the release of its server below raises an exception
+            on_exit Priv::current_request = prev_request;
             # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
             if (request_helper.h1_view) {
                 request_helper.endHandlerSocket();
             }
-            Priv::current_request = prev_request;
+            remove server_hold;
         }
+
+        # test hook (a debug build of the library only): the request has started (see dbgSetRequestHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_request_hook) {
+            dbg_request_hook(self);
+        }
+
+        request_helper.log_info = isLogInfoEnabled();
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -9633,6 +10539,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (!cx.close && s.isOpen()) {
                 serv.returnConnectionToAsyncIo(s, cx, self);
             }
+            # the session's thread does not hold the server while the session waits for its next request, which can
+            # take as long as the session lasts: each request of the session holds it (see processNativeRequest());
+            # a release here destroys a server that the program released while this request ran, whose stop closed
+            # the session
+            remove server_hold;
+            if (!serv) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
             # Continue handling queued requests on this thread until persistence ends
             handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
                 deregister_fn, sock_key);
@@ -9758,6 +10672,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),
                 "after_send": after_send,
+                # the response holds the server until the controller has given it to its I/O (see
+                # processNativeRequest())
+                "request_hold": serv,
             };
         }
 
@@ -9792,6 +10709,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     "close": False,
                     "return_to_idle": True,
                     "ttl": serv.getTtl(),
+                    "request_hold": serv,
                 };
             }
             cx.close = True;
@@ -10253,8 +11171,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                     return;
                 }
-                # Wait for next request from Queue with idle timeout
-                date ttl = serv.getTtl();
+                # Wait for next request from Queue with idle timeout; a server that is gone, or that is being
+                # destroyed in another thread (its calls are refused, qore#7509), closes the session
+                *date ttl = getSessionTtl();
+                if (!exists ttl) {
+                    log("cid %d: the server is being destroyed; ending the persistent session", cx.id);
+                    return;
+                }
                 *hash<auto> entry;
                 try {
                     entry = pq.get(ttl);
@@ -10287,6 +11210,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     log("cid %d: queued persistent connection closed", cx.id);
                     return;
                 }
+
+                # the request holds the server until it ends (see processNativeRequest())
+                *HttpServer server_hold = serv;
 
                 # Extract request data from queue entry
                 hash<auto> conn_info = entry.conn_info;
@@ -10509,7 +11435,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            string etxt = !serv.getDebug()
+            string etxt = !serverDebug()
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: queued persistent handler error: %s", cx.id, etxt);
@@ -10567,6 +11493,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 close_ack = entry.close_ack;
                 break;
             }
+
+            # the request holds the server until it ends (see processNativeRequest())
+            *HttpServer server_hold = serv;
 
             log("cid %d: processing orphaned request from persistent queue race window",
                 cx.id);
@@ -10681,7 +11610,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
             } catch (hash<ExceptionInfo> ex) {
-                string etxt = !serv.getDebug()
+                string etxt = !serverDebug()
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
                 logError("cid %d: error processing orphaned request: %s", cx.id,
@@ -11165,6 +12094,11 @@ class Http3HandlerSocket inherits Qore::Socket {
     int getQuicStreamAckedBytes(int session_id, int stream_id) {
         checkStream(session_id, stream_id);
         return real.getQuicStreamAckedBytes(session_id, stream_id);
+    }
+
+    bool checkQuicStreamSendRate(int session_id, int stream_id, bool waiting, int min_rate, timeout window) {
+        checkStream(session_id, stream_id);
+        return real.checkQuicStreamSendRate(session_id, stream_id, waiting, min_rate, window);
     }
 
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
@@ -11693,6 +12627,11 @@ class Http2HandlerSocket inherits Qore::Socket {
         return real.getHttp2StreamTakenBytes(stream_id);
     }
 
+    bool checkHttp2StreamSendRate(int stream_id, bool waiting, int min_rate, timeout window) {
+        checkStream(stream_id);
+        return real.checkHttp2StreamSendRate(stream_id, waiting, min_rate, window);
+    }
+
     #! Returns @ref True "True" for the first caller only, which then ends the stream
     private:internal synchronized bool takeEnd() {
         if (ended) {
@@ -11877,19 +12816,29 @@ enum Http1ResponseSend : int {
     Its character encoding (getEncoding(), setEncoding()) is its own: the strings that it sends are converted to it,
     and those that it reads are in it; the connection's encoding does not change.  Its timeouts
     (setSendTimeout(), setRecvTimeout()) are its own too: they apply to its sends and reads that are not given a
-    timeout.
+    timeout.  So is its maximum size of a chunked body (getMaxChunkedBodySize(), the connection's until it is set),
+    which applies to its read of the request's chunked body; restricted code can set it only to a limit that the
+    server set for the request (the listener's limit of a body read as a stream, or the connection's), so that it
+    cannot choose a limit of its own, and a limit that it set applies to the reads that give the body in parts only:
+    the reads that return the whole body keep at most the connection's limit (qore#7567).
 
     Its readHTTPHeader() and readHTTPHeaderString(), which would read the next request on the connection, raise an
     exception, as do shutdown(), shutdownWrite(), shutdownSSL() and close() (a handler closes the connection after
     its response with the \c close key of its response, or \c cx.close, and code that is not sandboxed aborts it at
     once with @ref HttpServer::http_abort_connection() "http_abort_connection()"), the methods that connect, bind,
     listen, accept or upgrade a socket to TLS, those that change the connection's settings (\c TCP_NODELAY, its
-    user timeout, the maximum size of a chunked body), getPollableDescriptor(), and copy().
+    user timeout), getPollableDescriptor(), and copy().
 
     These give what concerns the handler's own request, from the connection's socket: getPeerInfo(),
     getSocketInfo(), isOpen(), isSecure(), isHttp2(), isQuic(), getSSLCipherName(), getSSLCipherVersion(),
-    getAlpnProtocol(), getRemoteCertificate(), verifyPeerCertificate() and pendingHttpChunkedBody().  Its other
-    methods are those of its own, unconnected socket.
+    getAlpnProtocol(), getRemoteCertificate(), verifyPeerCertificate(), pendingHttpChunkedBody(),
+    unfinishedHttpChunkedBody(), getPort(), getConnectionId(), getNoDelay(), getUserTimeout(), getMaxHeaderSize(),
+    getMaxLineSize(), getSslVerifyMode() and getAcceptAllCertificates().  isDataAvailable() tells whether data of
+    the request's body that was not read is available (its chunked body before it is read, the rest of a body with
+    a \c Content-Length that the server did not read), and isWriteFinished() whether what was sent on the connection
+    was written; both raise an exception once the request ended, as its reads and sends do.  getCharset() and
+    setCharset() are getEncoding() and setEncoding().  Every other method of Socket raises an exception: none runs
+    on the object's own socket, which is not connected (qore#7567).
 
     The server ends the object before it sends a response for the request, or reads the next request: its methods
     that send or read then raise an exception, and isOpen() returns @ref False "False"; a send or read of another
@@ -11915,6 +12864,14 @@ class Http1HandlerSocket inherits Qore::Socket {
         int send_to = -1;
         #! the timeout of the object's reads that are given none; -1 for the connection's
         int recv_to = -1;
+        #! the object's own maximum size of a chunked body, once it was set; the connection's until then
+        *int max_chunked;
+        #! True if restricted code set the object's own maximum size of a chunked body: then it applies to the reads
+        #! that give the body in parts only
+        bool max_chunked_restricted;
+        #! the limit of the body of the request that its handler reads as a stream (the listener's), which any code
+        #! can set as the object's maximum size of a chunked body
+        int stream_max_body;
     }
 
     #! Creates the object for the current request on the connection's socket
@@ -11923,12 +12880,15 @@ class Http1HandlerSocket inherits Qore::Socket {
         @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Reset())
         @param max_to the longest timeout of a send or a read of the object, in milliseconds (the server's
         \c handler_socket_max_timeout option)
+        @param stream_max_body the limit of the body of the request that its handler reads as a stream (the
+        listener's, 0 for none)
     */
-    constructor(Socket real, HandlerSocketState rh, int gen, int max_to) {
+    constructor(Socket real, HandlerSocketState rh, int gen, int max_to, int stream_max_body) {
         self.real = real;
         self.rh = rh;
         self.gen = gen;
         self.max_to = max_to;
+        self.stream_max_body = stream_max_body;
     }
 
     #! Returns the object's own character encoding: the connection's until setEncoding() is called
@@ -12112,9 +13072,621 @@ class Http1HandlerSocket inherits Qore::Socket {
         refuse("setUserTimeout");
     }
 
-    #! Raises an exception
+    #! Sets the object's own maximum size of a chunked body, which applies to its read of the request's chunked body
+    /** Restricted code can set only the limits that the server set for the request: that of a body that the handler
+        reads as a stream (the listener's), which the code of the server's modules that reads the body of a stream
+        request sets, and the connection's; other code can set any limit (qore#7567).  A limit that restricted code
+        set applies to the reads that give the body in parts (with a callback or to an output stream) only: the
+        reads that return the whole body (readHTTPChunkedBody(), readHTTPChunkedBodyBinary()), which hold it in
+        memory, keep at most the connection's limit, as do those that restricted code makes with a limit that other
+        code set, so that restricted code cannot lift the server's bound on the memory of a body.  The connection's
+        limit does not change
+
+        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
+        @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), and the limit is neither of the
+        server's limits for the request
+    */
     nothing setMaxChunkedBodySize(int max_body_size) {
-        refuse("setMaxChunkedBodySize");
+        # a restricted caller cannot choose a limit of its own, also when it calls through code that is not
+        # restricted
+        if (max_body_size != stream_max_body && max_body_size != real.getMaxChunkedBodySize()
+                && SandboxManager::isRestricted()) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::setMaxChunkedBodySize(): sandboxed code can set only "
+                "the limits that the server set for the HTTP/1.x request of this socket (%d or %d), not %d",
+                stream_max_body, real.getMaxChunkedBodySize(), max_body_size);
+        }
+        # the value is checked as the socket checks it
+        Socket::setMaxChunkedBodySize(max_body_size);
+        max_chunked = max_body_size;
+        max_chunked_restricted = SandboxManager::isRestricted();
+    }
+
+    # the other methods of Socket, of the connection's other uses (TLS settings, HTTP/2 and HTTP/3 streams, poll
+    # operations, the server's own settings and queues), which would run on the object's own socket (qore#7567)
+    nothing acceptAllCertificates(bool accept_all = True) {
+        refuse("acceptAllCertificates");
+    }
+
+    nothing cancelHttp2Stream(int stream_id) {
+        refuse("cancelHttp2Stream");
+    }
+
+    nothing cancelQuicStream(int session_id, int stream_id) {
+        refuse("cancelQuicStream");
+    }
+
+    nothing cancelQuicStreamRead(int session_id, int stream_id) {
+        refuse("cancelQuicStreamRead");
+    }
+
+    bool captureRemoteCertificates(bool enabled = True) {
+        refuse("captureRemoteCertificates");
+    }
+
+    bool checkHttp2StreamSendRate(int stream_id, bool waiting, int min_rate, timeout window) {
+        refuse("checkHttp2StreamSendRate");
+    }
+
+    int checkIdleDataForAsyncPoll() {
+        refuse("checkIdleDataForAsyncPoll");
+    }
+
+    bool checkQuicStreamSendRate(int session_id, int stream_id, bool waiting, int min_rate, timeout window) {
+        refuse("checkQuicStreamSendRate");
+    }
+
+    nothing cleanupHttp2Stream(int stream_id) {
+        refuse("cleanupHttp2Stream");
+    }
+
+    nothing cleanupQuicStream(int session_id, int stream_id) {
+        refuse("cleanupQuicStream");
+    }
+
+    nothing clearStats() {
+        refuse("clearStats");
+    }
+
+    nothing clearWarningQueue() {
+        refuse("clearWarningQueue");
+    }
+
+    nothing deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+        refuse("deregisterQuicConnectStreamFrameState");
+    }
+
+    nothing deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+        refuse("deregisterQuicConnectStreamQueue");
+    }
+
+    nothing drainHttpConnection(bool idle = False) {
+        refuse("drainHttpConnection");
+    }
+
+    nothing flushQuicPendingData(int session_id) {
+        refuse("flushQuicPendingData");
+    }
+
+    int getHttp2MaxRequestBodySize() {
+        refuse("getHttp2MaxRequestBodySize");
+    }
+
+    int getHttp2StreamTakenBytes(int stream_id) {
+        refuse("getHttp2StreamTakenBytes");
+    }
+
+    *hash<auto> getHttp2StreamTrailers(int stream_id) {
+        refuse("getHttp2StreamTrailers");
+    }
+
+    *WebSocketCloseRecord getHttp2StreamWebSocketCloseRecord(int stream_id) {
+        refuse("getHttp2StreamWebSocketCloseRecord");
+    }
+
+    bool getHttpFieldsAtTopLevel() {
+        refuse("getHttpFieldsAtTopLevel");
+    }
+
+    int getQuicClientStreamAckedBytes(int stream_id) {
+        refuse("getQuicClientStreamAckedBytes");
+    }
+
+    int getQuicMaxDatagramSize(int session_id, int stream_id) {
+        refuse("getQuicMaxDatagramSize");
+    }
+
+    *SSLCertificate getQuicPeerCertificate(int session_id) {
+        refuse("getQuicPeerCertificate");
+    }
+
+    *string getQuicSSLCipherName(int session_id) {
+        refuse("getQuicSSLCipherName");
+    }
+
+    *string getQuicSSLCipherVersion(int session_id) {
+        refuse("getQuicSSLCipherVersion");
+    }
+
+    hash<QuicGoawayStateInfo> getQuicSessionGoawayState(int session_id) {
+        refuse("getQuicSessionGoawayState");
+    }
+
+    int getQuicSessionId() {
+        refuse("getQuicSessionId");
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        refuse("getQuicStreamAckedBytes");
+    }
+
+    *hash<auto> getQuicStreamTrailers(int session_id, int stream_id) {
+        refuse("getQuicStreamTrailers");
+    }
+
+    *WebSocketCloseRecord getQuicStreamWebSocketCloseRecord(int session_id, int stream_id) {
+        refuse("getQuicStreamWebSocketCloseRecord");
+    }
+
+    Socket getServerAlias() {
+        refuse("getServerAlias");
+    }
+
+    *Socket getServerSocket() {
+        refuse("getServerSocket");
+    }
+
+    bool getSourceHostLookup() {
+        refuse("getSourceHostLookup");
+    }
+
+    hash<auto> getUsageInfo() {
+        refuse("getUsageInfo");
+    }
+
+    bool hasHttpFastRoutes() {
+        refuse("hasHttpFastRoutes");
+    }
+
+    bool isQuicDatagramSupported(int session_id) {
+        refuse("isQuicDatagramSupported");
+    }
+
+    bool isQuicGoawayReceived(int session_id) {
+        refuse("isQuicGoawayReceived");
+    }
+
+    bool isQuicSessionClosed() {
+        refuse("isQuicSessionClosed");
+    }
+
+    bool isQuicStreamComplete(int session_id, int stream_id) {
+        refuse("isQuicStreamComplete");
+    }
+
+    bool isServerAlias() {
+        refuse("isServerAlias");
+    }
+
+    bool isServerOwned() {
+        refuse("isServerOwned");
+    }
+
+    *binary readQuicConnectStreamData(int session_id, int stream_id) {
+        refuse("readQuicConnectStreamData");
+    }
+
+    *binary readQuicDatagram(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        refuse("readQuicDatagram");
+    }
+
+    *binary readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        refuse("readQuicStreamDataBlock");
+    }
+
+    *hash<SseMessageInfo> readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+            int max_event_size = 0) {
+        refuse("readServerSentEvent");
+    }
+
+    *hash<SseMessageInfo> readServerSentEvent(timeout timeout_ms = -1) {
+        refuse("readServerSentEvent");
+    }
+
+    nothing registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicConnectStreamFrameState");
+    }
+
+    nothing registerQuicConnectStreamQueue(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicConnectStreamQueue");
+    }
+
+    nothing registerQuicDatagramQueue(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicDatagramQueue");
+    }
+
+    nothing resetHttp2Stream(int stream_id) {
+        refuse("resetHttp2Stream");
+    }
+
+    nothing resetQuicStream(int session_id, int stream_id) {
+        refuse("resetQuicStream");
+    }
+
+    nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+        refuse("sendHttp2StreamData");
+    }
+
+    int sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool end_stream = False) {
+        refuse("sendHttp2StreamWebSocketClose");
+    }
+
+    nothing sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
+        refuse("sendHttp2Trailers");
+    }
+
+    int sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) {
+        refuse("sendQuicClientStreamData");
+    }
+
+    nothing sendQuicClientTrailers(int stream_id, hash<string, string> trailers) {
+        refuse("sendQuicClientTrailers");
+    }
+
+    nothing setAlpnProtocols(list<string> protocols) {
+        refuse("setAlpnProtocols");
+    }
+
+    nothing setCertificate(SSLCertificate certificate) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificate(string pem) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificate(binary der) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificateAndPrivateKey(SSLCertificate certificate, SSLPrivateKey private_key) {
+        refuse("setCertificateAndPrivateKey");
+    }
+
+    nothing setEventQueue() {
+        refuse("setEventQueue");
+    }
+
+    nothing setEventQueue(Queue queue, auto argument, *bool with_data) {
+        refuse("setEventQueue");
+    }
+
+    nothing setHttp2ConnectProtocolEnabled(bool enabled = True) {
+        refuse("setHttp2ConnectProtocolEnabled");
+    }
+
+    nothing setHttp2InputStreamSendBound(int min_rate, timeout window, timeout stall_timeout = 30m) {
+        refuse("setHttp2InputStreamSendBound");
+    }
+
+    nothing setHttp2MaxRequestBodySize(int max_request_body_size) {
+        refuse("setHttp2MaxRequestBodySize");
+    }
+
+    nothing setHttp2StreamSendLimit(int stream_id, int limit) {
+        refuse("setHttp2StreamSendLimit");
+    }
+
+    nothing setHttp3ConnectProtocolEnabled(bool enabled = True) {
+        refuse("setHttp3ConnectProtocolEnabled");
+    }
+
+    nothing setHttpFastExtraHeaders(*hash<auto> headers) {
+        refuse("setHttpFastExtraHeaders");
+    }
+
+    nothing setHttpFastRoutes(*HttpFastRoutes routes) {
+        refuse("setHttpFastRoutes");
+    }
+
+    nothing setHttpFieldsAtTopLevel(bool top_level) {
+        refuse("setHttpFieldsAtTopLevel");
+    }
+
+    nothing setMaxHeaderSize(int max_header_size) {
+        refuse("setMaxHeaderSize");
+    }
+
+    nothing setMaxLineSize(int max_line_size) {
+        refuse("setMaxLineSize");
+    }
+
+    nothing setPrivateKey(SSLPrivateKey private_key) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setPrivateKey(string pem, *string password) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setPrivateKey(binary der) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setQuicInputStreamSendBound(int session_id, int min_rate, timeout window, timeout stall_timeout = 30m) {
+        refuse("setQuicInputStreamSendBound");
+    }
+
+    nothing setQuicStreamSendLimit(int session_id, int stream_id, int limit) {
+        refuse("setQuicStreamSendLimit");
+    }
+
+    bool setServerOwned() {
+        refuse("setServerOwned");
+    }
+
+    nothing setSourceHostLookup(bool enabled = True) {
+        refuse("setSourceHostLookup");
+    }
+
+    nothing setSslCaLocations(*string ca_file, *string ca_path) {
+        refuse("setSslCaLocations");
+    }
+
+    nothing setSslTrustStore(*SSLTrustStore store) {
+        refuse("setSslTrustStore");
+    }
+
+    nothing setSslVerifyMode(int mode) {
+        refuse("setSslVerifyMode");
+    }
+
+    nothing setWarningQueue(int warning_ms, int warning_bytes, Queue queue, auto argument, timeout min_ms = 1s) {
+        refuse("setWarningQueue");
+    }
+
+    AbstractPollOperation<auto> startPollAccept() {
+        refuse("startPollAccept");
+    }
+
+    AbstractPollOperation<auto> startPollConnect(string target) {
+        refuse("startPollConnect");
+    }
+
+    AbstractPollOperation<auto> startPollConnectSsl(string target) {
+        refuse("startPollConnectSsl");
+    }
+
+    AbstractPollOperation<auto> startPollHttp2ClientMultiplex() {
+        refuse("startPollHttp2ClientMultiplex");
+    }
+
+    AbstractPollOperation<auto> startPollHttp2Flush() {
+        refuse("startPollHttp2Flush");
+    }
+
+    AbstractPollOperation<auto> startPollIdleAndReadHttpHeader(timeout idle_timeout) {
+        refuse("startPollIdleAndReadHttpHeader");
+    }
+
+    AbstractPollOperation<auto> startPollLingeringClose(int max_discard = 0) {
+        refuse("startPollLingeringClose");
+    }
+
+    AbstractPollOperation<auto> startPollQuicAccept(*hash<auto> options) {
+        refuse("startPollQuicAccept");
+    }
+
+    AbstractPollOperation<auto> startPollQuicConnect(string host, int port, int family = AF_INET) {
+        refuse("startPollQuicConnect");
+    }
+
+    AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, *data body) {
+        refuse("startPollQuicSendResponse");
+    }
+
+    AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, InputStream body, *int chunk_size) {
+        refuse("startPollQuicSendStreamingResponse");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttp2Request(*hash<auto> options) {
+        refuse("startPollReadHttp2Request");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+        refuse("startPollReadHttpBody");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttpHeader() {
+        refuse("startPollReadHttpHeader");
+    }
+
+    AbstractPollOperation<auto> startPollRecvBinary(int size) {
+        refuse("startPollRecvBinary");
+    }
+
+    AbstractPollOperation<auto> startPollRecvData() {
+        refuse("startPollRecvData");
+    }
+
+    AbstractPollOperation<auto> startPollRecvFrom(*int max_size) {
+        refuse("startPollRecvFrom");
+    }
+
+    AbstractPollOperation<auto> startPollRecvString(int size) {
+        refuse("startPollRecvString");
+    }
+
+    AbstractPollOperation<auto> startPollRecvUntilBytesBinary(string pattern) {
+        refuse("startPollRecvUntilBytesBinary");
+    }
+
+    AbstractPollOperation<auto> startPollRecvUntilBytesString(string pattern) {
+        refuse("startPollRecvUntilBytesString");
+    }
+
+    AbstractPollOperation<auto> startPollSend(string data) {
+        refuse("startPollSend");
+    }
+
+    AbstractPollOperation<auto> startPollSend(binary data) {
+        refuse("startPollSend");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("startPollSendHttp2ConnectResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+            *data body) {
+        refuse("startPollSendHttp2Response");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+            *hash<auto> headers, InputStream body, *int chunk_size) {
+        refuse("startPollSendHttp2StreamingResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpChunkedResponseAndReadHeader(int status_code,
+            string status_description, string http_version, *hash<auto> headers, InputStream body,
+            timeout idle_timeout) {
+        refuse("startPollSendHttpChunkedResponseAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpChunkedResponseWithStream(int status_code, string status_description,
+            string http_version, *hash<auto> headers, InputStream body) {
+        refuse("startPollSendHttpChunkedResponseWithStream");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponse(int status_code, string status_description,
+            string http_version, *hash<auto> headers, *data body, bool head = False) {
+        refuse("startPollSendHttpResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
+            string http_version, *hash<auto> headers, *data body, timeout idle_timeout, bool head = False) {
+        refuse("startPollSendHttpResponseAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseWithStream(int status_code, string status_description,
+            string http_version, *hash<auto> headers, InputStream body, softint content_length) {
+        refuse("startPollSendHttpResponseWithStream");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
+            string status_description, string http_version, *hash<auto> headers, InputStream body,
+            softint content_length, timeout idle_timeout) {
+        refuse("startPollSendHttpResponseWithStreamAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendTo(string host, int port, binary data, *int family) {
+        refuse("startPollSendTo");
+    }
+
+    AbstractPollOperation<auto> startPollUpgradeClientToSSL() {
+        refuse("startPollUpgradeClientToSSL");
+    }
+
+    AbstractPollOperation<auto> startPollUpgradeServerToSSL() {
+        refuse("startPollUpgradeServerToSSL");
+    }
+
+    nothing submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitHttp2ConnectResponse");
+    }
+
+    int submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+        refuse("submitHttp2PushPromise");
+    }
+
+    int submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
+        refuse("submitHttp2Request");
+    }
+
+    nothing submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+        refuse("submitHttp2Response");
+    }
+
+    nothing submitHttp2StreamingResponseHeaders(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitHttp2StreamingResponseHeaders");
+    }
+
+    int submitHttp2StreamingResponseWithStream(int stream_id, int status_code, *hash<auto> headers, InputStream body) {
+        refuse("submitHttp2StreamingResponseWithStream");
+    }
+
+    nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitQuicConnectResponse");
+    }
+
+    nothing submitQuicDatagram(int session_id, int stream_id, binary data) {
+        refuse("submitQuicDatagram");
+    }
+
+    int submitQuicRequest(string method, string path, *hash<auto> headers, *data body, bool suppress_wake = False) {
+        refuse("submitQuicRequest");
+    }
+
+    int submitQuicRequestStreaming(string method, string path, *hash<auto> headers, bool suppress_wake = False) {
+        refuse("submitQuicRequestStreaming");
+    }
+
+    nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+        refuse("submitQuicResponse");
+    }
+
+    nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitQuicResponseStreaming");
+    }
+
+    nothing submitQuicShutdown(int session_id) {
+        refuse("submitQuicShutdown");
+    }
+
+    nothing submitQuicShutdownNotice(int session_id) {
+        refuse("submitQuicShutdownNotice");
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        refuse("submitQuicStreamData");
+    }
+
+    int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
+        refuse("submitQuicStreamWebSocketClose");
+    }
+
+    int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
+            InputStream body) {
+        refuse("submitQuicStreamingResponseWithStream");
+    }
+
+    nothing unregisterQuicDatagramQueue(int session_id, int stream_id) {
+        refuse("unregisterQuicDatagramQueue");
+    }
+
+    int waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForHttp2StreamDrain");
+    }
+
+    int waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForHttp2StreamFlushed");
+    }
+
+    int waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicClientStreamDrain");
+    }
+
+    int waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicClientStreamFlushed");
+    }
+
+    bool waitForQuicSettings(timeout timeout_ms = -1) {
+        refuse("waitForQuicSettings");
+    }
+
+    int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicStreamDrain");
     }
 
     #! Sets the timeout of the object's sends that are given none; the connection's timeout does not change
@@ -12201,6 +13773,99 @@ class Http1HandlerSocket inherits Qore::Socket {
     #! Returns @ref True "True" if the request has a chunked body that was not read yet
     bool pendingHttpChunkedBody() {
         return rh.h1IsCurrent(gen) && !rh.h1ChunkedBodyTaken() && real.pendingHttpChunkedBody();
+    }
+
+    #! Returns @ref True "True" if data of the request's body that was not read is available on the connection
+    /** The data of the request is its chunked body before it is read, and the rest of a body with a
+        \c Content-Length that the server did not read; any other data on the connection is the next request's, so
+        @ref False "False" is returned once the request's body is read, as for a request without one.  The timeout
+        is bounded as that of a read; raises an exception once the request ended, as its reads do
+    */
+    bool isDataAvailable(timeout timeout_ms = 0) {
+        rh.h1Enter(gen, "isDataAvailable");
+        on_exit rh.h1Leave();
+        if (rh.h1ChunkedBodyTaken()) {
+            return False;
+        }
+        if (!real.pendingHttpChunkedBody() && !rh.h1BodyLeft()) {
+            return False;
+        }
+        if (!real.isDataAvailable(timeout_ms ? recvTimeout(timeout_ms) : 0)) {
+            return False;
+        }
+        # a read of another thread may have taken the rest of the body while this one waited: the data that is then
+        # available is the next request's (a chunked read takes the body before it reads it, and a read of the rest of
+        # a body with a Content-Length takes its bytes before it reads them)
+        return !rh.h1ChunkedBodyTaken() && (real.pendingHttpChunkedBody() || rh.h1BodyLeft() > 0);
+    }
+
+    #! Returns @ref True "True" if the data sent on the connection was written
+    /** The timeout is bounded as that of a send; raises an exception once the request ended, as its sends do
+    */
+    bool isWriteFinished(timeout timeout_ms = 0) {
+        rh.h1Enter(gen, "isWriteFinished");
+        on_exit rh.h1Leave();
+        return real.isWriteFinished(timeout_ms ? sendTimeout(timeout_ms) : 0);
+    }
+
+    #! Returns @ref True "True" if the read of the request's chunked body started and stopped before its end
+    bool unfinishedHttpChunkedBody() {
+        return rh.h1IsCurrent(gen) && rh.h1ChunkedBodyTaken() && real.unfinishedHttpChunkedBody();
+    }
+
+    #! Returns the object's own character encoding, as getEncoding()
+    string getCharset() {
+        return getEncoding();
+    }
+
+    #! Sets the object's own character encoding, as setEncoding()
+    nothing setCharset(string encoding) {
+        setEncoding(encoding);
+    }
+
+    #! Returns the value of the connection's socket
+    int getPort() {
+        return real.getPort();
+    }
+
+    #! Returns the value of the connection's socket
+    int getConnectionId() {
+        return real.getConnectionId();
+    }
+
+    #! Returns the value of the connection's socket
+    bool getNoDelay() {
+        return real.getNoDelay();
+    }
+
+    #! Returns the value of the connection's socket
+    int getUserTimeout() {
+        return real.getUserTimeout();
+    }
+
+    #! Returns the object's own maximum size of a chunked body once it was set, otherwise the connection's
+    int getMaxChunkedBodySize() {
+        return max_chunked ?? real.getMaxChunkedBodySize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getMaxHeaderSize() {
+        return real.getMaxHeaderSize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getMaxLineSize() {
+        return real.getMaxLineSize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getSslVerifyMode() {
+        return real.getSslVerifyMode();
+    }
+
+    #! Returns the value of the connection's socket
+    bool getAcceptAllCertificates() {
+        return real.getAcceptAllCertificates();
     }
 
     # the raw sends of the bytes of a response's body with a Content-Length
@@ -12496,6 +14161,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit(True);
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         # the connection's socket decodes the body in the object's encoding
         if (ownEncoding()) {
             real.setEncoding(enc);
@@ -12510,6 +14179,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit(True);
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         return real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
     }
 
@@ -12518,6 +14191,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         return real.readHTTPChunkedBodyToOutputStream(output_stream, recvTimeout(timeout_ms));
     }
 
@@ -12526,6 +14203,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         # the connection's socket decodes the chunks in the object's encoding
         if (ownEncoding()) {
             real.setEncoding(enc);
@@ -12541,7 +14222,38 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         real.readHTTPChunkedBodyBinaryWithCallback(receive_callback, recvTimeout(timeout_ms));
+    }
+
+    #! Gives the connection's socket the object's own maximum size of a chunked body for a read of the request's
+    #! chunked body, and returns the connection's to set again at its end, if it changed
+    /** There is one read of the chunked body of a request (h1EnterChunkedRead()), and the server uses the connection's
+        socket only after it ended
+    */
+    /** @param whole True for a read that returns the whole body, which holds it in memory: a limit that restricted
+        code set, or any limit for a read that restricted code makes (also through code that is not restricted), is
+        then at most the connection's, whoever set it and whichever thread reads
+    */
+    private:internal *int applyChunkedLimit(*bool whole) {
+        if (!exists max_chunked) {
+            return;
+        }
+        int conn_max = real.getMaxChunkedBodySize();
+        int limit = max_chunked;
+        if (whole && conn_max && (!limit || limit > conn_max)
+                && (max_chunked_restricted || SandboxManager::isRestricted())) {
+            # 0 is no limit
+            limit = conn_max;
+        }
+        if (conn_max == limit) {
+            return;
+        }
+        real.setMaxChunkedBodySize(limit);
+        return conn_max;
     }
 
     #! Returns True if the object's encoding is not the connection's
@@ -13137,15 +14849,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         if (!inlineHeadValid(info.hdr, info.header_info)) {
             return NOTHING;
         }
-        HttpListener listener = cast<HttpListener>(info.listener);
-        *AbstractHttpRequestHandler handler = listener.findHandlerForInlineCheck(info.hdr);
-        if (!handler || !(handler.handlerCodeIsRestricted()
-                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
-                    handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
-                : handler.canHandleInline(info.cx, info.hdr))) {
-            return NOTHING;
-        }
-        return listener.processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
+        return cast<HttpListener>(info.listener).tryInlineRequest(info);
     }
 
     #! Called when an HTTP request is ready (header fully parsed)
@@ -13438,6 +15142,27 @@ class ResponseAfterSendNotifier {
 } # namespace Priv
 
 namespace Priv {
+
+#! Ends the reservations of the stops of listeners (HttpServer::stop_reserved, qore#7692)
+/** A reservation is ended by the server (HttpServer::listenerStopped(), HttpServer::endListenerStopReservation()), or
+    by the listener when the server refuses its notification (HttpListener::endStopReservation(), qore#7509); both
+    can end the same reservation, which is ended once: its Counter is decremented only if it is above zero, with one
+    lock for all reservations, so that the check and the decrement are atomic
+*/
+class StopReservation {
+    private {
+        static Mutex lck = new Mutex();
+    }
+
+    #! Ends the reservation unless it has been ended
+    static end(Counter reservation) {
+        AutoLock al(lck);
+        if (reservation.getCount() > 0) {
+            reservation.dec();
+        }
+    }
+}
+
 #! Runs the event source of a Server-Sent Events stream: starts it with the stream and stops it exactly once
 /** The stream's end (the controller's close callback on HTTP/1.x, the peer-close notification on HTTP/2 and HTTP/3,
     or a close by the source itself) calls @ref end(), which runs the source's stop on a thread of the handler pool;
@@ -14026,6 +15751,11 @@ class RequestHelper {
         @param listener_cthreads the counter of the normal connection threads of the listener that is stopped; the
         count of a request of another listener is not ended
     */
+    #! Returns @ref True if this request belongs to the listener with the given counter of normal connection threads
+    bool isRequestOf(WaitGroup listener_cthreads) {
+        return cThreads === listener_cthreads;
+    }
+
     releaseForStop(WaitGroup listener_cthreads) {
         if (!counted || cThreads !== listener_cthreads) {
             return;
@@ -14221,6 +15951,11 @@ class HandlerSocketState {
         int n = (size <= 0 || size > h1_body) ? h1_body : size;
         h1_body -= n;
         return n;
+    }
+
+    #! Returns the bytes of the request's body with a Content-Length that were not taken by a read
+    synchronized int h1BodyLeft() {
+        return h1_body;
     }
 
     #! Takes exactly the given number of bytes of the rest of the body, or none

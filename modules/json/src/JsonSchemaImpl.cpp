@@ -27,6 +27,9 @@
 #include <set>
 #include <functional>
 #include <vector>
+#include <string>
+#include <utility>
+#include <iterator>
 
 const TypedHashDecl* hashdeclJsonSchemaValidationError = nullptr;
 const TypedHashDecl* hashdeclJsonSchemaValidationResult = nullptr;
@@ -197,15 +200,21 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
 
         case NT_HASH: {
             const QoreHashNode* hash = val.get<const QoreHashNode>();
-            jsoncons::json obj = jsoncons::json::object();
+            // the members are collected and the object is built in one step, which sorts them once: an object keeps
+            // its members sorted in a vector, so that inserting them one by one moves the members after each one and
+            // takes time quadratic in their number (qore#7754); the keys of a hash are unique
+            std::vector<std::pair<std::string, jsoncons::json>> members;
+            members.reserve(hash->size());
             ConstHashIterator it(hash);
             while (it.next()) {
-                obj[it.getKey()] = qoreToJson(it.get(), xsink, depth + 1);
+                jsoncons::json member = qoreToJson(it.get(), xsink, depth + 1);
                 if (*xsink) {
                     return jsoncons::json::null();
                 }
+                members.emplace_back(it.getKey(), std::move(member));
             }
-            return obj;
+            return jsoncons::json(jsoncons::json_object_arg, std::make_move_iterator(members.begin()),
+                std::make_move_iterator(members.end()));
         }
 
         case NT_NUMBER: {

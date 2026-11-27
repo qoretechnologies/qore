@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.display_name": {
-          "source": "Get User Info",
+          "source": "Get user info",
           "message": "Отримати інформацію про користувача"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Отримати інформацію про поточного користувача"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Отримати інформацію про сервер"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.short_desc": {

@@ -41,6 +41,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -10669,6 +10670,11 @@ struct AotModuleState {
     std::vector<std::string> reexport_deps;
     //! Every module that this module requires; this module is deleted before them at shutdown
     std::vector<std::string> deps;
+    //! The modules that the directives of this module's source required directly, in their order
+    /** the requirements that succeeded when the module was compiled (IMPORT_DEPENDENCIES); reported by
+        get_module_hash() (qore_aot_get_module_requirements(), #7796)
+    */
+    std::vector<std::string> direct_deps;
     //! Serialized metadata retained only when deferred init cannot reuse an open reader.
     std::shared_ptr<const std::vector<uint8_t>> metadata;
     //! Reader opened during module_init and reused by deferred ns_init work.
@@ -12903,6 +12909,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.direct_deps = deps;
         state.deps = aotModuleDependencyNames(deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
@@ -13448,6 +13455,18 @@ DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std
     return true;
 }
 
+DLLLOCAL bool qore_aot_get_module_requirements(const char* name, std::vector<std::string>& required,
+        std::vector<std::string>& reexported) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    auto it = aot_module_map.find(name);
+    if (it == aot_module_map.end()) {
+        return false;
+    }
+    required = it->second.direct_deps;
+    reexported = it->second.reexport_deps;
+    return true;
+}
+
 DLLLOCAL bool qore_aot_module_has_dependent(const char* name) {
     AutoLocker aot_state_al(get_aot_module_state_lock());
     for (auto& entry : aot_module_map) {
@@ -13728,6 +13747,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        // metadata without the import list (written before it existed) has only the list of providers
+        state.direct_deps = import_deps_present ? import_deps : deps;
         state.deps = aotModuleDependencyNames(deps, &import_deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
@@ -16058,6 +16079,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        // metadata without the import list (written before it existed) has only the list of providers
+        state.direct_deps = import_deps_present ? import_deps : deps;
         state.deps = aotModuleDependencyNames(deps, &import_deps);
         if (!init_descriptors.empty()) {
             state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(

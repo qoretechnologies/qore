@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
+          "source": "Create submission",
           "message": "建立提交項目"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "選擇要為其建立提交項目的表單。提交欄位將根據您的選擇進行更新。"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "取得提交項目"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -388,7 +388,7 @@
           "message": "要擷取的提交項目的唯一 ID"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
+          "source": "Get form submissions",
           "message": "取得表單提交"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "要傳回的提交項目數量上限"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
+          "source": "Update submission",
           "message": "更新提交"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "要更新的提交 ID"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "刪除提交項目"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -508,7 +508,7 @@
           "message": "要刪除的提交項目的 ID"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "取得表單"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
@@ -532,7 +532,7 @@
           "message": "要擷取的表單"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
+          "source": "Get forms",
           "message": "取得表單"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "返回表單的最大數量"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
+          "source": "Get form reports",
           "message": "取得表單報告"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "要擷取報告的表單"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
+          "source": "New submission",
           "message": "新提交項目"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
@@ -628,7 +628,7 @@
           "message": "選擇要監視新提交項目的表單"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新付款"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {

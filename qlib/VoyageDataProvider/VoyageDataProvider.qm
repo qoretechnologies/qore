@@ -81,7 +81,7 @@ module VoyageDataProvider {
             "path": "/create-embeddings",
             "action": "create-embeddings",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
-            "display_name": "Create Embeddings",
+            "display_name": "Create embeddings",
             "short_desc": "Convert text into numerical vectors for search and comparison",
             "desc": "Converts one or more text inputs into numerical vectors (embeddings) that capture "
                 "the meaning of the text. Texts with similar meanings will have similar vectors, enabling "
@@ -118,7 +118,7 @@ module VoyageDataProvider {
             "path": "/rerank",
             "action": "rerank",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
-            "display_name": "Rerank Documents",
+            "display_name": "Rerank documents",
             "short_desc": "Re-sort search results by relevance to a query",
             "desc": "Takes a search query and a list of documents, then re-sorts the documents by how "
                 "relevant they are to the query. This improves search quality by using AI to understand "

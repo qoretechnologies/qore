@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Utwórz kontakt"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Strefa czasowa kontaktu"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Strefa czasowa kontaktu"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Usuń kontakt"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Kontakt do usunięcia"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
+          "source": "Merge contacts",
           "message": "Scal kontakty"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Kontakt do scalenia i usunięcia"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Lista kontaktów"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Pobierz kontakt"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Identyfikator kontaktu"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
+          "source": "Create a company",
           "message": "Utwórz firmę"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Witryna internetowa firmy"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
+          "source": "Update a company",
           "message": "Zaktualizuj firmę"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Witryna internetowa firmy"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
+          "source": "Delete a company",
           "message": "Usuń firmę"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Firma do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Lista firm"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
+          "source": "Get a company",
           "message": "Pobierz firmę"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Identyfikator firmy"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Utwórz szansę sprzedaży"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Notatki dotyczące szansy sprzedaży"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Zaktualizuj szansę sprzedaży"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "Notatki dotyczące szansy sprzedaży"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Usuń szansę sprzedaży"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "Szansa sprzedaży do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Wyświetl szanse sprzedaży"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Pobierz szansę sprzedaży"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "Identyfikator szansy sprzedaży"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Utwórz zamówienie"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Kody promocyjne"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Pobierz listę zamówień"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Pobierz zamówienie"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Identyfikator zamówienia"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Utwórz tag"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Kategoria tagu"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Usuń tag"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "Tag do usunięcia"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Przypisz tag do kontaktu"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Lista całkowitoliczbowych identyfikatorów tagów"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Usuń tag z kontaktu"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Tag do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Lista tagów"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Pobierz tag"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Identyfikator tagu"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Utwórz notatkę"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Typ notatki"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Zaktualizuj notatkę"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Treść notatki"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Usuń notatkę"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Notatka do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Wyświetl notatki"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Utwórz zadanie"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Przypisany użytkownik"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Zaktualizuj zadanie"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Stan ukończenia zadania"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Usuń zadanie"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Zadanie do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Wyświetl listę zadań"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Pobierz zadanie"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Identyfikator zadania ID"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Wyświetl listę wiadomości e-mail"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "Prześlij plik"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Widoczność pliku"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
+          "source": "Get a file",
           "message": "Pobierz plik"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Plik do pobrania"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
+          "source": "Delete a file",
           "message": "Usuń plik"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Plik do usunięcia"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Wyświetl listę plików"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Wyświetl listę produktów"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Pobierz produkt"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Identyfikator produktu"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Lista kampanii"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
+          "source": "List affiliates",
           "message": "Wyświetl listę partnerów"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
@@ -2256,7 +2256,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
+          "source": "Contact added",
           "message": "Dodano kontakt"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "Uruchamiane po utworzeniu nowego kontaktu w Keap"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Zaktualizowano kontakt"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Uruchamiane po zaktualizowaniu kontaktu w Keap"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
+          "source": "Tag applied",
           "message": "Przypisano tag"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
@@ -2292,7 +2292,7 @@
           "message": "Uruchamia się po przypisaniu tagu do kontaktu w Keap"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
+          "source": "Opportunity added",
           "message": "Dodano szansę sprzedaży"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Uruchamia się po utworzeniu nowej szansy sprzedaży w Keap"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
+          "source": "Order added",
           "message": "Dodano zamówienie"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Uruchamia się po utworzeniu nowego zamówienia w Keap"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
+          "source": "Task created",
           "message": "Utworzono zadanie"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Uruchamia się po utworzeniu nowego zadania w Keap"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
+          "source": "Note added",
           "message": "Dodano notatkę"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {

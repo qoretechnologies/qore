@@ -16,7 +16,7 @@
           "message": "Serveur FTP générique pour l'échange de fichiers avec FTP et FTPS"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Retrieve File With FTP",
+          "source": "Retrieve file with FTP",
           "message": "Récupérer un fichier avec FTP"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
@@ -64,7 +64,7 @@
           "message": "L'encodage de chaîne à utiliser si `text` = `True` (par défaut : `UTF-8`)"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Erreurs d'encodage"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Ce que donne un texte qui n'est pas valide dans son encodage de caractères si `text` = `True` : `raise` (la valeur par défaut) lève une erreur `INVALID-ENCODING`, `latin1` renvoie le texte en `ISO-8859-1`, et `keep` le renvoie dans l'encodage sans vérification"
         },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
-          "source": "Send File With FTP",
+          "source": "Send file with FTP",
           "message": "Envoyer un fichier avec FTP"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "L'encodage de chaîne à utiliser si `text` = `True` (par défaut : `UTF-8`)"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File With FTP",
+          "source": "Delete file with FTP",
           "message": "Supprimer un fichier avec FTP"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {

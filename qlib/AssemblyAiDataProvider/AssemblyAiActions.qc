@@ -51,7 +51,7 @@ public class AssemblyAiActions {
         }
         result += <DataProviderActionInfo>{
             "app": app, "action": "transcribe", "path": "/transcribe",
-            "display_name": "Transcribe Audio",
+            "display_name": "Transcribe audio",
             "short_desc": "Submit an audio URL and wait for its completed transcript",
             "desc": "Transcribe recorded audio and return the completed result. Configure model routing, speakers, redaction, and analysis as needed. The polling interval and timeout control how long this action waits.",
             "action_code": DPAT_API, "mutates_state": True,

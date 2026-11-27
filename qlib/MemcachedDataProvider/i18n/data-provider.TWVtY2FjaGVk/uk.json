@@ -16,7 +16,7 @@
           "message": "Розподілена система кешування об'єктів у пам'яті Memcached"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
+          "source": "Set value",
           "message": "Встановити значення"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Зберегти пару ключ-значення в memcached, перезаписуючи будь-яке наявне значення"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
+          "source": "Add value",
           "message": "Додати значення"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Зберегти пару ключ-значення в memcached лише якщо ключ ще не існує"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
+          "source": "Replace value",
           "message": "Замінити значення"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Замінити значення в memcached, лише якщо ключ уже існує"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
+          "source": "Compare and swap",
           "message": "Порівняти та замінити (CAS)"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Оновити значення лише якщо його токен CAS збігається (оптимістичне блокування)"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
+          "source": "Get value",
           "message": "Отримати значення"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Отримати кешоване значення разом із його токеном CAS для оптимістичного блокування"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
+          "source": "Multi-get",
           "message": "Множинне отримання"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Отримати версію сервера memcached"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
+          "source": "Flush all",
           "message": "Очистити все"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {

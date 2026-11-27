@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "顧客を検索"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "顧客コード、名前、メール、顧客タイプ、または変更日による任意のフィルタリングを使用して、Unleashed から顧客の一覧を取得します。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "顧客を作成"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -604,7 +604,7 @@
           "message": "通り名住所行"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "顧客を取得"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -628,7 +628,7 @@
           "message": "取得する顧客の一意の識別子（GUID）"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "顧客を更新"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -784,7 +784,7 @@
           "message": "この顧客に対して与信停止が設定されているかどうか"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "商品の検索"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -796,7 +796,7 @@
           "message": "製品コード、説明、またはバーコードによる任意のフィルタリングを使用して、Unleashed から製品の一覧を取得します。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "商品を作成"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -916,7 +916,7 @@
           "message": "これが組み立て製品（部品から製造）であるかどうか"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "製品の取得"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "取得する製品の一意の識別子（GUID）"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "製品を更新"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "製品が購入可能かどうか"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
-          "source": "Obsolete Product",
+          "source": "Obsolete product",
           "message": "製品の廃止"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "廃番にする製品の一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
-          "source": "Search Sales Orders",
+          "source": "Search sales orders",
           "message": "受注を検索"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "任意のフィルタリングを使用して、Unleashed から受注の一覧を取得します。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "受注を作成"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "配送先の郵便番号"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "受注を取得"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "取得する受注の一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "受注を更新"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "単位あたりの価格"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "受注を削除"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "削除する受注の一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
-          "source": "Complete Sales Order",
+          "source": "Complete sales order",
           "message": "受注を完了"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "完了する受注の一意識別子（GUID）"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
-          "source": "Search Credit Notes",
+          "source": "Search credit notes",
           "message": "クレジットノートを検索"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "任意のフィルタリングを使用して、Unleashed からクレジットノートの一覧を取得します。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Create Credit Note",
+          "source": "Create credit note",
           "message": "クレジットノートの作成"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "このクレジットノートのコメントまたはメモ"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Get Credit Note",
+          "source": "Get credit note",
           "message": "クレジットノートの取得"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "取得するクレジットノートの一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Update Credit Note",
+          "source": "Update credit note",
           "message": "クレジットノートを更新"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "このクレジットノートのコメントまたはメモ"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Delete Credit Note",
+          "source": "Delete credit note",
           "message": "クレジットノートの削除"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "削除するクレジットノートの一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
-          "source": "Complete Credit Note",
+          "source": "Complete credit note",
           "message": "クレジットノートを完了"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "完了するクレジットノートの一意識別子（GUID）"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Create Credit Note Line",
+          "source": "Create credit note line",
           "message": "クレジットノート明細行の作成"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "この行の単価"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Update Credit Note Line",
+          "source": "Update credit note line",
           "message": "クレジットノート明細行を更新"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "この行の単価"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Delete Credit Note Line",
+          "source": "Delete credit note line",
           "message": "クレジットノート明細行の削除"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "削除する明細行の一意の識別子 (GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "新規顧客"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -2260,7 +2260,7 @@
           "message": "ポーリングによって新規顧客が検出されたか、既存の顧客が変更されたときにトリガーされます。"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "新規受注"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

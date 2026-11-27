@@ -83,7 +83,7 @@ module YamlDocumentDataProvider {
             "path": "/",
             "action": "read",
             "subtype": "yamldocread",
-            "display_name": "Read YAML Document File",
+            "display_name": "Read YAML document file",
             "short_desc": "Read YAML document data from a specific file location",
             "desc": "Read YAML document data from a specific file location.\n\n"
                 "The YAML file may contain one or more documents separated by `---` markers. "
@@ -113,7 +113,7 @@ module YamlDocumentDataProvider {
             "path": "/",
             "action": "read-data",
             "subtype": "yamldocread",
-            "display_name": "Read YAML Inline Data",
+            "display_name": "Read YAML inline data",
             "short_desc": "Read YAML inline data",
             "desc": "Read YAML inline data provided directly as a string.\n\n"
                 "The YAML data may contain one or more documents separated by `---` markers. "
@@ -143,7 +143,7 @@ module YamlDocumentDataProvider {
             "path": "/",
             "action": "write",
             "subtype": "yamldocwrite",
-            "display_name": "Write YAML Document File",
+            "display_name": "Write YAML document file",
             "short_desc": "Write YAML document data to a specific file location",
             "desc": "Write YAML document records as a multi-document stream to a specific file location.\n\n"
                 "Records are accumulated and written with `---` document separators when the action "
@@ -172,7 +172,7 @@ module YamlDocumentDataProvider {
             "path": "/",
             "action": "write-data",
             "subtype": "yamldocwrite",
-            "display_name": "Write YAML Inline Data",
+            "display_name": "Write YAML inline data",
             "short_desc": "Generate YAML document data from records",
             "desc": "Generate a YAML multi-document stream from records and return it as data, for example to "
                 "attach it to an email or upload it with another action.\n\n"

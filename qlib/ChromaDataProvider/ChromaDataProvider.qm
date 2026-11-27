@@ -64,7 +64,7 @@ module ChromaDataProvider {
             "app": ChromaDataProvider::AppName,
             "path": "/query",
             "action": "vector-search",
-            "display_name": "Vector Search",
+            "display_name": "Vector search",
             "short_desc": "Search a Chroma collection by query vector",
             "desc": "Searches a Chroma collection for the K most similar vectors to a query "
                 "embedding via `/api/v2/.../collections/{id}/query`.  Returns ids, distances, "

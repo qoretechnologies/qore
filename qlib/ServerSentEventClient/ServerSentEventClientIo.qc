@@ -57,11 +57,20 @@ sse.disconnect();
     that thread.  This class is thread-safe for connect/disconnect/reconnect calls; the event thread holds the
     object only by a weak reference, so dropping its last reference destroys it, and its destructor stops the thread.
 */
-#! The stop and reconnect flags of a client, which its event thread shares
+#! The stop and reconnect flags of a client and the state of its event thread, which the event thread shares
 class SseIoRunState {
     public {
         bool stop = False;
         bool do_reconnect = False;
+
+        #! True from just before the event thread is started until it terminates
+        /** Set by ServerSentEventClientIo::connect() before the thread is started and cleared by the thread itself
+            when it terminates, so a thread that terminates before the call that started it returns cannot leave a
+            stale record.  Kept here, with the client's lock, so that the thread clears it also while the client is
+            destroyed, when it cannot call the client (a method call on an object whose destructor runs in another
+            thread is refused): the destructor waits for it (qore#7509)
+        */
+        bool thread_active = False;
     }
 }
 
@@ -108,14 +117,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! I/O timeout for opening the stream and for SSE event reading
         timeout timeout_ms = ServerSentEventClient::DefaultTimeout;
 
-        #! Stop and reconnect flags, shared with the event thread
+        #! Stop and reconnect flags and the state of the event thread, shared with the event thread
         SseIoRunState run_state();
-
-        #! True from just before the event thread is started until it terminates
-        /** Set by @ref connect() before the thread is started and cleared by the thread itself when it terminates,
-            so a thread that terminates before the call that started it returns cannot leave a stale record
-        */
-        bool thread_active = False;
 
         #! TID of the event thread; set and cleared by the event thread itself
         *int tid;
@@ -347,7 +350,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             setConnectedUnlocked(reader);
             # the event thread is accounted for before it is started: it can run to completion before the call
             # that starts it returns, so it cannot be recorded afterwards
-            thread_active = True;
+            run_state.thread_active = True;
         }
 
         int new_tid;
@@ -364,7 +367,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         } catch (hash<ExceptionInfo> ex) {
             # the event thread was not started
             AutoLock al1(m);
-            thread_active = False;
+            run_state.thread_active = False;
             remove cur_reader;
             connected = False;
             cid = -1;
@@ -400,7 +403,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     */
     bool reconnect() {
         AutoLock al(m);
-        if (!thread_active) {
+        if (!run_state.thread_active) {
             return False;
         }
         reconnect_flag = True;
@@ -443,7 +446,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     #! Returns True if the event thread is running but no event stream is open, because it is being reopened
     bool isReconnecting() {
         AutoLock al(m);
-        return thread_active && !connected;
+        return run_state.thread_active && !connected;
     }
 
     #! Returns the reconnect flag
@@ -519,9 +522,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     #! Stops the event thread and waits for it to terminate; must be called with @ref op_lock held
     private stopEventThread() {
         AutoLock al(m);
-        if (thread_active) {
+        if (run_state.thread_active) {
             requestStopUnlocked();
-            while (thread_active) {
+            while (run_state.thread_active) {
                 stop_cond.wait(m);
             }
         }
@@ -614,6 +617,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OBJECT-ALREADY-DELETED") {
                 reader.cancel();
+                ServerSentEventClientIo::threadEndedWithoutClient(ref);
                 return;
             }
             rethrow;
@@ -626,6 +630,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
                 if (ex.err != "OBJECT-ALREADY-DELETED") {
                     rethrow;
                 }
+                ServerSentEventClientIo::threadEndedWithoutClient(ref);
             }
         }
 
@@ -772,6 +777,17 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
     }
 
+    #! records the end of the event thread in the state that it shares with the client, when it cannot call the client
+    /** The client is being destroyed (its destructor waits for the thread in disconnect()), or has been: the thread
+        cannot call it then (qore#7509), and clears the record of the running thread that the destructor waits for
+        itself
+    */
+    private static threadEndedWithoutClient(SseIoThreadRef ref) {
+        AutoLock al(ref.m);
+        ref.state.thread_active = False;
+        ref.stop_cond.broadcast();
+    }
+
     #! records the event thread; called by the event thread before any event is raised
     /** A disconnect() from an observer is then recognized as made from the event thread, also before the call that
         started the thread has returned
@@ -784,7 +800,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     #! clears the state of the event thread when it terminates
     private eventThreadEnded() {
         AutoLock al(m);
-        thread_active = False;
+        run_state.thread_active = False;
         remove tid;
         remove cur_reader;
         connected = False;

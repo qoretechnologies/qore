@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.display_name": {
-          "source": "Upload Audio",
+          "source": "Upload audio",
           "message": "Carica audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Argomento del corpo della richiesta REST"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Create Transcript",
+          "source": "Create transcript",
           "message": "Crea trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "L'URL del file audio o video da trascrivere."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "Fine dell'audio alle"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Il momento, in millisecondi, in cui interrompere la trascrizione nel file multimediale. Per ulteriori dettagli, consulta [Impostare l'inizio e la fine della trascrizione](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "Inizio audio da"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Il momento, in millisecondi, in cui iniziare la trascrizione nel file multimediale. Per ulteriori dettagli, consulta [Impostare l'inizio e la fine della trascrizione](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "Capitoli automatici"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Genera riepiloghi dei capitoli con Universal-2. Richiede `punctuate: true` e non può essere combinato con `summarization`. **Deprecato:** utilizzare [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) per riepiloghi flessibili dei capitoli."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "Evidenziazioni automatiche"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Abilita [Frasi chiave](https://www.assemblyai.com/docs/speech-understanding/key-phrases), vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "Sicurezza dei contenuti"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Abilita [Moderazione contenuto](https://www.assemblyai.com/docs/content-moderation), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "Fiducia sulla sicurezza dei contenuti"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "La soglia di confidenza per il modello [Moderazione contenuti](https://www.assemblyai.com/docs/content-moderation). I valori devono essere compresi tra 25 e 100. Richiede che `content_safety` sia abilitato; altrimenti viene ignorato."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "Ortografia personalizzata"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -524,7 +524,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "Rilevamento entità"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -536,7 +536,7 @@
           "message": "Abilita [Rilevamento entità](https://www.assemblyai.com/docs/speech-understanding/entity-detection), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "Filtra volgarità"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -548,7 +548,7 @@
           "message": "Filtra le parolacce dal testo trascritto, possono essere vere o false. Per ulteriori dettagli, consulta [Filtro volgarità](https://www.assemblyai.com/docs/profanity-filtering)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "Formatta testo"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Abilita [Formattazione testo](https://www.assemblyai.com/docs/pre-recorded-audio), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Categorie Iab"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -572,7 +572,7 @@
           "message": "Abilita [Rilevamento argomento](https://www.assemblyai.com/docs/speech-understanding/topic-detection), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Richiesta termini chiave"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Migliora la precisione con un massimo di 200 (per Universal-2) o 1000 (per Universal-3.5 Pro) parole o frasi specifiche del dominio (massimo 6 parole per frase). Per ulteriori dettagli, consulta [Richiesta termini chiave](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Codice lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Codici della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "Soglia di confidenza della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "La soglia di confidenza per la lingua rilevata automaticamente.\nVerrà restituito un errore se la sicurezza della lingua è inferiore a questa soglia.\nIl valore predefinito è 0. Può essere impostato solo quando `language_detection` è abilitato. Per ulteriori dettagli, vedere [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "Rilevamento della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "[Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) identifica la lingua parlata e indirizza la richiesta al modello migliore. Viene applicato automaticamente quando non specifichi un `language_code`. Impostato su `false` solo insieme a `language_code`; disabilitarlo senza specificare una lingua restituisce un errore."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "Opzioni di rilevamento della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Specificare le opzioni per [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "Cambio di codice"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Se deve essere rilevato il [cambio di codice](/speech-to-text/pre-recorded-audio/code-switching)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "Soglia di confidenza del cambio di codice"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "La soglia di confidenza per il rilevamento del [commutazione di codice](/speech-to-text/pre-recorded-audio/code-switching). Se l'affidabilità del cambio di codice è inferiore a questa soglia, la trascrizione verrà elaborata nella lingua con il punteggio `language_detection_confidence` più alto."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "Lingue previste"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Elenco delle lingue previste nel file audio. Il valore predefinito è `[\"all\"]` se non specificato. Per ulteriori dettagli, vedere [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "Linguaggio di riserva"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "Utilizza l'ortografia `en_au` o `en_uk` quando viene rilevato l'inglese; è consentita una sola variante per lingua di base. I codici base/predefiniti come `en` o `en_us` vengono rifiutati. Il `language_code` della risposta riporta il codice regionale scelto. Le altre lingue rilevate ignorano questa impostazione. Vedere [Rilevamento della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "Su Nessuna voce rilevata"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Redatta le PII dal testo trascritto utilizzando il modello Redact PII, può essere vero o falso. Richiede che `format_text` sia `true`. Per ulteriori dettagli, consulta [Oscuramento PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "Redigere l'audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Genera una copia del file multimediale originale con le informazioni personali pronunciate \"emesse da un segnale acustico\", può essere vero o falso. Richiede che `redact_pii` sia `true`. Consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "Oscura le opzioni audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Specificare le opzioni per i file [audio PII oscurato](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "Sostituisci metodo di oscuramento audio"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "silenzio"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "Ritorna oscurato senza audio vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Per impostazione predefinita, la redazione dell'audio fornisce URL audio redatti solo quando viene rilevato il parlato. Tuttavia, se il tuo caso d'uso richiede specificamente file audio oscurati anche per file audio silenziosi senza dialoghi, puoi scegliere di ricevere questi URL impostando questo parametro su `true`. Richiede che `redact_pii_audio` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "Redigere la qualità audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "Redigere le policy PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "L'elenco dei criteri di redazione PII da abilitare. Per ulteriori dettagli, consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "Formato di sostituzione dei dati personali"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "hash"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "Restituire anche il testo originale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Restituisci `unredacted_text`, `unredacted_words` e `unredacted_utterances` accanto ai campi oscurati. Richiede `redact_pii: true`. **Output sensibile:** abilitando questa opzione vengono conservate le informazioni personali originali. Disabilitato per impostazione predefinita. Vedere [redazione PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "Redigere entità statiche"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "**Proteggere i termini proprietari**\n- Mappare le etichette di redazione su termini esatti, ad esempio `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`. Richiede `redact_pii: true` e utilizza `redact_pii_sub`. La corrispondenza tollera l'uso di maiuscole e minuscole, punteggiatura e piccole differenze di spaziatura. Non generalizza oltre i termini forniti.\n- Con `redact_pii_audio`, le corrispondenze vengono rimosse anche dall'audio.\n\n**Limiti**\n- Fino a 100 etichette, 200 termini per etichetta e 200 caratteri per termine.\n- Le etichette consentono lettere, numeri, spazi, caratteri di sottolineatura e trattini, fino a 80 caratteri.\n\nVedere [Oscuramento entità statica](https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "Analisi del sentiment"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -1728,7 +1728,7 @@
           "message": "Abilita [Analisi del sentiment](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis), può essere vero o falso. Richiede che `punctuate` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "Etichette degli altoparlanti"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Abilita [Diarizzazione dell'altoparlante](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers), può essere vero o falso. Richiede che `punctuate` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "Opzioni degli altoparlanti"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "Specificare le opzioni per [Diarizzazione dell'altoparlante](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers). Usatelo per impostare una gamma di possibili altoparlanti. Richiede che `speaker_labels` sia `true` e non può essere utilizzato insieme a `speakers_expected`. Quando sono impostati entrambi i limiti, `min_speakers_expected` deve essere inferiore o uguale a `max_speakers_expected`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "Includi la fiducia degli oratori"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Quando `true`, include un campo `speaker_confidence` per parola e per espressione nella risposta. Per ulteriori dettagli, vedere [Diarizzazione degli altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "È previsto un numero massimo di relatori"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Limitare il numero di etichette degli altoparlanti; gli oratori aggiuntivi si uniscono alle etichette esistenti. **Un limite troppo alto può ridurre la precisione suddividendo un altoparlante in più altoparlanti.** Impostazioni predefinite: nessun limite per 0–2 minuti, 10 per 2–10 minuti, 30 sopra 10 minuti. Vedere [Gamma degli altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "Numero minimo di relatori previsti"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Un limite inferiore rigido al numero di etichette degli altoparlanti: il modello non restituirà meno altoparlanti di questo. Vedi [Imposta una gamma di possibili altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "Attesi relatori"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Indica al modello di etichetta degli altoparlanti quanti altoparlanti dovrebbe tentare di identificare. Richiede che `speaker_labels` sia `true` e deve essere un numero intero positivo; non può essere utilizzato insieme a `speaker_options`. Vedi [Imposta il numero di relatori previsti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "Modelli vocali"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "Soglia vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -1832,7 +1832,7 @@
           "message": "Rifiuta i file audio che contengono meno di questa frazione del parlato.\nI valori validi sono nell'intervallo [0, 1] compreso. Per ulteriori dettagli, vedere [Soglia vocale](https://www.assemblyai.com/docs/speech-threshold)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Comprensione del parlato"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Usa uno stile di linguaggio formale. Per ulteriori dettagli, consulta la [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Corrisponde all'espressione originale"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Se abilitato con Etichette altoparlanti, restituisce il testo tradotto nell'array delle espressioni. Ogni espressione includerà una chiave `translated_texts` contenente le traduzioni per ciascuna lingua di destinazione."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Lingue di destinazione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -1888,11 +1888,11 @@
           "message": "Elenco dei codici della lingua di destinazione (ad esempio, `[\"es\", \"de\"]`). Vedi [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation) per le lingue supportate."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identificazione del relatore"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Valori conosciuti"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Obbligatorio se speaker_type è \"role\". Ciascun valore deve contenere massimo 35 caratteri."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Tipo di altoparlante"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Il ruolo dell'oratore. Obbligatorio quando `speaker_type` è \"ruolo\"."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Formattazione personalizzata"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -2000,7 +2000,7 @@
           "message": "Modello di formato email (ad esempio, `\"username@domain.com\"`). Per ulteriori dettagli, consulta [Formattazione personalizzata](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Numero di telefono"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Tipo di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -2048,7 +2048,7 @@
           "message": "proiettili"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Elementi di azione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -2064,7 +2064,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Includi decisioni"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Riassumere una trascrizione Universal-2. Richiede `punctuate: true` e `format_text: true`; non può essere combinato con `auto_chapters`. **Deprecato:** utilizzare [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) per riepiloghi flessibili."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "Modello di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "orecchiabile"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Tipo di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "paragrafo"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "Rimuovi tag audio"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Controlla la quantità di casualità inserita nella risposta del modello. Consulta la [Guida ai suggerimenti](https://www.assemblyai.com/docs/pre-recorded-audio/prompting) per ulteriori dettagli.\n\nNota: questo parametro ha effetto solo sul modello Universal-3.5 Pro."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "Nome dell'intestazione di autenticazione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Il nome dell'intestazione da inviare con la trascrizione completata o con le richieste [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) non riuscite. Deve contenere da 1 a 1000 caratteri e contenere solo lettere ASCII, numeri, trattini e trattini bassi. È necessario impostare anche `webhook_auth_header_value` e `webhook_url`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "Valore dell'intestazione di autenticazione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "L'URL a cui inviamo le richieste [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "Argomenti personalizzati"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "A questo parametro attualmente non è associata alcuna funzionalità."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "Modello vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "A questo parametro attualmente non è associata alcuna funzionalità."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.display_name": {
-          "source": "List Transcripts",
+          "source": "List transcripts",
           "message": "Elenco trascrizioni"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "errore"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Data di creazione"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Ottieni le trascrizioni create dopo questo ID trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.display_name": {
-          "source": "Throttled Only",
+          "source": "Throttled only",
           "message": "Solo limitato"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Ottieni solo trascrizioni limitate, sovrascrive il filtro di stato"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
+          "source": "Get transcript",
           "message": "Ottieni la trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "ID della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
+          "source": "Delete transcript",
           "message": "Elimina trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "ID della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
+          "source": "Get subtitles",
           "message": "Ottieni i sottotitoli"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
@@ -2440,7 +2440,7 @@
           "message": "WebVTT"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.display_name": {
-          "source": "Chars per Caption",
+          "source": "Chars per caption",
           "message": "Caratteri per didascalia"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Il numero massimo di caratteri per didascalia"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
+          "source": "Get transcript sentences",
           "message": "Ottieni frasi di trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "ID della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
+          "source": "Get transcript paragraphs",
           "message": "Ottieni i paragrafi della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "ID della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
+          "source": "Search transcript words",
           "message": "Cerca le parole della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Parole chiave da cercare"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
+          "source": "Get redacted audio",
           "message": "Ottieni audio redatto"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
@@ -2560,7 +2560,7 @@
           "message": "ID della trascrizione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.display_name": {
-          "source": "Create Voice Agent",
+          "source": "Create voice agent",
           "message": "Crea agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Nome visualizzato per l'agente."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "Prompt di sistema"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Frequenza di campionamento"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -2672,7 +2672,7 @@
           "message": "Fino a 100 stringhe di bias di trascrizione o null."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "Rilevamento del turno"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Quando chiamare lo strumento. Il segnale principale del modello."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "Modalità di esecuzione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "Inviato ad ogni chiamata. I valori vengono crittografati quando sono inattivi e di sola scrittura (mascherati come \"***\" nelle risposte)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metodo HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "oggetto"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "Secondi di timeout"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.display_name": {
@@ -2908,7 +2908,7 @@
           "message": "Collega il tuo LLM compatibile con OpenAI invece di AssemblyAI\nmodello gestito. Fornire al massimo una configurazione; omettere di utilizzare il gestito\nLLM. Le configurazioni multiple (fallback) non sono ancora supportate."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "Chiave API"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Nome del modello inviato nel corpo della richiesta di completamento della chat."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "Richieste di pre-connessione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "Le ricerche HTTPS vengono eseguite dalla piattaforma, in ordine, prima di rispondere a un messaggio in entrata\ntelefonata. Ciascuno può inviare i dati della chiamata (come quelli del chiamante).\nnumero) e valorizza una voce precedente acquisita e acquisisce valori da\nla sua risposta JSON per il saluto e la conversazione. Telefonia\nsolo; ignorato nelle sessioni WebSocket. Vedi\n[Richieste di pre-connessione](/voice-agents/voice-agent-api/pre-connect-requests)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "Consenti sostituzioni"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "Inviato ad ogni chiamata. I valori vengono crittografati quando sono inattivi e di sola scrittura (mascherati come \"***\" nelle risposte)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metodo HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "Nomi da inviare a questo endpoint, nel corpo JSON per POST, PUT e\nPATCH o come parametri di query per GET e DELETE. Qualsiasi voce può nominare\ni fatti di chiamata della piattaforma `caller_number`, `dialed_number`,\n`direction`, `agent_id` e `session_id`; anche le voci successive potrebbero nominare\nvalorizza una voce precedente catturata. Opt-in per voce: non viene inviato nulla\nse non nominato. Un fatto che la piattaforma non ha (ad esempio a\nnumero chiamante nascosto) viene omesso anziché inviato vuoto."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "Timeout, signora"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Riduce il timeout di questa voce. Ogni voce ha il proprio limite massimo di 800 ms;\nquesto può solo accorciarlo. Omettere per l'intero soffitto."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.display_name": {
-          "source": "List Voice Agents",
+          "source": "List voice agents",
           "message": "Elenca agenti vocali"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Elenca i record agente leggeri per questo account, iniziando dal più recente. Utilizzare Ottieni Voice Agent per recuperare una configurazione completa."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
+          "source": "Get voice agent",
           "message": "Ottieni l'agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "L'ID univoco dell'agente."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
+          "source": "Update voice agent",
           "message": "Aggiorna agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -3172,7 +3172,7 @@
           "message": "Nome"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "Prompt di sistema"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dm9pY2U.display_name": {
@@ -3228,7 +3228,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Frequenza di campionamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -3244,7 +3244,7 @@
           "message": "Fino a 100 stringhe di bias di trascrizione o null."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "Rilevamento del turno"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Quando chiamare lo strumento. Il segnale principale del modello."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "Modalità di esecuzione"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -3356,7 +3356,7 @@
           "message": "Inviato ad ogni chiamata. I valori vengono crittografati quando sono inattivi e di sola scrittura (mascherati come \"***\" nelle risposte)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metodo HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "oggetto"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "Secondi di timeout"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.display_name": {
@@ -3464,7 +3464,7 @@
           "message": "LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "Chiave API"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Nome del modello inviato nel corpo della richiesta di completamento della chat."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "Richieste di pre-connessione"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Sostituisce l'intero elenco. Vedi la richiesta di creazione."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "Consenti sostituzioni"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "Inviato ad ogni chiamata. I valori vengono crittografati quando sono inattivi e di sola scrittura (mascherati come \"***\" nelle risposte)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metodo HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "Nomi da inviare a questo endpoint, nel corpo JSON per POST, PUT e\nPATCH o come parametri di query per GET e DELETE. Qualsiasi voce può nominare\ni fatti di chiamata della piattaforma `caller_number`, `dialed_number`,\n`direction`, `agent_id` e `session_id`; anche le voci successive potrebbero nominare\nvalorizza una voce precedente catturata. Opt-in per voce: non viene inviato nulla\nse non nominato. Un fatto che la piattaforma non ha (ad esempio a\nnumero chiamante nascosto) viene omesso anziché inviato vuoto."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "Timeout, signora"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Riduce il timeout di questa voce. Ogni voce ha il proprio limite massimo di 800 ms;\nquesto può solo accorciarlo. Omettere per l'intero soffitto."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
+          "source": "Delete voice agent",
           "message": "Elimina agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -3688,7 +3688,7 @@
           "message": "L'ID univoco dell'agente."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.display_name": {
-          "source": "List Voice Agent Sessions",
+          "source": "List voice agent sessions",
           "message": "Elenca le sessioni dell'agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "Restituisce solo le sessioni per questo agente."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
+          "source": "Get voice agent session",
           "message": "Ottieni la sessione dell'agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "L'ID univoco della sessione."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
+          "source": "Delete voice agent session",
           "message": "Elimina sessione agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "L'ID univoco della sessione."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.display_name": {
-          "source": "Create Chat Completion",
+          "source": "Create chat completion",
           "message": "Crea completamento chat"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "strumento"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID chiamata strumento"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "L'ID del modello da utilizzare per questa richiesta. Consulta la [Panoramica del gateway LLM](https://www.assemblyai.com/docs/llm-gateway/quickstart#available-models) per i modelli disponibili."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.display_name": {
-          "source": "Model Region",
+          "source": "Model region",
           "message": "Regione modello"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "globale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Token massimi"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.short_desc": {
@@ -4056,7 +4056,7 @@
           "message": "funzione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "Scelta dello strumento"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "funzione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
-          "source": "Response Format",
+          "source": "Response format",
           "message": "Formato di risposta"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Specifica il formato della risposta del modello. Utilizza il tipo `json_schema` per vincolare il modello in modo che restituisca un JSON valido corrispondente a uno schema."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "Schema JSON"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Un array di oggetti di fallback. Ogni oggetto deve includere un `model` e può facoltativamente sovrascrivere qualsiasi campo della richiesta originale. Se il modello primario fallisce, il gateway LLM tenta ogni fallback in ordine finché uno non riesce. Per ulteriori dettagli, consulta [Specificare i modelli di fallback](https://www.assemblyai.com/docs/llm-gateway/fallback)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Token massimi"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.short_desc": {
@@ -4256,7 +4256,7 @@
           "message": "strumento"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID chiamata strumento"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Sostituisci la temperatura per la richiesta di fallback."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.display_name": {
-          "source": "Fallback Config",
+          "source": "Fallback config",
           "message": "Configurazione di fallback"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "Se ritentare automaticamente la richiesta una volta dopo 500 ms in caso di errore. Il valore predefinito è `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.display_name": {
-          "source": "Post Processing Steps",
+          "source": "Post processing steps",
           "message": "Passaggi di post-elaborazione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.short_desc": {
@@ -4356,7 +4356,7 @@
           "message": "json-repair"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.display_name": {
-          "source": "Understand Speech",
+          "source": "Understand speech",
           "message": "Comprendere il discorso"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.short_desc": {
@@ -4380,7 +4380,7 @@
           "message": "L'ID della trascrizione da elaborare."
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Comprensione del parlato"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -4412,7 +4412,7 @@
           "message": "Usa uno stile di linguaggio formale. Per ulteriori dettagli, consulta la [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Corrisponde all'espressione originale"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -4424,7 +4424,7 @@
           "message": "Se abilitato con Etichette altoparlanti, restituisce il testo tradotto nell'array delle espressioni. Ogni espressione includerà una chiave `translated_texts` contenente le traduzioni per ciascuna lingua di destinazione."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Lingue di destinazione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -4436,11 +4436,11 @@
           "message": "Elenco dei codici della lingua di destinazione (ad esempio, `[\"es\", \"de\"]`). Vedi [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation) per le lingue supportate."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identificazione del relatore"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Valori conosciuti"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -4452,7 +4452,7 @@
           "message": "Obbligatorio se speaker_type è \"role\". Ciascun valore deve contenere massimo 35 caratteri."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Tipo di altoparlante"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -4520,7 +4520,7 @@
           "message": "Il ruolo dell'oratore. Obbligatorio quando `speaker_type` è \"ruolo\"."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Formattazione personalizzata"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -4548,7 +4548,7 @@
           "message": "Modello di formato email (ad esempio, `\"username@domain.com\"`). Per ulteriori dettagli, consulta [Formattazione personalizzata](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Numero di telefono"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -4576,7 +4576,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Tipo di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -4596,7 +4596,7 @@
           "message": "proiettili"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Elementi di azione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -4612,7 +4612,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Includi decisioni"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -4624,7 +4624,7 @@
           "message": "Opzione per includere il processo decisionale nelle azioni."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List LLM Models",
+          "source": "List LLM models",
           "message": "Elenca i modelli LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4636,7 +4636,7 @@
           "message": "Elenca i modelli LLM Gateway disponibili, i parametri supportati, i limiti di contesto, i prezzi e la disponibilità regionale."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.display_name": {
-          "source": "Create Streaming Token",
+          "source": "Create streaming token",
           "message": "Crea token di streaming"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "Crea un token temporaneo per una sessione WebSocket di trascrizione in tempo reale. Limitare la validità del token e la durata della sessione prima di condividere il token con un'applicazione client."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "Scade tra secondi"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "Finestra di riscatto dei token, in pochi secondi. Il token deve essere utilizzato per aprire una connessione WebSocket all'interno di questa finestra. Se la finestra è trascorsa all'apertura del WebSocket, il server rifiuta la sessione al primo frame. Ciò NON limita la durata della sessione di streaming risultante: una volta aperto il WebSocket, la sessione dura fino a `max_session_duration_seconds`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "Secondi di durata massima della sessione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4672,7 +4672,7 @@
           "message": "Durata massima della sessione di streaming iniziata con questo token, in secondi. Se devi finalizzare il lavoro prima della fine della sessione, esegui un timer lato client utilizzando il valore passato qui."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.display_name": {
-          "source": "Create Voice Agent Token",
+          "source": "Create voice agent token",
           "message": "Crea token agente vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.short_desc": {
@@ -4684,7 +4684,7 @@
           "message": "Crea un token temporaneo monouso per una sessione WebSocket di Voice Agent. L'utilizzo è attribuito al progetto che possiede questa connessione."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "Scade tra secondi"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4696,7 +4696,7 @@
           "message": "Finestra di riscatto dei token, in pochi secondi. Il token deve essere utilizzato per aprire una connessione WebSocket all'interno di questa finestra. Se la finestra è trascorsa all'apertura del WebSocket, il server restituisce un `session.error` con il codice `unauthorized` sul primo frame invece di `session.ready`. Ciò NON limita la durata della sessione dell'agente vocale risultante: una volta aperto il WebSocket, la sessione dura fino a `max_session_duration_seconds`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "Secondi di durata massima della sessione"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4708,7 +4708,7 @@
           "message": "Durata massima della sessione di Voice Agent avviata con questo token, in secondi. Non è previsto alcun evento di avviso di \"chiusura imminente\" prima della fine della sessione, quindi se è necessario finalizzare con garbo (ad esempio riprodurre un messaggio di riepilogo, salvare lo stato), eseguire un timer sul lato client utilizzando il valore passato qui."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook Subscription",
+          "source": "Create webhook subscription",
           "message": "Crea sottoscrizione webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -4764,7 +4764,7 @@
           "message": "Abilitato"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhook Subscriptions",
+          "source": "List webhook subscriptions",
           "message": "Elenca abbonamenti webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "Cursore"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
+          "source": "Get webhook subscription",
           "message": "Ottieni l'abbonamento al webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -4800,7 +4800,7 @@
           "message": "Abbonamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
+          "source": "Update webhook subscription",
           "message": "Aggiorna la sottoscrizione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Abilitato"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
+          "source": "Delete webhook subscription",
           "message": "Elimina la sottoscrizione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -4848,7 +4848,7 @@
           "message": "Abbonamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.display_name": {
-          "source": "Transcribe Short Audio",
+          "source": "Transcribe short audio",
           "message": "Trascrivi un breve audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "Contesto conversazione"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5036,7 +5036,7 @@
           "message": "Fornisci un dialogo precedente per migliorare la continuità tra i turni di conversazione. Accetta un elenco ordinato dal più vecchio al più recente o una stringa trattata come un singolo giro. I limiti sono 500 turni e 16.000 caratteri in totale; il contesto in eccesso viene tagliato dai turni più vecchi, anche quando viene superata la finestra di contesto del modello."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Richiesta termini chiave"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "Termini chiave che indirizzano il decodificatore verso token specifici. Massimo 100 termini e 8000 caratteri in totale per tutti i termini. Accettato anche come `keyterms` o `word_boost`: fornisci solo uno dei tre."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Codice lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "Istruzioni di trascrizione personalizzata anteposte al prompt del sistema del modello. Se omesso, viene applicato un prompt predefinito."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Frequenza di campionamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.display_name": {
-          "source": "Transcribe Audio Upload",
+          "source": "Transcribe audio upload",
           "message": "Trascrivi il caricamento audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.short_desc": {
@@ -5184,7 +5184,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "Contesto conversazione"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5196,7 +5196,7 @@
           "message": "Turni precedenti della stessa conversazione, in ordine cronologico (prima il più vecchio, ultimo il più recente), forniti come contesto in modo che il modello trascriva la clip corrente con maggiore continuità. Accetta un elenco di giri o una singola stringa. I turni più vecchi vengono eliminati per primi se viene superato il limite della finestra di contesto."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Richiesta termini chiave"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5208,7 +5208,7 @@
           "message": "Termini chiave che indirizzano il decodificatore verso token specifici. Massimo 2048 caratteri in totale per tutti i termini. Accettato anche come `keyterms` o `word_boost`: fornisci solo uno dei tre."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Codice lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5232,7 +5232,7 @@
           "message": "Istruzioni di trascrizione personalizzata anteposte al prompt del sistema del modello. Se omesso, viene applicato un prompt predefinito."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Frequenza di campionamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5432,7 +5432,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.display_name": {
-          "source": "Transcribe Dictation",
+          "source": "Transcribe dictation",
           "message": "Trascrivere il dettato"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "Numero di canali audio. Obbligatorio quando `audio` è `audio/pcm`. Ignorato per WAV."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Richiesta termini chiave"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "Termini verso cui orientare la trascrizione, come nomi o gergo. Massimo 100 termini e 8000 caratteri in totale. Sono accettati anche i nomi legacy `keyterms` e `word_boost`; inviarne solo uno dei tre, altrimenti la richiesta viene rifiutata con `400`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Codici della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "Lingua o lingue dell'audio, come codici lingua ISO. Un codice esterno a questo set viene rifiutato con `400`. Il valore predefinito è `[\"en\"]`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.display_name": {
-          "source": "LLM Instruction",
+          "source": "LLM instruction",
           "message": "Istruzioni LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.short_desc": {
@@ -5504,7 +5504,7 @@
           "message": "Descrizione in inglese semplice della forma in cui si desidera inserire il testo, che sostituisce l'attività di pulizia predefinita. Descrivi solo la trasformazione: le regole sul formato di output, sul rifiuto di rispondere al testo e sulla gestione dell'input pulito vengono applicate automaticamente. Omettendo il campo o impostandolo su `null`, viene mantenuta l'attività di pulizia predefinita, che rimuove il riempitivo, risolve le correzioni automatiche e applica la punteggiatura e le maiuscole."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Frequenza di campionamento"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5516,7 +5516,7 @@
           "message": "Frequenza di campionamento sorgente in Hz, ad esempio `16000`. Obbligatorio quando `audio` è `audio/pcm`. Ignorato per WAV, che riporta la frequenza di campionamento nell'intestazione del file."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.display_name": {
-          "source": "STT Prompt",
+          "source": "STT prompt",
           "message": "Richiesta STT"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.short_desc": {
@@ -5660,7 +5660,7 @@
           "message": "Il nome del file"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Trascrivi audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.short_desc": {
@@ -5684,7 +5684,7 @@
           "message": "L'URL del file audio o video da trascrivere."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "Fine dell'audio alle"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -5696,7 +5696,7 @@
           "message": "Il momento, in millisecondi, in cui interrompere la trascrizione nel file multimediale. Per ulteriori dettagli, consulta [Impostare l'inizio e la fine della trascrizione](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "Inizio audio da"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -5708,7 +5708,7 @@
           "message": "Il momento, in millisecondi, in cui iniziare la trascrizione nel file multimediale. Per ulteriori dettagli, consulta [Impostare l'inizio e la fine della trascrizione](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "Capitoli automatici"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Genera riepiloghi dei capitoli con Universal-2. Richiede `punctuate: true` e non può essere combinato con `summarization`. **Deprecato:** utilizzare [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) per riepiloghi flessibili dei capitoli."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "Evidenziazioni automatiche"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -5732,7 +5732,7 @@
           "message": "Abilita [Frasi chiave](https://www.assemblyai.com/docs/speech-understanding/key-phrases), vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "Sicurezza dei contenuti"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -5744,7 +5744,7 @@
           "message": "Abilita [Moderazione contenuto](https://www.assemblyai.com/docs/content-moderation), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "Fiducia sulla sicurezza dei contenuti"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -5756,7 +5756,7 @@
           "message": "La soglia di confidenza per il modello [Moderazione contenuti](https://www.assemblyai.com/docs/content-moderation). I valori devono essere compresi tra 25 e 100. Richiede che `content_safety` sia abilitato; altrimenti viene ignorato."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "Ortografia personalizzata"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "Rilevamento entità"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "Abilita [Rilevamento entità](https://www.assemblyai.com/docs/speech-understanding/entity-detection), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "Filtra volgarità"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Filtra le parolacce dal testo trascritto, possono essere vere o false. Per ulteriori dettagli, consulta [Filtro volgarità](https://www.assemblyai.com/docs/profanity-filtering)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "Formatta testo"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -5856,7 +5856,7 @@
           "message": "Abilita [Formattazione testo](https://www.assemblyai.com/docs/pre-recorded-audio), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Categorie Iab"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "Abilita [Rilevamento argomento](https://www.assemblyai.com/docs/speech-understanding/topic-detection), può essere vero o falso"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Richiesta termini chiave"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5880,7 +5880,7 @@
           "message": "Migliora la precisione con un massimo di 200 (per Universal-2) o 1000 (per Universal-3.5 Pro) parole o frasi specifiche del dominio (massimo 6 parole per frase). Per ulteriori dettagli, consulta [Richiesta termini chiave](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Codice lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -6300,7 +6300,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Codici della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -6720,7 +6720,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "Soglia di confidenza della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6732,7 +6732,7 @@
           "message": "La soglia di confidenza per la lingua rilevata automaticamente.\nVerrà restituito un errore se la sicurezza della lingua è inferiore a questa soglia.\nIl valore predefinito è 0. Può essere impostato solo quando `language_detection` è abilitato. Per ulteriori dettagli, vedere [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "Rilevamento della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "[Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) identifica la lingua parlata e indirizza la richiesta al modello migliore. Viene applicato automaticamente quando non specifichi un `language_code`. Impostato su `false` solo insieme a `language_code`; disabilitarlo senza specificare una lingua restituisce un errore."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "Opzioni di rilevamento della lingua"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -6756,7 +6756,7 @@
           "message": "Specificare le opzioni per [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "Cambio di codice"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -6768,7 +6768,7 @@
           "message": "Se deve essere rilevato il [cambio di codice](/speech-to-text/pre-recorded-audio/code-switching)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "Soglia di confidenza del cambio di codice"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "La soglia di confidenza per il rilevamento del [commutazione di codice](/speech-to-text/pre-recorded-audio/code-switching). Se l'affidabilità del cambio di codice è inferiore a questa soglia, la trascrizione verrà elaborata nella lingua con il punteggio `language_detection_confidence` più alto."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "Lingue previste"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -6792,7 +6792,7 @@
           "message": "Elenco delle lingue previste nel file audio. Il valore predefinito è `[\"all\"]` se non specificato. Per ulteriori dettagli, vedere [Rilevamento automatico della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "Linguaggio di riserva"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -6816,7 +6816,7 @@
           "message": "Utilizza l'ortografia `en_au` o `en_uk` quando viene rilevato l'inglese; è consentita una sola variante per lingua di base. I codici base/predefiniti come `en` o `en_us` vengono rifiutati. Il `language_code` della risposta riporta il codice regionale scelto. Le altre lingue rilevate ignorano questa impostazione. Vedere [Rilevamento della lingua](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "Su Nessuna voce rilevata"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "Redatta le PII dal testo trascritto utilizzando il modello Redact PII, può essere vero o falso. Richiede che `format_text` sia `true`. Per ulteriori dettagli, consulta [Oscuramento PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "Redigere l'audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -6896,7 +6896,7 @@
           "message": "Genera una copia del file multimediale originale con le informazioni personali pronunciate \"emesse da un segnale acustico\", può essere vero o falso. Richiede che `redact_pii` sia `true`. Consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "Oscura le opzioni audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "Specificare le opzioni per i file [audio PII oscurato](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "Sostituisci metodo di oscuramento audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "silenzio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "Ritorna oscurato senza audio vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -6936,7 +6936,7 @@
           "message": "Per impostazione predefinita, la redazione dell'audio fornisce URL audio redatti solo quando viene rilevato il parlato. Tuttavia, se il tuo caso d'uso richiede specificamente file audio oscurati anche per file audio silenziosi senza dialoghi, puoi scegliere di ricevere questi URL impostando questo parametro su `true`. Richiede che `redact_pii_audio` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "Redigere la qualità audio PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -6956,7 +6956,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "Redigere le policy PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -6968,7 +6968,7 @@
           "message": "L'elenco dei criteri di redazione PII da abilitare. Per ulteriori dettagli, consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "Formato di sostituzione dei dati personali"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -6988,7 +6988,7 @@
           "message": "hash"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "Restituire anche il testo originale"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -7000,7 +7000,7 @@
           "message": "Restituisci `unredacted_text`, `unredacted_words` e `unredacted_utterances` accanto ai campi oscurati. Richiede `redact_pii: true`. **Output sensibile:** abilitando questa opzione vengono conservate le informazioni personali originali. Disabilitato per impostazione predefinita. Vedere [redazione PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "Redigere entità statiche"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -7012,7 +7012,7 @@
           "message": "**Proteggere i termini proprietari**\n- Mappare le etichette di redazione su termini esatti, ad esempio `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`. Richiede `redact_pii: true` e utilizza `redact_pii_sub`. La corrispondenza tollera l'uso di maiuscole e minuscole, punteggiatura e piccole differenze di spaziatura. Non generalizza oltre i termini forniti.\n- Con `redact_pii_audio`, le corrispondenze vengono rimosse anche dall'audio.\n\n**Limiti**\n- Fino a 100 etichette, 200 termini per etichetta e 200 caratteri per termine.\n- Le etichette consentono lettere, numeri, spazi, caratteri di sottolineatura e trattini, fino a 80 caratteri.\n\nVedere [Oscuramento entità statica](https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "Analisi del sentiment"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -7024,7 +7024,7 @@
           "message": "Abilita [Analisi del sentiment](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis), può essere vero o falso. Richiede che `punctuate` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "Etichette degli altoparlanti"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -7036,7 +7036,7 @@
           "message": "Abilita [Diarizzazione dell'altoparlante](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers), può essere vero o falso. Richiede che `punctuate` sia `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "Opzioni degli altoparlanti"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -7048,7 +7048,7 @@
           "message": "Specificare le opzioni per [Diarizzazione dell'altoparlante](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers). Usatelo per impostare una gamma di possibili altoparlanti. Richiede che `speaker_labels` sia `true` e non può essere utilizzato insieme a `speakers_expected`. Quando sono impostati entrambi i limiti, `min_speakers_expected` deve essere inferiore o uguale a `max_speakers_expected`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "Includi la fiducia degli oratori"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -7060,7 +7060,7 @@
           "message": "Quando `true`, include un campo `speaker_confidence` per parola e per espressione nella risposta. Per ulteriori dettagli, vedere [Diarizzazione degli altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "È previsto un numero massimo di relatori"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7072,7 +7072,7 @@
           "message": "Limitare il numero di etichette degli altoparlanti; gli oratori aggiuntivi si uniscono alle etichette esistenti. **Un limite troppo alto può ridurre la precisione suddividendo un altoparlante in più altoparlanti.** Impostazioni predefinite: nessun limite per 0–2 minuti, 10 per 2–10 minuti, 30 sopra 10 minuti. Vedere [Gamma degli altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "Numero minimo di relatori previsti"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7084,7 +7084,7 @@
           "message": "Un limite inferiore rigido al numero di etichette degli altoparlanti: il modello non restituirà meno altoparlanti di questo. Vedi [Imposta una gamma di possibili altoparlanti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "Attesi relatori"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -7096,7 +7096,7 @@
           "message": "Indica al modello di etichetta degli altoparlanti quanti altoparlanti dovrebbe tentare di identificare. Richiede che `speaker_labels` sia `true` e deve essere un numero intero positivo; non può essere utilizzato insieme a `speaker_options`. Vedi [Imposta il numero di relatori previsti](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected) per ulteriori dettagli."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "Modelli vocali"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "Soglia vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -7128,7 +7128,7 @@
           "message": "Rifiuta i file audio che contengono meno di questa frazione del parlato.\nI valori validi sono nell'intervallo [0, 1] compreso. Per ulteriori dettagli, vedere [Soglia vocale](https://www.assemblyai.com/docs/speech-threshold)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Comprensione del parlato"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -7160,7 +7160,7 @@
           "message": "Usa uno stile di linguaggio formale. Per ulteriori dettagli, consulta la [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Corrisponde all'espressione originale"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "Se abilitato con Etichette altoparlanti, restituisce il testo tradotto nell'array delle espressioni. Ogni espressione includerà una chiave `translated_texts` contenente le traduzioni per ciascuna lingua di destinazione."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Lingue di destinazione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -7184,11 +7184,11 @@
           "message": "Elenco dei codici della lingua di destinazione (ad esempio, `[\"es\", \"de\"]`). Vedi [Traduzione](https://www.assemblyai.com/docs/speech-understanding/translation) per le lingue supportate."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identificazione del relatore"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Valori conosciuti"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -7200,7 +7200,7 @@
           "message": "Obbligatorio se speaker_type è \"role\". Ciascun valore deve contenere massimo 35 caratteri."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Tipo di altoparlante"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -7268,7 +7268,7 @@
           "message": "Il ruolo dell'oratore. Obbligatorio quando `speaker_type` è \"ruolo\"."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Formattazione personalizzata"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -7296,7 +7296,7 @@
           "message": "Modello di formato email (ad esempio, `\"username@domain.com\"`). Per ulteriori dettagli, consulta [Formattazione personalizzata](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Numero di telefono"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -7324,7 +7324,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Tipo di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "proiettili"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Elementi di azione"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -7360,7 +7360,7 @@
           "message": "media"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Includi decisioni"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Riassumere una trascrizione Universal-2. Richiede `punctuate: true` e `format_text: true`; non può essere combinato con `auto_chapters`. **Deprecato:** utilizzare [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) per riepiloghi flessibili."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "Modello di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "orecchiabile"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Tipo di riepilogo"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "paragrafo"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "Rimuovi tag audio"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -7472,7 +7472,7 @@
           "message": "Controlla la quantità di casualità inserita nella risposta del modello. Consulta la [Guida ai suggerimenti](https://www.assemblyai.com/docs/pre-recorded-audio/prompting) per ulteriori dettagli.\n\nNota: questo parametro ha effetto solo sul modello Universal-3.5 Pro."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "Nome dell'intestazione di autenticazione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "Il nome dell'intestazione da inviare con la trascrizione completata o con le richieste [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) non riuscite. Deve contenere da 1 a 1000 caratteri e contenere solo lettere ASCII, numeri, trattini e trattini bassi. È necessario impostare anche `webhook_auth_header_value` e `webhook_url`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "Valore dell'intestazione di autenticazione del webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -7508,7 +7508,7 @@
           "message": "L'URL a cui inviamo le richieste [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "Argomenti personalizzati"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -7520,7 +7520,7 @@
           "message": "A questo parametro attualmente non è associata alcuna funzionalità."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "Modello vocale"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.short_desc": {

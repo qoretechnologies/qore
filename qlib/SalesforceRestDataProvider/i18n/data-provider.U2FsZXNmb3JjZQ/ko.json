@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "레코드 생성"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Salesforce 테이블 이름(\"sobject\"라고도 함), 예: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "단일 레코드 찾기"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Salesforce 테이블 이름(\"sobject\"라고도 함), 예: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "일치하는 레코드 찾기"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Salesforce 테이블 이름(\"sobject\"라고도 함), 예: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "레코드 업데이트"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Salesforce 테이블 이름(\"sobject\"라고도 함), 예: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "레코드 업서트"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Salesforce 테이블 이름(\"sobject\"라고도 함), 예: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "레코드 삭제"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {

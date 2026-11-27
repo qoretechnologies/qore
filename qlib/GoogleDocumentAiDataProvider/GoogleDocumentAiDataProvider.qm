@@ -111,7 +111,7 @@ module GoogleDocumentAiDataProvider {
                 "app": GoogleDocumentAiDataProvider::AppName,
                 "path": "/process-document",
                 "action": "process-document",
-                "display_name": "Process Document",
+                "display_name": "Process document",
                 "short_desc": "Run a Document AI processor over a document",
                 "desc": "Calls a Document AI processor's `:process` endpoint to "
                     "extract text and structure from a document.  The processor "
@@ -134,7 +134,7 @@ module GoogleDocumentAiDataProvider {
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": GoogleDocumentAiDataProvider::AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
                 "billing": <DataProviderBillingInfo>{"model": "included"},
-                "display_name": "Wait for Operation", "short_desc": "Wait for a job and return its complete final outcome",
+                "display_name": "Wait for operation", "short_desc": "Wait for a job and return its complete final outcome",
                 "desc": "Polls an existing operation until it finishes. Returns its name, metadata, result, or service "
                     "error, including per-document batch outcomes. A timeout preserves the operation name and last "
                     "status in the exception argument. Waiting does not cancel or delete the job.",

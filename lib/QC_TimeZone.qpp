@@ -186,6 +186,10 @@ bool TimeZone::hasDST() [flags=CONSTANT] {
 //! Returns the region name as a string; if the current zone is based on a UTC offset, then the UTC offset is returned as a string like \c "+01:00"
 /** @return the region name as a string; if the current zone is based on a UTC offset, then the UTC offset is returned as a string like \c "+01:00"
 
+    @note the region name is the name with which the zone was loaded, except for a spelling of a region (ex: a case
+    variant on macOS) after the first 512 spellings in the process, which gets the name of the zoneinfo entry that it
+    reaches; see @ref time_zone_region_spellings
+
     @par Example:
     @code{.py}
 string region = tz.region();

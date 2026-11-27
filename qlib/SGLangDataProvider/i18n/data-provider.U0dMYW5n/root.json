@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
-          "message": "Chat Completion"
+          "source": "Chat completion",
+          "message": "Chat completion"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a local SGLang model server",
@@ -656,8 +656,8 @@
           "message": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
-          "message": "Create Embeddings"
+          "source": "Create embeddings",
+          "message": "Create embeddings"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
           "source": "Generate embedding vectors from a local SGLang model server",
@@ -724,8 +724,8 @@
           "message": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect output."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
-          "message": "Constrained Generation"
+          "source": "Constrained generation",
+          "message": "Constrained generation"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
           "source": "Generate text with schema/regex/grammar-enforced output structure",
@@ -892,8 +892,8 @@
           "message": "When `True`, each log-probability entry includes the decoded token text in addition to the token ID.  Easier to inspect but larger payload."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
-          "message": "Get Server Info"
+          "source": "Get server info",
+          "message": "Get server info"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
           "source": "Retrieve SGLang server configuration and runtime metadata",
@@ -904,8 +904,8 @@
           "message": "Returns the SGLang server's configuration (model name, tokenizer path, max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, number of GPUs).  Useful for health checks and configuration validation."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
-          "message": "Flush KV Cache"
+          "source": "Flush KV cache",
+          "message": "Flush KV cache"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {
           "source": "Flush the SGLang server's KV cache",

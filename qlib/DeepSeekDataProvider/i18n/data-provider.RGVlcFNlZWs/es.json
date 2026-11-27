@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Completado de chat"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Identificador pseudónimo para aislamiento de caché y programación. Use letras, dígitos, guiones bajos o guiones; como máximo 512 caracteres. Excluya información personal."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Listar modelos"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Buscar modelos disponibles para sus flujos de trabajo."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
+          "source": "Get balance",
           "message": "Obtener saldo"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Comprobar el crédito disponible antes de ejecutar flujos de trabajo de IA.\n\nDevuelve la disponibilidad y los saldos de crédito sin generar tokens."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
+          "source": "Fill in the middle",
           "message": "Rellenar el medio"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Número de probabilidades de tokens alternativos de `0` a `20`."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Crear respuesta"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Identificador pseudónimo para aislamiento de caché y programación. Use letras, dígitos, guiones bajos o guiones; como máximo 512 caracteres. Excluya información personal."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
+          "source": "Upload image file",
           "message": "Cargar archivo de imagen"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Eliminar el archivo automáticamente después de `3600` a `2592000` segundos. Omítalo para conservarlo."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
+          "source": "List image files",
           "message": "Listar archivos de imagen"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Datos de usuario"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
+          "source": "Get image file",
           "message": "Obtener archivo de imagen"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Seleccione un archivo de imagen cargado."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
+          "source": "Delete image file",
           "message": "Eliminar archivo de imagen"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {

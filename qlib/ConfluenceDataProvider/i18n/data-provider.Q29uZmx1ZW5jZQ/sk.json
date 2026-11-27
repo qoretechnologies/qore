@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "Vypísať stránky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.short_desc": {
@@ -432,7 +432,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -508,7 +508,7 @@
           "message": "stránka"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.display_name": {
-          "source": "Create Page",
+          "source": "Create page",
           "message": "Vytvoriť stránku"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Obsah stránky v formáte nájdenom v poli reprezentácie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Formát dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -712,7 +712,7 @@
           "message": "Označte obsah ako vložený a obsah sa vytvorí v NCS."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.display_name": {
-          "source": "Root Level",
+          "source": "Root level",
           "message": "Koreňová úroveň"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Stránka sa vytvorí na koreňovej úrovni priestoru (mimo stromu domovskej stránky priestoru). Ak je true, pre parameter tela `parentId` sa hodnota nesmie zadať."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "Získať stránku"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -748,7 +748,7 @@
           "message": "ID stránky, ktorá sa má vrátiť. Ak nepoznáte ID stránky, použite Získať stránky a filtrujte výsledky."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Umožňuje načítať predtým publikovanú verziu. Zadajte číslo predchádzajúcej verzie pre načítanie jej podrobností."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "Získať koncept"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Získať konceptovú verziu tejto stránky."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Zahrnúť štítky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -836,7 +836,7 @@
           "message": "Filtrovať načítavanú stránku podľa jej stavu."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Zahrnúť vlastnosti"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Zahrnie do odpovede vlastnosti obsahu priradené k tejto stránke.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí radenia.\nVlastnosti `meta` a `_links` budú prítomné na indikáciu, či sú k dispozícii ďalšie výsledky, a na odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Zahrnúť operácie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Zahrnie do odpovede operácie priradené k tejto stránke, ako sú definované v objekte `Operation`.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí radenia.\nVlastnosti `meta` a `_links` budú prítomné na indikáciu, či sú k dispozícii ďalšie výsledky, a na odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "Zahrnúť Páči sa mi to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Zahrnie do odpovede označenia Páči sa mi to priradené k tejto stránke.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí radenia.\nVlastnosti `meta` a `_links` budú prítomné na indikáciu, či sú k dispozícii ďalšie výsledky, a na odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "Zahrnúť verzie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Zahrnie do odpovede verzie priradené k tejto stránke.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí zoradenia.\nVlastnosti `meta` a `_links` budú prítomné na označenie, či sú k dispozícii ďalšie výsledky, a odkazu na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "Zahrnúť verziu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Zahrnie do odpovede aktuálnu verziu priradenú k tejto stránke.\nPredvolene je zahrnutá a možno ju vynechať nastavením hodnoty na `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "Zahrnúť stav obľúbenosti aktuálnym používateľom"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Zahrnie informáciu, či si aktuálny používateľ pridal túto stránku medzi obľúbené."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "Zahrnúť webové prostriedky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Zahrnie webové prostriedky, ktoré možno použiť na vykreslenie obsahu stránky na klientovi."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "Zahrnúť spolupracovníkov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Zahrnie spolupracovníkov na stránke."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
-          "source": "Include Direct Children",
+          "source": "Include direct children",
           "message": "Zahrnúť priamych potomkov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Zahrnie priamych potomkov stránky, ako je definované v objekte `ChildrenResponse`."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "Aktualizovať stránku"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Obsah stránky v formáte nájdenom v poli reprezentácie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Formát dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1168,7 +1168,7 @@
           "message": "ID účtu vlastníka stránky.\n\nToto umožňuje previesť vlastníctvo stránky na iného používateľa."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "Premenovať stránku"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "koncept"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "Odstrániť stránku"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "V prípade pokusu o odstránenie stránky, ktorá je konceptom."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "Vypísať stránky v priestore"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "koreň"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "Zoznam stránok pre štítok"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.display_name": {
-          "source": "List Blog Posts",
+          "source": "List blog posts",
           "message": "Zoznam blogových príspevkov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Filtrovať výsledky podľa ID blogových príspevkov. Viac ID možno zadať ako čiarkou oddelený zoznam."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Create Blog Post",
+          "source": "Create blog post",
           "message": "Vytvoriť blogový príspevok"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Obsah blogu v formáte nájdenom v poli reprezentácie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Formát dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1856,7 +1856,7 @@
           "message": "Blogový príspevok bude súkromný. Zobraziť a upravovať ho bude môcť iba používateľ, ktorý ho vytvorí."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvorené"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Dátum vytvorenia blogového príspevku vo formáte „yyyy-MM-ddTHH:mm:ss.SSSZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "Získať príspevok na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "ID blogového príspevku na vrátenie. Ak ID blogového príspevku nepoznáte, použite Získať blogové príspevky a vyfiltrujte výsledky."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Umožňuje načítať predtým publikovanú verziu. Zadajte číslo predchádzajúcej verzie pre načítanie jej podrobností."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Zahrnúť štítky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Zahrnie do odpovede štítky spojené s týmto blogovým príspevkom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí. \nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "Získať koncept"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Filtrovať načítavaný blogový príspevok podľa jeho stavu."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Zahrnúť vlastnosti"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -1992,7 +1992,7 @@
           "message": "Zahrnie do odpovede vlastnosti obsahu spojené s týmto blogovým príspevkom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí. \nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Zahrnúť operácie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Zahrnie do odpovede operácie spojené s týmto blogovým príspevkom, ako ich definuje objekt `Operation`.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí. \nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "Zahrnúť Páči sa mi to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Zahrnie do odpovede „páči sa mi“ spojené s týmto blogovým príspevkom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí. \nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "Zahrnúť verzie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Zahrnie do odpovede verzie spojené s týmto blogovým príspevkom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí. \nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "Zahrnúť verziu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "Zahrnie do odpovede aktuálnu verziu spojenú s týmto blogovým príspevkom.\nV predvolenom nastavení je zahrnutá a možno ju vynechať nastavením hodnoty na `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "Zahrnúť stav obľúbenosti aktuálnym používateľom"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -2052,7 +2052,7 @@
           "message": "Uvedie, či si aktuálny používateľ pridal tento blogový príspevok medzi obľúbené."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "Zahrnúť webové prostriedky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Zahrnie webové prostriedky, ktoré možno použiť na vykreslenie obsahu blogového príspevku na klientovi."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "Zahrnúť spolupracovníkov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Zahrnie spolupracovníkov na blogovom príspevku."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "Aktualizovať blogový príspevok"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2160,7 +2160,7 @@
           "message": "Obsah blogu v formáte nájdenom v poli reprezentácie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Formát dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -2276,7 +2276,7 @@
           "message": "ID obsahujúceho priestoru.\n\nToto momentálne **nepodporuje presunutie blogového príspevku do iného priestoru**."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvorené"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Dátum vytvorenia blogového príspevku vo formáte „yyyy-MM-ddTHH:mm:ss.SSSZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "Odstrániť blogový príspevok"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Pri pokuse o zmazanie blogového príspevku, ktorý je konceptom."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "Zoznam blogových príspevkov v priestore"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "Zoznam blogových príspevkov pre štítok"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Zoznam priestorov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Filtrovať výsledky na priestory podľa ich štítkov. Viaceré štítky možno zadať ako čiarkami oddelený zoznam."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.display_name": {
-          "source": "Favorited By",
+          "source": "Favorited by",
           "message": "Pridal medzi obľúbené"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Filtrovať výsledky na priestory, ktoré si používateľ so zadaným ID účtu pridal medzi obľúbené."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.display_name": {
-          "source": "Not Favorited By",
+          "source": "Not favorited by",
           "message": "Nemá v obľúbených"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Filtrovať výsledky na priestory, ktoré používateľ so zadaným ID účtu NEMÁ medzi obľúbenými."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "Formát popisu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "Zahrnúť ikonu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Či sa má alebo nemá načítať ikona priestoru."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "Získať priestor"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "ID priestoru na vrátenie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "Formát popisu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2848,7 +2848,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "Zahrnúť ikonu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "Či sa má alebo nemá načítať ikona priestoru."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Zahrnúť operácie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Zahrnie do odpovede operácie spojené s týmto priestorom, ako ich definuje objekt `Operation`.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí.\nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Zahrnúť vlastnosti"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Zahrnie do odpovede vlastnosti priestoru spojené s týmto priestorom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí.\nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.display_name": {
-          "source": "Include Permissions",
+          "source": "Include permissions",
           "message": "Zahrnúť oprávnenia"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Zahrnie do odpovede oprávnenia priestoru priradené k tomuto priestoru.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí radenia.\nVlastnosti `meta` a `_links` budú prítomné na indikáciu, či sú k dispozícii ďalšie výsledky, a na odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.display_name": {
-          "source": "Include Role Assignments",
+          "source": "Include role assignments",
           "message": "Zahrnúť priradenia rolí"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Zahrnie do odpovede priradenia rolí priradené k tomuto priestoru. Tento parameter je akceptovaný iba pre lokality EAP.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí zoradenia.\nVlastnosti `meta` a `_links` budú prítomné, aby indikovali, či sú k dispozícii ďalšie výsledky, a poskytli odkaz na načítanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Zahrnúť štítky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "Zahrnie do odpovede štítky spojené s týmto priestorom.\nPočet výsledkov bude obmedzený na 50 a zoradený v predvolenom poradí.\nVlastnosti `meta` a `_links` uvádzajú, či sú k dispozícii ďalšie výsledky, a odkaz na získanie zvyšku výsledkov."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Zoznam úloh"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "nedokončené"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "Priradené komu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3032,7 +3032,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.display_name": {
-          "source": "Include Blank Tasks",
+          "source": "Include blank tasks",
           "message": "Zahrnúť prázdne úlohy"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "Filtruje podľa ID blogového príspevku úlohy. Je možné zadať viacero ID. Poznámka – filtre stránok a blogových príspevkov možno použiť súčasne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "Vytvoril/a"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "Filtruje podľa Account ID používateľa, ktorý vytvoril túto úlohu. Je možné zadať viacero ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "Dokončil/a"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.short_desc": {
@@ -3092,7 +3092,7 @@
           "message": "Filtruje podľa Account ID používateľa, ktorý dokončil túto úlohu. Je možné zadať viacero ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created at From",
+          "source": "Created at from",
           "message": "Vytvorené od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Filtruje podľa začiatku časového rozsahu úlohy na základe dátumu vytvorenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created at To",
+          "source": "Created at to",
           "message": "Vytvorené do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe dátumu vytvorenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due at From",
+          "source": "Due at from",
           "message": "Termín od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "Filtruje podľa začiatku časového rozsahu úlohy na základe termínu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due at To",
+          "source": "Due at to",
           "message": "Termín do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe termínu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed at From",
+          "source": "Completed at from",
           "message": "Dokončené od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "Filtruje podľa začiatku rozsahu dátumu a času úlohy na základe dátumu dokončenia (vrátane). Vstupom je čas v epoch formáte v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed at To",
+          "source": "Completed at to",
           "message": "Dokončené do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe dátumu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Získať úlohu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "ID úlohy na vrátenie. Ak ID úlohy nepoznáte, použite Získať úlohy a vyfiltrujte výsledky."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Aktualizovať úlohu"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3288,7 +3288,7 @@
           "message": "ID stránky, v ktorej sa úloha nachádza."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post ID",
+          "source": "Blog post ID",
           "message": "ID blogového príspevku"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "ID blogového príspevku, v ktorom sa úloha nachádza."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "Vytvoril/a"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "ID účtu používateľa, ktorý túto úlohu vytvoril."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "Priradené komu"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "ID účtu používateľa, ktorému je táto úloha priradená."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "Dokončil/a"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.short_desc": {
@@ -3336,7 +3336,7 @@
           "message": "ID účtu používateľa, ktorý túto úlohu dokončil."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvorené"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.short_desc": {
@@ -3348,7 +3348,7 @@
           "message": "Dátum a čas vytvorenia úlohy. Vo formáte „YYYY-MM-DDTHH:mm:ss.sssZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Aktualizované"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.short_desc": {
@@ -3360,7 +3360,7 @@
           "message": "Dátum a čas aktualizácie úlohy. Vo formáte „YYYY-MM-DDTHH:mm:ss.sssZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.display_name": {
-          "source": "Due At",
+          "source": "Due at",
           "message": "Termín do"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "Dátum a čas termínu úlohy. Vo formáte „YYYY-MM-DDTHH:mm:ss.sssZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.display_name": {
-          "source": "Completed At",
+          "source": "Completed at",
           "message": "Dokončené dňa"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Dátum a čas dokončenia úlohy. Vo formáte „YYYY-MM-DDTHH:mm:ss.sssZ“."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Formát tela"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Zoznam štítkov"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.display_name": {
-          "source": "List Attachments",
+          "source": "List attachments",
           "message": "Zoznam príloh"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Filtrovať výsledky na prílohy na základe ich stavu. Predvolene sa používajú `current` a `archived`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.display_name": {
-          "source": "Media Type",
+          "source": "Media type",
           "message": "Typ médií"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "Kurzor stránkovania: vezmite argument dotazu `cursor` z URL `_links.next` v predchádzajúcej odpovedi a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne."
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhľadať záznamy"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `pages`, `blogposts`, `tasks`, `spaces`, `labels` alebo `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Nájsť jeden záznam"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `pages`, `blogposts`, `tasks`, `spaces`, `labels` alebo `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvoriť záznamy"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `pages`, `blogposts`, `tasks`, `spaces`, `labels` alebo `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovať záznamy"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `pages`, `blogposts`, `tasks`, `spaces`, `labels` alebo `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Odstrániť záznamy"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `pages`, `blogposts`, `tasks`, `spaces`, `labels` alebo `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "Nová stránka"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "Spustí sa pre každú novú stránku, v rámci celej lokality alebo v jednom priestore.\n\nTáto udalosť nesie záznam stránky, ktorý Confluence vráti: jej ID, názov, priestor, autora a stav. Stránka, ktorá je upravená neskôr, túto udalosť znova nespustí; hlási iba vytvorenie."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "Nový blogový príspevok"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Spustí sa pre každý nový blogový príspevok na celej lokalite alebo v jednom priestore.\n\nUdalosť nesie záznam o blogovom príspevku, ktorý vracia Confluence: jeho ID, názov, priestor, autora a stav."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "Nová príloha"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

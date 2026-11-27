@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Aktuellen Benutzer abrufen"
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Ruft das Profil des angemeldeten Mitglieds ab: Name, E-Mail-Adresse, Profilbild und Gebietsschema.\n\nDas Feld `urn` ist die `urn:li:person:{id}`-URN des Mitglieds, die von LinkedIn-APIs überall dort erwartet wird, wo ein Mitglied angegeben werden muss."
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
-          "source": "Create Text Post",
+          "source": "Create text post",
           "message": "Textbeitrag erstellen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
-          "source": "Create Article Post",
+          "source": "Create article post",
           "message": "Artikelbeitrag erstellen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Image Post",
+          "source": "Create image post",
           "message": "Bildbeitrag erstellen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
-          "source": "Create Video Post",
+          "source": "Create video post",
           "message": "Video-Beitrag erstellen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Multi-Image Post",
+          "source": "Create multi-image post",
           "message": "Beitrag mit mehreren Bildern erstellen"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
-          "source": "Reshare Post",
+          "source": "Reshare post",
           "message": "Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Verhindern, dass andere den Beitrag erneut teilen"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update Post",
+          "source": "Update post",
           "message": "Beitrag aktualisieren"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Der neue Text des Beitrags, der den vorhandenen Text ersetzt.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation und `#coding` ist ein Hashtag."
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete Post",
+          "source": "Delete post",
           "message": "Beitrag löschen"
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Die URN des zu löschenden Beitrags"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Beitrag abrufen"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Die neueste Version, die möglicherweise `DRAFT` oder `PROCESSING` statt veröffentlicht ist"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
-          "source": "Upload Image",
+          "source": "Upload image",
           "message": "Bild hochladen"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Die URN der Entität, die Eigentümer des Assets sein wird. Standardmäßig das authentifizierte Mitglied (`urn:li:person:...`); eine Organisations-URN (`urn:li:organization:...`) erfordert eine Administrator- oder Content-Admin-Rolle auf dieser Seite sowie den Bereich `w_organization_social`"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
-          "source": "Upload Video",
+          "source": "Upload video",
           "message": "Video hochladen"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {

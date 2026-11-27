@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Completado de chat"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Identificador opaco que representa al usuario final. Se registra en el servidor para el seguimiento de abusos y la atribución de uso; no afecta a la generación."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Crear embeddings"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Identificador opaco que representa al usuario final. Registrado en el lado del servidor para el seguimiento de abusos y la atribución de uso; no afecta la salida."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "Generación restringida"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Cuando es `True`, cada entrada de probabilidad logarítmica incluye el texto del token decodificado además del ID de token. Más fácil de inspeccionar pero genera una carga útil mayor."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Obtener información del servidor"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Devuelve la configuración del servidor SGLang (nombre del modelo, ruta del tokenizador, max_total_tokens, chat_template, etc.) y el estado de tiempo de ejecución (versión, dispositivo CUDA, número de GPU). Útil para comprobaciones de estado y validación de configuración."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "Vaciar caché KV"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

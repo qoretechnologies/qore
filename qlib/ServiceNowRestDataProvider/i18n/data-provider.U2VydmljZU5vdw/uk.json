@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
+          "source": "Create incident",
           "message": "Створити інцидент"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Створити інцидент у ServiceNow шляхом створення запису в таблиці `incident` за допомогою REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
+          "source": "Find single incident",
           "message": "Знайти один інцидент"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Знайти певний запис у таблиці `incident` за допомогою REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
+          "source": "Find matching incidents",
           "message": "Знайти відповідні інциденти"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Знайти записи в таблиці `incident` за допомогою REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
+          "source": "Update incidents",
           "message": "Оновити інциденти"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Оновити записи в таблиці `incident` за допомогою REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
+          "source": "Delete incidents",
           "message": "Видалити інциденти"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Видалити записи в таблиці `incident` за допомогою REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Створити запис"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Назва таблиці ServiceNow, наприклад: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Знайти один запис"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Назва таблиці ServiceNow, наприклад: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Знайти записи"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Назва таблиці ServiceNow, наприклад: `incident`"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Назва таблиці ServiceNow, наприклад: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

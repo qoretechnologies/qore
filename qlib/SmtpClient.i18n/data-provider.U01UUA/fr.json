@@ -16,7 +16,7 @@
           "message": "Serveur SMTP générique pour l'envoi d'e-mails"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send an Email With SMTP",
+          "source": "Send an email with SMTP",
           "message": "Envoyer un e-mail avec SMTP"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {

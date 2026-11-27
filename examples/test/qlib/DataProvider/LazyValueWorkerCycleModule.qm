@@ -1,0 +1,45 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyValueWorkerCycleModule.qm - test module that sandboxed code loads by its path, with a private lazy value
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ./LazyAppActionsHooks.qm
+
+module LazyValueWorkerCycleModule {
+    version = "1.0";
+    desc = "test module whose lazy value runs the code that LazyValueAppCycle.qtest sets when it is built";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The test module's lazy value: private, as sandboxed code loads the module by its path
+public namespace LazyValueWorkerCycleModule {
+public class WorkerCycle {
+    public {
+        #! the value
+        static int id = DataProviderActionCatalog::registerLazyValue(\WorkerCycle::build());
+    }
+
+    static int getId() {
+        return id;
+    }
+
+    #! Returns the value: only the code of the module that registered it can read it (qore#6843)
+    static string getValue() {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
+    #! Returns a closure of the module that reads the value, for the readers of other Programs (qore#6843)
+    static code getReader() {
+        return string sub () { return DataProviderActionCatalog::getLazyValue(id); };
+    }
+
+    static string build() {
+        LazyAppActionsHooks::Hooks::run("LazyValueWorkerCycleModule");
+        return "private";
+    }
+}
+}

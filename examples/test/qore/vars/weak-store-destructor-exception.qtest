@@ -78,9 +78,11 @@ class WeakStoreDestructorExceptionTest inherits QUnit::Test {
                 continue;
             }
             # -b must be the first argument of a compiled program
-            string result = backquote(sprintf("%s -b 2>&1", quote(exe)), \rc);
-            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
-            assertEq(expected(), result, sprintf("-O%s", opt));
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", quote(exe)));
+            assertEq(0, res.rc, sprintf("-O%s: exit status (output: %y)", opt, res.out));
+            assertEq(expected(), res.stdout, sprintf("-O%s", opt));
+            # the native compilation trace and the module loader's warnings are not output of the program
+            assertEq("", res.stderr, sprintf("-O%s: stderr", opt));
         }
     }
 }

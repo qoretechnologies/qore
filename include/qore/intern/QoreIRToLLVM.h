@@ -3319,12 +3319,16 @@ private:
     /** Calls qore_rt_call_ref_boxed_v1() and, if it made no call, the generic call path (qore_rt_call_closure_fast())
         with the same arguments, and returns the joined NaN-boxed result, which the caller owns.
 
-        @param arg_cleanups nullptr, or the slots of reads through references that the call gives only when one holds
-        its value (nullable_arg_cleanups): the generic call path takes them then, and the call is made as one that
-        gives nothing otherwise
+        @param arg_cleanups nullptr, or the cleanup slots of the temporaries that the call gives to the callee
+        (buildArgCleanupArray()): the helper (qore_rt_call_ref_boxed_given_v1()) releases them in the frame of the call
+        that it makes, and the generic call path (qore_rt_call_closure_fast_consume_args()) takes them over otherwise;
+        an array that the call gives only when a read through a reference holds its value (nullable_arg_cleanups) is
+        tested first, and the call is made as one that gives nothing without it
+        @param cleanups_given true if \a arg_cleanups is known to be given (the branch of emitGivenOrPlainCall() that
+        gives it)
     */
     DLLLOCAL llvm::Value* emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
-            llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func);
+            llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func, bool cleanups_given = false);
 
     //! Emits the test of a call site's last value that was not a function reference (qore#5578)
     /** A call site keeps the last value with which a call-reference helper returned QORE_RT_CALL_REF_NOT_FUNCREF (a

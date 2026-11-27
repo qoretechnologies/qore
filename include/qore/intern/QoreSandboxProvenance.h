@@ -19,7 +19,10 @@ public:
     //! Returns a referenced intersection, flattening and deduplicating its borrowed arguments.
     DLLLOCAL static QoreSandboxManager* combine(const std::vector<QoreSandboxManager*>& managers);
     DLLLOCAL static bool same(const QoreSandboxManager* a, const QoreSandboxManager* b);
+    //! Returns the members of a composition, or nullptr if the manager is null or not a composition
     DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager* manager);
+    //! Returns the members of a composition, or nullptr if the manager is not a composition
+    DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager& manager);
 
     //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
     //! (qore#6536)

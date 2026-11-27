@@ -16,7 +16,7 @@
           "message": "Redis In-Memory-Datenstrukturspeicher, verwendet als Datenbank, Cache, Message Broker und Warteschlange"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
-          "source": "Set String",
+          "source": "Set string",
           "message": "Zeichenfolge festlegen"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Den Zeichenfolgenwert eines Schlüssels in Redis festlegen"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
-          "source": "Get String",
+          "source": "Get string",
           "message": "Zeichenfolge abrufen"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Den Zeichenfolgenwert eines Schlüssels aus Redis abrufen"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
-          "source": "Set Hash Field",
+          "source": "Set hash field",
           "message": "Hash-Feld festlegen"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Den Wert eines Hash-Felds in Redis festlegen"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
-          "source": "Get Hash Fields",
+          "source": "Get hash fields",
           "message": "Hash-Felder abrufen"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Werte von Hash-Feldern aus Redis abrufen"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
-          "source": "Push to List",
+          "source": "Push to list",
           "message": "Zur Liste hinzufügen (Push)"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Elemente zu einer Liste in Redis hinzufügen (push)"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
-          "source": "Pop from List",
+          "source": "Pop from list",
           "message": "Aus Liste entfernen (Pop)"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Elemente aus einer Liste in Redis entfernen und abrufen (pop)"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
-          "source": "Publish Message",
+          "source": "Publish message",
           "message": "Nachricht veröffentlichen"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {

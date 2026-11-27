@@ -645,10 +645,12 @@ Why:
 - the paths of every step event cost about 15-19% of the JIT compile time of code with step events (all code that is
   not parsed with `%no-debugging`), and the continue edges into a loop changed the native code of the loop's hot path;
 - new calls of AOT code under a debugger run its debug IR in the IR interpreter
-  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v46).  In code
-  compiled without debugging (no `qcc -g`, qore#7676), a function whose native code's IR was rewritten or has call
-  forms that the debug IR cannot express has no debug IR and runs its native code, and the native code makes its direct
-  calls without checking for a debugger (`AOTDebuggerChecks::None`); the binary has no `QORE_AOT_FLAG_DEBUGGING`, and a
+  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v46).  Every function has
+  this IR, also in code compiled without debugging (no `qcc -g`, qore#7676), lowered again without the native code's
+  rewrites where needed (`aotLowerUnrewrittenDebugIR()`): a source-stripped build runs it at parse time too
+  (`UserVariantBase::materializeLazyAOTFunctionIR()`).  Without debugging, the native code makes its direct calls
+  without checking for a debugger (`AOTDebuggerChecks::None`), closures that native code creates run their native
+  bodies, and top-level code with call forms has no debug IR; the binary has no `QORE_AOT_FLAG_DEBUGGING`, and a
   debugger attached to a Program into which such code is registered gets one warning for the Program
   (`qore_aot_note_code_without_debugging()`; module code runs in the module's own Program, so the modules of a
   debugger itself give none).

@@ -488,6 +488,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         hash<auto> fill = fillStream(proto, w);
         int taken = fill.taken;
         # the client holds the data it received without granting its stream credit, at most the stream's window
+        # debug-builtin-guard: fillStream() gives "before" only with library debugging
         if (*hash<auto> before = fill.before) {
             hash<auto> stats = call_function("dbg_http_stream_credit_stats");
             int outstanding = (stats.deferred - before.deferred) - (stats.credited - before.credited);

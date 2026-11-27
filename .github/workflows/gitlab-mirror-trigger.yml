@@ -1,0 +1,47 @@
+# Starts the GitLab mirror (infrastructure/github-ci-helper, branch "qore") after every push, without sending the push.
+#
+# The helper mirrors the whole repository (clone --mirror, push --mirror) and ignores the trigger's payload, so the
+# payload only does harm: GitHub's push webhook sends a body that grows with the pushed history (up to 25 MB for a new
+# branch with a long history, such as the AOT batch branches), and GitLab answered such a delivery with HTTP 413 (the
+# 2026-11-26 22:35:50 UTC delivery of the AOT2 branch), so the helper never ran and the mirror lacked the branch until
+# somebody re-ran it by hand.  This workflow posts an empty trigger instead.
+#
+# Needs the Actions secret TRIGGER_TOKEN: the helper project's pipeline trigger token (the one in the push webhook's URL).
+# The webhook stays until this workflow has been seen to start the mirror for a push.
+
+name: Trigger the GitLab mirror
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch:
+
+# one trigger at a time, none dropped: the helper mirrors everything, so a trigger queued behind another still matters
+concurrency:
+  group: gitlab-mirror-trigger
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start the mirror job
+        env:
+          TRIGGER_TOKEN: ${{ secrets.TRIGGER_TOKEN }}
+          GITLAB_TRIGGER_URL: https://git.qoretechnologies.com/api/v4/projects/100/ref/qore/trigger/pipeline
+        run: |
+          if [ -z "${TRIGGER_TOKEN}" ]; then
+            echo "::error::the TRIGGER_TOKEN Actions secret is not set"
+            exit 1
+          fi
+          # the token is a form field, never part of the URL; --retry-all-errors covers a GitLab that is restarting
+          response=$(curl --silent --show-error --fail-with-body --max-time 60 --retry 3 --retry-all-errors \
+              --request POST --form-string "token=${TRIGGER_TOKEN}" "${GITLAB_TRIGGER_URL}") || {
+            echo "::error::GitLab did not start the mirror pipeline: ${response}"
+            exit 1
+          }
+          echo "mirror pipeline: $(printf '%s' "${response}" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id"), d.get("status"), d.get("web_url"))')"

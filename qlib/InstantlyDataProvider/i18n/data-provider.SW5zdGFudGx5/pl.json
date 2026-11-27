@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "Lista kont"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Błąd wysyłania"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Utwórz konto"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -488,7 +488,7 @@
           "message": "Aktywny"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Pobierz konto"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -512,7 +512,7 @@
           "message": "Unikalny UUID konta do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.display_name": {
-          "source": "Patch Account",
+          "source": "Patch account",
           "message": "Częściowo zaktualizuj konto (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Niestandardowa domena śledzenia do skonfigurowania dla tego konta"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "Usuń konto"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Unikalny identyfikator UUID konta do usunięcia"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.display_name": {
-          "source": "Pause Account",
+          "source": "Pause account",
           "message": "Wstrzymaj konto"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.short_desc": {
@@ -608,7 +608,7 @@
           "message": "Unikalny identyfikator UUID konta do wstrzymania"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.display_name": {
-          "source": "Resume Account",
+          "source": "Resume account",
           "message": "Wznów konto"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Unikalny UUID konta do wznowienia"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.display_name": {
-          "source": "Mark Account Fixed",
+          "source": "Mark account fixed",
           "message": "Oznacz konto jako naprawione"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Unikalny identyfikator UUID konta do oznaczenia jako naprawione"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.display_name": {
-          "source": "Test Account Vitals",
+          "source": "Test account vitals",
           "message": "Testuj parametry konta"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Unikalny UUID konta, którego parametry mają zostać przetestowane"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.display_name": {
-          "source": "Get Warmup Analytics",
+          "source": "Get warmup analytics",
           "message": "Pobierz analitykę rozgrzewania"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Lista adresów e-mail, dla których mają zostać pobrane dane analityczne rozgrzewania (od 1 do 100 pozycji)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.display_name": {
-          "source": "Get Custom Tracking Domain Status",
+          "source": "Get custom tracking domain status",
           "message": "Pobierz status niestandardowej domeny śledzącej"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Opcjonalna niestandardowa domena śledząca, dla której ma zostać sprawdzony status"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Lista kampanii"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Filtruj kampanie według nazwy"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "Utwórz kampanię"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Jeśli `True`, ten wariant nie będzie używany do wysyłki; domyślnie wszystkie warianty są włączone"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Pobierz kampanię"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Unikalny UUID kampanii do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.display_name": {
-          "source": "Patch Campaign",
+          "source": "Patch campaign",
           "message": "Zaktualizuj kampanię"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "Zaktualizowana maksymalna liczba wiadomości e-mail, które można wysłać dziennie"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "Usuń kampanię"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "Unikalny identyfikator UUID kampanii do usunięcia"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.display_name": {
-          "source": "Update Campaign Status",
+          "source": "Update campaign status",
           "message": "Zaktualizuj status kampanii"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Uruchomione podsekwencje"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.display_name": {
-          "source": "Share Campaign",
+          "source": "Share campaign",
           "message": "Udostępnij kampanię"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Unikalny identyfikator UUID kampanii do wygenerowania linku do udostępniania"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Analytics",
+          "source": "Get campaign analytics",
           "message": "Pobierz analitykę kampanii"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "Unikalny UUID kampanii, dla której mają zostać pobrane dane analityczne"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.display_name": {
-          "source": "Get Campaign Analytics Overview",
+          "source": "Get campaign analytics overview",
           "message": "Pobierz przegląd analityki kampanii"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "Unikalny UUID kampanii, dla której ma zostać pobrany przegląd analityki"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Daily Analytics",
+          "source": "Get campaign daily analytics",
           "message": "Pobierz dzienne dane analityczne kampanii"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Unikalny identyfikator UUID kampanii, dla której mają zostać pobrane dzienne dane analityczne"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.display_name": {
-          "source": "Get Campaign Step Analytics",
+          "source": "Get campaign step analytics",
           "message": "Pobierz analitykę kroków kampanii"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Unikalny identyfikator UUID kampanii, dla której ma zostać pobrana analityka kroków"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.display_name": {
-          "source": "List Campaign Subsequences",
+          "source": "List campaign subsequences",
           "message": "Wyświetl podsekwencje kampanii"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Create Campaign Subsequence",
+          "source": "Create campaign subsequence",
           "message": "Utwórz podsekwencję kampanii"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Nazwa tworzonej podsekwencji"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Get Campaign Subsequence",
+          "source": "Get campaign subsequence",
           "message": "Pobierz podsekwencję kampanii"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "Unikalny identyfikator UUID podsekwencji do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.display_name": {
-          "source": "Patch Campaign Subsequence",
+          "source": "Patch campaign subsequence",
           "message": "Zaktualizuj podsekwencję kampanii"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "Zaktualizowana nazwa podsekwencji"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Delete Campaign Subsequence",
+          "source": "Delete campaign subsequence",
           "message": "Usuń podsekwencję kampanii"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Unikalny identyfikator UUID podsekwencji do usunięcia"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.display_name": {
-          "source": "Pause Subsequence",
+          "source": "Pause subsequence",
           "message": "Wstrzymaj podsekwencję"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Unikalny UUID podsekwencji do wstrzymania"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Resume Subsequence",
+          "source": "Resume subsequence",
           "message": "Wznów podsekwencję"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Unikalny UUID podsekwencji do wznowienia"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Duplicate Subsequence",
+          "source": "Duplicate subsequence",
           "message": "Duplikuj podsekwencję"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Unikalny identyfikator UUID podsekwencji do zduplikowania"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Wyświetl listę leadów"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "Utwórz leada"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Identyfikator UUID listy leadów, do której ma zostać dodany lead"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Pobierz leada"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Unikalny identyfikator (UUID) leada do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.display_name": {
-          "source": "Patch Lead",
+          "source": "Patch lead",
           "message": "Częściowo zaktualizuj leada (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Adres URL witryny internetowej leada"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "Usuń leada"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Unikalny identyfikator (UUID) leada do usunięcia"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.display_name": {
-          "source": "Merge Leads",
+          "source": "Merge leads",
           "message": "Scal leady"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Unikalny identyfikator (UUID) drugiego leada do scalenia"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.display_name": {
-          "source": "Move Leads",
+          "source": "Move leads",
           "message": "Przenieś leady"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "Identyfikator UUID listy leadów, do której mają zostać przeniesione leady"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Move Lead to Subsequence",
+          "source": "Move lead to subsequence",
           "message": "Przenieś leada do podsekwencji"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Unikalny identyfikator (UUID) docelowej podsekwencji"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.display_name": {
-          "source": "Remove Lead from Subsequence",
+          "source": "Remove lead from subsequence",
           "message": "Usuń leada z podsekwencji"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Unikalny identyfikator (UUID) podsekwencji, z której ma zostać usunięty lead"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.display_name": {
-          "source": "Update Lead Interest Status",
+          "source": "Update lead interest status",
           "message": "Zaktualizuj status zainteresowania leada"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Niewłaściwa osoba"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.display_name": {
-          "source": "Bulk Assign Leads",
+          "source": "Bulk assign leads",
           "message": "Zbiorczo przypisz leady"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Lista identyfikatorów UUID użytkowników, do których mają zostać przypisane leady"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.display_name": {
-          "source": "Export Leads",
+          "source": "Export leads",
           "message": "Eksportuj leady"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "Format eksportu"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.display_name": {
-          "source": "List Lead Lists",
+          "source": "List lead lists",
           "message": "Wyświetl listy leadów"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.short_desc": {
@@ -2196,7 +2196,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Create Lead List",
+          "source": "Create lead list",
           "message": "Utwórz listę leadów"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2220,7 +2220,7 @@
           "message": "Nazwa tworzonej listy leadów"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.display_name": {
-          "source": "Get Lead List",
+          "source": "Get lead list",
           "message": "Pobierz listę leadów"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.short_desc": {
@@ -2244,7 +2244,7 @@
           "message": "Unikalny identyfikator (UUID) listy leadów do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.display_name": {
-          "source": "Patch Lead List",
+          "source": "Patch lead list",
           "message": "Częściowo zaktualizuj listę leadów (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Nowa nazwa listy leadów"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Delete Lead List",
+          "source": "Delete lead list",
           "message": "Usuń listę leadów"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Unikalny identyfikator (UUID) listy leadów do usunięcia"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.display_name": {
-          "source": "List Lead Labels",
+          "source": "List lead labels",
           "message": "Wyświetl etykiety leadów"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "Maksymalna liczba wyników zwracanych na stronę (1–100)"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Create Lead Label",
+          "source": "Create lead label",
           "message": "Utwórz etykietę leada"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Opis etykiety"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.display_name": {
-          "source": "Get Lead Label",
+          "source": "Get lead label",
           "message": "Pobierz etykietę leada"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Unikalny identyfikator (UUID) etykiety do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.display_name": {
-          "source": "Patch Lead Label",
+          "source": "Patch lead label",
           "message": "Częściowo zaktualizuj etykietę leada (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Opis etykiety"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Delete Lead Label",
+          "source": "Delete lead label",
           "message": "Usuń etykietę leada"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Status zainteresowania, do którego mają zostać przypisane leady i wiadomości e-mail po usunięciu etykiety"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Wyświetl listę wiadomości e-mail"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "Pobierz wiadomość e-mail"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Unikalny identyfikator UUID wiadomości e-mail do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.display_name": {
-          "source": "Patch Email",
+          "source": "Patch email",
           "message": "Częściowo zaktualizuj wiadomość e-mail (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Zaktualizowana treść wiadomości e-mail"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "Usuń wiadomość e-mail"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Unikalny identyfikator UUID wiadomości e-mail do usunięcia"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.display_name": {
-          "source": "Reply to Email",
+          "source": "Reply to email",
           "message": "Odpowiedz na e-mail"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.short_desc": {
@@ -2776,7 +2776,7 @@
           "message": "Adres e-mail, z którego ma zostać wysłana odpowiedź"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.display_name": {
-          "source": "Count Unread Emails",
+          "source": "Count unread emails",
           "message": "Policz nieprzeczytane wiadomości e-mail"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Pobierz liczbę nieprzeczytanych wiadomości e-mail w skrzynce odbiorczej."
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.display_name": {
-          "source": "Mark Thread as Read",
+          "source": "Mark thread as read",
           "message": "Oznacz wątek jako przeczytany"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "Unikalny identyfikator UUID wiadomości e-mail, aby oznaczyć wątek jako przeczytany"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.display_name": {
-          "source": "Get Campaign for Email",
+          "source": "Get campaign for email",
           "message": "Pobierz kampanię dla wiadomości e-mail"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Unikalny identyfikator UUID wiadomości e-mail, dla której ma zostać pobrana kampania"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.display_name": {
-          "source": "List Block List",
+          "source": "List block list",
           "message": "Wyświetl listę zablokowanych"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Create Block List Entry",
+          "source": "Create block list entry",
           "message": "Utwórz wpis na liście blokowanych"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Adres e-mail lub domena do dodania do listy blokowanych"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Delete Block List Entry",
+          "source": "Delete block list entry",
           "message": "Usuń wpis z listy blokowanych"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Unikalny identyfikator UUID wpisu z listy blokowanych do usunięcia"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.display_name": {
-          "source": "Patch Block List",
+          "source": "Patch block list",
           "message": "Częściowo zaktualizuj listę blokad (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Zaktualizowany adres e-mail lub domena dla wpisu na liście blokad"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.display_name": {
-          "source": "List Custom Tags",
+          "source": "List custom tags",
           "message": "Wyświetl tagi niestandardowe"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Create Custom Tag",
+          "source": "Create custom tag",
           "message": "Utwórz tag niestandardowy"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "Typ zasobu, do którego ma zastosowanie tag (np. account, campaign)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.display_name": {
-          "source": "Get Custom Tag",
+          "source": "Get custom tag",
           "message": "Pobierz tag niestandardowy"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "Unikalny UUID tagu niestandardowego do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.display_name": {
-          "source": "Patch Custom Tag",
+          "source": "Patch custom tag",
           "message": "Zaktualizuj tag niestandardowy"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.short_desc": {
@@ -3088,7 +3088,7 @@
           "message": "Zaktualizowany typ zasobu dla tagu niestandardowego"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Delete Custom Tag",
+          "source": "Delete custom tag",
           "message": "Usuń tag niestandardowy"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Unikalny identyfikator UUID tagu niestandardowego do usunięcia"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.display_name": {
-          "source": "Assign Custom Tag",
+          "source": "Assign custom tag",
           "message": "Przypisz tag niestandardowy"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Cofnij przypisanie tagu"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.display_name": {
-          "source": "List Inbox Placement Tests",
+          "source": "List inbox placement tests",
           "message": "Wyświetl testy dostarczalności do skrzynki odbiorczej"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.short_desc": {
@@ -3204,7 +3204,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Create Inbox Placement Test",
+          "source": "Create inbox placement test",
           "message": "Utwórz test dostarczalności do skrzynki odbiorczej"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Z zewnątrz"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Get Inbox Placement Test",
+          "source": "Get inbox placement test",
           "message": "Pobierz test dostarczalności do skrzynki odbiorczej"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Unikalny identyfikator UUID testu dostarczalności do skrzynki odbiorczej do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.display_name": {
-          "source": "Patch Inbox Placement Test",
+          "source": "Patch inbox placement test",
           "message": "Częściowo zaktualizuj test dostarczalności (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "Ukończono"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Delete Inbox Placement Test",
+          "source": "Delete inbox placement test",
           "message": "Usuń test dostarczalności do skrzynki odbiorczej"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "Unikalny identyfikator UUID testu dostarczalności do skrzynki odbiorczej do usunięcia"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.display_name": {
-          "source": "Get Inbox Placement Analytics",
+          "source": "Get inbox placement analytics",
           "message": "Pobierz analitykę dostarczalności do skrzynki odbiorczej"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Pobierz dane analityczne dostarczalności do skrzynki odbiorczej pokazujące dostarczalność u różnych dostawców."
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.display_name": {
-          "source": "Get IP Analytics Stats by Date",
+          "source": "Get IP analytics stats by date",
           "message": "Pobierz statystyki analityki IP według daty"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "Data końcowa dla filtra zakresu dat analityki"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.display_name": {
-          "source": "Get IP Analytics Stats by Test",
+          "source": "Get IP analytics stats by test",
           "message": "Pobierz statystyki analityki IP według testu"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Unikalny identyfikator UUID testu dostarczalności do skrzynki odbiorczej, dla którego mają zostać pobrane statystyki"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.display_name": {
-          "source": "Get IP Deliverability Insights",
+          "source": "Get IP deliverability insights",
           "message": "Pobierz wnioski dotyczące dostarczalności IP"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "Pobierz wnioski dotyczące dostarczalności dla testów dostarczalności do skrzynki odbiorczej."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.display_name": {
-          "source": "List IP Analytics",
+          "source": "List IP analytics",
           "message": "Wyświetl analitykę IP"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.display_name": {
-          "source": "Get IP Blacklist Report",
+          "source": "Get IP blacklist report",
           "message": "Pobierz raport czarnej listy IP"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "Unikalny identyfikator UUID raportu z czarnej listy do pobrania"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.display_name": {
-          "source": "List IP Blacklist Reports",
+          "source": "List IP blacklist reports",
           "message": "Wyświetl raporty czarnej listy IP"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "Utwórz weryfikację e-mail"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {
@@ -3556,7 +3556,7 @@
           "message": "Adres e-mail do weryfikacji"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.display_name": {
-          "source": "Get Email Verification Status",
+          "source": "Get email verification status",
           "message": "Pobierz status weryfikacji adresu e-mail"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.short_desc": {
@@ -3580,7 +3580,7 @@
           "message": "Unikalny identyfikator UUID weryfikacji adresu e-mail, dla której ma zostać sprawdzony status"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.display_name": {
-          "source": "List Background Jobs",
+          "source": "List background jobs",
           "message": "Wyświetl zadania w tle"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.display_name": {
-          "source": "Get Background Job",
+          "source": "Get background job",
           "message": "Pobierz zadanie w tle"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.short_desc": {
@@ -3628,7 +3628,7 @@
           "message": "Unikalny UUID zadania w tle do pobrania"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Pobierz obszar roboczy"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -3640,7 +3640,7 @@
           "message": "Pobierz informacje o bieżącym obszarze roboczym."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get Workspace Admin",
+          "source": "Get workspace admin",
           "message": "Pobierz dane administratora obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "Pobierz informacje administracyjne o obszarze roboczym."
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.display_name": {
-          "source": "Patch Workspace",
+          "source": "Patch workspace",
           "message": "Częściowo zaktualizuj obszar roboczy (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "Nowa nazwa obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Wyświetl listę członków przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Create Workspace Member",
+          "source": "Create workspace member",
           "message": "Utwórz członka obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "Nazwisko członka obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Get Workspace Member",
+          "source": "Get workspace member",
           "message": "Pobierz członka obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "Unikalny identyfikator UUID członka obszaru roboczego do pobrania"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.display_name": {
-          "source": "Patch Workspace Member",
+          "source": "Patch workspace member",
           "message": "Częściowo zaktualizuj członka obszaru roboczego (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "Nowe nazwisko członka obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Member",
+          "source": "Delete workspace member",
           "message": "Usuń członka przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3868,7 +3868,7 @@
           "message": "Unikalny identyfikator UUID członka przestrzeni roboczej do usunięcia"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "List Workspace Group Members",
+          "source": "List workspace group members",
           "message": "Wyświetl członków grupy przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Create Workspace Group Member",
+          "source": "Create workspace group member",
           "message": "Utwórz członka grupy przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "Rola do przypisania członkowi w grupie przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Get Workspace Group Member",
+          "source": "Get workspace group member",
           "message": "Pobierz członka grupy obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "Unikalny identyfikator UUID członka grupy obszaru roboczego do pobrania"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Group Member",
+          "source": "Delete workspace group member",
           "message": "Usuń członka grupy przestrzeni roboczej"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "Unikalny identyfikator UUID członka grupy przestrzeni roboczej do usunięcia"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "Wyświetl dzienniki audytu"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -4072,7 +4072,7 @@
           "message": "Maksymalna liczba wyników do zwrócenia na stronę"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.display_name": {
-          "source": "Reply Received",
+          "source": "Reply received",
           "message": "Odebrano odpowiedź"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "To zdarzenie jest wyzwalane po odebraniu odpowiedzi na wiadomość e-mail z kampanii."
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "Wiadomość e-mail odrzucona"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "To zdarzenie jest wyzwalane, gdy wiadomość e-mail kampanii zostanie odrzucona."
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Interested",
+          "source": "Lead interested",
           "message": "Lead zainteresowany"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -4108,7 +4108,7 @@
           "message": "To zdarzenie jest wyzwalane, gdy status zainteresowania leada zmieni się na zainteresowany."
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.display_name": {
-          "source": "Campaign Completed",
+          "source": "Campaign completed",
           "message": "Kampania zakończona"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.short_desc": {

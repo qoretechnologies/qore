@@ -110,6 +110,12 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
         # values in inline short string storage
         assertRegex("(?m)^ssjoin: !!binary " + make_base64_string("a,bb,日,a") + "$", out);
         assertFrame(out, "ssjoin-bad", "ENCODING-CONVERSION-ERROR", "<list>::join", 147);
+        # lists of values and separators in inline short string storage
+        assertRegex("(?m)^ss-mjoin: !!binary " + make_base64_string("a,bb,日") + "$", out);
+        assertRegex("(?m)^ss-fjoin: !!binary " + make_base64_string("a,bb") + "$", out);
+        assertFrame(out, "ss-mjoin-bad", "ENCODING-CONVERSION-ERROR", "<list>::join", 152);
+        assertFrame(out, "ss-fjoin-bad", "ENCODING-CONVERSION-ERROR", "join", 153);
+        assertFrame(out, "ss-mapjoin-bad", "ENCODING-CONVERSION-ERROR", "<list>::join", 147);
     }
 
     #! checks the exception of a case and the top frame of its call stack

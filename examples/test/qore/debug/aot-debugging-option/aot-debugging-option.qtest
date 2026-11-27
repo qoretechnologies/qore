@@ -85,7 +85,11 @@ class AotDebuggingOptionTest inherits QUnit::Test {
         }
     }
 
-    #! a function whose native code's IR was rewritten has debug IR only with -g; without it, it runs natively
+    #! a function whose native code's IR was rewritten has its separately lowered IR with and without -g
+    /** The serialized IR of a function is not only the debugger's: a source-stripped build runs it at parse time, and it
+        costs compile time only, so it is written without -g too; a debugger gets the events of the rewritten functions
+        that it calls in both, and without -g the warning for the code of the Program
+    */
     debugIrTest() {
         TmpDir tmp("qore-aot-debugging-ir-");
         string src = debug_dir + "/aot-debug-ir-rewrites/debug-ir-rewrites.qr";
@@ -97,8 +101,8 @@ class AotDebuggingOptionTest inherits QUnit::Test {
         assertEq(1, countWarnings(without), "without -g: one warning");
         *string entries = (without =~ x/^debug IR entry counts: (.*)$/m)[0];
         assertNeq(NOTHING, entries, "without -g: the entry counts");
-        # the rewritten function has no debug IR: it runs its native code, which reports no entry
-        assertFalse(entries =~ /\bconcatPair:/, "without -g: the rewritten function runs natively: " + entries);
+        # the rewritten function runs its IR, which reports its entry
+        assertRegex("\\bconcatPair: [1-9]", entries, "without -g: the rewritten function has its IR: " + entries);
     }
 
     #! a module gives no warning, compiled with or without -g, in every execution mode, whether it is loaded first or

@@ -69,8 +69,8 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
 
         #! The display name of each action
         const DisplayNames = {
-            ActionGetEmployees: "Find Employees",
-            ActionCreateEmployees: "Create Employees",
+            ActionGetEmployees: "Find employees",
+            ActionCreateEmployees: "Create employees",
         };
 
         #! The short description of each action

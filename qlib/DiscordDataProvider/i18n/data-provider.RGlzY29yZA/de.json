@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.display_name": {
-          "source": "Get User Info",
+          "source": "Get user info",
           "message": "Benutzerinformationen abrufen"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Informationen über den aktuellen Benutzer abrufen"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Serverinformationen abrufen"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.short_desc": {

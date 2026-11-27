@@ -16,7 +16,7 @@
           "message": "Standard-JSON-Dateien lesen und schreiben (nicht NDJSON/JSON Lines). Unterstützt JSON-Dateien, die ein Array von Objekten (als einzelne Datensätze iteriert) oder ein einzelnes Objekt (als ein Datensatz zurückgegeben) enthalten. Bietet konfigurierbare Pretty-Print-Ausgabe beim Schreiben."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "JSON-Datei lesen"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "Den Text wie gelesen ohne Prüfung in der Eingabekodierung behalten"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "JSON-Inline-Daten lesen"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "US-ASCII-Kodierung"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "JSON-Datei schreiben"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Kompakte JSON-Ausgabe ohne zusätzliche Leerzeichen schreiben"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "JSON-Daten schreiben"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

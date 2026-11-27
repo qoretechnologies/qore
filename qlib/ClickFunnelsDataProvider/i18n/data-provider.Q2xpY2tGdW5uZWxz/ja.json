@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "連絡先を作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -508,7 +508,7 @@
           "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "連絡先を更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -688,7 +688,7 @@
           "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "連絡先を削除"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -724,7 +724,7 @@
           "message": "削除する連絡先の一意の識別子"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
-          "source": "Upsert a Contact",
+          "source": "Upsert a contact",
           "message": "連絡先を作成または更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
@@ -892,7 +892,7 @@
           "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "連絡先一覧"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -960,7 +960,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "連絡先を取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "連絡先ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact Tag",
+          "source": "Create a contact tag",
           "message": "連絡先タグを作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "タグのカラーコード"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact Tag",
+          "source": "Update a contact tag",
           "message": "連絡先タグを更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "タグの新しいカラーコード"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact Tag",
+          "source": "Delete a contact tag",
           "message": "連絡先タグを削除"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "削除するタグの一意の識別子"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact Tags",
+          "source": "List contact tags",
           "message": "コンタクトタグを一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact Tag",
+          "source": "Get a contact tag",
           "message": "連絡先タグを取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "取得するタグのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to contact",
           "message": "連絡先にタグを適用"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "連絡先に適用するタグのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "連絡先からタグを削除"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "連絡先から削除する適用されたタグ"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "注文を作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "発生元チャネルのタイプ"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "注文を更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "注文の新しいステータス"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "注文の一覧取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "注文を取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "取得する注文のID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "商品を作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "アフィリエイト報酬の対象かどうか"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "商品の更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "アフィリエイト報酬の対象かどうか"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "商品一覧"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "商品を取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "取得する商品のID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
-          "source": "Update a Funnel",
+          "source": "Update a funnel",
           "message": "ファネルを更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "ファネルの新しい名前"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
-          "source": "List Funnels",
+          "source": "List funnels",
           "message": "ファネルを一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
-          "source": "Get a Funnel",
+          "source": "Get a funnel",
           "message": "ファネルを取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "取得するファネルのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "コースを一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
-          "source": "Get a Course",
+          "source": "Get a course",
           "message": "コースを取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "取得するコースのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create an Enrollment",
+          "source": "Create an enrollment",
           "message": "登録を作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "登録を一時停止する理由"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Update an Enrollment",
+          "source": "Update an enrollment",
           "message": "登録を更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "登録が完了したかどうか"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "登録を一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
-          "source": "Get an Enrollment",
+          "source": "Get an enrollment",
           "message": "受講登録を取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "取得する受講登録のID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Create a Fulfillment",
+          "source": "Create a fulfillment",
           "message": "フルフィルメントを作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "フルフィルメントの作成時に在庫切れチェックを無視するかどうか"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Update a Fulfillment",
+          "source": "Update a fulfillment",
           "message": "フルフィルメントを更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "フルフィルメントの更新について顧客にメール通知を送信するかどうか"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Delete a Fulfillment",
+          "source": "Delete a fulfillment",
           "message": "フルフィルメントを削除"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "削除するフルフィルメントの一意の識別子"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Cancel a Fulfillment",
+          "source": "Cancel a fulfillment",
           "message": "フルフィルメントをキャンセル"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "キャンセルするフルフィルメントの一意の識別子"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "フルフィルメントを一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
-          "source": "Get a Fulfillment",
+          "source": "Get a fulfillment",
           "message": "フルフィルメントを取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "取得するフルフィルメントのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create a Form",
+          "source": "Create a form",
           "message": "フォームを作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "フォーム送信後にリダイレクトするURL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update a Form",
+          "source": "Update a form",
           "message": "フォームを更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "新しいリダイレクト URL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete a Form",
+          "source": "Delete a form",
           "message": "フォームを削除"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "削除するフォームの一意の識別子"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "フォーム一覧"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get a Form",
+          "source": "Get a form",
           "message": "フォームを取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "取得するフォームのID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
-          "source": "List Form Submissions",
+          "source": "List form submissions",
           "message": "フォーム送信を一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
-          "source": "Get a Form Submission",
+          "source": "Get a form submission",
           "message": "フォーム送信を取得"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "取得する送信ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
-          "source": "List Applied Tags",
+          "source": "List applied tags",
           "message": "適用済みタグを一覧表示"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "最大結果数"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "連絡先作成時"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "ClickFunnelsで新しい連絡先が作成されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "連絡先が更新されました"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "ClickFunnelsで連絡先が更新されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "注文が作成されたとき"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "ClickFunnelsで新しい注文が作成されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "注文更新"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "ClickFunnelsで注文が更新されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
-          "source": "Order Completed",
+          "source": "Order completed",
           "message": "注文完了"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "ClickFunnelsで注文が完了したときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Form Submission Created",
+          "source": "Form submission created",
           "message": "フォーム送信作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "ClickFunnelsでフォームが送信されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
-          "source": "Enrollment Created",
+          "source": "Enrollment created",
           "message": "登録作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
@@ -3304,7 +3304,7 @@
           "message": "ClickFunnelsで新しいコース登録が作成されたときにトリガーされます"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Fulfillment Created",
+          "source": "Fulfillment created",
           "message": "フルフィルメント作成"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {

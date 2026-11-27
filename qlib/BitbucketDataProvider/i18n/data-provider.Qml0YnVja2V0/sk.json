@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
-          "source": "List Workspace Repositories",
+          "source": "List workspace repositories",
           "message": "Vypísať repozitáre pracovného priestoru"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Získať repozitár"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Repozitár, s ktorým sa má pracovať, zadaný ako jeho slug alebo UUID v zložených zátvorkách.\n\nVšetko ostatné v rozsahu repozitára – commity, vetvy, pull requesty – sa načítava z tohto repozitára, takže jeho zmena ich načíta znova."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
-          "source": "Create Repository",
+          "source": "Create repository",
           "message": "Vytvoriť repozitár"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Súkromné"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Pravidlá forkovania"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
@@ -540,7 +540,7 @@
           "message": "Jazyk"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
@@ -548,7 +548,7 @@
           "message": "\nSledovanie issue pre tento repozitár je povolené. Funkcie nástroja Issue Tracker\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
@@ -560,7 +560,7 @@
           "message": "Projekt"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -568,7 +568,7 @@
           "message": "Popis"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Má verejne viditeľné úložiská"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -576,7 +576,7 @@
           "message": "\nUkazuje, či projekt obsahuje verejne prístupné úložiská.\nUpozornenie: súkromné projekty nemôžu obsahovať verejné úložiská."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Je súkromný"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -656,11 +656,11 @@
           "message": "Vlastník"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Názov zobrazenia"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.bGlua3M.display_name": {
@@ -768,7 +768,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aktualizované dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -796,7 +796,7 @@
           "message": "repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Aktualizovať repozitár"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
@@ -836,11 +836,11 @@
           "message": "Popis"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Je súkromný"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Pravidlá forkovania"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
@@ -864,7 +864,7 @@
           "message": "Jazyk"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
@@ -872,7 +872,7 @@
           "message": "\nSledovanie issue pre tento repozitár je povolené. Funkcie nástroja Issue Tracker\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
@@ -884,7 +884,7 @@
           "message": "Projekt"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -892,7 +892,7 @@
           "message": "Popis"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Má verejne viditeľné úložiská"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -900,7 +900,7 @@
           "message": "\nUkazuje, či projekt obsahuje verejne prístupné úložiská.\nUpozornenie: súkromné projekty nemôžu obsahovať verejné úložiská."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Je súkromný"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1016,11 +1016,11 @@
           "message": "Vlastník"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Názov zobrazenia"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.bGlua3M.display_name": {
@@ -1140,7 +1140,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aktualizované dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -1176,7 +1176,7 @@
           "message": "Hlavná vetva"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.display_name": {
-          "source": "Default Merge Strategy",
+          "source": "Default merge strategy",
           "message": "Prednastavená stratégia zlúčenia"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Názov"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.display_name": {
-          "source": "Merge Strategies",
+          "source": "Merge strategies",
           "message": "Stratégie zlúčenia"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.short_desc": {
@@ -1308,11 +1308,11 @@
           "message": "Používateľ"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Názov zobrazenia"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.bGlua3M.display_name": {
@@ -1464,7 +1464,7 @@
           "message": "Schválené"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.display_name": {
-          "source": "Participated On",
+          "source": "Participated on",
           "message": "Účastník na"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Repozitár"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1520,7 +1520,7 @@
           "message": "Popis"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Pravidlá forkovania"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.desc": {
@@ -1540,7 +1540,7 @@
           "message": "no_forks"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.display_name": {
-          "source": "Full Name",
+          "source": "Full name",
           "message": "Celé meno"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Kombinácia používateľského mena vlastníka repozitára a zlomenej názov, napr. \"evzijst/interruptingcow\". Toto je rovnaký reťazec používaný v URL Bitbucket."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Má issues"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.desc": {
@@ -1560,7 +1560,7 @@
           "message": "\nSledovanie issue pre tento repozitár je povolené. Funkcie nástroja Issue Tracker\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Má wiki"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.desc": {
@@ -1568,7 +1568,7 @@
           "message": "\nWiki pre tento repozitár je povolená. Funkcie Wiki\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Je súkromný"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.bGFuZ3VhZ2U.display_name": {
@@ -1712,7 +1712,7 @@
           "message": "Projekt"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1720,7 +1720,7 @@
           "message": "Popis"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Má verejne viditeľné úložiská"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -1728,7 +1728,7 @@
           "message": "\nUkazuje, či projekt obsahuje verejne prístupné úložiská.\nUpozornenie: súkromné projekty nemôžu obsahovať verejné úložiská."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Je súkromný"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1772,7 +1772,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aktualizované dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXVpZA.display_name": {
@@ -1804,7 +1804,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aktualizované dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXVpZA.display_name": {
@@ -1832,7 +1832,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Odstrániť repozitár"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Repozitár, s ktorým sa má pracovať, zadaný ako jeho slug alebo UUID v zložených zátvorkách.\n\nVšetko ostatné v rozsahu repozitára – commity, vetvy, pull requesty – sa načítava z tohto repozitára, takže jeho zmena ich načíta znova."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
-          "source": "Redirect To",
+          "source": "Redirect to",
           "message": "Presmerovať na"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Ak bol repozitár presunutý na nové umiestnenie, použite tento parameter na\nzobrazenie prehľadnej správy pre používateľov v rozhraní Bitbucketu o tom, že repozitár\nbol presunutý na nové umiestnenie. Požiadavka GET na tento koncový bod však stále\nvráti kód 404.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Zoznam vetiev"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Vypísať commity"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Získať commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "SHA1 commitu."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
-          "source": "List Commit Reports",
+          "source": "List commit reports",
           "message": "Zoznam správ commitu"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Vypísať komentáre ku commitu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Komentovať commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Cesta k súboru, ktorý je priradený k komentáru."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Začať od"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -2384,7 +2384,7 @@
           "message": "Počiatočný riadok v starej verzii súboru, ak je komentár viacriadkový. V opačnom prípade je null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Od začiatku"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "commit_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
-          "source": "Approve Commit",
+          "source": "Approve commit",
           "message": "Schváliť commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "SHA1 commitu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
-          "source": "Unapprove Commit",
+          "source": "Unapprove commit",
           "message": "Zrušiť schválenie commitu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "SHA1 commitu."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Zoznam nasadení"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Zoznam pull requestov"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
@@ -2664,7 +2664,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Vytvoriť pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Členovia, od ktorých sa požaduje posúdenie, vo forme UUID ich účtov.\n\nBitbucket toto deklaruje ako zoznam používateľských objektov; tu sa uvádza ako zoznam ID a odosiela sa v tvare, ktorý API očakáva.\n\nTáto hodnota sa odosiela ako zoznam používateľských objektov Bitbucketu, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Zatvoriť zdrojovú vetvu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "pullrequest"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Získať pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "ID pull requestu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Aktualizovať pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Členovia, od ktorých sa požaduje posúdenie, vo forme UUID ich účtov.\n\nBitbucket toto deklaruje ako zoznam používateľských objektov; tu sa uvádza ako zoznam ID a odosiela sa v tvare, ktorý API očakáva.\n\nTáto hodnota sa odosiela ako zoznam používateľských objektov Bitbucketu, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Zatvoriť zdrojovú vetvu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Boolovský príznak označujúci, či je pull request koncept."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Pull Request Comments",
+          "source": "List pull request comments",
           "message": "Zoznam komentárov k pull requestu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Pull Request",
+          "source": "Comment on pull request",
           "message": "Komentovať pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Cesta k súboru, ktorý je priradený k komentáru."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Začať od"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Počiatočný riadok v starej verzii súboru, ak je komentár viacriadkový. V opačnom prípade je null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Od začiatku"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3260,7 +3260,7 @@
           "message": "Text, aký bol zadaný používateľom."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.ZGVsZXRlZA.display_name": {
@@ -3300,7 +3300,7 @@
           "message": "Cesta k súboru, ktorý je priradený k komentáru."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Začať od"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Počiatočný riadok v starej verzii súboru, ak je komentár viacriadkový. V opačnom prípade je null."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Od začiatku"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Typ"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Aktualizované dňa"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXNlcg.display_name": {
@@ -3416,11 +3416,11 @@
           "message": "Používateľ"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Názov zobrazenia"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.bGlua3M.display_name": {
@@ -3476,7 +3476,7 @@
           "message": "pullrequest_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
-          "source": "Get Pull Request Comment",
+          "source": "Get pull request comment",
           "message": "Získať komentár k pull requestu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
@@ -3536,7 +3536,7 @@
           "message": "ID komentára."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
-          "source": "Update Pull Request Comment",
+          "source": "Update pull request comment",
           "message": "Aktualizovať komentár k pull requestu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "Cesta k súboru, ktorý je priradený k komentáru."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Začať od"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Počiatočný riadok v starej verzii súboru, ak je komentár viacriadkový. V opačnom prípade je null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Od začiatku"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "Riadok značky komentára v novej verzii súboru. Ak je komentár viacriadkový, ide o koncový riadok v novej verzii súboru."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
-          "source": "Delete Pull Request Comment",
+          "source": "Delete pull request comment",
           "message": "Odstrániť komentár k pull requestu"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
@@ -3788,7 +3788,7 @@
           "message": "ID komentára."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
-          "source": "Search Code in a Workspace",
+          "source": "Search code in a workspace",
           "message": "Vyhľadať kód v pracovnom priestore"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
@@ -3848,7 +3848,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
-          "source": "Search Code in a User's Repositories",
+          "source": "Search code in a user's repositories",
           "message": "Vyhľadať kód v repozitároch používateľa"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
-          "source": "Search Code in a Team's Repositories",
+          "source": "Search code in a Team's repositories",
           "message": "Vyhľadať kód v repozitároch tímu"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "Zoznam pracovných priestorov"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Koľko záznamov sa má vrátiť na jednej stránke, maximálne 100. Bitbucket to dokumentuje pre každú kolekciu, ale nedeklaruje to takmer pri žiadnej z nich."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Získať pracovný priestor"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Pracovný priestor, v ktorom sa má pracovať, zadaný ako jeho slug alebo UUID v zložených zátvorkách.\n\nVšetko ostatné v rozsahu pracovného priestoru – repozitáre, členovia – sa načítava z tohto pracovného priestoru, takže jeho zmena ich načíta znova."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Zoznam členov pracovného priestoru"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
-          "source": "List Workspace Projects",
+          "source": "List workspace projects",
           "message": "Zoznam projektov pracovného priestoru"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu Bitbucketu `100`.\n\n`next` v odpovedi je URL adresa nasledujúcej stránky; stránkujte podľa jej prítomnosti a nie podľa `size`, čo Bitbucket neuvádza pre každú kolekciu."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhľadať záznamy"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` alebo `branches`"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Nájsť jeden záznam"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` alebo `branches`"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvoriť záznamy"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` alebo `branches`"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovať záznamy"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` alebo `branches`"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Odstrániť záznamy"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {
@@ -4268,7 +4268,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` alebo `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nový commit"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
@@ -4280,7 +4280,7 @@
           "message": "Spustí sa pre každý nový commit v sledovanom repozitári naprieč všetkými vetvami.\n\nUdalosť nesie záznam o commite vrátený službou Bitbucket vrátane jeho hashu, správy, autora a dátumu."
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
-          "source": "New Deployment",
+          "source": "New deployment",
           "message": "Nové nasadenie"
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Spustí sa pre každé nové nasadenie v sledovanom repozitári.\n\nUdalosť nesie záznam o nasadení vrátený službou Bitbucket vrátane cieľového prostredia, dosiahnutého stavu a nasadenej verzie."
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Nový pull request"
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {

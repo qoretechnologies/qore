@@ -51,7 +51,7 @@ static void set_binary_and_analysis_bitwise(QoreParseContext& parse_context,
 }
 
 QoreValue QoreBinaryAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();

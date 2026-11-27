@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Kampagnen auflisten"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Kampagnen mit Fehlern"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Kampagne abrufen"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Die eindeutige Kennung der abzurufenden Kampagne"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "Kampagne erstellen"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Der Name der zu erstellenden Kampagne"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
-          "source": "Pause Campaign",
+          "source": "Pause campaign",
           "message": "Kampagne pausieren"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Die eindeutige Kennung der zu pausierenden Kampagne"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
-          "source": "Start Campaign",
+          "source": "Start campaign",
           "message": "Kampagne starten"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Die eindeutige Kennung der zu startenden Kampagne"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Leads auflisten"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Die Kennung der Kampagne, aus der Leads abgerufen werden sollen"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Lead abrufen"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Die E-Mail-Adresse des abzurufenden Leads"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Add Lead to Campaign",
+          "source": "Add lead to campaign",
           "message": "Lead zur Kampagne hinzufügen"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Die mit dem Lead verknüpfte Website-URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "Lead aktualisieren"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "Auf `True` setzen, um diesen Lead als an Ihrem Angebot interessiert zu markieren"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Remove Lead from Campaign",
+          "source": "Remove lead from campaign",
           "message": "Lead aus Kampagne entfernen"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Die E-Mail-Adresse des Leads, der aus der Kampagne entfernt werden soll"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "Aktivitäten auflisten"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Wenn `True`, wird nur das erste Auftreten jedes Aktivitätstyps pro Lead und Kampagne zurückgegeben"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Tasks auflisten"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Maximale Anzahl zurückzugebender Aufgaben (max. 100)"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Task abrufen"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Tasks"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Aufgabe erstellen"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Datum und Uhrzeit, wann diese Aufgabe fällig ist"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Aufgabe aktualisieren"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Aktualisiertes Datum und Uhrzeit der Fälligkeit dieser Aufgabe"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Aufgabe löschen"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Aufgabe"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Die E-Mail-Adresse des abzurufenden Kontakts. Die Lemlist v2-API erfordert eine spezifische E-Mail-Adresse, um Kontakte nachzuschlagen."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Kontakt abrufen"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Die E-Mail-Adresse des abzurufenden Kontakts"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Kontakt erstellen"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Die mit dem Kontakt verknüpfte Website-URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Kontakt aktualisieren"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Aktualisierte Website-URL für den Kontakt"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Kontakt löschen"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Die E-Mail-Adresse des zu löschenden Kontakts"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "E-Mail gesendet"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "E-Mail geöffnet"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "E-Mail-Link angeklickt"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
-          "source": "Email Replied",
+          "source": "Email replied",
           "message": "E-Mail beantwortet"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "E-Mail zurückgewiesen"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Marked Interested",
+          "source": "Lead marked interested",
           "message": "Lead als interessiert markiert"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Ereignisse optional nach einer bestimmten Lemlist-Kampagne filtern"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
-          "source": "Lead Marked Not Interested",
+          "source": "Lead marked not interested",
           "message": "Lead als nicht interessiert markiert"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {

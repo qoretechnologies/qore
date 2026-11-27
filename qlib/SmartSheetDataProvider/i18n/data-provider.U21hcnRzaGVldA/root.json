@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
-          "source": "Create a Sheet",
-          "message": "Create a Sheet"
+          "source": "Create a sheet",
+          "message": "Create a sheet"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
           "source": "Create a new sheet",
@@ -604,8 +604,8 @@
           "message": "The display width of the column in pixels"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
-          "source": "Update a Sheet",
-          "message": "Update a Sheet"
+          "source": "Update a sheet",
+          "message": "Update a sheet"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
           "source": "Update a sheet's properties",
@@ -640,8 +640,8 @@
           "message": "The new name for the sheet"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
-          "source": "Delete a Sheet",
-          "message": "Delete a Sheet"
+          "source": "Delete a sheet",
+          "message": "Delete a sheet"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
           "source": "Delete a sheet",
@@ -664,8 +664,8 @@
           "message": "The unique identifier of the sheet to delete"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
-          "source": "List Sheets",
-          "message": "List Sheets"
+          "source": "List sheets",
+          "message": "List sheets"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
           "source": "List all sheets",
@@ -684,8 +684,8 @@
           "message": "Get a specific sheet"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create a Workspace",
-          "message": "Create a Workspace"
+          "source": "Create a workspace",
+          "message": "Create a workspace"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
           "source": "Create a new workspace",
@@ -708,8 +708,8 @@
           "message": "The name for the new workspace"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update a Workspace",
-          "message": "Update a Workspace"
+          "source": "Update a workspace",
+          "message": "Update a workspace"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
           "source": "Update a workspace",
@@ -744,8 +744,8 @@
           "message": "The new name for the workspace"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete a Workspace",
-          "message": "Delete a Workspace"
+          "source": "Delete a workspace",
+          "message": "Delete a workspace"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
           "source": "Delete a workspace",
@@ -768,8 +768,8 @@
           "message": "The unique identifier of the workspace to delete"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List Workspaces",
-          "message": "List Workspaces"
+          "source": "List workspaces",
+          "message": "List workspaces"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
           "source": "List all workspaces",
@@ -788,8 +788,8 @@
           "message": "Get a specific workspace"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create a Folder",
-          "message": "Create a Folder"
+          "source": "Create a folder",
+          "message": "Create a folder"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
           "source": "Create a new folder",
@@ -812,8 +812,8 @@
           "message": "The name for the new folder"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
-          "source": "Update a Folder",
-          "message": "Update a Folder"
+          "source": "Update a folder",
+          "message": "Update a folder"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
           "source": "Update a folder",
@@ -848,8 +848,8 @@
           "message": "The new name for the folder"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
-          "source": "Delete a Folder",
-          "message": "Delete a Folder"
+          "source": "Delete a folder",
+          "message": "Delete a folder"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
           "source": "Delete a folder",
@@ -872,8 +872,8 @@
           "message": "The unique identifier of the folder to delete"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
-          "source": "List Folders",
-          "message": "List Folders"
+          "source": "List folders",
+          "message": "List folders"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
           "source": "List home folders",
@@ -892,8 +892,8 @@
           "message": "Get a specific folder"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
-          "source": "List Reports",
-          "message": "List Reports"
+          "source": "List reports",
+          "message": "List reports"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
           "source": "List all reports",
@@ -912,8 +912,8 @@
           "message": "Get a specific report"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Add a User",
-          "message": "Add a User"
+          "source": "Add a user",
+          "message": "Add a user"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
           "source": "Add a user to the organization",
@@ -1008,8 +1008,8 @@
           "message": "The last name of the new user"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
-          "message": "Update a User"
+          "source": "Update a user",
+          "message": "Update a user"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
           "source": "Update a user's settings",
@@ -1104,8 +1104,8 @@
           "message": "Whether the user should be a resource viewer"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Remove a User",
-          "message": "Remove a User"
+          "source": "Remove a user",
+          "message": "Remove a user"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
           "source": "Remove a user from the organization",
@@ -1164,8 +1164,8 @@
           "message": "If `True`, removes the user from your organization and revokes their access to all organization and plan assets"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List all users",
@@ -1192,8 +1192,8 @@
           "message": "Filter by email"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
-          "source": "Create a Group",
-          "message": "Create a Group"
+          "source": "Create a group",
+          "message": "Create a group"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
           "source": "Create a new group",
@@ -1252,8 +1252,8 @@
           "message": "The email address of the group member to add"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
-          "message": "Update a Group"
+          "source": "Update a group",
+          "message": "Update a group"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
           "source": "Update a group",
@@ -1300,8 +1300,8 @@
           "message": "The new description for the group"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
-          "source": "Delete a Group",
-          "message": "Delete a Group"
+          "source": "Delete a group",
+          "message": "Delete a group"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
           "source": "Delete a group",
@@ -1324,8 +1324,8 @@
           "message": "The unique identifier of the group to delete"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
-          "message": "List Groups"
+          "source": "List groups",
+          "message": "List groups"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
           "source": "List all groups",
@@ -1344,8 +1344,8 @@
           "message": "Get a specific group"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
-          "source": "Create Row",
-          "message": "Create Row"
+          "source": "Create row",
+          "message": "Create row"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
           "source": "Create a row in a sheet",
@@ -1368,8 +1368,8 @@
           "message": "Select the Smartsheet sheet where the new row will be created"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
-          "source": "Find Rows",
-          "message": "Find Rows"
+          "source": "Find rows",
+          "message": "Find rows"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
           "source": "Find rows in a sheet",
@@ -1392,8 +1392,8 @@
           "message": "Select the Smartsheet sheet to search for rows"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
-          "source": "Update Rows",
-          "message": "Update Rows"
+          "source": "Update rows",
+          "message": "Update rows"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
           "source": "Update rows in a sheet",
@@ -1416,8 +1416,8 @@
           "message": "Select the Smartsheet sheet where rows will be updated"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
-          "source": "Delete Rows",
-          "message": "Delete Rows"
+          "source": "Delete rows",
+          "message": "Delete rows"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
           "source": "Delete rows from a sheet",
@@ -1440,8 +1440,8 @@
           "message": "Select the Smartsheet sheet where rows will be deleted"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
-          "source": "Sheet Updated",
-          "message": "Sheet Updated"
+          "source": "Sheet updated",
+          "message": "Sheet updated"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
           "source": "Trigger when a sheet is updated",
@@ -1452,8 +1452,8 @@
           "message": "Fires when a sheet is updated in the Smartsheet account"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
-          "source": "Row Created",
-          "message": "Row Created"
+          "source": "Row created",
+          "message": "Row created"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a new row is created",
@@ -1464,8 +1464,8 @@
           "message": "Fires when a new row is created in a Smartsheet sheet"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
-          "source": "Row Updated",
-          "message": "Row Updated"
+          "source": "Row updated",
+          "message": "Row updated"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a row is updated",
@@ -1476,8 +1476,8 @@
           "message": "Fires when a row is updated in a Smartsheet sheet"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
-          "source": "Row Deleted",
-          "message": "Row Deleted"
+          "source": "Row deleted",
+          "message": "Row deleted"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {
           "source": "Trigger when a row is deleted",

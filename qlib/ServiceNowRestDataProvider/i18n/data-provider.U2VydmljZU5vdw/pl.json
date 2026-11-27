@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
+          "source": "Create incident",
           "message": "Utwórz incydent"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Utwórz incydent w ServiceNow, tworząc rekord w tabeli `incident` za pomocą interfejsu REST API usługi ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
+          "source": "Find single incident",
           "message": "Znajdź pojedynczy incydent"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Znajdź określony rekord w tabeli `incident` za pomocą interfejsu REST API usługi ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
+          "source": "Find matching incidents",
           "message": "Znajdź pasujące incydenty"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Znajdź rekordy w tabeli `incident` za pomocą interfejsu REST API usługi ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
+          "source": "Update incidents",
           "message": "Zaktualizuj incydenty"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Zaktualizuj rekordy w tabeli `incident` za pomocą interfejsu REST API usługi ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
+          "source": "Delete incidents",
           "message": "Usuń incydenty"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Usuń rekordy w tabeli `incident` za pomocą interfejsu REST API usługi ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Utwórz rekord"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Nazwa tabeli ServiceNow, np.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Znajdź pojedynczy rekord"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Nazwa tabeli ServiceNow, np.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Znajdź rekordy"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Nazwa tabeli ServiceNow, np.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Zaktualizuj rekordy"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Nazwa tabeli ServiceNow, np.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Usuń rekordy"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

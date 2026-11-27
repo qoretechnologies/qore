@@ -16,7 +16,7 @@
           "message": "Genera flussi di record configurabili per testare le pipeline di dati senza alcuna connessione a servizi esterni"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Genera record"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Un valore di data/ora fisso utilizzato come punto di riferimento per la generazione dei campi di data; se fornito insieme a un seed, garantisce la totale riproducibilità tra esecuzioni diverse dei campi di data; se non fornito, viene utilizzata la data/ora corrente all'inizio della generazione"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Genera da modello"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

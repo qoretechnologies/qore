@@ -16,8 +16,8 @@
           "message": "Connect to MCP servers for AI tool, resource, and prompt integration"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
-          "message": "Call Tool"
+          "source": "Call tool",
+          "message": "Call tool"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
           "source": "Execute an MCP tool",
@@ -28,8 +28,8 @@
           "message": "Execute an MCP tool with the provided arguments and return the result"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
-          "message": "List Tools"
+          "source": "List tools",
+          "message": "List tools"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
           "source": "List available MCP tools",
@@ -40,8 +40,8 @@
           "message": "List all tools available on the MCP server"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
-          "message": "Read Resource"
+          "source": "Read resource",
+          "message": "Read resource"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
           "source": "Read an MCP resource",
@@ -52,8 +52,8 @@
           "message": "Read content from an MCP resource by URI"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
-          "message": "List Resources"
+          "source": "List resources",
+          "message": "List resources"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
           "source": "List available MCP resources",
@@ -64,8 +64,8 @@
           "message": "List all resources available on the MCP server"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
-          "message": "Get Prompt"
+          "source": "Get prompt",
+          "message": "Get prompt"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
           "source": "Get an MCP prompt",
@@ -76,8 +76,8 @@
           "message": "Get a prompt template from the MCP server with arguments"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
-          "message": "List Prompts"
+          "source": "List prompts",
+          "message": "List prompts"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
           "source": "List available MCP prompts",
@@ -88,8 +88,8 @@
           "message": "List all prompts available on the MCP server"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
-          "message": "Get Completion"
+          "source": "Get completion",
+          "message": "Get completion"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
           "source": "Get autocompletion suggestions",
@@ -100,8 +100,8 @@
           "message": "Get autocompletion suggestions for prompts or resources"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
-          "message": "Ping Server"
+          "source": "Ping server",
+          "message": "Ping server"
         },
         "app.TUNQ.action.cGluZw.short_desc": {
           "source": "Check server connectivity",
