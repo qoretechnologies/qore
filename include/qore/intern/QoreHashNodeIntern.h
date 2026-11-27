@@ -805,7 +805,19 @@ public:
     }
 
     //! returns the member with the key \a key, or nullptr
+    /** GCC passes the fields of the key in registers (an IPA-SRA clone) as long as each caller does nothing with
+        its key but pass it to calls; the find-or-create functions, which also create the member of their key, use
+        findMemberForCreate() instead (qore#7763)
+    */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
+        assertNotReleasing();
+        return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
+    }
+
+    //! findMember(const qore_hash_lookup_key&) for the find-or-create functions of QoreHashNode.cpp, which create the
+    //! member of \a key inline when it is not found (createMemberKnownAbsentInline()), so that the other callers
+    //! keep the search with the key in registers (qore#7763)
+    QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMemberForCreate(const qore_hash_lookup_key& key) const {
         assertNotReleasing();
         return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
     }
@@ -1001,6 +1013,12 @@ public:
     //! creates the member of the key \a key, which the hash does not have
     DLLLOCAL HashMember* createMemberKnownAbsent(const qore_hash_lookup_key& key);
 
+    //! createMemberKnownAbsent(const qore_hash_lookup_key&), always inlined into the find-or-create functions of
+    //! QoreHashNode.cpp (findCreateMember(), findCreateMemberFor(), findCreateMemberPrehashed()), so that a new member
+    //! costs no call more than its allocation, whatever the number of the callers (qore#7763); defined and used only
+    //! in QoreHashNode.cpp
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL inline HashMember* createMemberKnownAbsentInline(const qore_hash_lookup_key& key);
+
     //! creates a member with the key of the member \a old of another hash, which this hash does not have, without
     //! hashing the key (qore#7265)
     /** @param old the member of the other hash, whose key map is of the same kind as the key map of this hash (see
@@ -1038,6 +1056,10 @@ public:
 
     //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
     DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
+
+    //! addMemberKnownAbsent(), always inlined into createMemberKnownAbsentInline() (qore#7763); defined and used
+    //! only in QoreHashNode.cpp
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL inline HashMember* addMemberKnownAbsentInline(HashMember* m);
 
     //! sets the value of a new member \a om, which has no value, without type checks; takes over the reference of \a v
     DLLLOCAL void setNewMemberValue(HashMember* om, QoreValue v) {
