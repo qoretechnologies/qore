@@ -565,10 +565,11 @@ QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, 
     QoreInternalSerializationContext context(xsink, flags);
     context.caller.setReceiver(&self);
     // the exemption of the receiver's provenance frame is decided once, at the start of the call; the code that the
-    // serialization runs (the serialization hooks of the object's classes) sees the frame unmarked, so that it counts
-    // for that code, as for the static form (qore#7146)
+    // call runs afterwards (the serialization hooks of the object's classes, the methods of an output stream that the
+    // call writes to) sees the frame unmarked for the rest of the call, so that it counts for that code, as for the
+    // static form (qore#7146)
     context.caller.chainSandboxed();
-    QoreSerializingReceiverClearHelper clear_mark(&self);
+    qore_clear_serializing_receiver_frame(&self);
     return serializeToDataIntern(&self, context, xsink);
 }
 

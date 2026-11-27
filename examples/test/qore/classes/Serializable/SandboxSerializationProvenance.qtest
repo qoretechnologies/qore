@@ -128,6 +128,44 @@ class SspHook inherits SspInternalBase {
     }
 }
 
+#! an output stream declared by trusted code whose write method serializes an object again (qore#7146)
+class SspStreamProbe inherits OutputStream {
+    public {
+        static *string nested_method;
+        static *string nested_static;
+    }
+
+    private {
+        object obj;
+        bool done = False;
+    }
+
+    constructor(object obj) {
+        self.obj = obj;
+    }
+
+    write(binary data) {
+        if (!done) {
+            done = True;
+            try {
+                hash<SerializationInfo> h = obj.serializeToData();
+                nested_method = h ? "OK" : "EMPTY";
+            } catch (hash<ExceptionInfo> ex) {
+                nested_method = ex.err;
+            }
+            try {
+                hash<SerializationInfo> h = Serializable::serializeToData(obj);
+                nested_static = h ? "OK" : "EMPTY";
+            } catch (hash<ExceptionInfo> ex) {
+                nested_static = ex.err;
+            }
+        }
+    }
+
+    close() {
+    }
+}
+
 public class SandboxSerializationProvenanceTest inherits QUnit::Test {
     private {
         SandboxManager manager();
@@ -297,6 +335,13 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
         assertRegex("PI-STATE", sprintf("%N", o.serializeToData()));
         assertEq("SERIALIZATION-ERROR", SspHook::nested_static);
         assertEq("SERIALIZATION-ERROR", SspHook::nested_method);
+
+        # the methods of an output stream that the host's call of the stream form writes to: decided for the stream's
+        # own code, after the data was serialized for the host
+        object t = createUnderSandbox(object sub () { return new SspTrusted(); });
+        t.serialize(new SspStreamProbe(t));
+        assertEq("SERIALIZATION-ERROR", SspStreamProbe::nested_static);
+        assertEq("SERIALIZATION-ERROR", SspStreamProbe::nested_method);
     }
 
     #! calls that sandboxed code sets up and the host or a background thread makes: a closure of the sandboxed

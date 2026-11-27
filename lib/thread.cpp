@@ -10200,14 +10200,6 @@ bool qore_clear_serializing_receiver_frame(const QoreObject* receiver) {
     return false;
 }
 
-void qore_restore_serializing_receiver_frame(const QoreObject* receiver) {
-    ThreadData* td = thread_data.get();
-    // the frames of the code that the serialization ran were removed when their calls returned
-    if (td && !td->receiver_provenance.empty() && td->receiver_provenance.back().receiver == receiver) {
-        td->receiver_provenance.back().serializing = true;
-    }
-}
-
 bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver) {
     ThreadData* td = thread_data.get();
     if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {

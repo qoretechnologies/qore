@@ -2632,31 +2632,12 @@ DLLLOCAL void qore_mark_serializing_receiver_frame(const QoreSandboxProvenanceHe
 
 //! Clears the mark of the innermost provenance frame if it is the one that the call of a builtin method of
 //! Serializable applied for \a receiver; returns true if it was cleared (qore#7146)
-/** The exemption is decided once, at the start of the builtin call; the code that the serialization runs (the
-    serialization hooks of the object's classes) then sees the frame unmarked, so that it counts for that code
+/** The exemption is decided once, at the start of the builtin call; the code that the call runs afterwards (the
+    serialization hooks of the object's classes, the methods of an output stream that the call writes to) then sees
+    the frame unmarked for the rest of the call, so that it counts for that code; the mark is not set again, as the
+    frame is removed when the call returns
 */
 DLLLOCAL bool qore_clear_serializing_receiver_frame(const QoreObject* receiver);
-
-//! Marks the innermost provenance frame again after qore_clear_serializing_receiver_frame() cleared it
-DLLLOCAL void qore_restore_serializing_receiver_frame(const QoreObject* receiver);
-
-//! Clears the mark of the frame of the receiver of a builtin method of Serializable for the rest of the call
-class QoreSerializingReceiverClearHelper {
-public:
-    DLLLOCAL QoreSerializingReceiverClearHelper(const QoreObject* receiver) : receiver(receiver),
-            cleared(qore_clear_serializing_receiver_frame(receiver)) {
-    }
-
-    DLLLOCAL ~QoreSerializingReceiverClearHelper() {
-        if (cleared) {
-            qore_restore_serializing_receiver_frame(receiver);
-        }
-    }
-
-private:
-    const QoreObject* receiver;
-    bool cleared;
-};
 
 //! Returns true if \a func is a builtin method of Serializable that serializes its receiver (Serializable::serialize(),
 //! Serializable::serializeToData()) (qore#7146)
