@@ -76,7 +76,7 @@ static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {
 }
 
 QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) {
         return QoreValue();
     }

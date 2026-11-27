@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
-          "source": "Create a Sheet",
+          "source": "Create a sheet",
           "message": "建立表格"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
@@ -604,7 +604,7 @@
           "message": "欄位的顯示寬度（以像素為單位）"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
-          "source": "Update a Sheet",
+          "source": "Update a sheet",
           "message": "更新工作表"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
@@ -640,7 +640,7 @@
           "message": "工作表的新名稱"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
-          "source": "Delete a Sheet",
+          "source": "Delete a sheet",
           "message": "刪除工作表"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
@@ -664,7 +664,7 @@
           "message": "要刪除之工作表的唯一識別碼"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
-          "source": "List Sheets",
+          "source": "List sheets",
           "message": "列出工作表"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
@@ -684,7 +684,7 @@
           "message": "取得特定工作表"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create a Workspace",
+          "source": "Create a workspace",
           "message": "建立工作區"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "新工作區的名稱"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update a Workspace",
+          "source": "Update a workspace",
           "message": "更新工作區"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "工作區的新名稱"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete a Workspace",
+          "source": "Delete a workspace",
           "message": "刪除工作區"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "要刪除之工作區的唯一識別碼"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "列出工作區"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
@@ -788,7 +788,7 @@
           "message": "取得特定工作區"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create a Folder",
+          "source": "Create a folder",
           "message": "建立資料夾"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -812,7 +812,7 @@
           "message": "新資料夾的名稱"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
-          "source": "Update a Folder",
+          "source": "Update a folder",
           "message": "更新資料夾"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
@@ -848,7 +848,7 @@
           "message": "資料夾的新名稱"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
-          "source": "Delete a Folder",
+          "source": "Delete a folder",
           "message": "刪除資料夾"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
@@ -872,7 +872,7 @@
           "message": "要刪除之資料夾的唯一識別碼"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
-          "source": "List Folders",
+          "source": "List folders",
           "message": "列出資料夾"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
@@ -892,7 +892,7 @@
           "message": "取得特定資料夾"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "列出報表"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
@@ -912,7 +912,7 @@
           "message": "取得特定報表"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Add a User",
+          "source": "Add a user",
           "message": "新增使用者"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
@@ -1008,7 +1008,7 @@
           "message": "新使用者的姓氏"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
+          "source": "Update a user",
           "message": "更新使用者"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "使用者是否應為資源檢視者"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Remove a User",
+          "source": "Remove a user",
           "message": "移除使用者"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "若為 `True`，則從您的組織中移除該使用者並撤銷其對所有組織及方案資產的存取權"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "列出使用者"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "依電子郵件篩選"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
-          "source": "Create a Group",
+          "source": "Create a group",
           "message": "建立群組"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "要新增的群組成員電子郵件地址"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "更新群組"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "群組的新描述"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
-          "source": "Delete a Group",
+          "source": "Delete a group",
           "message": "刪除群組"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "要刪除之群組的唯一識別碼"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "列出群組"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
@@ -1344,7 +1344,7 @@
           "message": "取得特定群組"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
-          "source": "Create Row",
+          "source": "Create row",
           "message": "建立列"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "選取要在其中建立新列的 Smartsheet 表格"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
-          "source": "Find Rows",
+          "source": "Find rows",
           "message": "尋找列"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "選取要搜尋列的 Smartsheet 工作表"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
-          "source": "Update Rows",
+          "source": "Update rows",
           "message": "更新資料列"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "選取要更新資料列的 Smartsheet 工作表"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
-          "source": "Delete Rows",
+          "source": "Delete rows",
           "message": "刪除資料列"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "選取要刪除列的 Smartsheet 工作表"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
-          "source": "Sheet Updated",
+          "source": "Sheet updated",
           "message": "工作表已更新"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "當 Smartsheet 帳戶中的工作表更新時觸發"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
-          "source": "Row Created",
+          "source": "Row created",
           "message": "列已建立"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "當在 Smartsheet 工作表中建立新列時觸發"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
-          "source": "Row Updated",
+          "source": "Row updated",
           "message": "資料列已更新"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "在 Smartsheet 工作表中更新資料列時引發"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
-          "source": "Row Deleted",
+          "source": "Row deleted",
           "message": "列已刪除"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {

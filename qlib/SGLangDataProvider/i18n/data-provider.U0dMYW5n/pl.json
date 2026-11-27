@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Uzupełnianie czatu"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Niejawny identyfikator reprezentujący użytkownika końcowego. Rejestrowany po stronie serwera w celu śledzenia nadużyć i przypisywania użycia; nie wpływa na generowanie."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Utwórz osadzenia"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Nieprzejrzysty identyfikator reprezentujący użytkownika końcowego. Rejestrowany po stronie serwera w celu śledzenia nadużyć i przypisywania użycia; nie wpływa na wynik."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "Generowanie z ograniczeniami"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Gdy `True`, każdy wpis logarytmu prawdopodobieństwa zawiera zdekodowany tekst tokena oprócz identyfikatora tokena. Łatwiejsze do inspekcji, ale większy ładunek."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Pobierz informacje o serwerze"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Zwraca konfigurację serwera SGLang (nazwa modelu, ścieżka tokenizatora, max_total_tokens, chat_template itp.) oraz stan środowiska uruchomieniowego (wersja, urządzenie CUDA, liczba procesorów GPU). Przydatne do kontroli stanu i walidacji konfiguracji."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "Wyczyść pamięć podręczną KV"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

@@ -388,7 +388,7 @@
           "message": "Il GUID del gruppo in cui creare il bitlink. Usa il gruppo predefinito se non specificato"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
-          "source": "Create a Bitlink",
+          "source": "Create a bitlink",
           "message": "Crea un Bitlink"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
@@ -532,7 +532,7 @@
           "message": "URL dove gli utenti possono installare l'app se non già installata"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
-          "source": "Update a Bitlink",
+          "source": "Update a bitlink",
           "message": "Aggiorna un bitlink"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Un nuovo elenco di tag per il bitlink (sostituisce i tag esistenti)"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
-          "source": "Delete a Bitlink",
+          "source": "Delete a bitlink",
           "message": "Elimina un bitlink"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
@@ -628,7 +628,7 @@
           "message": "L'ID del bitlink da eliminare (ad es. `bit.ly/abc123`)"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
-          "source": "Get Bitlink Clicks",
+          "source": "Get bitlink clicks",
           "message": "Ottieni clic del bitlink"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
@@ -696,7 +696,7 @@
           "message": "Il numero di unità di tempo da interrogare. Usa `-1` per tutti i dati disponibili"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
-          "source": "Create Custom Bitlink",
+          "source": "Create custom bitlink",
           "message": "Crea bitlink personalizzato"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
@@ -732,7 +732,7 @@
           "message": "L'ID del bitlink esistente a cui aggiungere una seconda metà personalizzata"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
-          "source": "List Bitlinks",
+          "source": "List bitlinks",
           "message": "Elenca bitlink"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Risultati massimi"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
-          "source": "Get a Bitlink",
+          "source": "Get a bitlink",
           "message": "Ottieni un bitlink"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
@@ -876,7 +876,7 @@
           "message": "L'ID del bitlink"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "Elenca gruppi"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Filtra per organizzazione"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "Aggiorna un gruppo"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Un elenco di domini brevi personalizzati da associare al gruppo"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
-          "source": "Get a Group",
+          "source": "Get a group",
           "message": "Ottieni un gruppo"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Il GUID del gruppo"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Elenca organizzazioni"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "Ottieni un'organizzazione specifica"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get an Organization",
+          "source": "Get an organization",
           "message": "Ottieni un'organizzazione"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "Il GUID dell'organizzazione"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create a Campaign",
+          "source": "Create a campaign",
           "message": "Crea una campagna"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Un elenco di GUID di canali da associare alla campagna"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Update a Campaign",
+          "source": "Update a campaign",
           "message": "Aggiorna una campagna"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Un nuovo elenco di GUID di canale da associare alla campagna"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Elenca campagne"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -1172,7 +1172,7 @@
           "message": "Filtra per gruppo"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get a Campaign",
+          "source": "Get a campaign",
           "message": "Ottieni una campagna"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Il GUID della campagna"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
-          "source": "List Branded Short Domains",
+          "source": "List branded short domains",
           "message": "Elenca domini brevi personalizzati"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Elenca tutti i domini brevi personalizzati (BSD) disponibili nell'account"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
-          "source": "Create a QR Code",
+          "source": "Create a QR code",
           "message": "Crea un codice QR"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Timestamp ISO 8601 che indica la scadenza del codice QR"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
-          "source": "Update a QR Code",
+          "source": "Update a QR code",
           "message": "Aggiorna un codice QR"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "Timestamp ISO 8601 che indica la scadenza del codice QR"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
-          "source": "List QR Codes",
+          "source": "List QR codes",
           "message": "Elenca codici QR"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Gruppo per cui elencare i codici QR"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
-          "source": "Get a QR Code",
+          "source": "Get a QR code",
           "message": "Ottieni un codice QR"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "L'ID del codice QR"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
-          "source": "Bitlink Clicked",
+          "source": "Bitlink clicked",
           "message": "Bitlink cliccato"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {

@@ -16,7 +16,7 @@
           "message": "WebSocket-Nachrichten senden und empfangen"
         },
         "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.display_name": {
-          "source": "WebSocket Message Received",
+          "source": "WebSocket message received",
           "message": "WebSocket-Nachricht empfangen"
         },
         "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Eine WebSocket-Nachricht von einem WebSocket-Server empfangen; auf eine WebSocket-Nachricht reagieren"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.display_name": {
-          "source": "Send WebSocket Message",
+          "source": "Send WebSocket message",
           "message": "WebSocket-Nachricht senden"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Die zu sendenden Daten; werden entsprechend der Serialisierungsoption serialisiert"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.display_name": {
-          "source": "Send Raw WebSocket Message",
+          "source": "Send raw WebSocket message",
           "message": "Raw-WebSocket-Nachricht senden"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
+          "source": "Create incident",
           "message": "Vytvoriť incident"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Vytvoriť incident v ServiceNow vytvorením záznamu v tabuľke `incident` pomocou REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
+          "source": "Find single incident",
           "message": "Nájsť jeden incident"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Nájsť konkrétny záznam v tabuľke `incident` pomocou REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
+          "source": "Find matching incidents",
           "message": "Nájsť zodpovedajúce incidenty"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Nájsť záznamy v tabuľke `incident` pomocou REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
+          "source": "Update incidents",
           "message": "Aktualizovať incidenty"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Aktualizovať záznamy v tabuľke `incident` pomocou REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
+          "source": "Delete incidents",
           "message": "Odstrániť incidenty"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Odstrániť záznamy v tabuľke `incident` pomocou REST API ServiceNow"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Vytvoriť záznam"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Názov tabuľky ServiceNow, napr.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Nájsť jeden záznam"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Názov tabuľky ServiceNow, napr.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Nájsť záznamy"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Názov tabuľky ServiceNow, napr.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovať záznamy"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Názov tabuľky ServiceNow, napr.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Odstrániť záznamy"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

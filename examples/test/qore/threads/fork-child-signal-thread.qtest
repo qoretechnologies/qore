@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run in child processes of the test's own binary, started without an execution mode
+# test-platform: macos - fork() from a thread other than the main thread, with and without the signal handling thread
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class ForkChildSignalThreadTest
+
+#! A child that a thread other than the main thread forks ends when its last thread ends (qore#7613)
+/** No main thread exists in the child to end it: it ends when its last thread that runs Qore code ends, which the
+    other threads of the child kept alive (the signal handling thread, which the child runs again, and the reaper that
+    joins the threads of the process).  The child script runs with signal handling enabled (without -b) and with -b;
+    it reports whether the child ended, and ends a child that does not end itself.  The output that the child writes
+    without flushing it must be written when it ends, and a child that such a child forks ends too
+*/
+class ForkChildSignalThreadTest inherits QUnit::Test {
+    constructor() : Test("ForkChildSignalThreadTest", "1.0") {
+        addTestCase("a child forked by a thread other than the main thread ends with that thread", \forkTest(), "");
+        addTestCase("a child forked by a thread other than the main thread ends with its last thread", \forkTest(),
+            "thread");
+        addTestCase("a child forked by a thread other than the main thread ends with its last thread without signal "
+            "handling", \forkTest(), ("thread", True));
+        addTestCase("a child forked by a thread other than the main thread ends with that thread without signal "
+            "handling", \forkTest(), ("", True));
+        addTestCase("a child forked by the only thread of a child without a main thread ends with that thread",
+            \forkTest(), "grandchild");
+        addTestCase("a child forked by an asynchronous I/O callback worker ends with that worker", \forkTest(),
+            "worker");
+        set_return_value(main());
+    }
+
+    forkTest(string mode, bool no_signals = False) {
+        if (!Option::HAVE_FORK) {
+            testSkip("no fork()");
+        }
+        if (!no_signals && Option::HAVE_SIGNAL_HANDLING == False) {
+            testSkip("no signal handling");
+        }
+        string script = get_script_dir() + "fork-child-signal-thread/fork-child.q";
+        # the output of both processes; it ends when both have ended
+        string out = backquote(sprintf("%s %s%s %s 2>&1", TestInterpreter::qore_interpreter(), no_signals ? "-b " : "",
+            script, mode));
+        assertEq(-1, out.find("did not end"), "the child's threads ended: " + out);
+        assertTrue(out.find("parent: the child ended\n") >= 0, "the child ended: " + out);
+        assertTrue(out.find(mode == "worker" ? "child: worker returns\n" : "child: forking thread returns\n") >= 0,
+            "the child's thread ran: " + out);
+        if (mode == "thread") {
+            assertTrue(out.find("child: thread ended\n") >= 0, "the child's second thread ran: " + out);
+        } else if (mode == "grandchild") {
+            assertTrue(out.find("grandchild: forking thread returns\n") >= 0, "the grandchild's thread ran: " + out);
+        }
+        # the library's end of the child: no message of its own (such as a cleanup worker that finds threads running)
+        assertEq(-1, out.find("qore: "), "the child ended without a message: " + out);
+    }
+}

@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
+          "source": "Retrieve order items",
           "message": "주문 항목 검색"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
@@ -604,7 +604,7 @@
           "message": "반환할 최대 레코드 수"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
+          "source": "Retrieve payment information",
           "message": "결제 정보 조회"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "반환할 최대 레코드 수"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
+          "source": "Retrieve customer information",
           "message": "고객 정보 검색"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {

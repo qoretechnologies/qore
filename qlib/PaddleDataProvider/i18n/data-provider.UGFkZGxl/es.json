@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Listar clientes"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Crear cliente"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Etiqueta de configuración regional en formato corto válida según IETF BCP 47. Si se omite, el valor predeterminado es `en`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Sus propios datos estructurados clave-valor."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "Consentimiento de marketing"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Si este cliente aceptó recibir comunicaciones de marketing por su parte. `false` a menos que los clientes marquen la casilla de consentimiento de marketing\nal usar Paddle Checkout. Establecido automáticamente por Paddle."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadatos de importación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Referencia o identificador para esta entidad desde el proveedor donde fue importada."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importado desde"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtener cliente"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "ID de Paddle de la entidad de cliente con la que trabajar.: ID de Paddle único para esta entidad de cliente, con el prefijo `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Actualizar cliente"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -648,7 +648,7 @@
           "message": "archivado"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Etiqueta de configuración regional válida de formato corto IETF BCP 47."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "Consentimiento de marketing"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Si este cliente aceptó recibir comunicaciones de marketing por su parte. `false` a menos que los clientes marquen la casilla de consentimiento de marketing\nal usar Paddle Checkout. Establecido automáticamente por Paddle."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadatos de importación"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Referencia o identificador para esta entidad desde el proveedor donde fue importada."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importado desde"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Obtener token de autenticación de cliente"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "ID de Paddle de la entidad de cliente con la que trabajar.: ID de Paddle único para esta entidad de cliente, con el prefijo `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Listar saldos de crédito de clientes"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -780,7 +780,7 @@
           "message": "Devuelve entidades que coincidan con el código de moneda. Utilice una lista separada por comas para especificar varios códigos de moneda."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Listar productos"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Devuelve solo los ID especificados. Use una lista separada por comas para obtener varias entidades."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Categoría fiscal"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Crear producto"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Nombre de este producto."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Categoría fiscal"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "Imagen para este producto. Se incluye en el proceso de pago y en algunos documentos de clientes."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "ID exclusivo de Paddle para este producto, con el prefijo `pro_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadatos de importación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Referencia o identificador para esta entidad desde el proveedor donde fue importada."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importado desde"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Obtener producto"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Incluye entidades relacionadas en la respuesta. Usa una lista separada por comas para especificar múltiples entidades."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Actualizar producto"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Imagen para este producto. Se incluye en el proceso de pago y en algunos documentos de clientes."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "standard"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Categoría fiscal"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "website-hosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Archivar producto"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "archivado"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
-          "source": "List Prices",
+          "source": "List prices",
           "message": "Listar precios"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Ordena las entidades devueltas por el campo y la dirección indicados (`[ASC]` o `[DESC]`). Por ejemplo, `?order_by=id[ASC]`.\n\nCampos válidos para la ordenación: `billing_cycle.frequency`, `billing_cycle.interval`, `id`, `product_id`, `quantity.maximum`, `quantity.minimum`, `status`, `tax_mode`, `unit_price.amount`, y `unit_price.currency_code`."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
-          "source": "Billing Cycle Interval",
+          "source": "Billing cycle interval",
           "message": "Intervalo del ciclo de facturación"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
-          "source": "Billing Cycle Frequency",
+          "source": "Billing cycle frequency",
           "message": "Frecuencia del ciclo de facturación"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
-          "source": "Create Price",
+          "source": "Create price",
           "message": "Crear precio"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Descripción interna de este precio, no mostrada a los clientes. Generalmente notas para su equipo."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Ciclo de facturación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Período de prueba"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "Requiere método de pago"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Si este precio requiere un método de pago (`true`) o no (`false`) durante la prueba. Si `false`, los clientes pueden suscribirse sin ingresar sus datos de pago, comúnmente conocido como \"prueba sin tarjeta.\""
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Lista de sobrescrituras de precio unitario para precios de prueba. Úselo para sobrescribir el precio de prueba base con un precio de prueba personalizado y moneda para un país o grupo de países."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Códigos de país"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Código de país ISO 3166-1 alpha-2 de dos letras compatible. A los clientes ubicados en los países enumerados se les cobra el precio de sustitución."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Nombre de este precio, mostrado a los clientes en el proceso de pago y en las facturas. Por lo general, describe con qué frecuencia se factura el producto relacionado."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Modo de impuestos"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "Cantidad mínima del producto relacionado con este precio que se puede comprar. Requerido si `maximum` está establecido."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "Lista de anulaciones de precio unitario. Se utiliza para anular el precio base con un precio y una moneda personalizados para un país o grupo de países."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Códigos de país"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Código de país ISO 3166-1 alpha-2 de dos letras compatible. A los clientes ubicados en los países enumerados se les cobra el precio de sustitución."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2136,7 +2136,7 @@
           "message": "Precio de sustitución. Este precio se aplica a clientes ubicados en los países para este sobrescribir precio unitario."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "ID único de Paddle para este precio, con el prefijo `pri_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "Metadatos de importación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Referencia o identificador para esta entidad desde el proveedor donde fue importada."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "Importado desde"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Obtener precio"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Incluir entidades relacionadas en la respuesta."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Actualizar precio"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Descripción interna de este precio, no mostrada a los clientes. Generalmente notas para su equipo."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "archivado"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Ciclo de facturación"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Período de prueba"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "Requiere método de pago"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "Si este precio requiere un método de pago (`true`) o no (`false`) durante la prueba. Si `false`, los clientes pueden suscribirse sin ingresar sus datos de pago, comúnmente conocido como \"prueba sin tarjeta.\""
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Lista de sobrescrituras de precio unitario para precios de prueba. Úselo para sobrescribir el precio de prueba base con un precio de prueba personalizado y moneda para un país o grupo de países."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Códigos de país"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Código de país ISO 3166-1 alpha-2 de dos letras compatible. A los clientes ubicados en los países enumerados se les cobra el precio de sustitución."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Nombre de este precio, mostrado a los clientes en el proceso de pago y en las facturas. Por lo general, describe con qué frecuencia se factura el producto relacionado."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Modo de impuestos"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Cantidad mínima del producto relacionado con este precio que se puede comprar. Requerido si `maximum` está establecido."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Lista de anulaciones de precio unitario. Se utiliza para anular el precio base con un precio y una moneda personalizados para un país o grupo de países."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Códigos de país"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Código de país ISO 3166-1 alpha-2 de dos letras compatible. A los clientes ubicados en los países enumerados se les cobra el precio de sustitución."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Precio de sustitución. Este precio se aplica a clientes ubicados en los países para este sobrescribir precio unitario."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "standard"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "Listar suscripciones"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Devuelve solo los ID especificados. Use una lista separada por comas para obtener varias entidades."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Modo de cobro"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "manual"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
-          "source": "Scheduled Change Action",
+          "source": "Scheduled change action",
           "message": "Acción de cambio programado"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "Devuelve suscripciones que tengan un cambio programado. Utilice una lista separada por comas para especificar varias acciones de cambio programado."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
-          "source": "Next Billed At",
+          "source": "Next billed at",
           "message": "Próxima facturación el"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Obtener suscripción"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Incluye entidades relacionadas en la respuesta. Usa una lista separada por comas para especificar múltiples entidades."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "Listar transacciones"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "Devuelve entidades relacionadas con la suscripción especificada. Use una lista separada por comas para especificar varios ID de suscripción. Pase `null` para devolver entidades que no estén relacionadas con ninguna suscripción."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Fecha de actualización"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
@@ -3200,7 +3200,7 @@
           "message": "Devuelve entidades actualizadas en un momento específico. Pase una cadena de fecha y hora RFC 3339 o use los operadores `[LT]` (menor que), `[LTE]` (menor o igual que), `[GT]` (mayor que) o `[GTE]` (mayor o igual que). Por ejemplo, `updated_at=2023-04-18T17:03:26` o `updated_at[LT]=2023-04-18T17:03:26`."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Fecha de creación"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "Devuelve entidades creadas en un momento específico. Pase una cadena de fecha y hora RFC 3339 o use los operadores `[LT]` (menor que), `[LTE]` (menor o igual que), `[GT]` (mayor que) o `[GTE]` (mayor o igual que). Por ejemplo, `created_at=2023-04-18T17:03:26` o `created_at[LT]=2023-04-18T17:03:26`."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
-          "source": "Billed At",
+          "source": "Billed at",
           "message": "Facturado el"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "Devuelve solo los ID especificados. Use una lista separada por comas para obtener varias entidades."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
-          "source": "Invoice Number",
+          "source": "Invoice number",
           "message": "Número de factura"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "Devuelve entidades relacionadas con el origen especificado. Use una lista separada por comas para especificar varios orígenes."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Modo de cobro"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "Crear transacción"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "año"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "Códigos de país"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Código de país ISO 3166-1 alpha-2 de dos letras compatible. A los clientes ubicados en los países enumerados se les cobra el precio de sustitución."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "past_due"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "Código de moneda ISO 4217 de tres letras admitido. Debe ser `USD`, `EUR` o `GBP` si `collection_mode` es `manual`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "Modo de cobro"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3632,7 +3632,7 @@
           "message": "ID de Paddle de la suscripción a la que corresponde esta transacción, con el prefijo `sub_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
+          "source": "Billing period",
           "message": "Período de facturación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
@@ -3644,7 +3644,7 @@
           "message": "Período de tiempo al que corresponde esta transacción. Establecido automáticamente por Paddle para renovaciones de suscripciones para describir el período al que corresponden los cargos."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
+          "source": "Ends at",
           "message": "Termina el"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Cadena de fecha y hora RFC 3339 cuando finaliza este período."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
+          "source": "Starts at",
           "message": "Comienza el"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.short_desc": {
@@ -3668,7 +3668,7 @@
           "message": "Cadena de fecha y hora RFC 3339 cuando comienza este período."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
-          "source": "Billing Details",
+          "source": "Billing details",
           "message": "Detalles de facturación"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
@@ -3680,7 +3680,7 @@
           "message": "Detalles de facturación. Obligatorio si `collection_mode` es `manual`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.display_name": {
-          "source": "Additional Information",
+          "source": "Additional information",
           "message": "Información adicional"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "Notas u otra información que incluir en esta factura. Aparece en los documentos de factura."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.display_name": {
-          "source": "Enable Checkout",
+          "source": "Enable checkout",
           "message": "Habilitar Checkout"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Si la transacción relacionada puede pagarse usando Paddle Checkout. Si se omite al crear una transacción, el valor predeterminado es `false`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.display_name": {
-          "source": "Payment Terms",
+          "source": "Payment terms",
           "message": "Términos de pago"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Cuánto tiempo tiene un cliente para pagar esta factura una vez emitida."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.display_name": {
-          "source": "Purchase Order Number",
+          "source": "Purchase order number",
           "message": "Número de orden de compra"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "Número de pedido de compra del cliente. Aparece en los documentos de factura."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3812,7 +3812,7 @@
           "message": "Monto a descontar. Para descuentos `percentage`, debe ser un monto entre `0.01` y `100`. Para descuentos `flat` y `flat_per_seat`, monto en la denominación más baja de una moneda."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "Descripción breve para este descuento para su referencia. No se muestra a los clientes."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.display_name": {
-          "source": "Maximum Recurring Intervals",
+          "source": "Maximum recurring intervals",
           "message": "Máximo de intervalos recurrentes"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Si este descuento se aplica para múltiples períodos de facturación de suscripción (`true`) o no (`false`). Si se omite, el valor predeterminado es `false`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.display_name": {
-          "source": "Restrict To",
+          "source": "Restrict to",
           "message": "Restringir a"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "URL de finalización para usar en el enlace de pago para esta transacción. Pase la URL de un dominio aprobado, o `null` para establecerla en su URL de pago predeterminada.\n\nPaddle devuelve un enlace de pago único compuesto por la URL proporcionada o su URL de pago predeterminada + `?_ptxn=` y el ID de Paddle para esta transacción."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Obtener transacción"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "Incluye entidades relacionadas en la respuesta. Usa una lista separada por comas para especificar múltiples entidades."
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "Listar informes"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
-          "source": "Create Report",
+          "source": "Create report",
           "message": "Crear informe"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "checkouts"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Obtener informe"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "ID de Paddle de la entidad de informe."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Obtener archivo de informe"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4712,7 +4712,7 @@
           "message": "ID de Paddle de la entidad de informe."
         },
         "app.UGFkZGxl.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Buscar registros"
         },
         "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "La tabla con la que trabajar: `customers`, `products`, `prices`, `transactions` o `reports`"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Buscar un único registro"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4760,7 +4760,7 @@
           "message": "La tabla con la que trabajar: `customers`, `products`, `prices`, `transactions` o `reports`"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Crear registros"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "La tabla con la que trabajar: `customers`, `products`, `prices`, `transactions` o `reports`"
         },
         "app.UGFkZGxl.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Actualizar registros"
         },
         "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "La tabla con la que trabajar: `customers`, `products`, `prices`, `transactions` o `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Cliente creado"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Se activa cuando se crea un cliente, sin importar cómo haya sucedido: a través de la API, un checkout o el panel de Paddle.\n\nEsto reemplaza el sondeo del listado de clientes: un sondeo ordenado por fecha de creación no puede ver a un cliente creado y eliminado entre dos ejecuciones, y cuesta una solicitud por intervalo ocurra o no algo."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Cliente actualizado"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Se activa cuando un cliente cambia, incluso cuando se archiva: `status` pasa a ser `archived` en lugar de que el cliente sea eliminado.\n\nPaddle envía el cliente completo, no una diferencia (diff), así que compáralo con lo que tienes si necesitas saber qué campo cambió."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Producto creado"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Se activa cuando se añade un producto al catálogo.\n\nUn producto no incluye un precio propio, por lo que un producto recién creado no se puede vender hasta que exista un precio para él; observe `price.created` para ello.\n\nEsto reemplaza el sondeo de la lista de productos."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Producto actualizado"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Se activa cuando un producto cambia, incluso cuando se archiva uno: `status` pasa a ser `archived`, lo que lo retira de la venta sin afectar a las suscripciones existentes.\n\n**Archivar un producto no archiva sus precios**, por lo que un precio de un producto archivado todavía se puede facturar a menos que también se archive."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Precio creado"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Se activa cuando se crea un precio para un producto.\n\n`unit_price.amount` es una cadena en la **unidad más pequeña de su moneda**, por lo que `1000` es 10,00 $ en USD pero 1000 yenes en JPY. Un `billing_cycle` lo convierte en un precio de suscripción; sin él, es un cargo único."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Precio actualizado"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Se activa cuando cambia un precio, incluso cuando se archiva uno.\n\n**Un cambio en `unit_price` afecta solo a las nuevas compras**; las suscripciones que ya facturan este precio conservan el importe con el que se crearon hasta que se actualicen explícitamente. Por tanto, un cambio de precio no es una señal de que la factura de alguien haya cambiado."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Suscripción creada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Se activa cuando se crea una suscripción.\n\n**Creada no es lo mismo que pagada.** Una nueva suscripción a menudo es `trialing`, y una creada para una transacción que aún no se ha cobrado no está generando ingresos; verifique `status` antes de aprovisionar. `subscription.activated` es la señal de que la facturación ha comenzado realmente.\n\nEsto reemplaza el sondeo de la lista de suscripciones."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Suscripción activada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Se activa cuando una suscripción pasa a ser `active` por primera vez: un período de prueba finalizó y se pagó, o llegó un inicio programado.\n\nEsta es la señal para aprovisionar un plan de pago: significa que Paddle ha cobrado, mientras que `subscription.created` solo significa que el registro existe."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Suscripción actualizada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Se activa ante cualquier cambio en una suscripción: un cambio de plan, un cambio de cantidad, una renovación que pasa a `next_billed_at`, o una pausa o cancelación que queda **programada**.\n\n`scheduled_change` es el campo que distingue esos últimos casos; una suscripción puede ser `active` y aun así estar programada para finalizar. Paddle envía la suscripción completa en lugar de una diferencia."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Suscripción cancelada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Se activa cuando una suscripción finaliza efectivamente y `status` pasa a ser `canceled`.\n\n**Esta es la señal de desaprovisionamiento, no la solicitud de cancelación.** Una cancelación programada para el final del período de facturación aparece primero como un `scheduled_change` en `subscription.updated`, y el cliente ha pagado hasta esa fecha; este evento se produce cuando llega esa fecha."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Suscripción vencida"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Se activa cuando no se pudo cobrar una renovación y la suscripción pasa a ser `past_due`.\n\nPaddle reintenta según su calendario de cobro reclamatorio, por lo que este aún no es el final: la suscripción se recupera a `active` si un reintento tiene éxito, o se cancela cuando se agotan los reintentos. Trátelo como una advertencia para avisar al cliente, no como un motivo para cortar el acceso."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Transacción creada"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Se activa cuando se crea una transacción, incluido el borrador que Paddle genera para una próxima renovación.\n\n**Una transacción creada no se ha pagado**; la mayoría son `draft` o `ready` en este punto. Utilice `transaction.completed` para el dinero efectivamente cobrado.\n\nEsto reemplaza el sondeo de la lista de transacciones."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Transacción completada"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Se activa cuando una transacción pasa a ser `completed`: el dinero se ha cobrado y la factura está liquidada.\n\nEste es el evento para tramitar un pedido. `details.totals` desglosa el importe en subtotal, impuestos y el total general, todos como cadenas en la unidad más pequeña de `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Fallo en el pago de la transacción"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Se activa cuando falla un intento de cobro de una transacción.\n\n`payments` contiene el intento y el motivo por el que falló. Paddle reintenta automáticamente la renovación de una suscripción, por lo que un solo fallo no es definitivo; el paso de la suscripción a `past_due` es el momento en el que el cliente debe intervenir."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Informe creado"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Se activa cuando se solicita un informe. Llega como `pending`: Paddle genera el archivo en segundo plano, por lo que todavía no hay nada que descargar.\n\nEspere a `report.updated` con un `status` de `ready` antes de solicitar el archivo.\n\nEsto reemplaza el sondeo de la lista de informes."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Informe actualizado"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
@@ -5012,7 +5012,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5324,7 +5324,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5624,7 +5624,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Ciclo de facturación"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5636,7 +5636,7 @@
           "message": "Con qué frecuencia se debe cobrar este precio. `null` si el precio no es recurrente (pago único)."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Cantidad mínima del producto relacionado con este precio que se puede comprar. Requerido si `maximum` está establecido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Modo de impuestos"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "location"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Período de prueba"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -5760,7 +5760,7 @@
           "message": "Período de prueba para el producto relacionado con este precio. El ciclo de facturación comienza una vez transcurrido el período de prueba. `null` para ningún período de prueba. Requiere `billing_cycle`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.short_desc": {
@@ -5784,7 +5784,7 @@
           "message": "Monto en la denominación más baja de la moneda, p. ej. 10 USD = 1000 (centavos). Aunque se representa como cadena, este valor debe ser un entero válido."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "Código de moneda"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -5940,7 +5940,7 @@
           "message": "Lista de anulaciones de precio unitario. Se utiliza para anular el precio base con un precio y una moneda personalizados para un país o grupo de países."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "Ciclo de facturación"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Con qué frecuencia se debe cobrar este precio. `null` si el precio no es recurrente (pago único)."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "Objeto de producto para un artículo no catalogado a cobrar."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "Datos personalizados"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "Nombre de este producto."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "Categoría fiscal"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "Límites sobre cuántas veces se puede comprar el producto relacionado a este precio. Útil para campañas de descuento. Si se omite, el valor predeterminado es 1-100."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "Modo de impuestos"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.short_desc": {
@@ -6136,7 +6136,7 @@
           "message": "location"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "Período de prueba"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -6148,7 +6148,7 @@
           "message": "Período de prueba para el producto relacionado con este precio. El ciclo de facturación comienza una vez transcurrido el período de prueba. `null` para ningún período de prueba. Requiere `billing_cycle`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "Precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "Precio base. Este precio se aplica a todos los clientes, excepto a aquellos ubicados en países donde tenga `unit_price_overrides`."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "Anulaciones de precio unitario"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {

@@ -548,7 +548,7 @@ public class GeneratorDataProviderTest inherits QUnit::Test {
         assertTrue(exists action, "generate-records action should be registered");
         assertEq("generate-records", action.action);
         assertEq(DPAT_FIND, action.action_code);
-        assertEq("Generate Records", action.display_name);
+        assertEq("Generate records", action.display_name);
         assertTrue(action.short_desc.val(), "action should have a short description");
         assertTrue(action.desc.val(), "action should have a description");
         assertEq("/", action.path);
@@ -626,7 +626,7 @@ public class GeneratorDataProviderTest inherits QUnit::Test {
         assertTrue(exists action, "generate-from-template action should be registered");
         assertEq("generate-from-template", action.action);
         assertEq(DPAT_FIND, action.action_code);
-        assertEq("Generate From Template", action.display_name);
+        assertEq("Generate from template", action.display_name);
         assertTrue(action.short_desc.val(), "action should have a short description");
         assertTrue(action.desc.val(), "action should have a description");
         assertEq("/", action.path);

@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
-          "source": "Create Client",
+          "source": "Create client",
           "message": "클라이언트 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
@@ -468,7 +468,7 @@
           "message": "국가"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
-          "source": "Update Client",
+          "source": "Update client",
           "message": "고객 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
@@ -588,7 +588,7 @@
           "message": "국가"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
-          "source": "Search Clients",
+          "source": "Search clients",
           "message": "고객 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
@@ -656,7 +656,7 @@
           "message": "반환할 최대 결과 수(최대 100개)"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
-          "source": "Get Client",
+          "source": "Get client",
           "message": "고객 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
@@ -688,7 +688,7 @@
           "message": "고객 ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
-          "source": "Delete Client",
+          "source": "Delete client",
           "message": "고객 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
@@ -720,7 +720,7 @@
           "message": "삭제할 고객"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
-          "source": "Create Service",
+          "source": "Create service",
           "message": "서비스 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "이 서비스를 클라이언트에게 청구할 수 있는지 여부"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
-          "source": "Update Service",
+          "source": "Update service",
           "message": "서비스 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
@@ -816,7 +816,7 @@
           "message": "서비스 청구 가능 여부"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
-          "source": "Search Services",
+          "source": "Search services",
           "message": "서비스 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
-          "source": "Get Service",
+          "source": "Get service",
           "message": "서비스 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
@@ -888,7 +888,7 @@
           "message": "서비스 ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
-          "source": "Delete Service",
+          "source": "Delete service",
           "message": "서비스 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
@@ -920,7 +920,7 @@
           "message": "삭제할 서비스"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "견적서 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "구매 주문 번호"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
-          "source": "Search Estimates",
+          "source": "Search estimates",
           "message": "견적서 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "견적서 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "견적서 ID"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "견적서 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "구매 주문 번호"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "견적서 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "삭제할 견적서"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "비용 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "세율 백분율"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "비용 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "세율 백분율"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "비용 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "삭제할 비용"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "비용 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "비용 ID"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
-          "source": "Search Expenses",
+          "source": "Search expenses",
           "message": "비용 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "인보이스 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "구매 주문 번호"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "인보이스 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "구매 주문 번호"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "송장 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "인보이스 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "송장 ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "인보이스 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "삭제할 인보이스"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "항목 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "기본 세금 2"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "항목 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "기본 세금 2"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "품목 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "품목 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "품목 ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "항목 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -2232,7 +2232,7 @@
           "message": "삭제할 항목"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "결제 생성"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "결제 메모"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "결제 업데이트"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "결제 메모"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "결제 삭제"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "삭제할 결제"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
-          "source": "Search Payments",
+          "source": "Search payments",
           "message": "결제 검색"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "최대 결과 수"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "결제 가져오기"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "결제 ID"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "새 인보이스"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "새 결제"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
-          "source": "New Client",
+          "source": "New client",
           "message": "새 클라이언트"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
@@ -2652,7 +2652,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "새 비용"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "새 견적서"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {

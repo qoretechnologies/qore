@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Completamento chat"
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Hash che impone una struttura di risposta formattata, ad es. `{type: \"json_object\"}` o `{type: \"json_schema\", schema: {...}}`."
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Crea embedding"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -596,7 +596,7 @@
           "message": "Stringa di durata che controlla per quanto tempo Ollama mantiene il modello caricato in memoria dopo il completamento della richiesta (ad es. `\"5m\"`, `\"1h\"`, `\"0\"` per lo scaricamento immediato)."
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Installed Models",
+          "source": "List installed models",
           "message": "Elenca modelli installati"
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.short_desc": {

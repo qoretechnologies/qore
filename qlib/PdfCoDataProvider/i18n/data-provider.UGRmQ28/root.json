@@ -808,8 +808,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.display_name": {
-          "source": "Convert from PDF into Images",
-          "message": "Convert from PDF into Images"
+          "source": "Convert from PDF into images",
+          "message": "Convert from PDF into images"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.short_desc": {
           "source": "Convert a PDF into JPG or PNG images",
@@ -1640,8 +1640,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.display_name": {
-          "source": "Convert from Images into PDF",
-          "message": "Convert from Images into PDF"
+          "source": "Convert from images into PDF",
+          "message": "Convert from images into PDF"
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.short_desc": {
           "source": "Convert one or more images into a PDF document",
@@ -2660,8 +2660,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.display_name": {
-          "source": "Compress and Optimize PDF",
-          "message": "Compress and Optimize PDF"
+          "source": "Compress and optimize PDF",
+          "message": "Compress and optimize PDF"
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.short_desc": {
           "source": "Compress and optimize a PDF document to reduce file size",
@@ -2968,8 +2968,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.display_name": {
-          "source": "Add Text and Images to a PDF",
-          "message": "Add Text and Images to a PDF"
+          "source": "Add text and images to a PDF",
+          "message": "Add text and images to a PDF"
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.short_desc": {
           "source": "Add text annotations and images to a PDF document",
@@ -3620,8 +3620,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.display_name": {
-          "source": "Create Fillable PDF Form",
-          "message": "Create Fillable PDF Form"
+          "source": "Create fillable PDF form",
+          "message": "Create fillable PDF form"
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.short_desc": {
           "source": "Create a fillable PDF form with form fields",
@@ -4228,8 +4228,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.display_name": {
-          "source": "Fill a PDF Form",
-          "message": "Fill a PDF Form"
+          "source": "Fill a PDF form",
+          "message": "Fill a PDF form"
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.short_desc": {
           "source": "Fill form fields in an existing PDF form",
@@ -4540,8 +4540,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.display_name": {
-          "source": "Get PDF Information",
-          "message": "Get PDF Information"
+          "source": "Get PDF information",
+          "message": "Get PDF information"
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.short_desc": {
           "source": "Get metadata and information about a PDF document",
@@ -4768,8 +4768,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.display_name": {
-          "source": "Search Text in PDF",
-          "message": "Search Text in PDF"
+          "source": "Search text in PDF",
+          "message": "Search text in PDF"
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.short_desc": {
           "source": "Search for text in a PDF document",
@@ -5104,8 +5104,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.display_name": {
-          "source": "Search and Delete Found Text in PDF",
-          "message": "Search and Delete Found Text in PDF"
+          "source": "Search and delete found text in PDF",
+          "message": "Search and delete found text in PDF"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.short_desc": {
           "source": "Find and delete text from a PDF document",
@@ -5428,8 +5428,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.display_name": {
-          "source": "Search and Replace Text in PDF",
-          "message": "Search and Replace Text in PDF"
+          "source": "Search and replace text in PDF",
+          "message": "Search and replace text in PDF"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.short_desc": {
           "source": "Find and replace text in a PDF document",
@@ -5752,8 +5752,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.display_name": {
-          "source": "Search and Replace With Image in PDF",
-          "message": "Search and Replace With Image in PDF"
+          "source": "Search and replace with image in PDF",
+          "message": "Search and replace with image in PDF"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.short_desc": {
           "source": "Find text and replace it with an image in a PDF document",
@@ -6076,8 +6076,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.display_name": {
-          "source": "AI Invoice Parser",
-          "message": "AI Invoice Parser"
+          "source": "AI invoice parser",
+          "message": "AI invoice parser"
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.short_desc": {
           "source": "Parse invoices using AI to extract structured data",
@@ -6316,8 +6316,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.display_name": {
-          "source": "Parse a Document",
-          "message": "Parse a Document"
+          "source": "Parse a document",
+          "message": "Parse a document"
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {
           "source": "Parse a document using templates to extract structured data",
@@ -6652,8 +6652,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.display_name": {
-          "source": "Document Classifier",
-          "message": "Document Classifier"
+          "source": "Document classifier",
+          "message": "Document classifier"
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.short_desc": {
           "source": "Classify a document based on custom rules",
@@ -6928,8 +6928,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.display_name": {
-          "source": "Generate a Barcode",
-          "message": "Generate a Barcode"
+          "source": "Generate a barcode",
+          "message": "Generate a barcode"
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.short_desc": {
           "source": "Generate a barcode image (QR code, Code128, etc.)",
@@ -7384,8 +7384,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.display_name": {
-          "source": "Read a Barcode",
-          "message": "Read a Barcode"
+          "source": "Read a barcode",
+          "message": "Read a barcode"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.short_desc": {
           "source": "Read and decode barcodes from a document or image",
@@ -7948,8 +7948,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.display_name": {
-          "source": "Add Password and Security into PDF",
-          "message": "Add Password and Security into PDF"
+          "source": "Add password and security into PDF",
+          "message": "Add password and security into PDF"
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.short_desc": {
           "source": "Add password protection and encryption to a PDF",
@@ -8368,8 +8368,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.display_name": {
-          "source": "Remove Password and Security from PDF",
-          "message": "Remove Password and Security from PDF"
+          "source": "Remove password and security from PDF",
+          "message": "Remove password and security from PDF"
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.short_desc": {
           "source": "Remove password protection from a PDF document",
@@ -8620,8 +8620,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email With Attachment",
-          "message": "Send Email With Attachment"
+          "source": "Send email with attachment",
+          "message": "Send email with attachment"
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.short_desc": {
           "source": "Send an email with a file attachment via SMTP",
@@ -8812,8 +8812,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
-          "message": "Upload a File"
+          "source": "Upload a file",
+          "message": "Upload a file"
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file to PDF.co temporary storage",
@@ -9040,8 +9040,8 @@
           "message": "Advanced processing profiles as a JSON string for fine-grained control over OCR, encryption, and other internal options.\n\n**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", \"OCRResolution\": 300}`"
         },
         "app.UGRmQ28.action.am9iLWNoZWNr.display_name": {
-          "source": "Job Check",
-          "message": "Job Check"
+          "source": "Job check",
+          "message": "Job check"
         },
         "app.UGRmQ28.action.am9iLWNoZWNr.short_desc": {
           "source": "Check the status of an asynchronous job",

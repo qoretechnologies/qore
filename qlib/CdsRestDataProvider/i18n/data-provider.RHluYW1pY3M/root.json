@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
-          "message": "Create Record"
+          "source": "Create record",
+          "message": "Create record"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
           "source": "Create a record in a Dynamics table",
@@ -364,8 +364,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
-          "message": "Find Single Record"
+          "source": "Find single record",
+          "message": "Find single record"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
           "source": "Find a specific record in Dynamics",
@@ -388,8 +388,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
-          "message": "Find Records"
+          "source": "Find records",
+          "message": "Find records"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
           "source": "Find records in Dynamics",
@@ -412,8 +412,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
           "source": "Update records in Dynamics",
@@ -436,8 +436,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
           "source": "Delete records in Dynamics",
@@ -460,8 +460,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
-          "source": "New or Updated Account",
-          "message": "New or Updated Account"
+          "source": "New or updated account",
+          "message": "New or updated account"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
           "source": "Fires when an account is created or changed",
@@ -472,8 +472,8 @@
           "message": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
-          "source": "New or Updated Case",
-          "message": "New or Updated Case"
+          "source": "New or updated case",
+          "message": "New or updated case"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
           "source": "Fires when a case is created or changed",
@@ -484,8 +484,8 @@
           "message": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
-          "source": "New or Updated Contact",
-          "message": "New or Updated Contact"
+          "source": "New or updated contact",
+          "message": "New or updated contact"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
           "source": "Fires when a contact is created or changed",
@@ -496,8 +496,8 @@
           "message": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
-          "source": "New or Updated Invoice",
-          "message": "New or Updated Invoice"
+          "source": "New or updated invoice",
+          "message": "New or updated invoice"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
           "source": "Fires when an invoice is created or changed",
@@ -508,8 +508,8 @@
           "message": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
-          "source": "New or Updated Lead",
-          "message": "New or Updated Lead"
+          "source": "New or updated lead",
+          "message": "New or updated lead"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
           "source": "Fires when a lead is created or changed",
@@ -520,8 +520,8 @@
           "message": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
-          "source": "New or Updated Opportunity",
-          "message": "New or Updated Opportunity"
+          "source": "New or updated opportunity",
+          "message": "New or updated opportunity"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
           "source": "Fires when an opportunity is created or changed",
@@ -532,8 +532,8 @@
           "message": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
-          "source": "New or Updated Order",
-          "message": "New or Updated Order"
+          "source": "New or updated order",
+          "message": "New or updated order"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
           "source": "Fires when an order is created or changed",
@@ -544,8 +544,8 @@
           "message": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`."
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
-          "source": "New or Updated Custom Entity",
-          "message": "New or Updated Custom Entity"
+          "source": "New or updated custom entity",
+          "message": "New or updated custom entity"
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
           "source": "Fires for each record created or changed in any Dataverse table",

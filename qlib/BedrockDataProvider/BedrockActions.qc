@@ -60,7 +60,7 @@ public class BedrockActions {
             "path": "/embed",
             "action": "embed",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
-            "display_name": "Embed Text",
+            "display_name": "Embed text",
             "short_desc": "Generate text embeddings via a Bedrock embedding model",
             "desc": "Generate dense vector embeddings for text using a Bedrock "
                 "embedding model (Amazon Titan Text Embeddings v2, or Cohere "

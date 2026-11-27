@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Crear incidencia"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
@@ -524,7 +524,7 @@
           "message": "La incidencia principal para crear una subincidencia"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
+          "source": "Search issues",
           "message": "Buscar incidencias"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Obtener incidencia"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
@@ -664,7 +664,7 @@
           "message": "La incidencia que se va a recuperar"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Actualizar problema"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
@@ -848,7 +848,7 @@
           "message": "El ID de la incidencia principal (para convertirla en una subincidencia)"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
+          "source": "Archive issue",
           "message": "Archivar incidencia"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "La incidencia a archivar"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
+          "source": "Create comment",
           "message": "Crear comentario"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -908,7 +908,7 @@
           "message": "El cuerpo/contenido del comentario en formato markdown"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Crear proyecto"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "La fecha objetivo de finalización del proyecto"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "Buscar proyectos"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
+          "source": "Create cycle",
           "message": "Crear ciclo"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "La fecha de finalización del ciclo"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
+          "source": "Search cycles",
           "message": "Buscar ciclos"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "Crear etiqueta"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "El equipo en el que crear la etiqueta (dejar vacío para etiquetas del espacio de trabajo)"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
+          "source": "Search labels",
           "message": "Buscar etiquetas"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
+          "source": "Search teams",
           "message": "Buscar equipos"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
+          "source": "Get team",
           "message": "Obtener equipo"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "El equipo que se va a recuperar"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
+          "source": "Issue created",
           "message": "Incidencia creada"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Activar solo para las incidencias creadas en este equipo (opcional)"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
+          "source": "Issue updated",
           "message": "Incidencia actualizada"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Activar solo para las incidencias actualizadas en este equipo (opcional)"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
+          "source": "Comment created",
           "message": "Comentario creado"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
-          "source": "List Sources",
+          "source": "List sources",
           "message": "Quellen auflisten"
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Anzahl der Ergebnisse pro Seite (`1`-`1000`, Standard: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source",
+          "source": "Get source",
           "message": "Quelle abrufen"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Die eindeutige Kennung der abzurufenden Segment-Quelle"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
-          "source": "Create Source",
+          "source": "Create source",
           "message": "Erstellungsquelle"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Auf `True` setzen, um alle aktuell verbundenen Warehouses bei der Erstellung von dieser Quelle zu trennen; der Standardwert ist `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source",
+          "source": "Update source",
           "message": "Aktualisierungsquelle"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Aktualisierte Konfigurationseinstellungen für die Source; die verfügbaren Schlüssel hängen vom Source-Typ ab"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source",
+          "source": "Delete source",
           "message": "Quelle löschen"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Segment-Quelle"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
-          "source": "List Destinations",
+          "source": "List destinations",
           "message": "Destinations auflisten"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Anzahl der Ergebnisse pro Seite (`1`-`1000`, Standard: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination",
+          "source": "Get destination",
           "message": "Ziel abrufen"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Segment-Ziels"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Create Destination",
+          "source": "Create destination",
           "message": "Ziel erstellen"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -676,7 +676,7 @@
           "message": "Auf `True` setzen, um das Ziel zu aktivieren, oder auf `False`, um es in einem deaktivierten Zustand zu erstellen"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination",
+          "source": "Update destination",
           "message": "Destination aktualisieren"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Aktualisierte Konfigurationseinstellungen für die Destination; die verfügbaren Schlüssel hängen vom Destination-Typ ab"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination",
+          "source": "Delete destination",
           "message": "Ziel löschen"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Segment-Ziels"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "Warehouses auflisten"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Anzahl der Ergebnisse pro Seite (`1`-`1000`, Standard: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "Warehouse abrufen"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Die eindeutige Kennung des abzurufenden Segment-Warehouses"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "Warehouse erstellen"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Auf `True` setzen, um bei der Erstellung alle derzeit verbundenen Quellen von diesem Warehouse zu trennen; standardmäßig `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "Warehouse aktualisieren"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Der neue lesbare Anzeigename für das Warehouse"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Delete Warehouse",
+          "source": "Delete warehouse",
           "message": "Warehouse löschen"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Segment-Warehouses"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
-          "source": "List Tracking Plans",
+          "source": "List tracking plans",
           "message": "Tracking-Pläne auflisten"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Vorlagen-Tracking-Plan"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Get Tracking Plan",
+          "source": "Get tracking plan",
           "message": "Tracking-Plan abrufen"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1064,7 +1064,7 @@
           "message": "Die eindeutige ID des abzurufenden Segment-Tracking-Plans"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Create Tracking Plan",
+          "source": "Create tracking plan",
           "message": "Tracking-Plan erstellen"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Eine Beschreibung des Tracking-Plans"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Update Tracking Plan",
+          "source": "Update tracking plan",
           "message": "Tracking-Plan aktualisieren"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Die neue Beschreibung für den Tracking-Plan"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Delete Tracking Plan",
+          "source": "Delete tracking plan",
           "message": "Tracking-Plan löschen"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Die eindeutige ID des zu löschenden Segment-Tracking-Plans"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Labels auflisten"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Anzahl der Ergebnisse pro Seite (`1`-`1000`, Standard: `100`)"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "Label erstellen"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Eine optionale lesbare Beschreibung, die den Zweck dieses Labels erklärt"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
-          "source": "Delete Label",
+          "source": "Delete label",
           "message": "Label löschen"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
-          "source": "Create Client",
+          "source": "Create client",
           "message": "クライアントを作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
@@ -468,7 +468,7 @@
           "message": "国"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
-          "source": "Update Client",
+          "source": "Update client",
           "message": "クライアントを更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
@@ -588,7 +588,7 @@
           "message": "国"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
-          "source": "Search Clients",
+          "source": "Search clients",
           "message": "クライアントを検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
@@ -656,7 +656,7 @@
           "message": "返される結果の最大件数（最大100）"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
-          "source": "Get Client",
+          "source": "Get client",
           "message": "クライアントを取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
@@ -688,7 +688,7 @@
           "message": "クライアントID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
-          "source": "Delete Client",
+          "source": "Delete client",
           "message": "クライアントを削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
@@ -720,7 +720,7 @@
           "message": "削除するクライアント"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
-          "source": "Create Service",
+          "source": "Create service",
           "message": "サービスを作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "このサービスがクライアントに請求可能かどうか"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
-          "source": "Update Service",
+          "source": "Update service",
           "message": "サービスを更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
@@ -816,7 +816,7 @@
           "message": "サービスが請求可能かどうか"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
-          "source": "Search Services",
+          "source": "Search services",
           "message": "サービスを検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
-          "source": "Get Service",
+          "source": "Get service",
           "message": "サービスを取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
@@ -888,7 +888,7 @@
           "message": "サービスID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
-          "source": "Delete Service",
+          "source": "Delete service",
           "message": "サービスを削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
@@ -920,7 +920,7 @@
           "message": "削除するサービス"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "見積書の作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "発注書番号"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
-          "source": "Search Estimates",
+          "source": "Search estimates",
           "message": "見積書を検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "概算見積を取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "見積書ID"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "見積もりを更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "発注書番号"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "見積の削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "削除する見積書"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "経費を作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "税率パーセンテージ"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "経費を更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "税率パーセンテージ"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "経費を削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "削除する経費"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "経費を取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "経費ID"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
-          "source": "Search Expenses",
+          "source": "Search expenses",
           "message": "経費を検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "請求書を作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "発注書番号"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "請求書を更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "発注書番号"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "請求書を検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "請求書を取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "請求書 ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "請求書を削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "削除する請求書"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "品目の作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "デフォルトの税2"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "アイテムを更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "デフォルトの税2"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "品目を検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "アイテムの取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "品目ID"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "アイテムの削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -2232,7 +2232,7 @@
           "message": "削除するアイテム"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "支払いの作成"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "支払メモ"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "支払いを更新"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "支払メモ"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "支払いを削除"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "削除する支払い"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
-          "source": "Search Payments",
+          "source": "Search payments",
           "message": "支払いを検索"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "最大結果数"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "支払いの取得"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "支払いID"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "新しい請求書"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新規支払い"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
-          "source": "New Client",
+          "source": "New client",
           "message": "新規クライアント"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
@@ -2652,7 +2652,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "新しい経費"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "新しい見積書"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {

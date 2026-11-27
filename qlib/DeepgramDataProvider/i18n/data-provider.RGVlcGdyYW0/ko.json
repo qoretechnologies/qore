@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
-          "source": "Transcribe File",
+          "source": "Transcribe file",
           "message": "파일 텍스트 변환"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
@@ -520,7 +520,7 @@
           "message": "제공된 경우 Deepgram이 즉시 응답을 반환하고 준비가 완료되면 최종 트랜스크립트를 이 URL로 POST합니다. 긴 파일에 사용하세요."
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
-          "source": "Synthesize Speech",
+          "source": "Synthesize speech",
           "message": "음성 합성"
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Wyświetl listę plików"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Wartość `next_page_token` zwrócona przez poprzednie listowanie, używana do pobrania następnej strony"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Pobierz informacje o pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Identyfikator Drive pliku; Drive adresuje pliki za pomocą niezmiennego identyfikatora, a nie ścieżki, więc dwa pliki w tym samym folderze mogą mieć tę samą nazwę"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Pobierz plik"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Identyfikator Drive pliku; Drive adresuje pliki za pomocą niezmiennego identyfikatora, a nie ścieżki, więc dwa pliki w tym samym folderze mogą mieć tę samą nazwę"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
-          "source": "Export Document",
+          "source": "Export document",
           "message": "Eksportuj dokument"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Zwykły tekst; dostępny dla Dokumentów"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Prześlij plik"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Opis do zapisania wraz z plikiem"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Utwórz plik tekstowy"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Typ MIME do zapisania z nowym plikiem"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
-          "source": "Replace File Content",
+          "source": "Replace file content",
           "message": "Zastąp zawartość pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Nazwa pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Utwórz folder"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Folder, w którym ma zostać utworzony nowy folder; jeśli nie ustawiono, używany jest katalog główny `My Drive` użytkownika"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Kopiuj plik"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Folder, w którym ma zostać umieszczona kopia; jeśli nie ustawiono, kopia jest umieszczana obok oryginału"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Przenieś plik"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Folder, do którego ma zostać przeniesiony plik"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
-          "source": "Rename File",
+          "source": "Rename file",
           "message": "Zmień nazwę pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Nowy opis do zapisania wraz z plikiem; istniejący opis pozostaje bez zmian, jeśli to pole nie jest ustawione"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Usuń plik"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Usuń plik trwale zamiast przenosić go do kosza. **Tej operacji nie można cofnąć**; pozostaw to pole niezaznaczone, aby przenieść plik do kosza, skąd można go jeszcze odzyskać"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
-          "source": "Share File",
+          "source": "Share file",
           "message": "Udostępnij plik"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Wyślij wiadomość e-mail z powiadomieniem do osoby uprawnionej"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
-          "source": "Restore from Trash",
+          "source": "Restore from trash",
           "message": "Przywróć z kosza"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Identyfikator pliku w usłudze Drive do przywrócenia z kosza"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
-          "source": "Create Shortcut",
+          "source": "Create shortcut",
           "message": "Utwórz skrót"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Folder, w którym ma zostać utworzony skrót; jeśli nie ustawiono, używany jest katalog główny `My Drive` użytkownika"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
-          "source": "List Shared Drives",
+          "source": "List shared drives",
           "message": "Wyświetl dyski współdzielone"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Wartość `next_page_token` zwrócona przez poprzednie listowanie"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
-          "source": "Get Storage Quota",
+          "source": "Get storage quota",
           "message": "Pobierz limit miejsca"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
@@ -1576,7 +1576,7 @@
           "message": "Zwraca informację o ilości wykorzystywanego i dostępnego miejsca na koncie.\n\nPrzydatne przed przesłaniem dużych plików: Drive odrzuca operacje, które przekroczyłyby limit, zgłaszając je jako zwykły błąd zapisu, a nie problem z pojemnością. Pliki w koszu nadal wliczają się do limitu, więc `usage_in_drive_trash` to ilość miejsca, którą zwolniłoby jego opróżnienie."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
-          "source": "List Permissions",
+          "source": "List permissions",
           "message": "Wyświetl uprawnienia"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Identyfikator pliku na Dysku, którego uprawnienia mają zostać wyświetlone"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
-          "source": "Remove Permission",
+          "source": "Remove permission",
           "message": "Usuń uprawnienie"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Identyfikator uprawnienia do cofnięcia, zwrócony przez `list-permissions` lub `share-file`"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Wyświetl wersje pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Identyfikator pliku na Dysku, którego wersje mają zostać wyświetlone"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
-          "source": "Get File Revision",
+          "source": "Get file revision",
           "message": "Pobierz wersję pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Identyfikator wersji zwracany przez `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
-          "source": "Delete File Revision",
+          "source": "Delete file revision",
           "message": "Usuń wersję pliku"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Identyfikator wersji zwracany przez `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files",
+          "source": "Find files",
           "message": "Znajdź pliki"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Liczba plików do pobrania na żądanie; Dysk ogranicza to do `1000`.\n\nWpływa to na podział przeglądania na żądania, a nie na liczbę zwracanych rekordów — iterator pobiera kolejne strony w miarę potrzeb"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Nowy plik"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Monitoruj ten dysk współdzielony (dawniej „Dysk zespołu”) zamiast własnego `My Drive` użytkownika.\n\nDysk współdzielony prowadzi własny kanał zmian, więc monitorowanie obejmuje jeden albo drugi, a nie oba naraz"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Nowy folder"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {

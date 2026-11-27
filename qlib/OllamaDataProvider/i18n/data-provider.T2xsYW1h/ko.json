@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "채팅 완성"
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -524,7 +524,7 @@
           "message": "구조화된 응답 형태를 강제하는 해시(예: `{type: \"json_object\"}` 또는 `{type: \"json_schema\", schema: {...}}`)입니다."
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "임베딩 생성"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -596,7 +596,7 @@
           "message": "요청이 완료된 후 Ollama가 메모리에 모델을 로드된 상태로 유지하는 기간을 제어하는 기간 문자열입니다(예: `\"5m\"`, `\"1h\"`, 즉시 언로드는 `\"0\"`)."
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Installed Models",
+          "source": "List installed models",
           "message": "설치된 모델 나열"
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.short_desc": {

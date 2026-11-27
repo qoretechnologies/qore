@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
+          "source": "Scrape a web page",
           "message": "웹 페이지 스크랩"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
+          "source": "Batch scrape web pages",
           "message": "웹 페이지 일괄 스크랩"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "일괄 스크랩 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "취소할 일괄 스크랩 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
+          "source": "Get batch scrape status",
           "message": "일괄 스크랩 상태 가져오기"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "확인할 일괄 스크랩 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
+          "source": "Crawl a website",
           "message": "웹사이트 크롤링"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "`True`인 경우, Firecrawl은 응답을 반환한 후 서버에 크롤링 데이터를 보관하지 않습니다. Enterprise 기능 — 활성화하려면 Firecrawl 지원팀에 문의하세요"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
+          "source": "Get crawl status",
           "message": "크롤링 상태 가져오기"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "확인할 크롤링 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "크롤링 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "취소할 크롤링 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
+          "source": "Map a website",
           "message": "웹사이트 맵핑"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "우선 순위 순서로 지정된 선호 언어/로캘 목록. 지정된 위치의 언어로 기본 설정됨"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "웹 검색"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "익명화된 Zero Data Retention"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
+          "source": "Extract structured data",
           "message": "구조화된 데이터 추출"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "`True`인 경우, Firecrawl는 응답 반환 후 서버에 스크래핑된 데이터를 보관하지 않음. 엔터프라이즈 기능 — 사용하려면 Firecrawl 지원팀에 문의"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
+          "source": "Get extraction status",
           "message": "추출 상태 가져오기"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "확인할 추출 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
+          "source": "Run AI agent",
           "message": "AI 에이전트 실행"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "에이전트 작업 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
@@ -3960,7 +3960,7 @@
           "message": "취소할 에이전트 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
+          "source": "Get agent status",
           "message": "에이전트 상태 가져오기"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "확인할 에이전트 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "문서 파싱"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {

@@ -388,7 +388,7 @@
           "message": "GUID skupiny, v ktorej sa má bitlink vytvoriť. Ak nie je zadané, použije sa predvolená skupina"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
-          "source": "Create a Bitlink",
+          "source": "Create a bitlink",
           "message": "Vytvoriť bitlink"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Adresa URL, kde používatelia môžu inštalovať aplikáciu, ak ešte nie je nainštalovaná"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
-          "source": "Update a Bitlink",
+          "source": "Update a bitlink",
           "message": "Aktualizovať bitlink"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Nový zoznam značiek pre bitlink (nahradí existujúce značky)"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
-          "source": "Delete a Bitlink",
+          "source": "Delete a bitlink",
           "message": "Vymazať bitlink"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
@@ -628,7 +628,7 @@
           "message": "ID bitlinku na vymazanie (napr. `bit.ly/abc123`)"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
-          "source": "Get Bitlink Clicks",
+          "source": "Get bitlink clicks",
           "message": "Získať kliknutia na bitlink"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
@@ -696,7 +696,7 @@
           "message": "Počet časových jednotiek na dopytovanie. Pre všetky dostupné údaje použite `-1`"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
-          "source": "Create Custom Bitlink",
+          "source": "Create custom bitlink",
           "message": "Vytvoriť vlastný bitlink"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
@@ -732,7 +732,7 @@
           "message": "ID existujúceho bitlinku, ku ktorému sa má pridať vlastná koncová časť"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
-          "source": "List Bitlinks",
+          "source": "List bitlinks",
           "message": "Zoznam bitlinkov"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
-          "source": "Get a Bitlink",
+          "source": "Get a bitlink",
           "message": "Získať bitlink"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
@@ -876,7 +876,7 @@
           "message": "ID bitlinku"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "Zobraziť skupiny"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Filtrovať podľa organizácie"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "Aktualizovať skupinu"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Zoznam značkových krátkych domén na priradenie ku skupine"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
-          "source": "Get a Group",
+          "source": "Get a group",
           "message": "Získať skupinu"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
@@ -984,7 +984,7 @@
           "message": "GUID skupiny"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Zoznam organizácií"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "Získať konkrétnu organizáciu"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get an Organization",
+          "source": "Get an organization",
           "message": "Získať organizáciu"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "GUID organizácie"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create a Campaign",
+          "source": "Create a campaign",
           "message": "Vytvoriť kampaň"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Zoznam GUID kanálov na priradenie ku kampani"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Update a Campaign",
+          "source": "Update a campaign",
           "message": "Aktualizovať kampaň"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Nový zoznam GUID kanálov na priradenie ku kampani"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Zoznam kampaní"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -1172,7 +1172,7 @@
           "message": "Filtrovať podľa skupiny"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get a Campaign",
+          "source": "Get a campaign",
           "message": "Získať kampaň"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "GUID kampane"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
-          "source": "List Branded Short Domains",
+          "source": "List branded short domains",
           "message": "Zoznam vlastných skrátených domén"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Zoznam všetkých vlastných skrátených domén (BSD) dostupných v účte"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
-          "source": "Create a QR Code",
+          "source": "Create a QR code",
           "message": "Vytvoriť QR kód"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Časová pečiatka ISO 8601, kedy má vypršať platnosť QR kódu"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
-          "source": "Update a QR Code",
+          "source": "Update a QR code",
           "message": "Aktualizovať QR kód"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "Časová pečiatka ISO 8601, kedy má vypršať platnosť QR kódu"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
-          "source": "List QR Codes",
+          "source": "List QR codes",
           "message": "Zoznam QR kódov"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Skupina, pre ktorú sa majú vypísať QR kódy"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
-          "source": "Get a QR Code",
+          "source": "Get a QR code",
           "message": "Získať QR kód"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "ID QR kódu"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
-          "source": "Bitlink Clicked",
+          "source": "Bitlink clicked",
           "message": "Na bitlink bolo kliknuté"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {

@@ -16,7 +16,7 @@
           "message": "Se connecter aux agents A2A pour une collaboration d'agent à agent"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Agent Card",
+          "source": "Get agent card",
           "message": "Obtenir la carte d'agent"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Récupérer la carte de l'agent A2A avec ses capacités et compétences"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Extended Agent Card",
+          "source": "Get extended agent card",
           "message": "Obtenir la carte d'agent étendue"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Obtenir la carte d'agent étendue authentifiée avec des détails supplémentaires"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "Envoyer un message"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Identifiant de tenant facultatif pour la prise en charge du multi-tenant"
         },
         "app.QTJB.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Obtenir la tâche"
         },
         "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
@@ -184,7 +184,7 @@
           "message": "L'identifiant unique de la tâche à récupérer"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
-          "source": "Cancel Task",
+          "source": "Cancel task",
           "message": "Annuler la tâche"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
@@ -208,7 +208,7 @@
           "message": "L'identifiant unique de la tâche à annuler"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Lister les tâches"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
@@ -256,7 +256,7 @@
           "message": "Curseur optionnel pour récupérer la page de résultats suivante"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Set Push Notification Config",
+          "source": "Set push notification config",
           "message": "Définir la config des notifications push"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Jeton de vérification optionnel pour le webhook"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Get Push Notification Config",
+          "source": "Get push notification config",
           "message": "Obtenir la config des notifications push"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "L'ID de la tâche pour laquelle gérer la configuration des notifications push"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
-          "source": "List Push Notification Configs",
+          "source": "List push notification configs",
           "message": "Lister les configs de notifications push"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "L'ID de la tâche pour laquelle gérer la configuration des notifications push"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Delete Push Notification Config",
+          "source": "Delete push notification config",
           "message": "Supprimer la config des notifications push"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "L'ID de la configuration des notifications push à supprimer"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
-          "source": "Task Status Update",
+          "source": "Task status update",
           "message": "Mise à jour du statut de tâche"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Recevoir une notification lorsque le statut d'une tâche A2A change"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
-          "source": "Task Artifact Update",
+          "source": "Task artifact update",
           "message": "Mise à jour d'artefact de tâche"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Recevoir une notification lorsqu'un artefact de tâche A2A est ajouté ou modifié"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
-          "source": "Task Message Update",
+          "source": "Task message update",
           "message": "Mise à jour de message de tâche"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {

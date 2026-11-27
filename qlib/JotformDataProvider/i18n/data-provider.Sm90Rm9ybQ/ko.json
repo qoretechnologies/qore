@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
+          "source": "Create submission",
           "message": "제출 생성"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "제출을 생성할 양식을 선택하세요. 선택 항목에 따라 제출 필드가 업데이트됩니다."
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "제출 가져오기"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -388,7 +388,7 @@
           "message": "조회할 제출의 고유 ID"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
+          "source": "Get form submissions",
           "message": "양식 제출 항목 가져오기"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "반환할 최대 제출 수"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
+          "source": "Update submission",
           "message": "제출 업데이트"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "업데이트할 제출물의 ID"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "제출 삭제"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -508,7 +508,7 @@
           "message": "삭제할 제출의 ID"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "폼 가져오기"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
@@ -532,7 +532,7 @@
           "message": "조회할 양식"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
+          "source": "Get forms",
           "message": "양식 목록 가져오기"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "반환할 최대 양식 수"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
+          "source": "Get form reports",
           "message": "양식 보고서 가져오기"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "보고서를 조회할 양식"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
+          "source": "New submission",
           "message": "새 제출"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
@@ -628,7 +628,7 @@
           "message": "새 제출을 모니터링할 양식을 선택하세요"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "새 결제"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {

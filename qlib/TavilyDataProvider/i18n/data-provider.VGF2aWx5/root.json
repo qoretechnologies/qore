@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
-          "message": "Search the Web"
+          "source": "Search the web",
+          "message": "Search the web"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
           "source": "Search the web and optionally get an answer written over the results",
@@ -1372,8 +1372,8 @@
           "message": "Restricts a `news` search to the last N days.\n\n**Superseded by `time_range`**, which applies to every topic; this option is still accepted so that existing flows keep working."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
-          "message": "Read Pages"
+          "source": "Read pages",
+          "message": "Read pages"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
           "source": "Fetch pages and return their main content",
@@ -1512,8 +1512,8 @@
           "message": "Return what this request cost in credits, as `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
-          "message": "Crawl a Site"
+          "source": "Crawl a site",
+          "message": "Crawl a site"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
           "source": "Follow links from a page and return the content of everything found",
@@ -1744,8 +1744,8 @@
           "message": "Return what this request cost in credits, as `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
-          "message": "Map a Site"
+          "source": "Map a site",
+          "message": "Map a site"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
           "source": "List the URLs reachable from a page without reading them",
@@ -1900,8 +1900,8 @@
           "message": "Return what this request cost in credits, as `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
-          "message": "Start Research"
+          "source": "Start research",
+          "message": "Start research"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
           "source": "Set an agent to research a question and return the task it started",
@@ -2084,8 +2084,8 @@
           "message": "How the contents are encoded.  Defaults to `base64`, which is the only encoding Tavily documents."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
-          "message": "Get Research Report"
+          "source": "Get research report",
+          "message": "Get research report"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
           "source": "Read a research task and its report once it has finished",
@@ -2108,8 +2108,8 @@
           "message": "The research task to read, as returned by **Start Research** in `request_id`.\n\nThe dropdown lists the research tasks this account has started, taken from the usage log.  The log is written a few minutes after a task starts, so a task begun moments ago is not in it yet: use the `request_id` **Start Research** returned."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
-          "message": "Get Credit Usage"
+          "source": "Get credit usage",
+          "message": "Get credit usage"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
           "source": "Report what the API key and the account have spent",
@@ -2132,8 +2132,8 @@
           "message": "Report usage for this project only, rather than for the whole account.  Sent as the `X-Project-ID` header.\n\nTavily publishes no endpoint that lists projects, so this cannot be offered as a dropdown; take the value from the Tavily dashboard."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
-          "message": "List API Usage Logs"
+          "source": "List API usage logs",
+          "message": "List API usage logs"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {
           "source": "List the requests made against the account, newest first",

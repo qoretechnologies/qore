@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtenir le modèle"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Sélectionner la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Créer une réponse"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Ne pas stocker"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Transcrire l'audio"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Segment"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.display_name": {
-          "source": "Translate Audio",
+          "source": "Translate audio",
           "message": "Traduire l'audio"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Température d'échantillonnage entre `0` et `1`."
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.display_name": {
-          "source": "Generate Speech",
+          "source": "Generate speech",
           "message": "Générer une parole"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Vitesse de parole de `0.5` à `5`, lorsque prise en charge par le modèle."
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Télécharger un fichier"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Adaptateur LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Lister les fichiers"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Rechercher des fichiers téléchargés et des fichiers de résultats par lot.\n\nRenvoie les ressources rendues disponibles par l'endpoint d'authentification de listing."
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Obtenir le fichier"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Sélectionner la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Télécharger le fichier"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Sélectionner la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Supprimer le fichier"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Sélectionnez la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Créer un lot"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Métadonnées personnalisées clé/valeur pour suivre ce lot."
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Lister les lots"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "Trouver des lots et inspecter leur état de traitement actuel.\n\nRenvoie les ressources disponibles via l'endpoint d'authentification."
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Obtenir le lot"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Sélectionnez la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Annuler le lot"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Sélectionnez la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Register LoRA Adapter",
+          "source": "Register LoRA adapter",
           "message": "Inscrire un adaptateur LoRA"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.display_name": {
-          "source": "List LoRA Adapters",
+          "source": "List LoRA adapters",
           "message": "Lister les adaptateurs LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Trouver les adaptateurs disponibles pour votre organisation.\n\n**Accès entreprise requis.** Téléchargez un adaptateur LoRA entraîné en externe avec `purpose` défini sur `fine_tuning`. Groq héberge les adaptateurs et ne procède pas à l'entraînement des modèles. Consultez le [guide LoRA](https://console.groq.com/docs/lora).\n\nRetourne les ressources mises à disposition par l'endpoint d'inscription authentifié."
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.display_name": {
-          "source": "Get LoRA Adapter",
+          "source": "Get LoRA adapter",
           "message": "Obtenir un adaptateur LoRA"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Sélectionnez la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Delete LoRA Adapter",
+          "source": "Delete LoRA adapter",
           "message": "Supprimer l'adaptateur LoRA"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Sélectionnez la ressource existante à inspecter ou gérer."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Complétion de chat"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Identifiant opaque représentant l'utilisateur final. Consigné côté serveur pour le suivi des abus et l'attribution de l'utilisation ; n'affecte pas la génération."
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lister les modèles"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {

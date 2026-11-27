@@ -16,7 +16,7 @@
           "message": "Odczytuj i zapisuj komunikaty elektronicznej wymiany danych UN/EDIFACT"
         },
         "app.RWRpZmFjdA.action.cmVhZA.display_name": {
-          "source": "Read EDIFACT File",
+          "source": "Read EDIFACT file",
           "message": "Odczytaj plik EDIFACT"
         },
         "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Jeśli `True`, pomijaj segmenty usługowe (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) podczas iteracji, zwracając tylko segmenty danych biznesowych."
         },
         "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
-          "source": "Write EDIFACT Data",
+          "source": "Write EDIFACT data",
           "message": "Zapisz dane EDIFACT"
         },
         "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
@@ -300,7 +300,7 @@
           "message": "Wersja składni 4"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
-          "source": "Load EDIFACT Schema",
+          "source": "Load EDIFACT schema",
           "message": "Załaduj schemat EDIFACT"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
@@ -420,7 +420,7 @@
           "message": "Jeśli `True`, sprawdzaj poprawność plików EDMD w bardziej rygorystyczny sposób (nagłówek tabeli segmentów, wcięcia i integralność strukturalna)."
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "Schema Summary",
+          "source": "Schema summary",
           "message": "Podsumowanie schematu"
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

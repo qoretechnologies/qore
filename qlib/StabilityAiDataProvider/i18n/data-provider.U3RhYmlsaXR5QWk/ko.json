@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.display_name": {
-          "source": "Generate Ultra Image",
+          "source": "Generate Ultra image",
           "message": "Ultra 이미지 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.display_name": {
-          "source": "Generate Core Image",
+          "source": "Generate Core image",
           "message": "Core 이미지 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.display_name": {
-          "source": "Generate SD3.5 Image",
+          "source": "Generate SD3.5 image",
           "message": "SD3.5 이미지 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.display_name": {
-          "source": "Upscale Image Quickly",
+          "source": "Upscale image quickly",
           "message": "이미지 해상도를 빠르게 높이기"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.display_name": {
-          "source": "Upscale Image Conservatively",
+          "source": "Upscale image conservatively",
           "message": "원래 모습을 유지하며 이미지 해상도 높이기"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.display_name": {
-          "source": "Start Creative Upscale",
+          "source": "Start creative upscale",
           "message": "창의적 해상도 향상 시작"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "타일 텍스처"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.display_name": {
-          "source": "Get Creative Upscale Result",
+          "source": "Get creative upscale result",
           "message": "창의적 해상도 향상 결과 가져오기"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.display_name": {
-          "source": "Erase Object",
+          "source": "Erase object",
           "message": "개체 지우기"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.display_name": {
-          "source": "Inpaint Image",
+          "source": "Inpaint image",
           "message": "이미지의 마스크 영역 교체"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.display_name": {
-          "source": "Extend Image",
+          "source": "Extend image",
           "message": "이미지 확장"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "찾기 및 바꾸기"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.display_name": {
-          "source": "Search and Recolor",
+          "source": "Search and recolor",
           "message": "검색 및 다시 칠하기"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.short_desc": {
@@ -3912,7 +3912,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.display_name": {
-          "source": "Remove Background",
+          "source": "Remove background",
           "message": "배경 제거"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.display_name": {
-          "source": "Start Background and Lighting Edit",
+          "source": "Start background and lighting edit",
           "message": "배경 및 조명 편집 시작"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "WebP"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.display_name": {
-          "source": "Get Image Job Result",
+          "source": "Get image job result",
           "message": "이미지 작업 결과 가져오기"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.short_desc": {
@@ -4704,7 +4704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.display_name": {
-          "source": "Generate from Sketch",
+          "source": "Generate from sketch",
           "message": "스케치에서 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.display_name": {
-          "source": "Generate with Image Structure",
+          "source": "Generate with image structure",
           "message": "이미지 구조로 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.short_desc": {
@@ -5336,7 +5336,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.display_name": {
-          "source": "Generate with Style Guide",
+          "source": "Generate with style guide",
           "message": "스타일 가이드로 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.display_name": {
-          "source": "Transfer Image Style",
+          "source": "Transfer image style",
           "message": "이미지 스타일 전송"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.short_desc": {
@@ -6092,7 +6092,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.display_name": {
-          "source": "Generate Fast 3D Model",
+          "source": "Generate Fast 3D model",
           "message": "빠른 3D 모델 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.short_desc": {
@@ -6308,7 +6308,7 @@
           "message": "지정된 경우 결과는 단순화된 메시에서 대략 이만큼의 정점(결과적으로 더 적은 수의 면)을 갖게 됩니다.\n\n이 값을 -1(기본값)로 설정하면 제한이 설정되지 않음을 의미합니다."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.display_name": {
-          "source": "Generate Point Aware 3D Model",
+          "source": "Generate Point Aware 3D model",
           "message": "Point Aware 3D로 모델 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.display_name": {
-          "source": "Start Audio 3 Generation",
+          "source": "Start Audio 3 generation",
           "message": "Audio 3 오디오 생성 시작"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.short_desc": {
@@ -7364,7 +7364,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.display_name": {
-          "source": "Start Audio 3 Transformation",
+          "source": "Start Audio 3 transformation",
           "message": "Audio 3 오디오 변환 시작"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.display_name": {
-          "source": "Start Audio 3 Inpainting",
+          "source": "Start Audio 3 inpainting",
           "message": "Audio 3 오디오 구간 교체 시작"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.display_name": {
-          "source": "Get Audio Job Result",
+          "source": "Get audio job result",
           "message": "오디오 작업 결과 가져오기"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.short_desc": {
@@ -7964,7 +7964,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "계정 가져오기"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -7976,7 +7976,7 @@
           "message": "계정 세부정보 및 사용 가능한 조직을 읽어보세요."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "크레딧 잔액 조회"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -7988,7 +7988,7 @@
           "message": "선택한 기관의 크레딧 잔액을 확인하세요."
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.display_name": {
-          "source": "List Legacy Engines",
+          "source": "List legacy engines",
           "message": "레거시 생성 모델 목록 조회"
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "이 계정에서 사용할 수 있는 기존 이미지 엔진을 나열합니다."
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.display_name": {
-          "source": "Generate Legacy Image",
+          "source": "Generate legacy image",
           "message": "레거시 이미지 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "원시 미디어"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.display_name": {
-          "source": "Transform Legacy Image",
+          "source": "Transform legacy image",
           "message": "레거시 이미지 변환"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.short_desc": {
@@ -8716,7 +8716,7 @@
           "message": "원시 미디어"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.display_name": {
-          "source": "Mask Legacy Image",
+          "source": "Mask legacy image",
           "message": "마스크 레거시 이미지"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "원시 미디어"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.display_name": {
-          "source": "Wait for Image Job",
+          "source": "Wait for image job",
           "message": "이미지 작업 완료 대기"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "폴링 지연; 제작 시간은 최소 10초입니다."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.display_name": {
-          "source": "Wait for Creative Upscale",
+          "source": "Wait for creative upscale",
           "message": "창의적 해상도 향상 완료 대기"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "폴링 지연; 제작 시간은 최소 10초입니다."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.display_name": {
-          "source": "Wait for Audio Job",
+          "source": "Wait for audio job",
           "message": "오디오 작업 완료 대기"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "폴링 지연; 제작 시간은 최소 10초입니다."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "이미지 생성"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {

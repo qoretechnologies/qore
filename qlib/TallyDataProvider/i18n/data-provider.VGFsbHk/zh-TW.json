@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create Form",
+          "source": "Create form",
           "message": "建立表單"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "用於強制唯一提交的欄位鍵"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "取得表單"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
@@ -1068,7 +1068,7 @@
           "message": "要擷取的表單唯一識別碼"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update Form",
+          "source": "Update form",
           "message": "更新表單"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "用於強制唯一提交的欄位鍵"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete Form",
+          "source": "Delete form",
           "message": "刪除表單"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "要刪除的表單唯一識別碼（移至垃圾桶）"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
-          "source": "Search Forms",
+          "source": "Search forms",
           "message": "搜尋表單"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "用來篩選結果的工作區 ID 清單"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "取得提交資料"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "要擷取的提交唯一識別碼"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "刪除提交資料"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "要刪除的提交唯一識別碼"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
-          "source": "Search Submissions",
+          "source": "Search submissions",
           "message": "搜尋提交"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "取得特定提交 ID 之後的提交"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
-          "source": "Search Questions",
+          "source": "Search questions",
           "message": "搜尋問題"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "要從中擷取問題的表單 ID"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "建立 Webhook"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "外部訂閱者的選用識別碼"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "更新 Webhook"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "自訂 HTTP 標頭的值"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "刪除 Webhook"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "要刪除的 Webhook 唯一識別碼"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
-          "source": "Search Webhooks",
+          "source": "Search webhooks",
           "message": "搜尋 Webhook"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "每頁 Webhook 數量（1-100，預設值為 `25`）"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search Webhook Events",
+          "source": "Search webhook events",
           "message": "搜尋 Webhook 事件"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "分頁頁碼（預設值 `1`）"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
-          "source": "Retry Webhook Event",
+          "source": "Retry webhook event",
           "message": "重試 Webhook 事件"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "要重試的失敗 Webhook 事件 ID"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create Workspace",
+          "source": "Create workspace",
           "message": "建立工作區"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "新工作區的顯示名稱"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "取得工作區"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "要擷取的工作區唯一識別碼"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace",
+          "source": "Update workspace",
           "message": "更新工作區"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "工作區的新顯示名稱"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete Workspace",
+          "source": "Delete workspace",
           "message": "刪除工作區"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "要刪除的工作區唯一識別碼；這也會刪除該工作區中的所有表單"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
-          "source": "Search Workspaces",
+          "source": "Search workspaces",
           "message": "搜尋工作區"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "分頁頁碼（預設值 `1`）"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "取得目前使用者"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "擷取目前已驗證使用者的資訊"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
-          "source": "New Form Submission",
+          "source": "New form submission",
           "message": "新增表單提交"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {

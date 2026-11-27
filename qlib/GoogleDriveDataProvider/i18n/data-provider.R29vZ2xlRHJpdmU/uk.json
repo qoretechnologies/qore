@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Список файлів"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Значення `next_page_token`, повернене попереднім запитом списку, яке використовується для отримання наступної сторінки"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Отримати інформацію про файл"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Ідентифікатор файлу на Drive; Drive адресує файли за незмінним ID, а не за шляхом, тому два файли в одній папці можуть мати однакову назву"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Завантажити файл"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Ідентифікатор файлу на Drive; Drive адресує файли за незмінним ID, а не за шляхом, тому два файли в одній папці можуть мати однакову назву"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
-          "source": "Export Document",
+          "source": "Export document",
           "message": "Експортувати документ"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Звичайний текст; доступно для Docs"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Завантажити файл"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Опис, який зберігатиметься разом із файлом"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Створити текстовий файл"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Тип MIME для збереження з новим файлом"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
-          "source": "Replace File Content",
+          "source": "Replace file content",
           "message": "Замінити вміст файлу"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Ім’я файлу"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Створити папку"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Папка для створення нової папки; якщо не вказано, використовується корінь `My Drive` користувача"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Скопіювати файл"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Папка для розміщення копії; якщо не вказано, копія розміщується поруч із оригіналом"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Перемістити файл"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Папка, до якої потрібно перемістити файл"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
-          "source": "Rename File",
+          "source": "Rename file",
           "message": "Перейменувати файл"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Новий опис для збереження з файлом; існуючий опис залишається без змін, якщо цей параметр не встановлено"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Видалити файл"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Видалити файл назавжди замість переміщення його в кошик. **Цю дію не можна скасувати**; залиште параметр вимкненим, щоб перемістити файл у кошик, звідки його ще можна відновити"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
-          "source": "Share File",
+          "source": "Share file",
           "message": "Поділитися файлом"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Надіслати електронний лист із сповіщенням одержувачу доступу"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
-          "source": "Restore from Trash",
+          "source": "Restore from trash",
           "message": "Відновити зі смітника"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Ідентифікатор Drive файлу, який потрібно відновити зі смітника"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
-          "source": "Create Shortcut",
+          "source": "Create shortcut",
           "message": "Створити ярлик"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Папка для створення ярлика; якщо не вказано, використовується корінь `My Drive` користувача"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
-          "source": "List Shared Drives",
+          "source": "List shared drives",
           "message": "Отримати список спільних дисків"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Значення `next_page_token`, повернене попереднім запитом списку"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
-          "source": "Get Storage Quota",
+          "source": "Get storage quota",
           "message": "Отримати квоту сховища"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
@@ -1576,7 +1576,7 @@
           "message": "Повертає інформацію про те, скільки сховища облікового запису використовується і скільки доступно.\n\nКорисно перед великим завантаженням: Drive відхиляє завантаження, що перевищує квоту, і повідомляє про це як про звичайну помилку запису, а не як про проблему місткості. Файли в кошику все одно враховуються у квоту, тому `usage_in_drive_trash` показує, скільки місця звільнить його очищення."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
-          "source": "List Permissions",
+          "source": "List permissions",
           "message": "Отримати список дозволів"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Ідентифікатор файлу на Диску, список дозволів якого потрібно отримати"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
-          "source": "Remove Permission",
+          "source": "Remove permission",
           "message": "Видалити дозвіл"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Ідентифікатор дозволу, який потрібно відкликати, повернутий `list-permissions` або `share-file`"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Список версій файлу"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Ідентифікатор файлу на Диску, список версій якого потрібно отримати"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
-          "source": "Get File Revision",
+          "source": "Get file revision",
           "message": "Отримати версію файлу"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Ідентифікатор версії, повернутий `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
-          "source": "Delete File Revision",
+          "source": "Delete file revision",
           "message": "Видалити версію файлу"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Ідентифікатор версії, повернутий `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files",
+          "source": "Find files",
           "message": "Знайти файли"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Скільки файлів отримувати за один запит; Диск обмежує це значення до `1000`.\n\nЦе впливає на те, як обхід розбивається на запити, а не на кількість повернутих записів — ітератор вибирає наступні сторінки за потреби"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Новий файл"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Спостерігати за цим спільним диском (раніше \"Team Drive\") замість власного `My Drive` користувача.\n\nСпільний диск веде власну стрічку змін, тому спостереження охоплює один або інший, а не обидва"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Нова папка"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {

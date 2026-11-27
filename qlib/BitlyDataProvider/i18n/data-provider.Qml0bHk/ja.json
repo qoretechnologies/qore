@@ -388,7 +388,7 @@
           "message": "Bitlink を作成するグループの GUID。指定しない場合はデフォルトグループを使用します"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
-          "source": "Create a Bitlink",
+          "source": "Create a bitlink",
           "message": "Bitlinkの作成"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
@@ -532,7 +532,7 @@
           "message": "アプリがインストールされていない場合、ユーザーがアプリをインストールできる URL"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
-          "source": "Update a Bitlink",
+          "source": "Update a bitlink",
           "message": "Bitlinkの更新"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
@@ -604,7 +604,7 @@
           "message": "bitlinkの新しいタグリスト（既存のタグを置換）"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
-          "source": "Delete a Bitlink",
+          "source": "Delete a bitlink",
           "message": "Bitlink の削除"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
@@ -628,7 +628,7 @@
           "message": "削除する Bitlink ID（例: `bit.ly/abc123`）"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
-          "source": "Get Bitlink Clicks",
+          "source": "Get bitlink clicks",
           "message": "Bitlinkのクリック数を取得"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
@@ -696,7 +696,7 @@
           "message": "クエリする時間単位の数。利用可能なすべてのデータには `-1` を使用します"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
-          "source": "Create Custom Bitlink",
+          "source": "Create custom bitlink",
           "message": "カスタムBitlinkを作成"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
@@ -732,7 +732,7 @@
           "message": "カスタムバックハーフを追加する既存のBitlinkのID"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
-          "source": "List Bitlinks",
+          "source": "List bitlinks",
           "message": "Bitlink の一覧表示"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
@@ -856,7 +856,7 @@
           "message": "最大結果数"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
-          "source": "Get a Bitlink",
+          "source": "Get a bitlink",
           "message": "Bitlinkを取得"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
@@ -876,7 +876,7 @@
           "message": "Bitlink ID"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "グループを一覧表示"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
@@ -904,7 +904,7 @@
           "message": "組織で絞り込み"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "グループの更新"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -964,7 +964,7 @@
           "message": "グループに関連付けるブランド短縮ドメインのリスト"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
-          "source": "Get a Group",
+          "source": "Get a group",
           "message": "グループの取得"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
@@ -984,7 +984,7 @@
           "message": "グループ GUID"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "組織の一覧取得"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "特定の組織を取得"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get an Organization",
+          "source": "Get an organization",
           "message": "組織の取得"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "組織GUID"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create a Campaign",
+          "source": "Create a campaign",
           "message": "キャンペーンを作成"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "キャンペーンに関連付けるチャネルGUIDのリスト"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Update a Campaign",
+          "source": "Update a campaign",
           "message": "キャンペーンの更新"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "キャンペーンに関連付けるチャネルGUIDの新しいリスト"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "キャンペーン一覧"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -1172,7 +1172,7 @@
           "message": "グループで絞り込み"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get a Campaign",
+          "source": "Get a campaign",
           "message": "キャンペーンの取得"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "キャンペーン GUID"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
-          "source": "List Branded Short Domains",
+          "source": "List branded short domains",
           "message": "ブランド短縮ドメインの一覧表示"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "アカウントで利用可能なすべてのブランド短縮ドメイン（BSD）を一覧表示"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
-          "source": "Create a QR Code",
+          "source": "Create a QR code",
           "message": "QRコードを作成"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "QRコードの有効期限を示すISO 8601タイムスタンプ"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
-          "source": "Update a QR Code",
+          "source": "Update a QR code",
           "message": "QRコードの更新"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "QRコードの有効期限を示すISO 8601タイムスタンプ"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
-          "source": "List QR Codes",
+          "source": "List QR codes",
           "message": "QR コードの一覧表示"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "QR コードを一覧表示するグループ"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
-          "source": "Get a QR Code",
+          "source": "Get a QR code",
           "message": "QR コードの取得"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "QR コード ID"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
-          "source": "Bitlink Clicked",
+          "source": "Bitlink clicked",
           "message": "Bitlinkがクリックされた時"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {

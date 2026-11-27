@@ -16,7 +16,7 @@
           "message": "Odczyt i zapis danych z plików CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Odczytaj plik CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "jeśli `true` (domyślnie `false`), w przypadku sparsowania wiersza z inną liczbą kolumn lub pól niż w innych wierszach, zgłaszany jest wyjątek `CSVFILEITERATOR-DATA-ERROR`\n\nPamiętaj, że włączenie tej opcji wpłynie negatywnie na wydajność"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Odczytaj dane wbudowane CSV"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "jeśli `true` (domyślnie `false`), w przypadku sparsowania wiersza z inną liczbą kolumn lub pól niż w innych wierszach, zgłaszany jest wyjątek `CSVFILEITERATOR-DATA-ERROR`\n\nPamiętaj, że włączenie tej opcji wpłynie negatywnie na wydajność"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Profiluj dane CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Jeśli `True` (domyślnie), przykładowe wartości i kontrprzykłady są redagowane do swojego kształtu: litery stają się `x` lub `X`, a cyfry `9`, dzięki czemu profil można udostępnić bez danych"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Zapisz dane CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "Ustaw na `false`, aby pominąć wypisywanie nagłówków; domyślnie: `true`, co oznacza wypisywanie nagłówków, jeśli są obecne"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Utwórz dane CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

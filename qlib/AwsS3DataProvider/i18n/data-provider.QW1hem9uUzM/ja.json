@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "バケット一覧を取得"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "認証されたアカウントが所有するすべてのバケットと、それぞれの作成日を一覧表示します。"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "バケットを作成"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "新しいバケットでオブジェクトロックを有効にします。オブジェクトロックは作成後に有効にすることはできず、バージョニングが必要です。これを設定するとバージョニングは自動的に有効になります"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "オブジェクトの一覧表示"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "前回の切り詰められた一覧表示によって返された `next_continuation_token` の値。次のページを取得するために使用されます"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "オブジェクトの取得"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "対象とするオブジェクトの特定のバージョン。バージョニングが有効なバケットでのみ有効です。設定しない場合は現在のバージョンが使用されます"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "ファイルのダウンロード"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "対象とするオブジェクトの特定のバージョン。バージョニングが有効なバケットでのみ有効です。設定しない場合は現在のバージョンが使用されます"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "ファイルをアップロード"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "オブジェクトの暗号化に使用する AWS KMS キー（キー ID、エイリアス、または ARN）。\n\n`server_side_encryption` が KMS スキームを選択している場合にのみ使用されます。未設定の場合、バケットのデフォルト KMS キーが使用されます"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "テキストオブジェクトを作成"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "オブジェクトの暗号化に使用する AWS KMS キー（キー ID、エイリアス、または ARN）。\n\n`server_side_encryption` が KMS スキームを選択している場合にのみ使用されます。未設定の場合、バケットのデフォルト KMS キーが使用されます"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "オブジェクトの削除"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "対象とするオブジェクトの特定のバージョン。バージョニングが有効なバケットでのみ有効です。設定しない場合は現在のバージョンが使用されます"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "オブジェクトをコピー"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "数時間で取得される長期アーカイブデータ。最も低コストなストレージクラス"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "事前署名付き URL の作成"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Amazon S3 がダウンロード時に配信すべき `Content-Disposition`。ブラウザでオブジェクトを表示するのではなく、指定した名前で保存させる場合に使用します"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "オブジェクトの一括削除"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "ガバナンスモードのオブジェクトロック保持下にあるオブジェクトを削除します。\n\n認証情報に `s3:BypassGovernanceRetention` が許可されている必要があります。**コンプライアンス**モードのロック下にあるオブジェクトは、ロックが期限切れになるまで誰も削除できません"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "オブジェクトの移動"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "数時間で取得される長期アーカイブデータ。最も低コストなストレージクラス"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "オブジェクトタグの取得"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "対象とするオブジェクトの特定のバージョン。バージョニングが有効なバケットでのみ有効です。設定しない場合は現在のバージョンが使用されます"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "オブジェクトタグの設定"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "対象とするオブジェクトの特定のバージョン。バージョニングが有効なバケットでのみ有効です。設定しない場合は現在のバージョンが使用されます"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "オブジェクトバージョンの一覧表示"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "前回の切り詰められた一覧表示によって返された `next_version_id_marker` の値。`key_marker` と併せて使用されます"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "バケットの削除"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "削除するバケットの名前。すでに空である必要があります"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "オブジェクトの検索"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "1回のリクエストで取得するキーの数。Amazon S3では最大 `1000` に制限されています。\n\nこれは返されるレコード数ではなく走査がどのようにリクエストに分割されるかに影響します（イテレーターは必要に応じて後続のページを取得します）"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "新しいバケット"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "この日時より古いものはレポートしません。\n\n設定されていない場合、監視の開始後に現れたもののみがレポートされるため、既存のバケットで初回実行時に大量のイベントが発生するのを防ぎます"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "新規または更新されたファイル"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

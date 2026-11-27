@@ -239,7 +239,7 @@ public class ConfluenceNewPageDataProvider inherits ConfluenceWatchDataProviderB
         const EventName = "new_page";
 
         #! The event display name
-        const DisplayName = "New Page";
+        const DisplayName = "New page";
 
         #! The event short description
         const ShortDesc = "Fires when a page is created";
@@ -305,7 +305,7 @@ public class ConfluenceNewBlogPostDataProvider inherits ConfluenceWatchDataProvi
         const EventName = "new_blogpost";
 
         #! The event display name
-        const DisplayName = "New Blog Post";
+        const DisplayName = "New blog post";
 
         #! The event short description
         const ShortDesc = "Fires when a blog post is created";
@@ -370,7 +370,7 @@ public class ConfluenceNewAttachmentDataProvider inherits ConfluenceWatchDataPro
         const EventName = "new_attachment";
 
         #! The event display name
-        const DisplayName = "New Attachment";
+        const DisplayName = "New attachment";
 
         #! The event short description
         const ShortDesc = "Fires when a file is attached to a page or blog post";

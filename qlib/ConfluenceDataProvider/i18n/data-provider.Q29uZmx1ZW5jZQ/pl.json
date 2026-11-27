@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "Wyświetl listę stron"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.short_desc": {
@@ -432,7 +432,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -508,7 +508,7 @@
           "message": "page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.display_name": {
-          "source": "Create Page",
+          "source": "Create page",
           "message": "Utwórz stronę"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Treść strony, w formacie znalezionym w polu reprezentacji."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Format dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -712,7 +712,7 @@
           "message": "Oznacz treść jako osadzoną, a treść zostanie utworzona w NCS."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.display_name": {
-          "source": "Root Level",
+          "source": "Root level",
           "message": "Poziom główny"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Strona zostanie utworzona na poziomie głównym przestrzeni (poza drzewem strony głównej przestrzeni). Jeśli wartość to true, \nnie można podać wartości dla parametru treści `parentId`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "Pobierz stronę"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Identyfikator strony do zwrócenia. Jeśli nie znasz identyfikatora strony, użyj Pobierz strony i przefiltruj wyniki."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Umożliwia pobranie wcześniej opublikowanej wersji. Określ numer poprzedniej wersji, aby pobrać jej szczegóły."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "Pobierz wersję roboczą"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Pobierz wersję roboczą tej strony."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Dołącz etykiety"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -836,7 +836,7 @@
           "message": "Filtruj pobieraną stronę na podstawie jej statusu."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Dołącz właściwości"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Dołącza w odpowiedzi właściwości zawartości powiązane z tą stroną.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` oraz `_links` wskażą, czy dostępnych jest więcej wyników, oraz podadzą link do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Dołącz operacje"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Dołącza w odpowiedzi operacje powiązane z tą stroną, zgodnie z definicją w obiekcie `Operation`.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` oraz `_links` wskażą, czy dostępnych jest więcej wyników, oraz podadzą link do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "Dołącz polubienia"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Dołącza w odpowiedzi polubienia powiązane z tą stroną.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` oraz `_links` wskażą, czy dostępnych jest więcej wyników, oraz podadzą link do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "Dołącz wersje"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Uwzględnia w odpowiedzi wersje powiązane z tą stroną.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności sortowania.\nWłaściwości `meta` i `_links` będą obecne, aby wskazać, czy dostępnych jest więcej wyników, oraz zawierać łącze do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "Dołącz wersję"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Uwzględnia w odpowiedzi bieżącą wersję powiązaną z tą stroną.\nDomyślnie jest ona dołączana i można ją pominąć, ustawiając wartość na `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "Dołącz status dodania do ulubionych przez bieżącego użytkownika"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Uwzględnia informację, czy ta strona została dodana do ulubionych przez bieżącego użytkownika."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "Dołącz zasoby internetowe"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Uwzględnia zasoby internetowe, których można użyć do wyrenderowania zawartości strony na kliencie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "Dołącz współtwórców"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Uwzględnia współtwórców strony."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
-          "source": "Include Direct Children",
+          "source": "Include direct children",
           "message": "Dołącz bezpośrednie elementy podrzędne"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Dołącza bezpośrednie elementy podrzędne strony, zgodnie z definicją w obiekcie `ChildrenResponse`."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "Zaktualizuj stronę"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Treść strony, w formacie znalezionym w polu reprezentacji."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Format dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1168,7 +1168,7 @@
           "message": "Identyfikator konta (Account ID) właściciela strony.\n\nUmożliwia to przeniesienie własności strony na innego użytkownika."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "Zmień nazwę strony"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "wersja robocza"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "Usuń stronę"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "W przypadku próby usunięcia strony będącej wersją roboczą."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "Wyświetl listę stron w obszarze"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "root"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "Wyświetl listę stron dla etykiety"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.display_name": {
-          "source": "List Blog Posts",
+          "source": "List blog posts",
           "message": "Wyświetl listę wpisów na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Filtruj wyniki według identyfikatorów wpisów bloga. Wiele identyfikatorów można podać jako listę rozdzieloną przecinkami."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Create Blog Post",
+          "source": "Create blog post",
           "message": "Utwórz wpis na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Treść posta blogowego, w formacie znalezionym w polu reprezentacji."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Format dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1856,7 +1856,7 @@
           "message": "Wpis bloga będzie prywatny. Tylko użytkownik, który go utworzy, będzie mógł go wyświetlać i edytować."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Data utworzenia wpisu na blogu w formacie \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "Pobierz wpis na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Identyfikator wpisu bloga do zwrócenia. Jeśli nie znasz identyfikatora wpisu bloga, użyj „Pobierz wpisy bloga” i przefiltruj wyniki."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Umożliwia pobranie wcześniej opublikowanej wersji. Określ numer poprzedniej wersji, aby pobrać jej szczegóły."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Dołącz etykiety"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Uwzględnia w odpowiedzi etykiety powiązane z tym wpisem bloga.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "Pobierz wersję roboczą"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Filtruj pobierany wpis na blogu według jego stanu."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Dołącz właściwości"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -1992,7 +1992,7 @@
           "message": "Uwzględnia w odpowiedzi właściwości treści powiązane z tym wpisem bloga.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Dołącz operacje"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Uwzględnia w odpowiedzi operacje powiązane z tym wpisem bloga, zgodnie z definicją w obiekcie `Operation`.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "Dołącz polubienia"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Uwzględnia w odpowiedzi polubienia powiązane z tym wpisem bloga.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "Dołącz wersje"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Uwzględnia w odpowiedzi wersje powiązane z tym wpisem bloga.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności. \nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "Dołącz wersję"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "Uwzględnia w odpowiedzi bieżącą wersję powiązaną z tym wpisem bloga.\nDomyślnie jest uwzględniana i można ją pominąć, ustawiając wartość `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "Dołącz status dodania do ulubionych przez bieżącego użytkownika"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -2052,7 +2052,7 @@
           "message": "Wskazuje, czy bieżący użytkownik dodał ten wpis bloga do ulubionych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "Dołącz zasoby internetowe"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Uwzględnia zasoby sieciowe, których można użyć do wyrenderowania treści wpisu bloga po stronie klienta."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "Dołącz współtwórców"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Uwzględnia współpracowników wpisu bloga."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "Zaktualizuj wpis na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2160,7 +2160,7 @@
           "message": "Treść posta blogowego, w formacie znalezionym w polu reprezentacji."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Format dokumentu Atlas"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -2276,7 +2276,7 @@
           "message": "Identyfikator ID zawierającej przestrzeni.\n\nObecnie funkcja ta **nie obsługuje przenoszenia wpisu na blogu do innej przestrzeni**."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Data utworzenia wpisu na blogu w formacie \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "Usuń wpis na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Przy próbie usunięcia wpisu bloga będącego wersją roboczą."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "Wyświetl listę wpisów na blogu w przestrzeni"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "Wyświetl listę wpisów na blogu dla etykiety"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Pobierz listę przestrzeni"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Filtruj wyniki do obszarów na podstawie ich etykiet. Wiele etykiet można podać jako listę rozdzieloną przecinkami."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.display_name": {
-          "source": "Favorited By",
+          "source": "Favorited by",
           "message": "Ulubione przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Filtruj wyniki do obszarów dodanych do ulubionych przez użytkownika o określonym identyfikatorze konta."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.display_name": {
-          "source": "Not Favorited By",
+          "source": "Not favorited by",
           "message": "Nieulubione przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Filtruj wyniki do obszarów NIEDODANYCH do ulubionych przez użytkownika o określonym identyfikatorze konta."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "Format opisu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "Dołącz ikonę"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Określa, czy ikona przestrzeni powinna zostać pobrana, czy nie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "Pobierz przestrzeń"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Identyfikator przestrzeni do zwrócenia."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "Format opisu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2848,7 +2848,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "Dołącz ikonę"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "Określa, czy ikona przestrzeni powinna zostać pobrana, czy nie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "Dołącz operacje"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Uwzględnia w odpowiedzi operacje powiązane z tą przestrzenią, zgodnie z definicją w obiekcie `Operation`.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności.\nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "Dołącz właściwości"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Uwzględnia w odpowiedzi właściwości przestrzeni powiązane z tą przestrzenią.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności.\nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.display_name": {
-          "source": "Include Permissions",
+          "source": "Include permissions",
           "message": "Dołącz uprawnienia"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Dołącza w odpowiedzi uprawnienia powiązane z tym obszarem.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności sortowania.\nWłaściwości `meta` oraz `_links` wskażą, czy dostępnych jest więcej wyników, oraz link do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.display_name": {
-          "source": "Include Role Assignments",
+          "source": "Include role assignments",
           "message": "Dołącz przypisania ról"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Dołącza w odpowiedzi przypisania ról powiązane z tym obszarem. Ten parametr jest akceptowany tylko dla witryn EAP.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności sortowania.\nWłaściwości `meta` oraz `_links` wskażą, czy dostępnych jest więcej wyników, oraz link do pobrania pozostałych wyników."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "Dołącz etykiety"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "Uwzględnia w odpowiedzi etykiety powiązane z tą przestrzenią.\nLiczba wyników zostanie ograniczona do 50 i posortowana w domyślnej kolejności.\nWłaściwości `meta` i `_links` wskazują, czy dostępne są kolejne wyniki, oraz zawierają odnośnik do pobrania pozostałych."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Wyświetl listę zadań"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "nieukończone"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "Przypisano do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3032,7 +3032,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.display_name": {
-          "source": "Include Blank Tasks",
+          "source": "Include blank tasks",
           "message": "Uwzględnij puste zadania"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "Filtruje według identyfikatora wpisu na blogu powiązanego z zadaniem. Można określić wiele identyfikatorów. Uwaga — filtrów stron i wpisów na blogu można używać łącznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "Utworzone przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "Filtruje według identyfikatora konta (Account ID) użytkownika, który utworzył to zadanie. Można określić wiele identyfikatorów."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "Ukończone przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.short_desc": {
@@ -3092,7 +3092,7 @@
           "message": "Filtruje według identyfikatora konta (Account ID) użytkownika, który ukończył to zadanie. Można określić wiele identyfikatorów."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created at From",
+          "source": "Created at from",
           "message": "Utworzono od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Filtruje według początku zakresu daty i godziny zadania na podstawie daty utworzenia (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created at To",
+          "source": "Created at to",
           "message": "Utworzono do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Filtruje według końca zakresu daty i godziny zadania na podstawie daty utworzenia (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due at From",
+          "source": "Due at from",
           "message": "Termin wykonania od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "Filtruje według początku zakresu daty i godziny zadania na podstawie terminu wykonania (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due at To",
+          "source": "Due at to",
           "message": "Termin wykonania do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Filtruje według końca zakresu daty i godziny zadania na podstawie terminu wykonania (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed at From",
+          "source": "Completed at from",
           "message": "Ukończono od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "Filtruje według początku zakresu daty i godziny zadania na podstawie daty ukończenia (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed at To",
+          "source": "Completed at to",
           "message": "Ukończono do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "Filtruje według końca zakresu daty i godziny zadania na podstawie daty ukończenia (włącznie). Dane wejściowe to czas epoki w milisekundach."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Pobierz zadanie"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "Identyfikator zadania do zwrócenia. Jeśli nie znasz identyfikatora zadania, użyj „Pobierz zadania” i przefiltruj wyniki."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Zaktualizuj zadanie"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3288,7 +3288,7 @@
           "message": "Identyfikator ID strony, na której znajduje się zadanie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post ID",
+          "source": "Blog post ID",
           "message": "ID wpisu na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "Identyfikator ID wpisu na blogu, w którym znajduje się zadanie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "Utworzone przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Identyfikator konta użytkownika, który utworzył to zadanie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "Przypisano do"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "Identyfikator konta użytkownika, do którego przypisano to zadanie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "Ukończone przez"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.short_desc": {
@@ -3336,7 +3336,7 @@
           "message": "Identyfikator konta użytkownika, który ukończył to zadanie."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Data utworzenia"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.short_desc": {
@@ -3348,7 +3348,7 @@
           "message": "Data i godzina utworzenia zadania. W formacie \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Data aktualizacji"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.short_desc": {
@@ -3360,7 +3360,7 @@
           "message": "Data i godzina aktualizacji zadania. W formacie \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.display_name": {
-          "source": "Due At",
+          "source": "Due at",
           "message": "Termin"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "Termin wykonania zadania (data i godzina). W formacie \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.display_name": {
-          "source": "Completed At",
+          "source": "Completed at",
           "message": "Data ukończenia"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Data i godzina ukończenia zadania. W formacie \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "Format treści"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Lista etykiet"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.display_name": {
-          "source": "List Attachments",
+          "source": "List attachments",
           "message": "Wyświetl listę załączników"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Filtruje wyniki do załączników na podstawie ich statusu. Domyślnie używane są `current` oraz `archived`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.display_name": {
-          "source": "Media Type",
+          "source": "Media type",
           "message": "Typ mediów"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "Kursor stronicowania: pobierz argument zapytania `cursor` z adresu URL `_links.next` w poprzedniej odpowiedzi i przekaż go tutaj.\n\nJest to wartość nieprzezroczysta (opaque) i nie wolno jej tworzyć ręcznie."
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Wyszukaj rekordy"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "Tabela do pracy: `pages`, `blogposts`, `tasks`, `spaces`, `labels` lub `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Znajdź pojedynczy rekord"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "Tabela do pracy: `pages`, `blogposts`, `tasks`, `spaces`, `labels` lub `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Utwórz rekordy"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "Tabela do pracy: `pages`, `blogposts`, `tasks`, `spaces`, `labels` lub `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Zaktualizuj rekordy"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Tabela do pracy: `pages`, `blogposts`, `tasks`, `spaces`, `labels` lub `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Usuń rekordy"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Tabela do pracy: `pages`, `blogposts`, `tasks`, `spaces`, `labels` lub `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "Nowa strona"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "Uruchamiane dla każdej nowej strony w całej witrynie lub w jednej przestrzeni.\n\nZdarzenie przekazuje rekord strony zwracany przez Confluence: jej identyfikator ID, tytuł, przestrzeń, autora i status. Strona edytowana później nie wyzwala ponownie tego zdarzenia; zgłasza ono tylko utworzenie."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "Nowy wpis na blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Uruchamia się dla każdego nowego wpisu na blogu, w całej witrynie lub w jednej przestrzeni.\n\nZdarzenie przenosi rekord wpisu na blogu zwracany przez Confluence: jego identyfikator, tytuł, przestrzeń, autora i status."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "Nowy załącznik"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

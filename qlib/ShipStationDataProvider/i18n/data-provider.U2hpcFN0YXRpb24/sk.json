@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Zoznam objednávok"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -396,7 +396,7 @@
           "message": "Filtrovať objednávky podľa obchodu, z ktorého pochádzajú"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Získať objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
@@ -420,7 +420,7 @@
           "message": "Jedinečné ID objednávky ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Vytvoriť objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Pole identifikátorov tagov (ID), ktoré sa majú použiť na objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "Aktualizovať objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Pole identifikátorov tagov (ID), ktoré sa majú použiť na objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Odstrániť objednávku"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2488,7 +2488,7 @@
           "message": "ID objednávky ShipStation na odstránenie"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
-          "source": "Mark Order as Shipped",
+          "source": "Mark order as shipped",
           "message": "Označiť objednávku ako odoslanú"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "Či sa má o odoslaní zásielky informovať predajný kanál (trhovisko)"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
-          "source": "Add Tag to Order",
+          "source": "Add tag to order",
           "message": "Pridať tag k objednávke"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Vyberte tag, ktorý chcete pridať k objednávke"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
-          "source": "Remove Tag from Order",
+          "source": "Remove tag from order",
           "message": "Odstrániť štítok z objednávky"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
@@ -2644,7 +2644,7 @@
           "message": "Vyberte štítok, ktorý chcete odstrániť z objednávky"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
-          "source": "Assign User to Order",
+          "source": "Assign user to order",
           "message": "Priradiť používateľa k objednávke"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Vyberte používateľa, ktorého chcete priradiť k objednávke"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
-          "source": "Unassign User from Order",
+          "source": "Unassign user from order",
           "message": "Zrušiť priradenie používateľa k objednávke"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Pole ID objednávok, z ktorých sa má zrušiť priradenie používateľa"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
-          "source": "List Carriers",
+          "source": "List carriers",
           "message": "Zoznam prepravcov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "Získať zoznam všetkých prepravcov pripojených k vášmu účtu ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
-          "source": "Get Carrier",
+          "source": "Get carrier",
           "message": "Získať dopravcu"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
@@ -2740,7 +2740,7 @@
           "message": "Vyberte dopravcu, pre ktorého chcete získať podrobnosti"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
-          "source": "List Services",
+          "source": "List services",
           "message": "Zoznam služieb"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Vyberte prepravcu, pre ktorého chcete zobraziť zoznam dostupných služieb"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "Zoznam balíkov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Vyberte prepravcu, pre ktorého chcete zobraziť zoznam dostupných typov balíkov"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
-          "source": "Add Funds",
+          "source": "Add funds",
           "message": "Pridať prostriedky"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
@@ -2824,7 +2824,7 @@
           "message": "Suma, ktorá sa má pridať na účet dopravcu (v USD)"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Zoznam zákazníkov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Získať zoznam zákazníkov zo služby ShipStation s voliteľným filtrovaním."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získať zákazníka"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "Jedinečné ID zákazníka ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Zoznam produktov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Získať zoznam produktov zo služby ShipStation s voliteľným filtrovaním podľa SKU, názvu alebo kategórie."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získať produkt"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Jedinečné ID produktu ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovať produkt"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Kód krajiny pôvodu pre colné účely"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "Zoznam zásielok"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -3184,7 +3184,7 @@
           "message": "Filtrovať zásielky podľa prepravcu"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "Zoznam vybavení"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Získať zoznam vybavení (dokončených zásielok) zo služby ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
-          "source": "Void Label",
+          "source": "Void label",
           "message": "Zrušiť štítok"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "Unikátne ShipStation ID zásielky pre štítok, ktorý sa má zrušiť"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
-          "source": "List Stores",
+          "source": "List stores",
           "message": "Zoznam obchodov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "Získať zoznam všetkých obchodov (predajných kanálov) pripojených k vášmu účtu ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
-          "source": "Get Store",
+          "source": "Get store",
           "message": "Získať obchod"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Vyberte obchod, pre ktorý chcete získať podrobnosti"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
-          "source": "Update Store",
+          "source": "Update store",
           "message": "Aktualizovať obchod"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "Pole mapovaní stavov na synchronizáciu stavov objednávok"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Deactivate Store",
+          "source": "Deactivate store",
           "message": "Deaktivovať obchod"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "Vyberte obchod, ktorý chcete deaktivovať"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Reactivate Store",
+          "source": "Reactivate store",
           "message": "Znovu aktivovať obchod"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3400,7 +3400,7 @@
           "message": "Vyberte obchod, ktorý chcete znovu aktivovať"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
-          "source": "Refresh Store",
+          "source": "Refresh store",
           "message": "Obnoviť obchod"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
@@ -3436,7 +3436,7 @@
           "message": "Dátum, od ktorého sa má začať obnovenie. Ak nie je zadaný, obnovia sa nedávne objednávky."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
-          "source": "List Marketplaces",
+          "source": "List marketplaces",
           "message": "Zoznam trhovísk"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Získať zoznam všetkých trhovísk, ktoré je možné pripojiť k službe ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "Zoznam skladov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "Získať zoznam všetkých skladov (miest odoslania) vo vašom účte ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "Získať sklad"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "Vyberte sklad, pre ktorý chcete získať podrobnosti"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "Vytvoriť dátový sklad"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "Či má byť tento sklad predvolený pre nové objednávky"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "Aktualizovať sklad"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -4192,7 +4192,7 @@
           "message": "Či má byť tento sklad predvolený pre nové objednávky"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Zoznam značiek"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "Získať zoznam všetkých štítkov dostupných pre objednávky."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Zoznam používateľov"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "Získať zoznam všetkých používateľov vo vašom účte ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Objednávka vytvorená/aktualizovaná"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
-          "source": "Order Created/Updated (with Items)",
+          "source": "Order created/updated (with items)",
           "message": "Objednávka vytvorená/aktualizovaná (s položkami)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
-          "source": "Label Created",
+          "source": "Label created",
           "message": "Štítok vytvorený"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
-          "source": "Label Created (with Items)",
+          "source": "Label created (with items)",
           "message": "Štítok vytvorený (s položkami)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {

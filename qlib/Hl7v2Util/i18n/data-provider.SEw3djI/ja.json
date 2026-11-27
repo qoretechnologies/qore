@@ -16,7 +16,7 @@
           "message": "統合および変換ワークフロー向けに、区切り文字形式の [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) 医療メッセージを読み書きします。\n\n**機能**:\n- 固定スキーマを必要とせずにメッセージ構造とカスタム `Z` セグメントを保持\n- `MSH` からカスタム区切り文字を読み取り、HL7 エスケープ シーケンスを処理\n- DataProvider API を介してレコードごとに 1 つの解析済みセグメントを公開\n- 解析されたメッセージまたは単純なセグメント レコードを HL7 v2 テキストにシリアル化"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "HL7 v2メッセージの読み取り"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "テキストを読み取ったまま、チェックせずに入力エンコーディングで保持します"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "HL7 v2インラインデータの読み取り"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "インラインHL7 v2メッセージデータ。メッセージがすでにメモリ内にある場合にこのオプションを使用します。"
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "HL7 v2メッセージの書き込み"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "シリアライズされたHL7 v2メッセージを書き込むパス。"
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "HL7 v2スキーマの読み込み"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "`True`の場合、インメモリのスキーマキャッシュを無視してスキーマアーティファクトを再読み込みします。"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "HL7 v2スキーマサマリー"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
+          "source": "Get drive info",
           "message": "Získat informace o disku"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Získat metadata OneDrivu aktuálního uživatele včetně kvóty úložiště, typu disku a informací o vlastníkovi"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "Vyhledat položky"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Pořadí řazení výsledků (např. `name asc`, `size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Získat položku"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Cesta k položce relativní vůči kořenu disku (např. `/Documents/file.txt`). Zadejte buď `id`, nebo `path`"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Vytvořit složku"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Nahrát soubor"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "ID nadřazené složky. Pokud je vynecháno, soubor se nahraje do kořenového adresáře disku"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Vytvořit relaci nahrávání"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stáhnout soubor"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Jedinečný identifikátor souboru ke stažení"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Smazat položku"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Jedinečný identifikátor položky ke smazání"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aktualizovat položku"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -868,7 +868,7 @@
           "message": "ID cílové složky, do které se má položka přesunout. Nastavte pro přesun položky do jiné složky"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
+          "source": "Copy item",
           "message": "Zkopírovat položku"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Ukončit požadavek chybou"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Vytvořit odkaz pro sdílení"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Datum a čas vypršení platnosti odkazu pro sdílení"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Změna souboru nebo složky"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

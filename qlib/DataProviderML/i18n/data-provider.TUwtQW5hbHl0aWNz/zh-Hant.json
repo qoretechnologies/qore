@@ -16,7 +16,7 @@
           "message": "捕捉詐欺、預測銷售、劃分客戶群並簡化複雜資料 — 全部在您的資料管道中完成，無需外部依賴項。包括異常偵測（標記異常交易或感測器故障）、分群（發現客戶細分或地理熱點）、預測（預測具有季節性模式的營收）、迴歸（根據特徵估算價格）以及降維（將 50 個欄位壓縮為 3 個關鍵值）。"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
+          "source": "Detect unusual data points",
           "message": "偵測異常資料點"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "介於 `0.0` 與 `1.0` 之間的值，用於決定何時將記錄標記為異常；評分等於或高於此臨界值的記錄將被歸類為異常；較低的值會標記更多記錄為異常，較高的值標記的記錄較少。\n\n**典型值**：`0.5`（標準）、`0.6`–`0.7`（保守 — 僅明顯異常）；預設值：`0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
+          "source": "Find natural groups in data",
           "message": "尋找資料中的自然分群"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
@@ -184,7 +184,7 @@
           "message": "測量資料點之間的夾角而非數值大小；最適合方向比數值大小更重要的情況"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
+          "source": "Divide data into groups",
           "message": "將資料劃分為群組"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
@@ -288,7 +288,7 @@
           "message": "當 `output_mode` 為 `dataframe` 時，為每個叢集中心點包含 `centroid_distance_<n>` 欄位。當下游步驟只需要勝出的 `cluster` 與最近的 `distance` 值時請停用此項；預設值：`True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
+          "source": "Simplify complex data",
           "message": "簡化複雜資料"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
@@ -380,7 +380,7 @@
           "message": "當 `output_mode` 為 `dataframe` 時，將原始輸入欄位與 `component_<n>` 欄位一併包含。當下游步驟只需要主成分時可停用此項，以減少輸出大小並提高輸送量；預設值：`True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
+          "source": "Forecast future values",
           "message": "預測未來值"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
@@ -528,7 +528,7 @@
           "message": "介於 `0.0` 與 `1.0` 之間的值，控制在長期預測中趨勢變平的速度；接近 `1.0` 的值可讓趨勢持續更久；接近 `0.0` 的值會更快使趨勢變平；僅在啟用阻尼趨勢時使用。\n\n**典型值**：`0.8`–`0.98`（常用範圍）；保留未設定以讓演算法自動選擇"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
+          "source": "Predict values from input data",
           "message": "從輸入資料預測數值"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
@@ -600,7 +600,7 @@
           "message": "啟用時，輸入欄位在擬合前會縮放至相似的範圍；當輸入欄位的單位或量級差異很大時 (例如混合坪數和房間數)，這可以提高準確度；預設值：`False` (已停用)"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
+          "source": "Detect local outliers",
           "message": "偵測局部異常值"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
@@ -660,7 +660,7 @@
           "message": "異常值分數臨界值；分數為 `1.0` 表示該點與其鄰近點具有相同的密度 (正常)；顯著高於 `1.0` 的分數表示該點位於比其鄰近點密度更低的區域 (異常)；較低的閾值會標記更多記錄。\n\n**典型值**：`1.5` (標準 — 捕捉中度異常值)，`2.0` (保守 — 僅捕捉強烈異常值)；預設值：`1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
+          "source": "Group data with probabilities",
           "message": "依機率對資料進行分組"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
@@ -736,7 +736,7 @@
           "message": "集群為軸對齊的橢圓；在有限資料下速度更快且更穩定，但無法捕捉欄位之間的相關性"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
+          "source": "Run pre-trained model",
           "message": "執行預先訓練模型"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
@@ -968,7 +968,7 @@
           "message": "當 `output_mode` 為 `columns` 或 `dataframe` 時，在 ONNX 輸出欄位旁包含原始輸入特徵欄位。當下游步驟只需要模型輸出時，停用此選項可縮小輸出大小並提升輸送量。預設值：`False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
+          "source": "Run registered model",
           "message": "執行已註冊模型"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "為執行 `causal-lm` 而從模型註冊表載入的選用 `tokenizer.json` 工件名稱。若套件資訊清單已識別權杖解析器工件，請省略此項。"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
+          "source": "Separate trends and seasonal patterns",
           "message": "分離趨勢與季節性模式"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "季節性變化隨整體水準等比例調整；最適合季節性模式隨資料值增加而擴大的情況"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
+          "source": "Put all fields on the same scale",
           "message": "將所有欄位置於相同尺度"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "當 `output_mode` 為 `dataframe` 時，將原始輸入欄位與 `scaled_<field>` 欄位一併包含。當下游步驟只需要縮放後的欄位時可停用此項，以減少輸出大小並提高輸送量；預設值：`True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
+          "source": "Normalize values to a range",
           "message": "將數值正規化至特定範圍"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "當 `output_mode` 為 `dataframe` 時，將原始輸入欄位與 `scaled_<field>` 欄位一同包含。下游步驟僅需要正規化欄位時請停用此項，以減少輸出大小並提升輸送量；預設值：`True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
+          "source": "Fill in missing data",
           "message": "填補遺漏資料"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "填補方法設定為「固定值」時用於填補缺口的數字。例如，使用 `0` 填補零，或使用 `-1` 作為哨兵值；使用其他填補方法時會忽略；預設值：`0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
+          "source": "Score your category predictions",
           "message": "為您的類別預測評分"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "計算品質評分前要收集的記錄筆數。批次中的所有記錄將一起評估。\n\n**提示**：使用至少 `50` 筆以取得有意義的評分；`200`+ 筆以取得詳細的各類別明細"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
+          "source": "Score your number predictions",
           "message": "為您的數值預測評分"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "計算品質分數前要收集的記錄數。批次中的所有記錄會一起評估。\n\n**提示**：至少使用 `30` 筆以獲得有意義的分數；使用 `200`+ 筆以獲得穩定的評估"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
+          "source": "Score your data groupings",
           "message": "為您的資料分組評分"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "計算品質評分前要收集的記錄筆數。批次中的所有記錄將一起評估。該批次必須包含至少 2 個不同的分組。\n\n**提示**：使用至少 `50` 筆以取得有意義的評分"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
+          "source": "Categorize records",
           "message": "分類記錄"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "是否包含基準常數。幾乎應該一律啟用 — 它允許模型考慮資料中的整體趨勢 (例如，如果大多數申請都獲得核准，基準值會捕捉該特徵)。\n\n預設值：已啟用"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
+          "source": "Classify by similarity",
           "message": "依相似度分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "與新記錄越相似的鄰近項目在預測中具有越大的影響力 — 高度相似的記錄比略微相似的記錄權重更高"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
+          "source": "Predict numbers by similarity",
           "message": "依相似度預測數值"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "與新記錄越相似的記錄，對預測值的影響越大"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
+          "source": "Classify with decision rules",
           "message": "使用決策規則分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "測量每次分割所獲得的資訊量。可能會產生稍顯平衡的樹狀結構，但運算速度較慢"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
+          "source": "Predict numbers with decision rules",
           "message": "使用決策規則預測數值"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "決策樹的最大層數。較深的樹可以擷取更複雜的模式，但可能會死記訓練資料而非學習通用規則。\n\n**提示**：建議從 `5`–`15` 開始；若準確度過低則增加，若模型過度擬合則減少\n\n預設值：`10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
+          "source": "Classify with multiple decision trees",
           "message": "使用多棵決策樹進行分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "每棵樹在每次分割時考慮總欄位數的 log2。使用較少特徵，增加樹的多樣性"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
+          "source": "Predict numbers with multiple trees",
           "message": "使用多棵樹預測數值"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "每棵樹在每次分割時考慮總欄位數的 log2。使用較少特徵，增加樹的多樣性"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
+          "source": "Classify with gradient boosting",
           "message": "使用梯度提升進行分類"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "每棵樹的最大層數。梯度提升通常使用淺層樹（樹樁或小型樹），每棵樹各自捕捉模式的一個面向。\n\n**提示**：`2`–`6` 最適合梯度提升；較深的樹有過度擬合的風險\n\n預設值：`3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
+          "source": "Predict numbers with gradient boosting",
           "message": "使用梯度提升預測數值"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
@@ -2628,7 +2628,7 @@
           "message": "每棵樹的最大層數。梯度提升通常使用較淺的樹，每棵樹分別擷取模式的一個面向。\n\n**提示**：`2`–`6` 對梯度提升效果最佳；更深的樹有過度擬合的風險\n\n預設值：`3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
+          "source": "Compute rolling statistics",
           "message": "計算滾動統計資料"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "目前視窗中所有數值的總和。適用於追蹤累計指標，如滾動營收或總事件數"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
+          "source": "Smooth with moving average",
           "message": "使用移動平均平滑"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "幾乎不平滑 — 緊密追蹤原始信號，最適合立即偵測突發變化"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
+          "source": "Profile data quality",
           "message": "分析資料品質"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "在計算剖析報告前要收集的記錄數量。批次中的所有記錄會一併進行分析。\n\n**提示**：至少使用 `50` 以獲得有意義的統計數據；`200`+ 以獲得可靠的極端值偵測"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
+          "source": "Validate record schema",
           "message": "驗證記錄結構描述"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "當記錄未通過驗證時擲出 VALIDATION-ERROR 例外狀況；在遇到第一筆無效記錄時立即停止管線"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
+          "source": "Clean up text",
           "message": "清理文字"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "套用 Unicode NFKC 正規化（佔位符，目前直接穿透傳遞）"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
+          "source": "Count tokens in text",
           "message": "計算文字中的 Token"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "是否在 Token 計數中包含特殊 Token（例如 `[CLS]` 和 `[SEP]`）。設定為 `True` 以符合模型實際看到的計數，或設定為 `False` 以獲取原始內容 Token 計數。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
+          "source": "Split text into searchable chunks",
           "message": "將文字分割為可搜尋的區塊"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "大量重疊以最大程度保留上下文，代價是區塊數量與儲存空間增加"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
+          "source": "Convert text to search vectors",
           "message": "將文字轉換為搜尋向量"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
@@ -3736,7 +3736,7 @@
           "message": "用於界定註冊表模型產物範圍的選用租戶識別碼。"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
+          "source": "Extract structured data from text",
           "message": "從文字擷取結構化資料"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "當擷取輸出未通過結構描述驗證時的最大重試次數。預設為 2。"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
+          "source": "Re-rank search results by relevance",
           "message": "依關聯性重新排序搜尋結果"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "用於界定註冊表模型產物範圍的選用租戶識別碼。"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
+          "source": "Split text at semantic boundaries",
           "message": "在語意邊界處分割文字"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "用於界定註冊表模型產物範圍的選用租戶識別碼。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
+          "source": "Block unsafe records",
           "message": "封鎖不安全記錄"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "護欄規則設定清單。每項規則包含：\n- `type` — 規則類型（`pii`、`prompt_injection`、`output_format`、`topic_restriction`）\n- `severity` — `warning`、`high` 或 `critical`\n- `params` — 規則專用參數\n\n未能通過任一規則的記錄將會從管線中捨棄。"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
+          "source": "Check and annotate text safety",
           "message": "檢查並標記文字安全性"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
@@ -4572,7 +4572,7 @@
           "message": "護欄規則設定清單。每項規則包含：\n- `type` — 規則類型（`pii`、`prompt_injection`、`output_format`、`topic_restriction`）\n- `severity` — `warning`、`high` 或 `critical`\n- `params` — 規則專用參數\n\n每筆記錄將擴充 `_guardrail_passed` (bool) 和 `_guardrail_violations` (list)。若已設定 PII 遮蔽，文字欄位將會替換為已遮蔽的版本。"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
+          "source": "Extract text from any document",
           "message": "從任何文件擷取文字"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "若 PDF 頁面的可擷取字元數少於此值，則視為掃描頁面並套用 OCR。預設值：`50`。"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
+          "source": "Analyze images with vision AI",
           "message": "使用視覺 AI 分析圖片"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {

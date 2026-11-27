@@ -84,7 +84,7 @@ module PerplexityDataProvider {
             "app": PerplexityDataProvider::AppName,
             "path": "/multi-chat",
             "action": "multi-chat",
-            "display_name": "Multi Chat",
+            "display_name": "Multi chat",
             "short_desc": "Chat by sending several messages at once, with citations",
             "desc": "Chat with a Perplexity AI model by sending multiple messages at once and getting "
                 "web-grounded responses with citations",
@@ -111,7 +111,7 @@ module PerplexityDataProvider {
             "app": PerplexityDataProvider::AppName,
             "path": "/simple-chat",
             "action": "simple-chat",
-            "display_name": "Simple Chat",
+            "display_name": "Simple chat",
             "short_desc": "Chat by sending one message, with citations",
             "desc": "Chat with a Perplexity AI model by sending a single message and receiving a single "
                 "web-grounded reply with citations",
@@ -138,7 +138,7 @@ module PerplexityDataProvider {
             "app": PerplexityDataProvider::AppName,
             "path": "/stream-chat",
             "action": "stream-chat",
-            "display_name": "Stream Chat",
+            "display_name": "Stream chat",
             "short_desc": "Stream a chat response from Perplexity AI via Server-Sent Events",
             "desc": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token "
                 "delivery",
@@ -166,7 +166,7 @@ module PerplexityDataProvider {
             "path": "/search",
             "action": "search",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "Web Search",
+            "display_name": "Web search",
             "short_desc": "Search the web using Perplexity's dedicated search API",
             "desc": "Search the web using Perplexity's dedicated search API returning structured results with "
                 "titles, URLs, and snippets",

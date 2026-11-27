@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Chat multipla"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat semplice"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Carica file"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Il nome del file"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Elimina file"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "L'ID o il nome file OpenAI del file da eliminare"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
+          "source": "Create an assistant",
           "message": "Crea un assistente"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Indica che il modello deve produrre un JSON valido in output"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
+          "source": "Update assistant",
           "message": "Aggiorna assistente"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Indica che il modello deve produrre un JSON valido in output"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
+          "source": "Delete assistant",
           "message": "Elimina assistente"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "L'ID dell'assistente da eliminare"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
+          "source": "Create a thread",
           "message": "Crea un thread"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Insieme di 16 coppie chiave-valore che possono essere associate a un oggetto. Può essere utile per memorizzare informazioni aggiuntive sull'oggetto in un formato strutturato. Le chiavi possono avere una lunghezza massima di 64 caratteri e i valori possono avere una lunghezza massima di 512 caratteri"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
+          "source": "Update thread",
           "message": "Aggiorna thread"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "Insieme di 16 coppie chiave-valore che possono essere associate a un oggetto. Può essere utile per memorizzare informazioni aggiuntive sull'oggetto in un formato strutturato. Le chiavi possono avere una lunghezza massima di 64 caratteri e i valori possono avere una lunghezza massima di 512 caratteri"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
+          "source": "Delete thread",
           "message": "Elimina thread"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "ID thread"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Elabora richiesta con un modello"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Esegui streaming risposta"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
+          "source": "Create a conversation",
           "message": "Crea una conversazione"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Insieme di 16 coppie chiave-valore che possono essere associate a un oggetto. Può essere utile per memorizzare informazioni aggiuntive sull'oggetto in formato strutturato e per eseguire query sugli oggetti tramite API o dashboard. Le chiavi sono stringhe con una lunghezza massima di 64 caratteri; i valori sono stringhe con una lunghezza massima di 512 caratteri"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Ottieni una conversazione"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "L'ID della conversazione"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
+          "source": "Update a conversation",
           "message": "Aggiorna una conversazione"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6920,7 +6920,7 @@
           "message": "Insieme di 16 coppie chiave-valore che possono essere associate a un oggetto. Può essere utile per memorizzare informazioni aggiuntive sull'oggetto in formato strutturato e per eseguire query sugli oggetti tramite API o dashboard. Le chiavi sono stringhe con una lunghezza massima di 64 caratteri; i valori sono stringhe con una lunghezza massima di 512 caratteri"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
+          "source": "Delete a conversation",
           "message": "Elimina una conversazione"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "L'ID della conversazione"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Elenca elementi della conversazione"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "Campi aggiuntivi da includere nella risposta.\n\nConsulta la documentazione del [parametro include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) per i valori supportati"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
+          "source": "Add items to a conversation",
           "message": "Aggiungi elementi a una conversazione"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Campi aggiuntivi da includere nella risposta.\n\nConsulta la documentazione del [parametro include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) per i valori supportati"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Ottieni un elemento della conversazione"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7468,7 +7468,7 @@
           "message": "Campi aggiuntivi da includere nella risposta.\n\nConsulta la documentazione del [parametro include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) per i valori supportati"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
+          "source": "Delete a conversation item",
           "message": "Elimina un elemento della conversazione"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7504,7 +7504,7 @@
           "message": "L'elemento all'interno della conversazione; l'elenco viene popolato a partire dalla conversazione selezionata"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
+          "source": "Cancel a response",
           "message": "Annulla una risposta"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "L'ID della risposta da ottenere"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Elenca elementi di input della risposta"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
@@ -7624,7 +7624,7 @@
           "message": "Campi aggiuntivi da includere nella risposta.\n\nConsulta la documentazione del [parametro include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) per i valori supportati"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
+          "source": "Generate an image",
           "message": "Genera un'immagine"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Trascrivi audio"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {

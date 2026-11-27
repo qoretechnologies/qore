@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Kontakt erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Kontakt aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Kontakt löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kontakts"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
-          "source": "Upsert a Contact",
+          "source": "Upsert a contact",
           "message": "Kontakt erstellen oder aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Einen Kontakt abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact Tag",
+          "source": "Create a contact tag",
           "message": "Kontakt-Tag erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Der Farbcode für den Tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact Tag",
+          "source": "Update a contact tag",
           "message": "Einen Kontakt-Tag aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Der neue Farbcode für den Tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact Tag",
+          "source": "Delete a contact tag",
           "message": "Kontakt-Tag löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Tags"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact Tags",
+          "source": "List contact tags",
           "message": "Kontakt-Tags auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact Tag",
+          "source": "Get a contact tag",
           "message": "Kontakt-Tag abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Die abzurufende Tag-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Tag auf Kontakt anwenden"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Die ID des Tags, der auf den Kontakt angewendet werden soll"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Tag von Kontakt entfernen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Der zugewiesene Tag, der vom Kontakt entfernt werden soll"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Bestellung erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Der Typ des Ursprungskanals"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "Bestellung aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "Der neue Status für die Bestellung"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Bestellungen auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Bestellung abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Die abzurufende Bestellungs-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "Produkt erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Gibt an, ob für Affiliate-Provisionen berechtigt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "Ein Produkt aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Gibt an, ob für Affiliate-Provisionen berechtigt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Produkte auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Produkt abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Die abzurufende Produkt-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
-          "source": "Update a Funnel",
+          "source": "Update a funnel",
           "message": "Einen Funnel aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Der neue Name für den Funnel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
-          "source": "List Funnels",
+          "source": "List funnels",
           "message": "Funnels auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
-          "source": "Get a Funnel",
+          "source": "Get a funnel",
           "message": "Funnel abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "Die abzurufende Funnel-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "Kurse auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
-          "source": "Get a Course",
+          "source": "Get a course",
           "message": "Kurs abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Die abzurufende Kurs-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create an Enrollment",
+          "source": "Create an enrollment",
           "message": "Einschreibung erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "Der Grund für das Aussetzen der Einschreibung"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Update an Enrollment",
+          "source": "Update an enrollment",
           "message": "Eine Einschreibung aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "Gibt an, ob die Einschreibung abgeschlossen wurde"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "Einschreibungen auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
-          "source": "Get an Enrollment",
+          "source": "Get an enrollment",
           "message": "Einschreibung abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "Die abzurufende Einschreibungs-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Create a Fulfillment",
+          "source": "Create a fulfillment",
           "message": "Fulfillment erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "Gibt an, ob Bestandsprüfungen bei fehlendem Lagerbestand beim Erstellen des Fulfillments ignoriert werden sollen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Update a Fulfillment",
+          "source": "Update a fulfillment",
           "message": "Ein Fulfillment aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Gibt an, ob eine E-Mail-Benachrichtigung über die Fulfillment-Aktualisierung an den Kunden gesendet werden soll"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Delete a Fulfillment",
+          "source": "Delete a fulfillment",
           "message": "Ein Fulfillment löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Fulfillments"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Cancel a Fulfillment",
+          "source": "Cancel a fulfillment",
           "message": "Fulfillment stornieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "Die eindeutige Kennung des zu stornierenden Fulfillments"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "Fulfillments auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
-          "source": "Get a Fulfillment",
+          "source": "Get a fulfillment",
           "message": "Ausführung (Fulfillment) abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "Die abzurufende Ausführungs-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create a Form",
+          "source": "Create a form",
           "message": "Formular erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Die URL, zu der nach dem Absenden des Formulars weitergeleitet werden soll"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update a Form",
+          "source": "Update a form",
           "message": "Ein Formular aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "Die neue Weiterleitungs-URL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete a Form",
+          "source": "Delete a form",
           "message": "Ein Formular löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Formulars"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "Formulare auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get a Form",
+          "source": "Get a form",
           "message": "Formular abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "Die abzurufende Formular-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
-          "source": "List Form Submissions",
+          "source": "List form submissions",
           "message": "Formularübermittlungen auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
-          "source": "Get a Form Submission",
+          "source": "Get a form submission",
           "message": "Formularübermittlung abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Die abzurufende Übermittlungs-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
-          "source": "List Applied Tags",
+          "source": "List applied tags",
           "message": "Angewendete Tags auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Kontakt erstellt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Kontakt in ClickFunnels erstellt wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Kontakt aktualisiert"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Wird ausgelöst, wenn ein Kontakt in ClickFunnels aktualisiert wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Bestellung erstellt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Wird ausgelöst, wenn eine neue Bestellung in ClickFunnels erstellt wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "Bestellung aktualisiert"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung in ClickFunnels aktualisiert wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
-          "source": "Order Completed",
+          "source": "Order completed",
           "message": "Bestellung abgeschlossen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung in ClickFunnels abgeschlossen wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Form Submission Created",
+          "source": "Form submission created",
           "message": "Formularübermittlung erstellt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Wird ausgelöst, wenn ein Formular in ClickFunnels übermittelt wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
-          "source": "Enrollment Created",
+          "source": "Enrollment created",
           "message": "Einschreibung erstellt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
@@ -3304,7 +3304,7 @@
           "message": "Wird ausgelöst, wenn eine neue Kurseinschreibung in ClickFunnels erstellt wird"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Fulfillment Created",
+          "source": "Fulfillment created",
           "message": "Fulfillment erstellt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {

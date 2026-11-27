@@ -16,7 +16,7 @@
           "message": "Ogólny serwer FTP do wymiany plików za pośrednictwem FTP i FTPS"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Retrieve File With FTP",
+          "source": "Retrieve file with FTP",
           "message": "Pobierz plik przez FTP"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Kodowanie ciągów znaków do użycia, jeśli `text` = `True` (domyślnie: `UTF-8`)"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Błędy kodowania"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Co daje tekst, który nie jest prawidłowy w swoim kodowaniu znaków, jeśli `text` = `True`: `raise` (domyślnie) zgłasza błąd `INVALID-ENCODING`, `latin1` zwraca tekst jako `ISO-8859-1`, a `keep` zwraca go w kodowaniu bez sprawdzania"
         },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
-          "source": "Send File With FTP",
+          "source": "Send file with FTP",
           "message": "Wyślij plik przez FTP"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Kodowanie ciągów znaków do użycia, jeśli `text` = `True` (domyślnie: `UTF-8`)"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File With FTP",
+          "source": "Delete file with FTP",
           "message": "Usuń plik przez FTP"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {

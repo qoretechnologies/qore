@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
+          "source": "Scrape a web page",
           "message": "Esegui scraping di una pagina web"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Se `True`, i cambiamenti effettuati durante l'estrazione (cookie, archiviazione locale, ecc.) vengono salvati nel profilo denominato. Predefinito: `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
+          "source": "Batch scrape web pages",
           "message": "Scrape batch di pagine web"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Se `True`, i cambiamenti effettuati durante l'estrazione (cookie, archiviazione locale, ecc.) vengono salvati nel profilo denominato. Predefinito: `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "Annulla uno scraping batch"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "L'identificatore univoco del job di scraping batch da annullare"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
+          "source": "Get batch scrape status",
           "message": "Ottieni stato batch scrape"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "L'identificatore univoco del job di batch scrape da verificare"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
+          "source": "Crawl a website",
           "message": "Esegui crawl di un sito web"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Se `True`, Firecrawl non conserva alcun dato di crawl sui propri server dopo aver restituito la risposta. Funzionalità Enterprise — contatta il supporto Firecrawl per abilitarla"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
+          "source": "Get crawl status",
           "message": "Ottieni stato crawl"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "L'identificatore univoco del job di crawl da verificare"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "Annulla un crawl"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "L'identificatore univoco del job di crawl da annullare"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
+          "source": "Map a website",
           "message": "Mappa un sito web"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Elenco delle lingue/linguaggi preferiti in ordine di priorità. Predefinito alla lingua della posizione specificata"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Cerca sul Web"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Zero Data Retention anonimizzata"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
+          "source": "Extract structured data",
           "message": "Estrai dati strutturati"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Se `True`, Firecrawl non conserva alcun dato estratto sui suoi server dopo aver restituito la risposta. Funzionalità enterprise — contatta il supporto Firecrawl per abilitarla"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
+          "source": "Get extraction status",
           "message": "Ottieni stato estrazione"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "L'identificatore univoco del processo di estrazione da verificare"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
+          "source": "Run AI agent",
           "message": "Esegui agente IA"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "Annulla un job dell'agente"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
@@ -3960,7 +3960,7 @@
           "message": "L'identificatore univoco del job dell'agente da annullare"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
+          "source": "Get agent status",
           "message": "Ottieni stato agente"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "L'identificatore univoco del job dell'agente da verificare"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "Analizza un documento"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {

@@ -16,7 +16,7 @@
           "message": "外部サービスに接続することなくデータパイプラインをテストするための、設定可能なレコードストリームを生成します"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "レコードの生成"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "日付フィールドの生成基準点として使用される固定日時値。シードとともに提供されると、日付フィールドの実行間完全再現性が保証されます。指定しない場合は、生成開始時の現在の日時が使用されます"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "テンプレートから生成"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

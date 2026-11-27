@@ -16,7 +16,7 @@
           "message": "Všeobecný SMTP server na odosielanie e-mailov"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send an Email With SMTP",
+          "source": "Send an email with SMTP",
           "message": "Odoslať e-mail pomocou SMTP"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {

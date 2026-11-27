@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
-          "source": "List People",
+          "source": "List people",
           "message": "사용자 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Customer.io 내부 ID로 사용자 필터링"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
-          "source": "Get Person",
+          "source": "Get person",
           "message": "개인 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
@@ -412,7 +412,7 @@
           "message": "조회할 고객 ID, 이메일 또는 cio_id"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
-          "source": "Create/Update Customer",
+          "source": "Create/update customer",
           "message": "고객 생성/업데이트"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
@@ -472,7 +472,7 @@
           "message": "고객에 설정할 커스텀 속성"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "고객 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "삭제할 고유 고객 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
-          "source": "Suppress Customer",
+          "source": "Suppress customer",
           "message": "고객 억제"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
@@ -520,7 +520,7 @@
           "message": "억제할 고유 고객 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
-          "source": "Unsuppress Customer",
+          "source": "Unsuppress customer",
           "message": "고객 발송 제외 해제"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
@@ -544,7 +544,7 @@
           "message": "발송 제외를 해제할 고유 고객 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
-          "source": "Merge Customers",
+          "source": "Merge customers",
           "message": "고객 병합"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
@@ -628,7 +628,7 @@
           "message": "보조 식별자 값"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "세그먼트 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -664,7 +664,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "세그먼트 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "고유 Customer.io 세그먼트 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment People",
+          "source": "Get segment people",
           "message": "세그먼트 사용자 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -724,7 +724,7 @@
           "message": "페이지 매김된 결과의 페이지 번호"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "캠페인 목록"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -760,7 +760,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "캠페인 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -784,7 +784,7 @@
           "message": "고유 Customer.io 캠페인 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
-          "source": "Get Campaign Metrics",
+          "source": "Get campaign metrics",
           "message": "캠페인 지표 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
@@ -820,7 +820,7 @@
           "message": "지표 집계 기간"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
-          "source": "Get Campaign Actions",
+          "source": "Get campaign actions",
           "message": "캠페인 작업 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
@@ -844,7 +844,7 @@
           "message": "작업을 조회할 고유 Customer.io 캠페인 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "브로드캐스트 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -880,7 +880,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get Broadcast",
+          "source": "Get broadcast",
           "message": "브로드캐스트 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "고유 Customer.io 브로드캐스트 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
-          "source": "Trigger Broadcast",
+          "source": "Trigger broadcast",
           "message": "브로드캐스트 트리거"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "누락된 고객 ID를 무시할지 여부"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
-          "source": "Send Transactional Email",
+          "source": "Send transactional email",
           "message": "트랜잭션 이메일 전송"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "HTML 콘텐츠로 메시지 본문 재정의"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
-          "source": "Send Transactional Push",
+          "source": "Send transactional push",
           "message": "트랜잭션 푸시 보내기"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "푸시 알림 본문 텍스트 재정의"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "컬렉션 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "컬렉션 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "고유 Customer.io 컬렉션 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "컬렉션 생성"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "컬렉션의 외부 데이터 소스 URL"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Update Collection",
+          "source": "Update collection",
           "message": "컬렉션 업데이트"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "외부 데이터 소스의 업데이트된 URL"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "컬렉션 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "삭제할 고유 Customer.io 컬렉션 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
-          "source": "List Snippets",
+          "source": "List snippets",
           "message": "스니펫 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Customer.io에서 모든 스니펫 목록을 조회합니다."
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
-          "source": "Get Snippet",
+          "source": "Get snippet",
           "message": "스니펫 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "조회할 스니펫의 고유 이름 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Create Snippet",
+          "source": "Create snippet",
           "message": "스니펫 생성"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "스니펫 내용"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Update Snippet",
+          "source": "Update snippet",
           "message": "스니펫 업데이트"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "스니펫의 업데이트된 내용"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
-          "source": "Delete Snippet",
+          "source": "Delete snippet",
           "message": "스니펫 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "삭제할 스니펫의 고유 이름 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
-          "source": "Create Export",
+          "source": "Create export",
           "message": "내보내기 생성"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "내보내기에 적용할 필터"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
-          "source": "Get Export Status",
+          "source": "Get export status",
           "message": "내보내기 상태 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "상태를 확인할 고유 Customer.io 내보내기 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
-          "source": "Download Export",
+          "source": "Download export",
           "message": "내보내기 다운로드"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "다운로드할 고유 Customer.io 내보내기 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
-          "source": "List Deliveries",
+          "source": "List deliveries",
           "message": "전송 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "이 Unix 타임스탬프 이전에 전송된 메시지 필터링"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get Message",
+          "source": "Get message",
           "message": "메시지 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "고유 Customer.io 메시지 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "활동 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "이 Unix 타임스탬프 이전의 활동 필터링"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
-          "source": "List Newsletters",
+          "source": "List newsletters",
           "message": "뉴스레터 목록 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
-          "source": "Get Newsletter",
+          "source": "Get newsletter",
           "message": "뉴스레터 가져오기"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "고유 Customer.io 뉴스레터 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
-          "source": "Track Event",
+          "source": "Track event",
           "message": "이벤트 추적"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "이벤트의 Unix 타임스탬프"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
-          "source": "Track Anonymous Event",
+          "source": "Track anonymous event",
           "message": "익명 이벤트 추적"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "이벤트의 Unix 타임스탬프"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
-          "source": "Track Page View",
+          "source": "Track page view",
           "message": "페이지 뷰 추적"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "페이지 뷰 이벤트의 Unix 타임스탬프"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
-          "source": "Add Device",
+          "source": "Add device",
           "message": "기기 추가"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "기기 속성"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
-          "source": "Delete Device",
+          "source": "Delete device",
           "message": "기기 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "제거할 기기 토큰"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
-          "source": "Create/Update Object",
+          "source": "Create/update object",
           "message": "객체 생성/업데이트"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "객체에 설정할 커스텀 속성"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "객체 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "객체 식별자"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Add Relationships",
+          "source": "Add relationships",
           "message": "관계 추가"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "각각 'identifier' 및 선택적으로 'relationship_attributes'를 포함하는 식별자 해시 목록"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Delete Relationships",
+          "source": "Delete relationships",
           "message": "관계 삭제"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "객체에서 연결 해제할 식별자 해시 목록"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch Email Sent",
+          "source": "Watch email sent",
           "message": "이메일 발송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Customer.io를 통해 이메일이 발송될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
-          "source": "Watch Email Delivered",
+          "source": "Watch email delivered",
           "message": "이메일 전달 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "Customer.io를 통해 이메일이 전달될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
-          "source": "Watch Email Opened",
+          "source": "Watch email opened",
           "message": "이메일 열람 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
@@ -2480,7 +2480,7 @@
           "message": "Customer.io를 통해 이메일이 열람될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Watch Email Clicked",
+          "source": "Watch email clicked",
           "message": "이메일 클릭 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Customer.io를 통해 이메일의 링크를 클릭할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Watch Email Bounced",
+          "source": "Watch email bounced",
           "message": "이메일 반송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Customer.io를 통해 이메일이 반송될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
-          "source": "Watch Email Dropped",
+          "source": "Watch email dropped",
           "message": "이메일 드롭 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Customer.io에서 이메일이 드롭될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
-          "source": "Watch Email Spammed",
+          "source": "Watch email spammed",
           "message": "이메일 스팸 표시 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "Customer.io를 통해 이메일이 스팸으로 표시될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Email Unsubscribed",
+          "source": "Watch email unsubscribed",
           "message": "이메일 구독 취소 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Customer.io의 이메일을 통해 수신자가 구독을 취소할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
+          "source": "Watch SMS sent",
           "message": "SMS 발송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Customer.io를 통해 SMS 메시지가 발송될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
-          "source": "Watch SMS Delivered",
+          "source": "Watch SMS delivered",
           "message": "SMS 전달 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "Customer.io를 통해 SMS 메시지가 전달될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
-          "source": "Watch SMS Failed",
+          "source": "Watch SMS failed",
           "message": "SMS 발송 실패 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Customer.io를 통해 SMS 메시지 발송이 실패할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
-          "source": "Watch SMS Clicked",
+          "source": "Watch SMS clicked",
           "message": "SMS 클릭 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Customer.io를 통해 SMS 메시지의 링크를 클릭할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch Push Sent",
+          "source": "Watch push sent",
           "message": "푸시 전송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Customer.io를 통해 푸시 알림이 전송될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
-          "source": "Watch Push Delivered",
+          "source": "Watch push delivered",
           "message": "푸시 전달 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "Customer.io를 통해 푸시 알림이 전달될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
-          "source": "Watch Push Opened",
+          "source": "Watch push opened",
           "message": "푸시 열림 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Customer.io를 통해 푸시 알림이 열릴 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
-          "source": "Watch Push Failed",
+          "source": "Watch push failed",
           "message": "푸시 실패 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Customer.io를 통해 푸시 알림 전송에 실패할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
+          "source": "Watch Slack sent",
           "message": "Slack 전송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Customer.io를 통해 Slack 메시지가 전송될 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
-          "source": "Watch Slack Clicked",
+          "source": "Watch Slack clicked",
           "message": "Slack 클릭 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Customer.io를 통해 Slack 메시지의 링크를 클릭할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
-          "source": "Watch Slack Failed",
+          "source": "Watch Slack failed",
           "message": "Slack 실패 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
@@ -2672,7 +2672,7 @@
           "message": "Customer.io를 통해 Slack 메시지 전송에 실패할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
-          "source": "Watch Subscribed",
+          "source": "Watch subscribed",
           "message": "구독 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Customer.io를 통해 고객이 구독할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Unsubscribed",
+          "source": "Watch unsubscribed",
           "message": "구독 취소 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {

@@ -16,7 +16,7 @@
           "message": "讀取和寫入 CSV 檔案資料"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "讀取 CSV 檔案"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "若為 `true`（預設為 `false`），解析出的某一行若與其他行的資料行數或欄位數不同，將會引發 `CSVFILEITERATOR-DATA-ERROR` 例外狀況\n\n請注意，啟用此選項將會影響效能"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "讀取 CSV 內嵌資料"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "若為 `true`（預設為 `false`），解析出的某一行若與其他行的資料行數或欄位數不同，將會引發 `CSVFILEITERATOR-DATA-ERROR` 例外狀況\n\n請注意，啟用此選項將會影響效能"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "分析 CSV 資料"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "若為 `True`（預設），範例值與反例會遮蔽為其形狀：字母變為 `x` 或 `X`，數字變為 `9`，因此可以在不包含資料的情況下分享分析結果"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "寫入 CSV 資料"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "設為 `false` 可隱藏標頭輸出；預設值為 `true`，表示若存在標頭則輸出"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "建立 CSV 資料"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Отримати список бакетів"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Перелічує всі бакети, які належать автентифікованому обліковому запису, із датою створення кожного."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "Створити бакет"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Увімкнути блокування об'єктів для нового бакета; блокування об'єктів не можна ввімкнути після створення і вимагає версіонування, яке вмикається автоматично, якщо це налаштування вибрано"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Отримати список об'єктів"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Значення `next_continuation_token`, повернуте попереднім усіченим списком; використовується для отримання наступної сторінки"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "Отримати об'єкт"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Завантажити файл"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Завантажити файл"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Ключ AWS KMS для шифрування об'єкта у вигляді ID ключа, псевдоніма або ARN.\n\nВикористовується лише тоді, коли `server_side_encryption` вибирає схему KMS; якщо не вказано, використовується ключ KMS бакета за замовчуванням"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "Створити текстовий об'єкт"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Ключ AWS KMS для шифрування об'єкта у вигляді ID ключа, псевдоніма або ARN.\n\nВикористовується лише тоді, коли `server_side_encryption` вибирає схему KMS; якщо не вказано, використовується ключ KMS бакета за замовчуванням"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Видалити об'єкт"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Копіювати об’єкт"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Створити попередньо підписану URL-адресу"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Заголовок `Content-Disposition`, з яким Amazon S3 має видавати завантаження; використовуйте це, щоб браузер зберігав об'єкт під вибраним іменем замість його відображення"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "Видалити об'єкти"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Видалити об'єкти, які перебувають під блокуванням утримання в режимі управління.\n\nОблікові дані повинні мати дозвіл `s3:BypassGovernanceRetention`; об'єкти під блокуванням у режимі **compliance** ніхто не може видалити до завершення терміну дії блокування"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "Перемістити об'єкт"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "Отримати теги об'єкта"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "Встановити теги об'єкта"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "Отримати список версій об'єктів"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "Значення `next_version_id_marker`, повернуте попереднім усіченим списком; використовується разом із `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "Видалити бакет"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Назва бакета для видалення; він уже має бути порожнім"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "Знайти об'єкти"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Скільки ключів отримувати за один запит; Amazon S3 обмежує це значення до `1000`.\n\nЦе впливає на те, як обхід розбивається на запити, а не на кількість повернутих записів — ітератор завантажує наступні сторінки за потреби"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "Новий бакет"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Не повідомляти про об'єкти, старіші за цю дату.\n\nЯкщо не встановлено, відстеження повідомлятиме лише про те, що з'явилося після його запуску, тому наявний бакет не створюватиме лавину подій під час першого запуску"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "Новий або оновлений файл"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

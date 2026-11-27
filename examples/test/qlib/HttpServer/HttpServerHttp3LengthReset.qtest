@@ -47,6 +47,7 @@ class LengthHandler inherits AbstractHttpRequestHandler {
         string c = (hdr.path =~ x/([^\/]+)$/)[0];
         int sid = cx."header-info".stream_id;
         int session_id = cx."header-info".session_id;
+        # debug-builtin-guard: only resetTest() requests these paths, which skips without library debugging
         switch (c) {
             case "long":
                 # more content than declared

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Create a Subscriber",
+          "source": "Create a subscriber",
           "message": "購読者を作成"
         },
         "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -400,7 +400,7 @@
           "message": "購読者に設定するカスタムフィールド値のハッシュ"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
-          "source": "Update a Subscriber",
+          "source": "Update a subscriber",
           "message": "購読者を更新"
         },
         "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
@@ -460,7 +460,7 @@
           "message": "購読者に設定するカスタムフィールド値のハッシュ"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
-          "source": "Unsubscribe a Subscriber",
+          "source": "Unsubscribe a subscriber",
           "message": "購読者を購読解除"
         },
         "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
@@ -484,7 +484,7 @@
           "message": "購読解除する購読者の一意の識別子"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Create Subscribers",
+          "source": "Bulk create subscribers",
           "message": "購読者を一括作成"
         },
         "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
@@ -576,7 +576,7 @@
           "message": "一括処理の完了時にWebhookを受信するURL"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Subscribers",
+          "source": "List subscribers",
           "message": "購読者を一覧表示"
         },
         "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
@@ -676,7 +676,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
-          "source": "Get a Subscriber",
+          "source": "Get a subscriber",
           "message": "購読者を取得"
         },
         "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
@@ -696,7 +696,7 @@
           "message": "購読者ID"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "タグを作成"
         },
         "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "作成するタグの名前"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "タグを更新"
         },
         "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -756,7 +756,7 @@
           "message": "タグの新しい名前"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
-          "source": "Tag a Subscriber",
+          "source": "Tag a subscriber",
           "message": "購読者にタグを付与"
         },
         "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
@@ -792,7 +792,7 @@
           "message": "タグを付与する購読者のメールアドレス"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
-          "source": "Untag a Subscriber",
+          "source": "Untag a subscriber",
           "message": "購読者のタグを解除"
         },
         "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
@@ -828,7 +828,7 @@
           "message": "タグを解除する購読者の一意の識別子"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "Bulk Tag Subscribers",
+          "source": "Bulk tag subscribers",
           "message": "購読者を一括タグ付け"
         },
         "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -864,7 +864,7 @@
           "message": "タグ付けする購読者のメールアドレスのリスト"
         },
         "app.S2l0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "タグのリスト取得"
         },
         "app.S2l0.action.bGlzdC10YWdz.short_desc": {
@@ -900,7 +900,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
-          "source": "List Tag Subscribers",
+          "source": "List tag subscribers",
           "message": "タグの購読者を一覧表示"
         },
         "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
@@ -936,7 +936,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "カスタムフィールドを作成"
         },
         "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -960,7 +960,7 @@
           "message": "作成するカスタムフィールドの表示ラベル"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "カスタムフィールドの更新"
         },
         "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "カスタムフィールドの新しい表示ラベル"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "カスタムフィールドを削除"
         },
         "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "削除するカスタムフィールドの一意の識別子"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "カスタムフィールド一覧"
         },
         "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Create a Broadcast",
+          "source": "Create a broadcast",
           "message": "ブロードキャストを作成"
         },
         "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "メールを開く前にメールクライアントに表示されるプレビューテキスト"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Update a Broadcast",
+          "source": "Update a broadcast",
           "message": "ブロードキャストを更新"
         },
         "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "メールを開く前にメールクライアントに表示されるプレビューテキスト"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
-          "source": "Delete a Broadcast",
+          "source": "Delete a broadcast",
           "message": "ブロードキャストを削除"
         },
         "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "削除するブロードキャストの一意の識別子"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
-          "source": "Get Broadcast Stats",
+          "source": "Get broadcast stats",
           "message": "ブロードキャスト統計を取得"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "統計情報を取得するブロードキャストの一意の識別子"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "ブロードキャストを一覧表示"
         },
         "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get a Broadcast",
+          "source": "Get a broadcast",
           "message": "ブロードキャストを取得"
         },
         "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "ブロードキャストID"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
-          "source": "Add Subscriber to Form",
+          "source": "Add subscriber to form",
           "message": "フォームに購読者を追加"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "購読者の名"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "フォーム一覧"
         },
         "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
-          "source": "List Form Subscribers",
+          "source": "List form subscribers",
           "message": "フォームの購読者を一覧表示"
         },
         "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
-          "source": "Add Subscriber to Sequence",
+          "source": "Add subscriber to sequence",
           "message": "シーケンスに購読者を追加"
         },
         "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "シーケンスに追加する購読者のメールアドレス"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
-          "source": "List Sequences",
+          "source": "List sequences",
           "message": "シーケンスを一覧表示"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
-          "source": "List Sequence Subscribers",
+          "source": "List sequence subscribers",
           "message": "シーケンスの購読者を一覧表示"
         },
         "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
-          "source": "Create a Purchase",
+          "source": "Create a purchase",
           "message": "購入レコードを作成"
         },
         "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "購入の現在のステータス"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
-          "source": "List Purchases",
+          "source": "List purchases",
           "message": "購入一覧"
         },
         "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "最大結果数"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
-          "source": "Get a Purchase",
+          "source": "Get a purchase",
           "message": "購入を取得"
         },
         "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "購入ID"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
-          "source": "Subscriber Activated",
+          "source": "Subscriber activated",
           "message": "購読者がアクティブ化されました"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Kitで購読者がアクティブ化されたときにトリガーされます"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
-          "source": "Subscriber Unsubscribed",
+          "source": "Subscriber unsubscribed",
           "message": "購読者が購読解除しました"
         },
         "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Kitで購読者が購読解除したときにトリガーされます"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
-          "source": "Subscriber Bounced",
+          "source": "Subscriber bounced",
           "message": "購読者がバウンスしました"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "Kitで購読者のメールがバウンスしたときにトリガーされます"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
-          "source": "Subscriber Complained",
+          "source": "Subscriber complained",
           "message": "購読者が報告しました"
         },
         "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Kitで購読者がメールを迷惑メールとして報告したときにトリガーされます"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
-          "source": "Form Subscription",
+          "source": "Form subscription",
           "message": "フォーム購読"
         },
         "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "購読者がKitのフォームからサインアップしたときにトリガーされます"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
-          "source": "Course Subscription",
+          "source": "Course subscription",
           "message": "コース登録"
         },
         "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {

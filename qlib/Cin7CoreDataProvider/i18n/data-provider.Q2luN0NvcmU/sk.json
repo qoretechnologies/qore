@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Vyhľadať zákazníkov"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Získať zoznam zákazníkov zo služby Cin7Core s voliteľným filtrovaním podľa mena, ID alebo dátumu úpravy."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvoriť zákazníka"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Značky pre zákazníka oddelené čiarkou"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získať zákazníka"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Jedinečný identifikátor (GUID) zákazníka, ktorého chcete získať"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovať zákazníka"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "Značky pre zákazníka oddelené čiarkou"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
+          "source": "Search suppliers",
           "message": "Vyhľadať dodávateľov"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Získať zoznam dodávateľov zo služby Cin7Core s voliteľným filtrovaním."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "Vytvoriť dodávateľa"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Značky dodávateľa oddelené čiarkou"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "Získať dodávateľa"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Jedinečný identifikátor (GUID) dodávateľa, ktorého chcete získať"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "Aktualizovať dodávateľa"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Značky priradené k tomuto dodávateľovi"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Vyhľadať produkty"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Získať zoznam produktov zo služby Cin7Core s voliteľným filtrovaním podľa SKU, názvu, kategórie alebo značky."
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získať produkt"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Jedinečný identifikátor (GUID) produktu, ktorý chcete získať"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
+          "source": "Find product availability",
           "message": "Nájsť dostupnosť produktov"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Skontrolovať dostupnosť produktov a stav zásob v jednotlivých skladoch."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
+          "source": "Search sales",
           "message": "Vyhľadať predaje"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Získať zoznam objednávok odberateľa z Cin7Core s voliteľným filtrovaním."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
+          "source": "Create sale",
           "message": "Vytvoriť predaj"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
@@ -2368,7 +2368,7 @@
           "message": "Celkom pre tento riadok"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
+          "source": "Get sale",
           "message": "Získať predaj"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "Jedinečný identifikátor (GUID) predaja, ktorý chcete získať"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
+          "source": "Update sale",
           "message": "Aktualizovať predaj"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "Celková suma za túto položku"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
+          "source": "Delete sale",
           "message": "Odstrániť predaj"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "Jedinečný identifikátor (GUID) predaja, ktorý sa má odstrániť/zneplatniť"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
+          "source": "Search sale payments",
           "message": "Vyhľadať platby predaja"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "Získať zoznam platieb za predaje."
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
+          "source": "Add sale payment",
           "message": "Pridať platbu za predaj"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Účet, na ktorý sa má platba zaznamenať"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
+          "source": "Update sale payment",
           "message": "Aktualizovať platbu za predaj"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Referenčné číslo alebo poznámka k platbe"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
+          "source": "Delete sale payment",
           "message": "Odstrániť platbu predaja"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Jedinečný identifikátor (GUID) platby, ktorá sa má odstrániť"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
+          "source": "Add sale attachment",
           "message": "Pridať prílohu k predaju"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Obsah súboru zakódovaný ako reťazec Base64"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
+          "source": "Delete sale attachment",
           "message": "Odstrániť prílohu predaja"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "Jedinečný identifikátor (GUID) prílohy, ktorá sa má odstrániť"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
+          "source": "Add sale pack",
           "message": "Pridať balenie predaja"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
@@ -3496,7 +3496,7 @@
           "message": "Skladová lokácia pre balenie"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
+          "source": "Get sale pack",
           "message": "Získať balenie predaja"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "Voliteľné ID úlohy na získanie konkrétneho záznamu balenia"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
+          "source": "Add sale shipment",
           "message": "Pridať zásielku k predaju"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "Dátum, do ktorého je zásielka požadovaná"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
+          "source": "Find sale fulfilment",
           "message": "Nájsť plnenie predaja"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "Vyhľadať úlohy plnenia, vychystávania a balenia pre predaje."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
+          "source": "Find sale invoices",
           "message": "Nájsť faktúry predaja"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "Vyhľadať faktúry priradené k predajným objednávkam."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
+          "source": "Find sale credit notes",
           "message": "Nájsť dobropisy predaja"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "Vyhľadať dobropisy priradené k predajným objednávkam."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
+          "source": "Search stock adjustments",
           "message": "Vyhľadať úpravy zásob"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "Získať zoznam úprav zásob zo služby Cin7Core."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "Vytvoriť úpravu zásob"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "Jednotková cena úpravy"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "Získať úpravu zásob"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "Jedinečný identifikátor (GUID) úpravy zásob, ktorú chcete získať"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "Aktualizovať úpravu zásob"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4180,7 +4180,7 @@
           "message": "Stav úpravy (Draft, Authorized, Void)"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "Odstrániť úpravu zásob"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "Jedinečný identifikátor (GUID) úpravy zásob, ktorá sa má odstrániť/zneplatniť"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
+          "source": "Find assemblies",
           "message": "Nájsť montáže"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "Vyhľadať úlohy montáže a hotových výrobkov."
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nová platba"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "Spustí sa pri zistení novej platby pri predaji prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
+          "source": "New sale credit note authorized",
           "message": "Nový dobropis predaja autorizovaný"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "Spustí sa pri autorizácii nového dobropisu predaja prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
+          "source": "New sale invoice authorized",
           "message": "Nová faktúra predaja autorizovaná"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
@@ -4252,7 +4252,7 @@
           "message": "Spustí sa pri autorizácii novej faktúry predaja prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
+          "source": "Sale tracking changed",
           "message": "Sledovanie predaja zmenené"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "Spustí sa pri zmene sledovania predaja alebo informácií o zásielke prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
+          "source": "Sale voided",
           "message": "Predaj zneplatnený"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
@@ -4276,7 +4276,7 @@
           "message": "Spustí sa pri zneplatnení predajnej objednávky prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
+          "source": "Stock level update",
           "message": "Aktualizácia stavu zásob"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "Spustí sa pri zmene stavu zásob/skladu produktov prostredníctvom dopytovania."
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Aktualizovaný zákazník"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4300,7 +4300,7 @@
           "message": "Spustí sa pri vytvorení alebo úprave zákazníka cez polling."
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
+          "source": "Supplier updated",
           "message": "Dodávateľ bol aktualizovaný"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {

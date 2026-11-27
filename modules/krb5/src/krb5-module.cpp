@@ -42,7 +42,12 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
+#include <atomic>
+#include <random>
 #include <strings.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 static QoreNamespace krb5ns("Qore::Krb5");
 
@@ -390,6 +395,203 @@ static bool krb5_cache_backend_is_non_filesystem(const char* type) {
         || !strcmp(type, "KEYRING") || !strcmp(type, "MSLSA");
 }
 
+//! The namespace of the credential caches that are not file based of the code that calls the module (qore#7671)
+/** Such caches (\c MEMORY, \c KEYRING) are shared by name in the process or by the OS user: the caches of code that a
+    sandbox governs are kept per isolation domain, with names that start with a prefix of its own, and the caches of
+    other code are not visible to it.  The domain is the isolation domain of the caller (qore_caller_isolation_domain())
+    or, for a sandbox without one, the caller's Program, whose ID is never reused.
+*/
+struct Krb5CacheNamespace {
+    //! true if a sandbox governs the caller
+    bool sandboxed = false;
+    //! the prefix of the names of the caller's caches
+    std::string prefix;
+    //! true if the namespace is that of the caller's Program (a sandbox without an isolation domain), whose ID is
+    //! unique only in the process
+    bool by_program = false;
+};
+
+static void krb5_append_hex(std::string& out, const std::string& in) {
+    static const char digits[] = "0123456789abcdef";
+    for (unsigned char c : in) {
+        out += digits[c >> 4];
+        out += digits[c & 0xf];
+    }
+}
+
+//! Gets the namespace of the caches of the caller; returns -1 if an exception was raised
+static int krb5_cache_namespace(Krb5CacheNamespace& ns, ExceptionSink* xsink, const char* context) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return 0;
+    }
+    ns.sandboxed = true;
+    std::string domain = qore_caller_isolation_domain();
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the code belongs to more than one isolation domain, which "
+            "have no credential caches in common", context);
+        return -1;
+    }
+    ns.prefix = "qore-sandbox-";
+    if (!domain.empty()) {
+        ns.prefix += 'd';
+        krb5_append_hex(ns.prefix, domain);
+    } else {
+        qore_program_id_t id;
+        if (qore_get_caller_program_id(id)) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the code that calls the module is not known, so its "
+                "credential caches cannot be kept apart from those of other code", context);
+            return -1;
+        }
+        ns.prefix += 'p';
+        ns.prefix += std::to_string(id);
+        ns.by_program = true;
+    }
+    ns.prefix += '-';
+    return 0;
+}
+
+//! Splits a credential cache name into its type and residual, as MIT Kerberos does (a name without a type is a file)
+static void krb5_split_cache_name(const char* name, std::string& type, std::string& residual) {
+    const char* colon = strchr(name, ':');
+    if (colon && colon != name && !memchr(name, '/', colon - name)) {
+        type.assign(name, colon - name);
+        residual = colon + 1;
+    } else {
+        type = "FILE";
+        residual = name;
+    }
+}
+
+//! The index of the collection name in a \c KEYRING residual of a keyring that only the process has, or npos
+/** The \c process and \c thread keyrings belong to the process; the \c session, \c user and \c persistent
+    keyrings, and a legacy name (a cache in the session keyring, which MIT Kerberos gives as \c legacy:name:name), are
+    shared with the other processes of the session or of the OS user, where a name of an isolation domain does not
+    keep a cache apart: they are not used for code that a sandbox governs
+*/
+static size_t krb5_keyring_name_offset(const std::string& residual) {
+    size_t colon = residual.find(':');
+    if (colon == std::string::npos) {
+        return std::string::npos;
+    }
+    std::string kind = residual.substr(0, colon);
+    if (kind == "process" || kind == "thread") {
+        return colon + 1;
+    }
+    return std::string::npos;
+}
+
+//! Gives the name of the cache of the caller's namespace that the name that it gives refers to
+/** File based caches keep their names (the filesystem sandbox applies); the caches that cannot be kept apart per
+    isolation domain (\c API, \c KCM, \c MSLSA, persistent \c KEYRING caches) are refused
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int krb5_map_cache_name(const char* name, const Krb5CacheNamespace& ns, std::string& out, ExceptionSink* xsink,
+        const char* context) {
+    if (!ns.sandboxed) {
+        out = name;
+        return 0;
+    }
+    std::string type, residual;
+    krb5_split_cache_name(name, type, residual);
+    if (type == "FILE" || type == "DIR") {
+        out = name;
+        return 0;
+    }
+    if (type == "MEMORY") {
+        out = "MEMORY:" + ns.prefix + residual;
+        return 0;
+    }
+    if (type == "KEYRING") {
+        size_t off = krb5_keyring_name_offset(residual);
+        if (off != std::string::npos) {
+            // the collection, and the cache name in it if one is given (kind:coll:name), get the prefix, as the names
+            // given back leave it out of both (see krb5_visible_cache_name())
+            std::string rest = residual.substr(off);
+            size_t sub = rest.find(':');
+            if (sub != std::string::npos) {
+                rest = rest.substr(0, sub + 1) + ns.prefix + rest.substr(sub + 1);
+            }
+            out = "KEYRING:" + residual.substr(0, off) + ns.prefix + rest;
+            return 0;
+        }
+    }
+    xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: credential cache '%s' cannot be kept apart for the isolation "
+        "domain of the code that a sandbox governs: only file, memory and process or thread keyring caches can be "
+        "used", context, name);
+    return -1;
+}
+
+//! Returns true if a cache that is not file based belongs to the namespace of the caller
+static bool krb5_cache_in_namespace(const char* type, const char* name, const Krb5CacheNamespace& ns) {
+    if (!strcmp(type, "MEMORY")) {
+        return !strncmp(name, ns.prefix.c_str(), ns.prefix.size());
+    }
+    if (!strcmp(type, "KEYRING")) {
+        std::string residual(name);
+        size_t off = krb5_keyring_name_offset(residual);
+        return off != std::string::npos && !residual.compare(off, ns.prefix.size(), ns.prefix);
+    }
+    return false;
+}
+
+//! Removes a leading prefix from \a s at \a pos
+static void krb5_strip_at(std::string& s, size_t pos, const std::string& prefix) {
+    if (!s.compare(pos, prefix.size(), prefix)) {
+        s.erase(pos, prefix.size());
+    }
+}
+
+//! Gives the name of a cache of the namespace \a prefix as the code of that namespace named it
+/** \a name is a residual (\a full false) or a full name (\c TYPE:residual); only \c MEMORY and \c KEYRING names
+    have the prefix: at the start of a \c MEMORY residual, and at the start of the collection and of the cache name of
+    a \c KEYRING residual (\c kind:coll:name: MIT Kerberos gives \c kind:coll as \c kind:coll:coll)
+*/
+static std::string krb5_visible_cache_name(const char* type, const std::string& name, const std::string& prefix,
+        bool full) {
+    if (prefix.empty() || !type) {
+        return name;
+    }
+    std::string rv = name;
+    size_t start = 0;
+    if (full) {
+        size_t colon = rv.find(':');
+        if (colon == std::string::npos) {
+            return rv;
+        }
+        start = colon + 1;
+    }
+    if (!strcmp(type, "MEMORY")) {
+        krb5_strip_at(rv, start, prefix);
+    } else if (!strcmp(type, "KEYRING")) {
+        size_t off = krb5_keyring_name_offset(rv.substr(start));
+        if (off != std::string::npos) {
+            krb5_strip_at(rv, start + off, prefix);
+            size_t colon = rv.find(':', start + off);
+            if (colon != std::string::npos) {
+                krb5_strip_at(rv, colon + 1, prefix);
+            }
+        }
+    }
+    return rv;
+}
+
+//! The prefix to leave out of the names of a cache that code of the namespace \a opened opened: that of the caller
+//! if it is the same namespace, or none (another caller sees the real name of the cache)
+static std::string krb5_caller_visible_prefix(const std::string& opened) {
+    if (opened.empty()) {
+        return opened;
+    }
+    Krb5CacheNamespace ns;
+    ExceptionSink xsink;
+    if (krb5_cache_namespace(ns, &xsink, "getting a credential cache name")) {
+        xsink.clear();
+        return std::string();
+    }
+    return ns.prefix == opened ? opened : std::string();
+}
+
 //! Returns true if the calling code may use a credential of the host: the process's default credential cache,
 //! keytab or GSSAPI credential, or a credential store that is not a file of its own (qore#6844)
 /** Code that may not receive host secrets (see qore_caller_may_receive_host_secrets(): code restricted from external
@@ -451,11 +653,36 @@ static bool krb5_check_named_store(bool filesystem, bool memory, const char* err
     return true;
 }
 
+//! Raises \a err and returns false if the default credential store that the calling code gets is the host's and
+//! the calling code may not use the host's credentials (qore#6844)
+/** The default credential cache and keytab of code that a sandbox governs are memory stores of its isolation domain
+    (qore#7671, qore#7736), which are its own and not the host's; the default stores of other code are the host's,
+    which only code that may receive the host's secrets gets
+*/
+static bool krb5_check_default_store(ExceptionSink* xsink, const char* err, const char* what) {
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, what)) {
+        return false;
+    }
+    return ns.sandboxed || krb5_check_host_credential(xsink, err, what);
+}
+
 static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mode, ExceptionSink* xsink,
         const char* context) {
     {
         const char* type = krb5_cc_get_type(ctx, cache);
-        if (type && *type && !krb5_check_named_store(krb5_cache_backend_uses_filesystem(type), !strcmp(type, "MEMORY"),
+        bool own = type && !strcmp(type, "MEMORY");
+        if (!own && type && !strcmp(type, "KEYRING") && !krb5_caller_may_use_host_credentials()) {
+            // a process or thread keyring cache of the isolation domain of code that a sandbox governs is its own
+            // (qore#7671); other keyring caches hold the host's credentials (qore#6844)
+            Krb5CacheNamespace ns;
+            if (krb5_cache_namespace(ns, xsink, context)) {
+                return false;
+            }
+            const char* name = krb5_cc_get_name(ctx, cache);
+            own = ns.sandboxed && name && krb5_cache_in_namespace(type, name, ns);
+        }
+        if (type && *type && !krb5_check_named_store(krb5_cache_backend_uses_filesystem(type), own,
                 "KRB5-CACHE-ERROR", "credential cache", type, xsink, context)) {
             return false;
         }
@@ -481,7 +708,17 @@ static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mod
     }
 
     if (krb5_cache_backend_is_non_filesystem(type)) {
-        return true;
+        // only a cache of the caller's isolation domain (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, context)) {
+            return false;
+        }
+        if (krb5_cache_in_namespace(type, name, ns)) {
+            return true;
+        }
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the %s credential cache belongs to other code than the "
+            "code that a sandbox governs, and is not visible to it", context, type);
+        return false;
     }
 
     xsink->raiseException("KRB5-SANDBOX-ERROR",
@@ -538,12 +775,375 @@ static bool krb5_check_keytab_access(krb5_context ctx, krb5_keytab keytab, int m
     }
 
     if (krb5_keytab_backend_is_non_filesystem(type)) {
-        return true;
+        // only a keytab of the caller's isolation domain (qore#7736): memory keytabs are shared by name in the
+        // process, as memory credential caches are (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, context)) {
+            return false;
+        }
+        const char* residual = strchr(name, ':');
+        residual = residual ? residual + 1 : name;
+        if (!strncmp(residual, ns.prefix.c_str(), ns.prefix.size())) {
+            return true;
+        }
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the %s keytab belongs to other code than the code that a "
+            "sandbox governs, and is not visible to it", context, type);
+        return false;
     }
 
     xsink->raiseException("KRB5-SANDBOX-ERROR",
         "%s: keytab backend '%s' is not supported in sandboxed mode", context, type);
     return false;
+}
+
+//! Gives the name of the keytab of the caller's namespace that a keytab name that it gives refers to (qore#7736)
+/** File based keytabs keep their names (the filesystem sandbox applies); a \c MEMORY keytab name refers to a keytab
+    of the caller's isolation domain; other keytab types are refused by the access check
+
+*/
+static void krb5_map_keytab_name(const char* name, const Krb5CacheNamespace& ns, std::string& out) {
+    out = name;
+    if (!ns.sandboxed) {
+        return;
+    }
+    std::string type, residual;
+    krb5_split_cache_name(name, type, residual);
+    if (type == "MEMORY") {
+        out = "MEMORY:" + ns.prefix + residual;
+    }
+}
+
+//! A file keytab that code that a sandbox governs uses, as the file that the module opened and checked (qore#7767)
+/** The library opens a \c FILE keytab by name at every use, following links: for an acceptor credential made from
+    it, at every context that the credential accepts, long after the module checked the name against the filesystem
+    policy.  Code that may change the entries on the path (the sandboxed code itself, or code of another sandbox)
+    could replace the file in the meantime, for example with a link to another keytab, and the library would use the
+    keys of that keytab.
+
+    The module therefore opens the file once for each operation, in the directory that it opened, without following
+    a link at the last component, checks the policy for the canonical path of the file that it opened, refuses a file
+    that is not a regular file with one link, and gives the library only that file:
+    - for an operation that reads the keytab, a \c MEMORY keytab of the module with a copy of its entries, which an
+      acceptor credential keeps; its name is outside the names of the keytabs of every isolation domain
+      (\c qore-krb5-file-keytab-<n>, where the \c MEMORY keytabs of code that a sandbox governs are
+      \c qore-sandbox-<domain>-<name>), so no code that a sandbox governs can open it
+    - for an operation that writes the keytab, the open descriptor (\c /proc/self/fd/N on Linux, \c /dev/fd/N
+      elsewhere), which the library writes in place
+*/
+class Krb5PinnedKeytab {
+public:
+    //! the keytab that the library uses: a copy of the entries for a read, the descriptor's file for a write, or
+    //! nullptr if the caller's keytab is used as it is (no sandbox, or not a file keytab)
+    krb5_keytab keytab = nullptr;
+    //! the name of \c keytab
+    std::string name;
+    //! true if the file does not exist (a read that allows it)
+    bool missing = false;
+
+    DLLLOCAL explicit Krb5PinnedKeytab(krb5_context ctx) : ctx(ctx) {
+    }
+
+    DLLLOCAL ~Krb5PinnedKeytab() {
+        if (keytab) {
+            krb5_kt_close(ctx, keytab);
+        }
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+
+    //! Gives the keytab to use for a caller's keytab
+    DLLLOCAL krb5_keytab use(krb5_keytab orig) const {
+        return keytab ? keytab : orig;
+    }
+
+    //! Moves the file offset of the descriptor to the start before the library opens the file: the library reads
+    //! the header from the offset where it opens the file, and /dev/fd/N on macOS shares the offset with the
+    //! descriptor
+    DLLLOCAL void rewind() const {
+        if (fd >= 0) {
+            lseek(fd, 0, SEEK_SET);
+        }
+    }
+
+    //! Opens and checks a file keytab of code that a sandbox governs, for the access \a mode (QSEC_*)
+    /** Does nothing for code that no sandbox governs and for keytabs that are not file keytabs
+
+        @param orig the keytab of the caller
+        @param mode the access (QSEC_*) that the caller's policy must allow
+        @param allow_missing if true, a file that does not exist sets \c missing; otherwise an exception is raised
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int pin(krb5_keytab orig, int mode, bool allow_missing, ExceptionSink* xsink, const char* context);
+
+    Krb5PinnedKeytab(const Krb5PinnedKeytab&) = delete;
+    Krb5PinnedKeytab& operator=(const Krb5PinnedKeytab&) = delete;
+
+private:
+    krb5_context ctx;
+    //! the descriptor of the file
+    int fd = -1;
+
+    DLLLOCAL int openFile(const std::string& given, const std::string& path, int mode, bool& retry,
+        ExceptionSink* xsink, const char* context);
+    DLLLOCAL int copy(krb5_keytab file, ExceptionSink* xsink, const char* context);
+};
+
+//! Gives the name of a new MEMORY keytab of the module, which no code that a sandbox governs can open (qore#7767)
+static std::string krb5_module_keytab_name() {
+    static std::atomic<uint64_t> count(0);
+    return "MEMORY:qore-krb5-file-keytab-" + std::to_string(++count);
+}
+
+//! Closes a descriptor at the end of a block
+class Krb5FdHolder {
+public:
+    int fd;
+
+    DLLLOCAL explicit Krb5FdHolder(int fd) : fd(fd) {
+    }
+
+    DLLLOCAL ~Krb5FdHolder() {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+
+    DLLLOCAL int release() {
+        int rv = fd;
+        fd = -1;
+        return rv;
+    }
+
+    Krb5FdHolder(const Krb5FdHolder&) = delete;
+    Krb5FdHolder& operator=(const Krb5FdHolder&) = delete;
+};
+
+int Krb5PinnedKeytab::pin(krb5_keytab orig, int mode, bool allow_missing, ExceptionSink* xsink,
+        const char* context) {
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (!smh) {
+            return 0;
+        }
+    }
+    const char* type = krb5_kt_get_type(ctx, orig);
+    if (!type || (strcmp(type, "FILE") && strcmp(type, "WRFILE"))) {
+        return 0;
+    }
+    char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
+    krb5_error_code rc = krb5_kt_get_name(ctx, orig, kt_name, sizeof(kt_name));
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+    }
+    std::string given = krb5_keytab_filesystem_path(kt_name);
+    // a link at the last component that the name has now is followed: the canonical path is checked, and the file
+    // is opened without following a link there; a change in the meantime is retried
+    for (unsigned i = 0; i < 8; ++i) {
+        std::string path = given;
+        char* real = realpath(given.c_str(), nullptr);
+        if (real) {
+            path = real;
+            free(real);
+        }
+        bool retry = false;
+        if (openFile(given, path, mode, retry, xsink, context)) {
+            return -1;
+        }
+        if (!retry) {
+            break;
+        }
+    }
+    if (fd < 0) {
+        if (!missing) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the keytab file '%s' changed while it was opened, or "
+                "is a link that cannot be resolved", context, given.c_str());
+            return -1;
+        }
+        if (!allow_missing) {
+            xsink->raiseException("KRB5-KEYTAB-ERROR", "%s: the keytab file '%s' does not exist", context,
+                given.c_str());
+            return -1;
+        }
+        return 0;
+    }
+
+    // the library opens the descriptor's file, never the name
+    char fd_name[64];
+#ifdef __linux__
+    snprintf(fd_name, sizeof fd_name, "/proc/self/fd/%d", fd);
+#else
+    snprintf(fd_name, sizeof fd_name, "/dev/fd/%d", fd);
+#endif
+    std::string file_name = (!strcmp(type, "WRFILE") ? "WRFILE:" : "FILE:") + std::string(fd_name);
+    krb5_keytab file = nullptr;
+    rc = krb5_kt_resolve(ctx, file_name.c_str(), &file);
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+    }
+    if (mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE)) {
+        keytab = file;
+        name = file_name;
+        return 0;
+    }
+    int rv = copy(file, xsink, context);
+    krb5_kt_close(ctx, file);
+    return rv;
+}
+
+int Krb5PinnedKeytab::openFile(const std::string& given, const std::string& path, int mode, bool& retry,
+        ExceptionSink* xsink, const char* context) {
+    size_t slash = path.rfind('/');
+    std::string dir = slash == std::string::npos ? std::string(".") : (slash ? path.substr(0, slash) : "/");
+    std::string base = slash == std::string::npos ? path : path.substr(slash + 1);
+    if (base.empty() || base == "." || base == "..") {
+        xsink->raiseException("KRB5-KEYTAB-ERROR", "%s: the keytab name '%s' does not name a file", context,
+            given.c_str());
+        return -1;
+    }
+    bool write = mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+    Krb5FdHolder dfd(::open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC));
+    if (dfd.fd < 0) {
+        if (errno == ENOENT && !write) {
+            missing = true;
+            return 0;
+        }
+        xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot open the directory of the keytab file "
+            "'%s'", context, given.c_str());
+        return -1;
+    }
+    // the canonical path of the directory opened, for the policy check of the file in it
+    std::string canon;
+    {
+        char* real = realpath(dir.c_str(), nullptr);
+        if (real) {
+            canon = real;
+            free(real);
+        }
+    }
+    struct stat dst, cst;
+    if (canon.empty() || fstat(dfd.fd, &dst) || stat(canon.c_str(), &cst) || dst.st_dev != cst.st_dev
+        || dst.st_ino != cst.st_ino) {
+        retry = true;
+        return 0;
+    }
+    if (canon.back() != '/') {
+        canon += '/';
+    }
+    canon += base;
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        // errors name the file as given, not the file reached
+        ExceptionSink check;
+        if (smh && !smh->checkFilesystemAccess(canon.c_str(), mode, &check)) {
+            QoreValue err = check.getExceptionErr();
+            QoreStringValueHelper err_str(err);
+            std::string code = err_str->empty() ? std::string("FILESYSTEM-ACCESS-DENIED")
+                : std::string(err_str->c_str());
+            check.clear();
+            xsink->raiseException(code.c_str(), "%s: access to the keytab file '%s' denied: the file opened is not "
+                "permitted by the security policy", context, given.c_str());
+            return -1;
+        }
+    }
+    int flags = (write ? O_RDWR : O_RDONLY) | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
+    Krb5FdHolder f(openat(dfd.fd, base.c_str(), flags));
+    if (f.fd < 0 && errno == ENOENT && (mode & QSEC_CREATE)) {
+        // a new file, as the library creates one
+        f.fd = openat(dfd.fd, base.c_str(), flags | O_CREAT | O_EXCL, 0600);
+        if (f.fd < 0 && errno == EEXIST) {
+            retry = true;
+            return 0;
+        }
+    }
+    if (f.fd < 0) {
+        if (errno == ENOENT && !write) {
+            missing = true;
+            return 0;
+        }
+        if (errno == ELOOP) {
+            // a link at the last component, put there after realpath()
+            retry = true;
+            return 0;
+        }
+        xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot open the keytab file '%s'", context,
+            given.c_str());
+        return -1;
+    }
+    struct stat st;
+    // a regular file with one link: another link to it could be in a directory that the policy does not allow
+    if (fstat(f.fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the keytab file '%s' is not a regular file with one link",
+            context, given.c_str());
+        return -1;
+    }
+    int fl = fcntl(f.fd, F_GETFL);
+    if (fl != -1) {
+        fcntl(f.fd, F_SETFL, fl & ~O_NONBLOCK);
+    }
+    if (!st.st_size && (mode & QSEC_CREATE)) {
+        // the header of an empty keytab file (version 0x502), as the library writes it in a file that it creates
+        static const unsigned char header[2] = {0x05, 0x02};
+        if (pwrite(f.fd, header, sizeof header, 0) != static_cast<ssize_t>(sizeof header)) {
+            xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot write the keytab file '%s'", context,
+                given.c_str());
+            return -1;
+        }
+    }
+    fd = f.release();
+    missing = false;
+    return 0;
+}
+
+int Krb5PinnedKeytab::copy(krb5_keytab file, ExceptionSink* xsink, const char* context) {
+    // the entries in the order of the file: a MEMORY keytab gives the entry added last first
+    struct Entries {
+        krb5_context ctx;
+        std::vector<krb5_keytab_entry> list;
+
+        ~Entries() {
+            for (krb5_keytab_entry& e : list) {
+                krb5_free_keytab_entry_contents(ctx, &e);
+            }
+        }
+    } entries = {ctx, {}};
+    {
+        rewind();
+        Krb5KeytabCursorHolder cursor(ctx, file);
+        krb5_error_code rc = cursor.start();
+        if (rc) {
+            return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+        }
+        while (true) {
+            krb5_keytab_entry entry;
+            memset(&entry, 0, sizeof(entry));
+            rc = krb5_kt_next_entry(ctx, file, &entry, &cursor.cursor);
+            if (rc == KRB5_KT_END) {
+                break;
+            }
+            if (rc) {
+                return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+            }
+            entries.list.push_back(entry);
+        }
+    }
+    std::string copy_name = krb5_module_keytab_name();
+    krb5_keytab mem = nullptr;
+    krb5_error_code rc = krb5_kt_resolve(ctx, copy_name.c_str(), &mem);
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+    }
+    for (auto i = entries.list.rbegin(), e = entries.list.rend(); i != e; ++i) {
+        rc = krb5_kt_add_entry(ctx, mem, &*i);
+        if (rc) {
+            krb5_kt_close(ctx, mem);
+            return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+        }
+    }
+    keytab = mem;
+    name = copy_name;
+    return 0;
 }
 
 static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsink, const char* context) {
@@ -579,6 +1179,212 @@ static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsin
         "%s: MIT Kerberos/GSSAPI performs KDC network I/O internally, so this module cannot enforce "
         "the active fine-grained network sandbox policy with post-DNS checks", context);
     return false;
+}
+
+//! Gives the directory of the replay caches of the GSSAPI acceptors of code that a sandbox governs (qore#7756)
+/** The temporary directory of the process (\c TMPDIR, \c TMP, \c TEMP, \c TEMPDIR or \c /tmp, as
+    \c Util::tmp_location() finds it) and in it a directory of the module for the effective user of the process
+*/
+static std::string krb5_rcache_dir() {
+    std::string dir;
+    for (const char* var : {"TMPDIR", "TMP", "TEMP", "TEMPDIR"}) {
+        QoreEnvironmentValue val(var);
+        if (val && !val.str().empty()) {
+            dir = val.str();
+            break;
+        }
+    }
+    if (dir.empty()) {
+        dir = "/tmp";
+    }
+    char* real = realpath(dir.c_str(), nullptr);
+    if (real) {
+        dir = real;
+        free(real);
+    }
+    while (dir.size() > 1 && dir.back() == '/') {
+        dir.pop_back();
+    }
+    if (dir.back() != '/') {
+        dir += '/';
+    }
+    dir += "qore-krb5-rcache-" + std::to_string(geteuid());
+    return dir;
+}
+
+//! Checks the replay cache directory and, if it exists, the replay cache file of a GSSAPI acceptor of code that a
+//! sandbox governs (qore#7756)
+/** The library opens the replay cache by name, following links, for every authenticator that it accepts: the
+    directory must be a directory of the effective user that only it can use, in a temporary directory that other
+    users cannot change entries of (sticky, or not writable by them), and the file a regular file of the effective
+    user with one link, or the library could write to another file; and the filesystem policy of the caller's sandbox
+    must not allow it to change the entries on that path (the temporary directory, the replay cache directory or the
+    file), as it could replace the directory or the file between this check and the library's open, which is not
+    detected.  The sandboxes of other code that may change them are not known here: no sandbox may be given that
+    access.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int krb5_check_rcache(const std::string& dir, const std::string& path, ExceptionSink* xsink,
+        const char* context) {
+    std::string tmp = dir.substr(0, dir.rfind('/'));
+    if (tmp.empty()) {
+        tmp = "/";
+    }
+    struct stat st;
+    if (stat(tmp.c_str(), &st) || !S_ISDIR(st.st_mode) || ((st.st_mode & (S_IWGRP | S_IWOTH))
+        && !(st.st_mode & S_ISVTX))) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the temporary directory '%s' of the replay caches of the "
+            "GSSAPI acceptors of code that a sandbox governs is writable by other users and not sticky", context,
+            tmp.c_str());
+        return -1;
+    }
+    // the owner of a directory can rename and remove the entries of others in it, also with the sticky bit
+    if (st.st_uid && st.st_uid != geteuid()) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the temporary directory '%s' of the replay caches of the "
+            "GSSAPI acceptors of code that a sandbox governs belongs to another user than root or the effective user "
+            "of the process", context, tmp.c_str());
+        return -1;
+    }
+    if (lstat(dir.c_str(), &st) || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077)) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache directory '%s' of the GSSAPI acceptors of "
+            "code that a sandbox governs is not a directory that only the effective user of the process can use",
+            context, dir.c_str());
+        return -1;
+    }
+    if (lstat(path.c_str(), &st) ? errno != ENOENT
+        : (!S_ISREG(st.st_mode) || st.st_nlink != 1 || st.st_uid != geteuid())) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache '%s' of the GSSAPI acceptor of code that a "
+            "sandbox governs is not a regular file of the effective user of the process with one link", context,
+            path.c_str());
+        return -1;
+    }
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        for (const char* p : {tmp.c_str(), dir.c_str(), path.c_str()}) {
+            for (int mode : {QSEC_WRITE, QSEC_CREATE, QSEC_DELETE}) {
+                // a query of the policy: a denial is the expected answer
+                ExceptionSink probe;
+                bool allowed = smh->checkFilesystemAccess(p, mode, &probe);
+                probe.clear();
+                if (allowed) {
+                    xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the filesystem policy of the sandbox allows "
+                        "changes to '%s' on the path of the replay cache of its GSSAPI acceptors, with which it could "
+                        "make the library write to other files; no sandbox may be given write, create or delete "
+                        "access to the temporary directory or to the replay cache directory", context, p);
+                    return -1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+//! The token of a process (see krb5_process_token())
+struct Krb5ProcessToken {
+    //! the process that the token was made for
+    pid_t pid;
+    //! the token
+    std::string token;
+};
+
+//! Gives a token of the process, which makes names of the module that are unique only in the process unique on the
+//! host; a new one after a fork
+/** Lock-free, so that a fork while another thread makes a token cannot leave a lock held in the child: a token is an
+    immutable object that an atomic pointer publishes; a caller that finds none, or one of another process (the
+    parent, after a fork), makes one and publishes it unless another thread was faster.  The object that a token of
+    the process replaces after a fork is not freed (once per fork; the parent may still use it).
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int krb5_process_token(std::string& out, ExceptionSink* xsink) {
+    static std::atomic<Krb5ProcessToken*> current(nullptr);
+    pid_t pid = getpid();
+    Krb5ProcessToken* t = current.load(std::memory_order_acquire);
+    while (!t || t->pid != pid) {
+        Krb5ProcessToken* nt;
+        try {
+            std::random_device rd;
+            std::string rv = std::to_string(pid) + '-';
+            krb5_append_hex(rv, std::to_string(rd()) + '-' + std::to_string(rd()));
+            nt = new Krb5ProcessToken{pid, rv};
+        } catch (const std::exception&) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from keytab: no random source "
+                "is available for the name of the replay cache of a GSSAPI acceptor of code that a sandbox governs");
+            return -1;
+        }
+        if (current.compare_exchange_strong(t, nt, std::memory_order_acq_rel, std::memory_order_acquire)) {
+            t = nt;
+        } else {
+            // another thread published one first: t is it
+            delete nt;
+        }
+    }
+    out = t->token;
+    return 0;
+}
+
+//! Gives the replay cache of the GSSAPI acceptor credentials of the caller's isolation domain (qore#7756)
+/** The acceptor writes every authenticator that it accepts to the replay cache; without one in the credential, the
+    library uses the replay cache of the process (the default replay cache file in the system's temporary directory,
+    or the one of \c KRB5RCACHENAME, \c KRB5RCACHETYPE and \c KRB5RCACHEDIR), which is shared with the rest of the
+    process and with other isolation domains.
+
+    The replay cache of the domain is module state, as the memory credential caches of the domain are, not a file of
+    the sandbox: a \c file2 replay cache in a directory of the module in the temporary directory of the process
+    (see krb5_rcache_dir()), created with mode 0700, named with the prefix of the domain (and, for the namespace of a
+    Program, a token of the process); no filesystem access is needed or checked for it, and no sandbox may be given
+    access to the directory.  The file is created here if it does not exist (never through a link).  A temporary
+    directory of the caller's Program (qore#7656) can replace that of the process, if no sandbox can access it.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int krb5_sandbox_rcache_name(const Krb5CacheNamespace& ns, std::string& dir, std::string& rcache_path,
+        ExceptionSink* xsink) {
+    const char* context = "importing GSSAPI credential from keytab";
+    dir = krb5_rcache_dir();
+    if (mkdir(dir.c_str(), 0700) && errno != EEXIST) {
+        xsink->raiseErrnoException("KRB5-SANDBOX-ERROR", errno, "%s: cannot create the replay cache directory '%s' "
+            "of the GSSAPI acceptors of code that a sandbox governs", context, dir.c_str());
+        return -1;
+    }
+    std::string name = ns.prefix;
+    if (ns.by_program) {
+        // Program IDs are unique only in the process
+        std::string token;
+        if (krb5_process_token(token, xsink)) {
+            return -1;
+        }
+        name += token + '-';
+    }
+    name += "krb5-rcache";
+    if (name.size() > NAME_MAX) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the isolation domain name is too long for the name of the "
+            "replay cache of its GSSAPI acceptors", context);
+        return -1;
+    }
+    std::string path = dir + '/' + name;
+    if (krb5_check_rcache(dir, path, xsink, context)) {
+        return -1;
+    }
+    // created as a new file of the effective user, never through a link; an existing one was checked above
+    int fd = open(path.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        xsink->raiseErrnoException("KRB5-SANDBOX-ERROR", errno, "%s: cannot create the replay cache '%s' of the "
+            "GSSAPI acceptor of code that a sandbox governs", context, path.c_str());
+        return -1;
+    }
+    struct stat st;
+    bool ok = !fstat(fd, &st) && S_ISREG(st.st_mode) && st.st_nlink == 1 && st.st_uid == geteuid();
+    close(fd);
+    if (!ok) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache '%s' of the GSSAPI acceptor of code that a "
+            "sandbox governs is not a regular file of the effective user of the process with one link", context,
+            path.c_str());
+        return -1;
+    }
+    rcache_path = path;
+    return 0;
 }
 
 DLLLOCAL QoreStringNode* krb5_unparse_principal(krb5_context ctx, krb5_const_principal principal, ExceptionSink* xsink,
@@ -953,6 +1759,17 @@ QoreHashNode* QoreGssClientContext::step(const char* token_hex, ExceptionSink* x
     if (!krb5_network_sandbox_allows_unmanaged_library_io(xsink, "initializing GSSAPI security context")) {
         return nullptr;
     }
+    // the default credentials are those of the default cache of the process, which is not visible to code that a
+    // sandbox governs (qore#7671): it gives a credential of a cache of its own
+    if (!cred_ref) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "initializing GSSAPI security context: the default credentials "
+                "of the process are not visible to code that a sandbox governs; give a credential of a cache of its "
+                "own (GssCredential::fromCredentialCache())");
+            return nullptr;
+        }
+    }
 
     gss_buffer_desc input_token = GSS_C_EMPTY_BUFFER;
     std::vector<unsigned char> input_bytes;
@@ -1313,6 +2130,41 @@ void QoreGssAcceptorContext::reset() {
 }
 
 QoreHashNode* QoreGssAcceptorContext::step(const char* token_hex, ExceptionSink* xsink) {
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh) {
+            // without a credential, the acceptor uses the default keytab of the process, which is not visible to code
+            // that a sandbox governs (qore#7736): it gives a credential of a keytab of its own
+            if (!cred_ref) {
+                xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the default keytab of "
+                    "the process is not visible to code that a sandbox governs; give a credential of a keytab of its "
+                    "own (GssCredential::fromKeytab())");
+                return nullptr;
+            }
+            // the acceptor writes the authenticators that it accepts to the replay cache of its credential: that of
+            // the isolation domain whose code acquired it from a keytab, which another domain does not use (a
+            // credential that trusted code made and gave it uses the replay cache that trusted code chose) (qore#7756)
+            if (!cred_ref->accept_prefix.empty()) {
+                Krb5CacheNamespace ns;
+                if (krb5_cache_namespace(ns, xsink, "accepting GSSAPI security context")) {
+                    return nullptr;
+                }
+                if (cred_ref->accept_prefix != ns.prefix) {
+                    xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the credential "
+                        "names the replay cache of another isolation domain than that of the code that a sandbox "
+                        "governs; give a credential of a keytab of its own (GssCredential::fromKeytab())");
+                    return nullptr;
+                }
+            }
+        }
+    }
+    // the library opens the replay cache of the credential of sandboxed code by name, following links, for the
+    // authenticator: it is checked before (qore#7756)
+    if (cred_ref && !cred_ref->rcache_path.empty()
+        && krb5_check_rcache(cred_ref->rcache_dir, cred_ref->rcache_path, xsink,
+            "accepting GSSAPI security context")) {
+        return nullptr;
+    }
     if (!token_hex || !*token_hex) {
         xsink->raiseException("KRB5-TOKEN-ERROR", "GSSAPI acceptor input token cannot be empty");
         return nullptr;
@@ -1647,6 +2499,54 @@ QoreGssCredential::QoreGssCredential(const QoreKrb5CredentialCache& cache, Excep
         return;
     }
 
+    // an initiator credential of a cache without a ticket gets one with the client keytab, which is the default client
+    // keytab of the process when the credential names none: the credential of code that a sandbox governs names the
+    // cache and a client keytab of its isolation domain (qore#7736)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "importing GSSAPI credential from cache")) {
+        return;
+    }
+    if (ns.sandboxed) {
+#ifdef HAVE_GSS_ACQUIRE_CRED_FROM
+        // the library gets a ticket with a key of the domain's client keytab when the cache has none, and stores it and
+        // the tickets that it refreshes in the cache: a request to the KDC that writes the cache
+        if (!krb5_check_cache_access(cache.ctx, cache.cache, QSEC_READ | QSEC_WRITE, xsink,
+                "importing GSSAPI credential from cache")
+            || !krb5_network_sandbox_allows_unmanaged_library_io(xsink, "importing GSSAPI credential from cache")
+            || qore_check_cancel(xsink, "importing GSSAPI credential from cache")) {
+            return;
+        }
+        char* full_name = nullptr;
+        krb5_error_code rc = krb5_cc_get_full_name(cache.ctx, cache.cache, &full_name);
+        if (rc) {
+            krb5_raise_exception(xsink, cache.ctx, rc, "KRB5-CACHE-ERROR", "getting credential cache full name");
+            return;
+        }
+        std::string ccache_name(full_name);
+        krb5_free_string(cache.ctx, full_name);
+        std::string client_keytab = "MEMORY:" + ns.prefix + "client";
+        gss_key_value_element_desc elements[2] = {
+            {"ccache", ccache_name.c_str()},
+            {"client_keytab", client_keytab.c_str()},
+        };
+        gss_key_value_set_desc store = {2, elements};
+        // the Kerberos mechanism only, as the import of a cache: no default credentials of other mechanisms
+        gss_OID_set_desc mechs = {1, gss_mech_krb5};
+        OM_uint32 min_stat = 0;
+        OM_uint32 maj = gss_acquire_cred_from(&min_stat, GSS_C_NO_NAME, GSS_C_INDEFINITE, &mechs,
+            GSS_C_INITIATE, &store, &cred, nullptr, nullptr);
+        if (maj != GSS_S_COMPLETE) {
+            gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat,
+                "importing GSSAPI credential from credential cache");
+        }
+#else
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from cache: this GSSAPI library cannot "
+            "keep the client keytab of code that a sandbox governs apart from that of the process "
+            "(gss_acquire_cred_from() is not available)");
+#endif
+        return;
+    }
+
     OM_uint32 min_stat = 0;
     OM_uint32 maj = gss_krb5_import_cred(&min_stat, cache.cache, nullptr, nullptr, &cred);
     if (maj != GSS_S_COMPLETE) {
@@ -1660,6 +2560,90 @@ QoreGssCredential::QoreGssCredential(const QoreKrb5Keytab& keytab, const QoreKrb
         ExceptionSink* xsink) {
     if (!krb5_check_keytab_access(keytab.ctx, keytab.keytab, QSEC_READ, xsink,
             "importing GSSAPI credential from keytab")) {
+        return;
+    }
+
+    // the acceptor writes every authenticator that it accepts to a replay cache, which is that of the process when
+    // the credential names none: the credential of code that a sandbox governs names the keytab and a replay cache
+    // of its isolation domain (qore#7756)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "importing GSSAPI credential from keytab")) {
+        return;
+    }
+    if (ns.sandboxed) {
+#ifdef HAVE_GSS_ACQUIRE_CRED_FROM
+        std::string rcache_dir, rcache_path;
+        if (krb5_sandbox_rcache_name(ns, rcache_dir, rcache_path, xsink)
+            || qore_check_cancel(xsink, "importing GSSAPI credential from keytab")) {
+            return;
+        }
+        // an explicit replay cache of the credential: the library never uses the replay cache of the process for it,
+        // whatever KRB5RCACHENAME, KRB5RCACHETYPE and KRB5RCACHEDIR say; never "none:", which turns replay detection
+        // off
+        std::string rcache = "file2:" + rcache_path;
+        // the library reads a file keytab by name at every context that the credential accepts: the credential
+        // names a copy of the entries of the file that the module opened and checked (qore#7767)
+        Krb5PinnedKeytab pinned(keytab.ctx);
+        if (pinned.pin(keytab.keytab, QSEC_READ, false, xsink, "importing GSSAPI credential from keytab")) {
+            return;
+        }
+        char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
+        if (pinned.keytab) {
+            if (pinned.name.size() >= sizeof(kt_name)) {
+                xsink->raiseException("KRB5-KEYTAB-ERROR", "importing GSSAPI credential from keytab: keytab name "
+                    "too long");
+                return;
+            }
+            strcpy(kt_name, pinned.name.c_str());
+        } else {
+            krb5_error_code rc = krb5_kt_get_name(keytab.ctx, keytab.keytab, kt_name, sizeof(kt_name));
+            if (rc) {
+                krb5_raise_exception(xsink, keytab.ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+                return;
+            }
+        }
+        // the principal is the name of the acceptor, as with gss_krb5_import_cred()
+        gss_name_t desired_name = GSS_C_NO_NAME;
+        OM_uint32 min_stat = 0;
+        if (principal) {
+            QoreStringNodeHolder princ_str(principal->toString(xsink));
+            if (*xsink) {
+                return;
+            }
+            gss_buffer_desc name_buf = GSS_C_EMPTY_BUFFER;
+            name_buf.value = const_cast<char*>(princ_str->c_str());
+            name_buf.length = princ_str->size();
+            OM_uint32 maj = gss_import_name(&min_stat, &name_buf, GSS_KRB5_NT_PRINCIPAL_NAME, &desired_name);
+            if (maj != GSS_S_COMPLETE) {
+                gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat, "importing keytab principal name");
+                return;
+            }
+        }
+        gss_key_value_element_desc elements[2] = {
+            {"keytab", kt_name},
+            {"rcache", rcache.c_str()},
+        };
+        gss_key_value_set_desc store = {2, elements};
+        // the Kerberos mechanism only, as the import of a keytab: no default credentials of other mechanisms
+        gss_OID_set_desc mechs = {1, gss_mech_krb5};
+        OM_uint32 maj = gss_acquire_cred_from(&min_stat, desired_name, GSS_C_INDEFINITE, &mechs, GSS_C_ACCEPT,
+            &store, &cred, nullptr, nullptr);
+        if (desired_name != GSS_C_NO_NAME) {
+            OM_uint32 release_min = 0;
+            gss_release_name(&release_min, &desired_name);
+        }
+        if (maj != GSS_S_COMPLETE) {
+            gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat, "importing GSSAPI credential from keytab");
+            return;
+        }
+        accept_prefix = ns.prefix;
+        this->rcache_dir = rcache_dir;
+        this->rcache_path = rcache_path;
+#else
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from keytab: this GSSAPI library "
+            "cannot keep the replay cache of an acceptor of code that a sandbox governs apart from that of the process "
+            "(gss_acquire_cred_from() is not available)");
+#endif
         return;
     }
 
@@ -1738,6 +2722,28 @@ QoreKrb5CredentialCache::QoreKrb5CredentialCache(const char* cache_name, bool us
         return;
     }
 
+    // the caches of code that a sandbox governs are those of its isolation domain (qore#7671): the default cache
+    // is a memory cache of the domain, and a name refers to a cache of the domain
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "opening credential cache")) {
+        return;
+    }
+    std::string mapped;
+    if (ns.sandboxed) {
+        visible_prefix = ns.prefix;
+        if (use_default) {
+            mapped = "MEMORY:" + ns.prefix + "default";
+            use_default = false;
+        } else if (cache_name && *cache_name) {
+            if (krb5_map_cache_name(cache_name, ns, mapped, xsink, "opening credential cache")) {
+                return;
+            }
+        }
+        if (!mapped.empty()) {
+            cache_name = mapped.c_str();
+        }
+    }
+
     if (use_default) {
         rc = krb5_cc_default(ctx, &cache);
         if (rc) {
@@ -1767,7 +2773,9 @@ QoreKrb5CredentialCache::~QoreKrb5CredentialCache() {
 }
 
 QoreStringNode* QoreKrb5CredentialCache::getName() const {
-    return new QoreStringNode(krb5_cc_get_name(ctx, cache));
+    // the name that the code of a sandbox gave, for that code (qore#7671)
+    return new QoreStringNode(krb5_visible_cache_name(krb5_cc_get_type(ctx, cache), krb5_cc_get_name(ctx, cache),
+        krb5_caller_visible_prefix(visible_prefix), false));
 }
 
 QoreStringNode* QoreKrb5CredentialCache::getType() const {
@@ -1782,7 +2790,8 @@ QoreStringNode* QoreKrb5CredentialCache::getFullName(ExceptionSink* xsink) const
         return nullptr;
     }
 
-    QoreStringNode* rv = new QoreStringNode(full_name);
+    QoreStringNode* rv = new QoreStringNode(krb5_visible_cache_name(krb5_cc_get_type(ctx, cache), full_name,
+        krb5_caller_visible_prefix(visible_prefix), true));
     krb5_free_string(ctx, full_name);
     return rv;
 }
@@ -2097,6 +3106,14 @@ QoreStringNode* QoreKrb5Context::getDefaultRealm(ExceptionSink* xsink) const {
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xsink) const {
+    // the default cache of code that a sandbox governs is a memory cache of its isolation domain (qore#7671)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "getting the default credential cache name")) {
+        return nullptr;
+    }
+    if (ns.sandboxed) {
+        return new QoreStringNode("MEMORY:default");
+    }
     if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "getting the default credential cache name")) {
         return nullptr;
     }
@@ -2110,6 +3127,14 @@ QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xs
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultKeytabName(ExceptionSink* xsink) const {
+    // the default keytab of code that a sandbox governs is a memory keytab of its isolation domain (qore#7736)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "getting the default keytab name")) {
+        return nullptr;
+    }
+    if (ns.sandboxed) {
+        return new QoreStringNode("MEMORY:default");
+    }
     if (!krb5_check_host_credential(xsink, "KRB5-KEYTAB-ERROR", "getting the default keytab name")) {
         return nullptr;
     }
@@ -2128,7 +3153,7 @@ QoreKrb5CredentialCache* QoreKrb5Context::openCredentialCache(const char* cache_
 }
 
 QoreKrb5CredentialCache* QoreKrb5Context::openDefaultCredentialCache(ExceptionSink* xsink) const {
-    if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "opening the default credential cache")) {
+    if (!krb5_check_default_store(xsink, "KRB5-CACHE-ERROR", "opening the default credential cache")) {
         return nullptr;
     }
     return new QoreKrb5CredentialCache(nullptr, true, xsink);
@@ -2139,7 +3164,7 @@ QoreKrb5Keytab* QoreKrb5Context::openKeytab(const char* keytab_name, ExceptionSi
 }
 
 QoreKrb5Keytab* QoreKrb5Context::openDefaultKeytab(ExceptionSink* xsink) const {
-    if (!krb5_check_host_credential(xsink, "KRB5-KEYTAB-ERROR", "opening the default keytab")) {
+    if (!krb5_check_default_store(xsink, "KRB5-KEYTAB-ERROR", "opening the default keytab")) {
         return nullptr;
     }
     return new QoreKrb5Keytab(nullptr, true, xsink);
@@ -2266,7 +3291,16 @@ private:
     DLLLOCAL int addCcacheOption(krb5_context ctx, const char* key, const char* name, int access_mode,
             ExceptionSink* xsink) {
         krb5_ccache ccache = nullptr;
-        krb5_error_code rc = krb5_cc_resolve(ctx, name, &ccache);
+        // a cache of the isolation domain of code that a sandbox governs (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, "using initial-credential cache option")) {
+            return -1;
+        }
+        std::string mapped;
+        if (krb5_map_cache_name(name, ns, mapped, xsink, "using initial-credential cache option")) {
+            return -1;
+        }
+        krb5_error_code rc = krb5_cc_resolve(ctx, mapped.c_str(), &ccache);
         if (rc) {
             return krb5_raise_exception(xsink, ctx, rc, "KRB5-INIT-CREDS-ERROR",
                 "resolving credential cache option");
@@ -2462,9 +3496,15 @@ QoreKrb5Credentials* QoreKrb5Context::acquireCredentialsWithKeytab(const QoreKrb
         return nullptr;
     }
 
+    // the keys of the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(keytab.ctx);
+    if (pinned.pin(keytab.keytab, QSEC_READ, false, xsink, "acquiring initial credentials with keytab")) {
+        return nullptr;
+    }
+
     krb5_creds creds;
     memset(&creds, 0, sizeof(creds));
-    krb5_error_code rc = krb5_get_init_creds_keytab(ctx, &creds, principal.principal, keytab.keytab,
+    krb5_error_code rc = krb5_get_init_creds_keytab(ctx, &creds, principal.principal, pinned.use(keytab.keytab),
         opts.start_time, opts.serviceName(), opts.opt);
     if (rc) {
         krb5_raise_exception(xsink, ctx, rc, "KRB5-INIT-CREDS-ERROR",
@@ -2646,12 +3686,20 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
     if (qore_check_cancel(xsink, "listing credential caches")) {
         return nullptr;
     }
+
+    // the listing enumerates the host's cache collection: it is refused to all code that may not receive the host's
+    // secrets, also to code that a sandbox governs (qore#6844)
     if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "listing the credential caches of the host")) {
         return nullptr;
     }
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKrb5CredentialCacheInfo->getTypeInfo()), xsink);
     Krb5CccolCursorHolder cursor(ctx);
+    // the caches of code that a sandbox governs are listed with the names that it gave them (qore#7671)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "listing credential caches")) {
+        return nullptr;
+    }
 
     krb5_error_code rc = cursor.start();
     if (rc) {
@@ -2688,6 +3736,12 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
             "listing credential cache collection entry");
         if (!accessible) {
             xsink->clear();
+            // the caches that are not file based of other code are not visible to code that a sandbox governs
+            // (qore#7671)
+            if (type && krb5_cache_backend_is_non_filesystem(type)) {
+                krb5_cc_close(ctx, cc);
+                continue;
+            }
         }
 
         info->setKeyValue("type", new QoreStringNode(type ? type : ""), xsink);
@@ -2699,12 +3753,14 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
             info->setKeyValue("has_principal", false, xsink);
             info->setKeyValue("principal", QoreValue(), xsink);
         } else {
-            info->setKeyValue("name", new QoreStringNode(name ? name : ""), xsink);
+            info->setKeyValue("name", new QoreStringNode(krb5_visible_cache_name(type, name ? name : "", ns.prefix,
+                false)), xsink);
 
             char* full_name = nullptr;
             rc = krb5_cc_get_full_name(ctx, cc, &full_name);
             if (!rc && full_name) {
-                info->setKeyValue("full_name", new QoreStringNode(full_name), xsink);
+                info->setKeyValue("full_name", new QoreStringNode(krb5_visible_cache_name(type, full_name, ns.prefix,
+                    true)), xsink);
                 krb5_free_string(ctx, full_name);
             } else {
                 info->setKeyValue("full_name", new QoreStringNode(""), xsink);
@@ -2751,6 +3807,26 @@ QoreKrb5Keytab::QoreKrb5Keytab(const char* keytab_name, bool use_default, Except
         return;
     }
 
+    // the keytabs of code that a sandbox governs are those of its isolation domain (qore#7736): the default keytab
+    // is a memory keytab of the domain, and a memory keytab name refers to a keytab of the domain
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "opening keytab")) {
+        return;
+    }
+    std::string mapped;
+    if (ns.sandboxed) {
+        visible_prefix = ns.prefix;
+        if (use_default) {
+            mapped = "MEMORY:" + ns.prefix + "default";
+            use_default = false;
+        } else if (keytab_name && *keytab_name) {
+            krb5_map_keytab_name(keytab_name, ns, mapped);
+        }
+        if (!mapped.empty()) {
+            keytab_name = mapped.c_str();
+        }
+    }
+
     if (use_default) {
         rc = krb5_kt_default(ctx, &keytab);
         if (rc) {
@@ -2787,7 +3863,9 @@ QoreStringNode* QoreKrb5Keytab::getName(ExceptionSink* xsink) const {
         return nullptr;
     }
 
-    return new QoreStringNode(name);
+    // the name that the code of a sandbox gave, for that code (qore#7736)
+    return new QoreStringNode(krb5_visible_cache_name(krb5_kt_get_type(ctx, keytab), name,
+        krb5_caller_visible_prefix(visible_prefix), true));
 }
 
 QoreStringNode* QoreKrb5Keytab::getType() const {
@@ -2826,7 +3904,15 @@ bool QoreKrb5Keytab::hasContent(ExceptionSink* xsink) const {
         return false;
     }
 
-    krb5_error_code rc = krb5_kt_have_content(ctx, keytab);
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, true, xsink, "checking keytab content")) {
+        return false;
+    }
+    if (pinned.missing) {
+        return false;
+    }
+    krb5_error_code rc = krb5_kt_have_content(ctx, pinned.use(keytab));
     if (!rc) {
         return true;
     }
@@ -2877,7 +3963,14 @@ int QoreKrb5Keytab::addEntry(const QoreKrb5Principal& principal, const char* key
     entry.vno = kvno;
     entry.timestamp = time(nullptr);
 
-    rc = krb5_kt_add_entry(ctx, keytab, &entry);
+    // the file that the module opened and checked, written in place (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_WRITE | QSEC_CREATE, false, xsink, "adding keytab entry")) {
+        krb5_free_keytab_entry_contents(ctx, &entry);
+        return -1;
+    }
+    pinned.rewind();
+    rc = krb5_kt_add_entry(ctx, pinned.use(keytab), &entry);
     krb5_free_keytab_entry_contents(ctx, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "adding keytab entry");
@@ -2892,10 +3985,16 @@ QoreHashNode* QoreKrb5Keytab::getEntry(const QoreKrb5Principal& principal, krb5_
         return nullptr;
     }
 
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, false, xsink, "reading keytab entry")) {
+        return nullptr;
+    }
+
     krb5_keytab_entry entry;
     memset(&entry, 0, sizeof(entry));
 
-    krb5_error_code rc = krb5_kt_get_entry(ctx, keytab, principal.principal, kvno, enctype, &entry);
+    krb5_error_code rc = krb5_kt_get_entry(ctx, pinned.use(keytab), principal.principal, kvno, enctype, &entry);
     if (rc) {
         krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "reading keytab entry");
         return nullptr;
@@ -2918,8 +4017,15 @@ QoreListNode* QoreKrb5Keytab::listEntries(ExceptionSink* xsink) const {
         return nullptr;
     }
 
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, false, xsink, "listing keytab entries")) {
+        return nullptr;
+    }
+    krb5_keytab kt = pinned.use(keytab);
+
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKrb5KeytabEntryInfo->getTypeInfo()), xsink);
-    Krb5KeytabCursorHolder cursor(ctx, keytab);
+    Krb5KeytabCursorHolder cursor(ctx, kt);
 
     krb5_error_code rc = cursor.start();
     if (rc) {
@@ -2934,7 +4040,7 @@ QoreListNode* QoreKrb5Keytab::listEntries(ExceptionSink* xsink) const {
 
         krb5_keytab_entry entry;
         memset(&entry, 0, sizeof(entry));
-        rc = krb5_kt_next_entry(ctx, keytab, &entry, &cursor.cursor);
+        rc = krb5_kt_next_entry(ctx, kt, &entry, &cursor.cursor);
         if (rc == KRB5_KT_END) {
             break;
         }
@@ -2965,15 +4071,24 @@ int QoreKrb5Keytab::removeEntry(const QoreKrb5Principal& principal, krb5_kvno kv
         return -1;
     }
 
+    // the file that the module opened and checked, written in place (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_WRITE, false, xsink, "removing keytab entry")) {
+        return -1;
+    }
+    krb5_keytab kt = pinned.use(keytab);
+
     krb5_keytab_entry entry;
     memset(&entry, 0, sizeof(entry));
 
-    krb5_error_code rc = krb5_kt_get_entry(ctx, keytab, principal.principal, kvno, enctype, &entry);
+    pinned.rewind();
+    krb5_error_code rc = krb5_kt_get_entry(ctx, kt, principal.principal, kvno, enctype, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "looking up keytab entry for removal");
     }
 
-    rc = krb5_kt_remove_entry(ctx, keytab, &entry);
+    pinned.rewind();
+    rc = krb5_kt_remove_entry(ctx, kt, &entry);
     krb5_free_keytab_entry_contents(ctx, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "removing keytab entry");

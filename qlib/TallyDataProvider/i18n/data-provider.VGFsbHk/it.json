@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create Form",
+          "source": "Create form",
           "message": "Crea modulo"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "La chiave del campo utilizzata per garantire invii unici"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Ottieni modulo"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
@@ -1068,7 +1068,7 @@
           "message": "L'identificatore univoco del modulo da recuperare"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update Form",
+          "source": "Update form",
           "message": "Aggiorna Modulo"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "La chiave del campo utilizzata per garantire invii unici"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete Form",
+          "source": "Delete form",
           "message": "Elimina modulo"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "L'identificatore univoco del modulo da eliminare (sposta nel cestino)"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
-          "source": "Search Forms",
+          "source": "Search forms",
           "message": "Cerca moduli"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Elenco di ID delle aree di lavoro per filtrare i risultati"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Ottieni invio"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "L'identificatore univoco dell'invio da recuperare"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Elimina invio"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "L'identificatore univoco dell'invio da eliminare"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
-          "source": "Search Submissions",
+          "source": "Search submissions",
           "message": "Cerca invii"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Ottieni gli invii successivi a uno specifico ID di invio"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
-          "source": "Search Questions",
+          "source": "Search questions",
           "message": "Cerca domande"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "L'ID del modulo da cui recuperare le domande"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Crea webhook"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Identificatore facoltativo per il sottoscrittore esterno"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Aggiorna webhook"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Il valore dell'intestazione HTTP personalizzata"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Elimina webhook"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "L'identificatore univoco del webhook da eliminare"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
-          "source": "Search Webhooks",
+          "source": "Search webhooks",
           "message": "Cerca webhook"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Numero di webhook per pagina (1-100, predefinito `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search Webhook Events",
+          "source": "Search webhook events",
           "message": "Cerca eventi webhook"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Numero di pagina per la paginazione (predefinito `1`)"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
-          "source": "Retry Webhook Event",
+          "source": "Retry webhook event",
           "message": "Riprova evento webhook"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "L'ID dell'evento webhook non riuscito da riprovare"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create Workspace",
+          "source": "Create workspace",
           "message": "Crea spazio di lavoro"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "Il nome visualizzato per il nuovo spazio di lavoro"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Ottieni workspace"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "L'identificatore univoco dell'area di lavoro da recuperare"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace",
+          "source": "Update workspace",
           "message": "Aggiorna area di lavoro"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Il nuovo nome visualizzato per l'area di lavoro"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete Workspace",
+          "source": "Delete workspace",
           "message": "Elimina area di lavoro"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "L'identificatore univoco dell'area di lavoro da eliminare; questa operazione elimina anche tutti i moduli nell'area di lavoro"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
-          "source": "Search Workspaces",
+          "source": "Search workspaces",
           "message": "Cerca aree di lavoro"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Numero di pagina per la paginazione (predefinito `1`)"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Ottieni utente corrente"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Recupera informazioni sull'utente attualmente autenticato"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
-          "source": "New Form Submission",
+          "source": "New form submission",
           "message": "Nuovo invio del modulo"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {

@@ -266,7 +266,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/customers",
                 "operation_id": "list-customers",
-                "display_name": "List Customers",
+                "display_name": "List customers",
                 "short_desc": "List the customers in this Paddle account",
                 "desc": "Lists customers, newest first by default.\n\n"
                     "Only `active` customers are returned unless `status` says otherwise, which is worth "
@@ -310,7 +310,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/customers",
                 "operation_id": "create-customer",
-                "display_name": "Create Customer",
+                "display_name": "Create customer",
                 "short_desc": "Create a customer",
                 "desc": "Creates a customer.\n\n"
                     "`email` is the only required field and it must be unique in the account: creating a "
@@ -338,7 +338,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/customers/{customer_id}",
                 "operation_id": "get-customer",
-                "display_name": "Get Customer",
+                "display_name": "Get customer",
                 "short_desc": "Retrieve one customer",
                 "desc": "Retrieves a customer by Paddle ID, including any `custom_data` stored against it.\n\n"
                     "This returns a customer whatever its status, so it is how an archived customer is read "
@@ -354,7 +354,7 @@ public class PaddleManifest {
                 "method": "PATCH",
                 "path": "/customers/{customer_id}",
                 "operation_id": "update-customer",
-                "display_name": "Update Customer",
+                "display_name": "Update customer",
                 "short_desc": "Update a customer",
                 "desc": "Updates a customer. Only the fields supplied are changed; everything else is left "
                     "as it is.\n\n"
@@ -389,7 +389,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/customers/{customer_id}/auth-token",
                 "operation_id": "generate-customer-authentication-token",
-                "display_name": "Get Customer Authentication Token",
+                "display_name": "Get customer authentication token",
                 "short_desc": "Generate a short-lived token identifying a customer to Paddle.js",
                 "desc": "Generates an authentication token for a customer, so that a checkout opened with "
                     "Paddle.js knows who the buyer is without them signing in again.\n\n"
@@ -409,7 +409,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/customers/{customer_id}/credit-balances",
                 "operation_id": "list-credit-balances",
-                "display_name": "List Customer Credit Balances",
+                "display_name": "List customer credit balances",
                 "short_desc": "List a customer's credit balances, by currency",
                 "desc": "Lists the credit a customer holds, one entry per currency.\n\n"
                     "Each entry splits the balance into `available` credit, credit `reserved` against an "
@@ -436,7 +436,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/products",
                 "operation_id": "list-products",
-                "display_name": "List Products",
+                "display_name": "List products",
                 "short_desc": "List the products in the catalog",
                 "desc": "Lists catalog products.\n\n"
                     "Only `active` products are returned unless `status` says otherwise. Set `include` to "
@@ -474,7 +474,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/products",
                 "operation_id": "create-product",
-                "display_name": "Create Product",
+                "display_name": "Create product",
                 "short_desc": "Create a catalog product",
                 "desc": "Creates a product in the catalog.\n\n"
                     "A product is what you sell; it carries no price of its own. Create at least one price "
@@ -509,7 +509,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/products/{product_id}",
                 "operation_id": "get-product",
-                "display_name": "Get Product",
+                "display_name": "Get product",
                 "short_desc": "Retrieve one catalog product",
                 "desc": "Retrieves a product by Paddle ID, whatever its status.\n\n"
                     "Set `include` to `prices` to get the product's prices in the same response.",
@@ -529,7 +529,7 @@ public class PaddleManifest {
                 "method": "PATCH",
                 "path": "/products/{product_id}",
                 "operation_id": "update-product",
-                "display_name": "Update Product",
+                "display_name": "Update product",
                 "short_desc": "Update a catalog product",
                 "desc": "Updates a product. Only the fields supplied are changed.\n\n"
                     "`tax_category` is fixed at creation and cannot be changed here; a product in the wrong "
@@ -563,7 +563,7 @@ public class PaddleManifest {
                 "path": "/products/{product_id}",
                 "operation_id": "update-product",
                 "variant_of": "update_product",
-                "display_name": "Archive Product",
+                "display_name": "Archive product",
                 "short_desc": "Retire a catalog product",
                 "desc": "Archives a product, so it can no longer be billed and stops appearing in "
                     "listings.\n\n"
@@ -606,7 +606,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/prices",
                 "operation_id": "list-prices",
-                "display_name": "List Prices",
+                "display_name": "List prices",
                 "short_desc": "List the prices in the catalog",
                 "desc": "Lists catalog prices.\n\n"
                     "Only `active` prices are returned unless `status` says otherwise. Filter by "
@@ -656,7 +656,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/prices",
                 "operation_id": "create-price",
-                "display_name": "Create Price",
+                "display_name": "Create price",
                 "short_desc": "Create a price for a catalog product",
                 "desc": "Creates a price against a product.\n\n"
                     "`unit_price` is an amount in the **smallest unit of its currency** given as a string - "
@@ -701,7 +701,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/prices/{price_id}",
                 "operation_id": "get-price",
-                "display_name": "Get Price",
+                "display_name": "Get price",
                 "short_desc": "Retrieve one catalog price",
                 "desc": "Retrieves a price by Paddle ID, whatever its status.\n\n"
                     "Set `include` to `product` to get the owning product in the same response.",
@@ -721,7 +721,7 @@ public class PaddleManifest {
                 "method": "PATCH",
                 "path": "/prices/{price_id}",
                 "operation_id": "update-price",
-                "display_name": "Update Price",
+                "display_name": "Update price",
                 "short_desc": "Update a catalog price",
                 "desc": "Updates a price. Only the fields supplied are changed.\n\n"
                     "**Changing `unit_price` changes what new purchases cost; existing subscriptions keep "
@@ -759,7 +759,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/subscriptions",
                 "operation_id": "list-subscriptions",
-                "display_name": "List Subscriptions",
+                "display_name": "List subscriptions",
                 "short_desc": "List the subscriptions in this Paddle account",
                 "desc": "Lists subscriptions.\n\n"
                     "Filter by `customer_id` for one customer's subscriptions, by `status` for the state "
@@ -808,7 +808,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/subscriptions/{subscription_id}",
                 "operation_id": "get-subscription",
-                "display_name": "Get Subscription",
+                "display_name": "Get subscription",
                 "short_desc": "Retrieve one subscription",
                 "desc": "Retrieves a subscription by Paddle ID.\n\n"
                     "`items` is what the customer is billed for, `current_billing_period` is the window "
@@ -839,7 +839,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/transactions",
                 "operation_id": "list-transactions",
-                "display_name": "List Transactions",
+                "display_name": "List transactions",
                 "short_desc": "List the transactions in this Paddle account",
                 "desc": "Lists transactions - the records that calculate and capture revenue.\n\n"
                     "Filter by `status` to separate what has been paid (`completed`, `paid`) from what is "
@@ -904,7 +904,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/transactions",
                 "operation_id": "create-transaction",
-                "display_name": "Create Transaction",
+                "display_name": "Create transaction",
                 "short_desc": "Create a transaction, optionally billing it",
                 "desc": "Creates a transaction: the record of what a customer is being charged for.\n\n"
                     "`items` is required - each entry names a `price_id` and a `quantity`, or carries a "
@@ -961,7 +961,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/transactions/{transaction_id}",
                 "operation_id": "get-transaction",
-                "display_name": "Get Transaction",
+                "display_name": "Get transaction",
                 "short_desc": "Retrieve one transaction",
                 "desc": "Retrieves a transaction by Paddle ID.\n\n"
                     "`details.totals` breaks the amount down into subtotal, tax, discount and the balance "
@@ -992,7 +992,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/reports",
                 "operation_id": "list-reports",
-                "display_name": "List Reports",
+                "display_name": "List reports",
                 "short_desc": "List the reports requested from this account",
                 "desc": "Lists reports and the state each is in.\n\n"
                     "A report is generated asynchronously: it starts `pending`, becomes `ready` when the "
@@ -1019,7 +1019,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/reports",
                 "operation_id": "create-report",
-                "display_name": "Create Report",
+                "display_name": "Create report",
                 "short_desc": "Request a report; it is generated asynchronously",
                 "desc": "Requests a report. Paddle generates it in the background, so this returns a report "
                     "in the `pending` state rather than any data.\n\n"
@@ -1047,7 +1047,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/reports/{report_id}",
                 "operation_id": "get-report",
-                "display_name": "Get Report",
+                "display_name": "Get report",
                 "short_desc": "Retrieve one report and its status",
                 "desc": "Retrieves a report by Paddle ID.\n\n"
                     "`status` is what matters: `pending` while Paddle is still generating it, `ready` when "
@@ -1070,7 +1070,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/reports/{report_id}/download-url",
                 "operation_id": "get-report-csv",
-                "display_name": "Get Report File",
+                "display_name": "Get report file",
                 "short_desc": "Get a download URL for a report's CSV file",
                 "desc": "Returns a URL the report's CSV file can be downloaded from.\n\n"
                     "**This is a URL, not the file**: fetch it separately. The URL is signed and "

@@ -16,7 +16,7 @@
           "message": "Leggi e gestisci le email su qualsiasi server IMAP.\n\n- cerca in una casella di posta con criteri lato server, in modo da trasferire solo i messaggi corrispondenti\n- recupera un intero messaggio o una singola parte MIME quando è necessario un solo allegato\n- reagisci alla nuova posta al suo arrivo, utilizzando il push del server ove supportato\n- modifica i flag, sposta i messaggi tra caselle di posta e archivia i messaggi con `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) è il protocollo standard per le caselle di posta e per molti provider di posta elettronica rappresenta l'unico accesso programmatico offerto. Poiché i messaggi rimangono sul server, un'integrazione può monitorare una casella di posta e agire su ciò che arriva senza prendere il controllo della posta dell'account.\n\nSono supportate sia l'autenticazione tramite password che quella tramite bearer token OAuth2; il meccanismo viene scelto in base a quanto annunciato dal server"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Cerca messaggi"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Apre la cassetta postale con `EXAMINE` invece di `SELECT`, in modo che il recupero dei messaggi non possa modificare alcun flag"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Recupera un messaggio"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Imposta il flag `\\Seen` sul messaggio dopo averlo recuperato.\n\nIl recupero di per sé non modifica mai i flag, quindi lascia questo `False` per ispezionare un messaggio senza che il client di posta del mittente lo mostri come letto"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Recupera un allegato"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Lo specificatore della parte MIME da recuperare (es: `1`, `2.1`, `HEADER`, `TEXT`).\n\nIl recupero di una singola parte evita di trasferire l'intero messaggio, il che è utile quando è necessario un solo allegato da un messaggio con diversi allegati di grandi dimensioni"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Elenca cassette postali"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Elenca solo le cassette postali a cui l'account è iscritto, utilizzando `LSUB` invece di `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Modifica flag dei messaggi"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Sostituisce tutti i flag sui messaggi con i flag indicati"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Sposta messaggi"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Copia i messaggi invece di spostarli, lasciando invariati gli originali"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Memorizza un messaggio"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "L'ora di arrivo da registrare per il messaggio; per impostazione predefinita corrisponde all'ora in cui il server lo memorizza"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nuova email"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Contrassegna ciascun messaggio segnalato con `\\Deleted` ed eseguine l'epurazione una volta generato il relativo evento.\n\n**Questa operazione rimuove la posta dal server in modo permanente**; preferisci `mark_seen` o lo spostamento in un'altra cassetta postale, a meno che la cassetta postale non sia una coda destinata a essere svuotata.\n\nIl messaggio viene epurato non appena il relativo evento viene **generato**, il che non equivale al fatto che il consumer lo abbia **elaborato**. Se la generazione dell'evento genera un'eccezione, il messaggio rimane al suo posto per il passaggio successivo, ma un consumer che riceve l'evento e poi fallisce, va in timeout o viene riavviato durante l'elaborazione ha già perso l'unica copia. Per un carico di lavoro che non deve perdere il messaggio di origine, lascia questa opzione deselezionata e intervieni dal consumer una volta completata l'elaborazione: ogni evento include il proprio `uid`, e le azioni `set-flags` e `move-messages` lo accettano"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nuovi allegati email"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Create a Contract",
-          "message": "Create a Contract"
+          "source": "Create a contract",
+          "message": "Create a contract"
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
           "source": "Create a new contract in Deel",
@@ -512,8 +512,8 @@
           "message": "The date the contract ends (YYYY-MM-DD format), if applicable"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Terminate a Contract",
-          "message": "Terminate a Contract"
+          "source": "Terminate a contract",
+          "message": "Terminate a contract"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
           "source": "Terminate an existing contract",
@@ -560,8 +560,8 @@
           "message": "The last day the worker will be active (YYYY-MM-DD format)"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
-          "source": "Sign a Contract",
-          "message": "Sign a Contract"
+          "source": "Sign a contract",
+          "message": "Sign a contract"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
           "source": "Sign a contract in Deel",
@@ -584,8 +584,8 @@
           "message": "The unique identifier of the contract to sign"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
-          "source": "Search Contracts",
-          "message": "Search Contracts"
+          "source": "Search contracts",
+          "message": "Search contracts"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
           "source": "Search for contracts in Deel",
@@ -688,8 +688,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
-          "source": "Get a Contract",
-          "message": "Get a Contract"
+          "source": "Get a contract",
+          "message": "Get a contract"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
           "source": "Get a single contract by ID",
@@ -712,8 +712,8 @@
           "message": "The unique identifier of the contract"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Update a Contract",
-          "message": "Update a Contract"
+          "source": "Update a contract",
+          "message": "Update a contract"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
           "source": "Update an existing contract",
@@ -784,8 +784,8 @@
           "message": "The updated job title for the contract"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
-          "source": "Submit a Timesheet",
-          "message": "Submit a Timesheet"
+          "source": "Submit a timesheet",
+          "message": "Submit a timesheet"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
           "source": "Submit a timesheet entry in Deel",
@@ -844,8 +844,8 @@
           "message": "A description of the work performed"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Update a Timesheet",
-          "message": "Update a Timesheet"
+          "source": "Update a timesheet",
+          "message": "Update a timesheet"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
           "source": "Update an existing timesheet entry",
@@ -892,8 +892,8 @@
           "message": "The updated description of the work performed"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
-          "source": "Approve a Timesheet",
-          "message": "Approve a Timesheet"
+          "source": "Approve a timesheet",
+          "message": "Approve a timesheet"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
           "source": "Approve a timesheet entry",
@@ -916,8 +916,8 @@
           "message": "The unique identifier of the timesheet entry to approve"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
-          "source": "Reject a Timesheet",
-          "message": "Reject a Timesheet"
+          "source": "Reject a timesheet",
+          "message": "Reject a timesheet"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
           "source": "Reject a timesheet entry",
@@ -952,8 +952,8 @@
           "message": "An explanation for why the timesheet entry was rejected"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
-          "source": "Search Timesheets",
-          "message": "Search Timesheets"
+          "source": "Search timesheets",
+          "message": "Search timesheets"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
           "source": "Search for timesheets in Deel",
@@ -1060,8 +1060,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
-          "source": "Get a Timesheet",
-          "message": "Get a Timesheet"
+          "source": "Get a timesheet",
+          "message": "Get a timesheet"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
           "source": "Get a single timesheet by ID",
@@ -1084,8 +1084,8 @@
           "message": "The unique identifier of the timesheet entry"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Delete a Timesheet",
-          "message": "Delete a Timesheet"
+          "source": "Delete a timesheet",
+          "message": "Delete a timesheet"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
           "source": "Delete a timesheet entry",
@@ -1108,8 +1108,8 @@
           "message": "The unique identifier of the timesheet entry to delete"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Create an Invoice Adjustment",
-          "message": "Create an Invoice Adjustment"
+          "source": "Create an invoice adjustment",
+          "message": "Create an invoice adjustment"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
           "source": "Create a new invoice adjustment",
@@ -1204,8 +1204,8 @@
           "message": "An explanation for why this invoice adjustment is being created"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Update an Invoice Adjustment",
-          "message": "Update an Invoice Adjustment"
+          "source": "Update an invoice adjustment",
+          "message": "Update an invoice adjustment"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
           "source": "Update an existing invoice adjustment",
@@ -1252,8 +1252,8 @@
           "message": "The updated explanation for this invoice adjustment"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Review an Invoice Adjustment",
-          "message": "Review an Invoice Adjustment"
+          "source": "Review an invoice adjustment",
+          "message": "Review an invoice adjustment"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
           "source": "Approve or decline an invoice adjustment",
@@ -1296,8 +1296,8 @@
           "message": "Decline the adjustment"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
-          "source": "Search Invoice Adjustments",
-          "message": "Search Invoice Adjustments"
+          "source": "Search invoice adjustments",
+          "message": "Search invoice adjustments"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
           "source": "Search for invoice adjustments",
@@ -1380,8 +1380,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Get an Invoice Adjustment",
-          "message": "Get an Invoice Adjustment"
+          "source": "Get an invoice adjustment",
+          "message": "Get an invoice adjustment"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
           "source": "Get a single invoice adjustment by ID",
@@ -1404,8 +1404,8 @@
           "message": "The unique identifier of the invoice adjustment"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Delete an Invoice Adjustment",
-          "message": "Delete an Invoice Adjustment"
+          "source": "Delete an invoice adjustment",
+          "message": "Delete an invoice adjustment"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
           "source": "Delete an invoice adjustment",
@@ -1428,8 +1428,8 @@
           "message": "The unique identifier of the invoice adjustment to delete"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
-          "source": "Create a Worker",
-          "message": "Create a Worker"
+          "source": "Create a worker",
+          "message": "Create a worker"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
           "source": "Create a new worker/person in Deel",
@@ -1540,8 +1540,8 @@
           "message": "The worker's phone number in international format"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
-          "source": "Update a Worker",
-          "message": "Update a Worker"
+          "source": "Update a worker",
+          "message": "Update a worker"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
           "source": "Update an existing worker's information",
@@ -1628,8 +1628,8 @@
           "message": "Lead level"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
-          "source": "Search Workers",
-          "message": "Search Workers"
+          "source": "Search workers",
+          "message": "Search workers"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
           "source": "Search for workers in Deel",
@@ -1712,8 +1712,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
-          "source": "Get a Worker",
-          "message": "Get a Worker"
+          "source": "Get a worker",
+          "message": "Get a worker"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
           "source": "Get a single worker by ID",
@@ -1736,8 +1736,8 @@
           "message": "The unique identifier of the worker"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Create a Time-Off Request",
-          "message": "Create a Time-Off Request"
+          "source": "Create a time-off request",
+          "message": "Create a time-off request"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
           "source": "Create a new time-off request",
@@ -1808,8 +1808,8 @@
           "message": "Optional notes or reason for the time-off request"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
-          "source": "Search Time-Off Types",
-          "message": "Search Time-Off Types"
+          "source": "Search time-off types",
+          "message": "Search time-off types"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
           "source": "List available time-off types/entitlements",
@@ -1844,8 +1844,8 @@
           "message": "Maximum number of results to return"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
-          "source": "List Legal Entities",
-          "message": "List Legal Entities"
+          "source": "List legal entities",
+          "message": "List legal entities"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
           "source": "List legal entities in Deel",
@@ -1880,8 +1880,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
-          "message": "Search Invoices"
+          "source": "Search invoices",
+          "message": "Search invoices"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
           "source": "Search for invoices in Deel",
@@ -1988,8 +1988,8 @@
           "message": "Number of results to skip (for manual pagination)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
-          "message": "Get an Invoice"
+          "source": "Get an invoice",
+          "message": "Get an invoice"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get a single invoice by ID",
@@ -2012,8 +2012,8 @@
           "message": "The unique identifier of the invoice"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
-          "source": "Approve a Time-Off Request",
-          "message": "Approve a Time-Off Request"
+          "source": "Approve a time-off request",
+          "message": "Approve a time-off request"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
           "source": "Approve a time-off request",
@@ -2036,8 +2036,8 @@
           "message": "The unique identifier of the time-off request to approve"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Reject a Time-Off Request",
-          "message": "Reject a Time-Off Request"
+          "source": "Reject a time-off request",
+          "message": "Reject a time-off request"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
           "source": "Reject a time-off request",
@@ -2072,8 +2072,8 @@
           "message": "An explanation for why the time-off request was rejected"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
-          "source": "Contract Created",
-          "message": "Contract Created"
+          "source": "Contract created",
+          "message": "Contract created"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new contract is created",
@@ -2108,8 +2108,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Contract Status Updated",
-          "message": "Contract Status Updated"
+          "source": "Contract status updated",
+          "message": "Contract status updated"
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a contract's status changes",
@@ -2144,8 +2144,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
-          "source": "Contract Terminated",
-          "message": "Contract Terminated"
+          "source": "Contract terminated",
+          "message": "Contract terminated"
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
           "source": "Trigger when a contract is terminated",
@@ -2180,8 +2180,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
-          "source": "Invoice Adjustment Created",
-          "message": "Invoice Adjustment Created"
+          "source": "Invoice adjustment created",
+          "message": "Invoice adjustment created"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a new invoice adjustment is created",
@@ -2216,8 +2216,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
-          "source": "Invoice Adjustment Reviewed",
-          "message": "Invoice Adjustment Reviewed"
+          "source": "Invoice adjustment reviewed",
+          "message": "Invoice adjustment reviewed"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
           "source": "Trigger when an invoice adjustment is reviewed",
@@ -2252,8 +2252,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
-          "source": "Timesheet Submitted",
-          "message": "Timesheet Submitted"
+          "source": "Timesheet submitted",
+          "message": "Timesheet submitted"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a new timesheet is submitted",
@@ -2288,8 +2288,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
-          "source": "Timesheet Reviewed",
-          "message": "Timesheet Reviewed"
+          "source": "Timesheet reviewed",
+          "message": "Timesheet reviewed"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
           "source": "Trigger when a timesheet is approved or rejected",
@@ -2324,8 +2324,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
-          "source": "Time-Off Request Created",
-          "message": "Time-Off Request Created"
+          "source": "Time-off request created",
+          "message": "Time-off request created"
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new time-off request is created",
@@ -2360,8 +2360,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
-          "source": "Time-Off Request Updated",
-          "message": "Time-Off Request Updated"
+          "source": "Time-off request updated",
+          "message": "Time-off request updated"
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
           "source": "Trigger when a time-off request is updated",
@@ -2396,8 +2396,8 @@
           "message": "Only detect events created or updated after this date/time. If not set, polling starts from the current time."
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
-          "source": "Time-Off Request Reviewed",
-          "message": "Time-Off Request Reviewed"
+          "source": "Time-off request reviewed",
+          "message": "Time-off request reviewed"
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {
           "source": "Trigger when a time-off request is approved or rejected",

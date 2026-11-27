@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
-          "source": "Approve Invoice",
+          "source": "Approve invoice",
           "message": "Approva fattura"
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "La fattura da approvare"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Crea cliente"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Note interne sul cliente (non visibili al cliente)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Crea prodotto"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Il prezzo unitario del prodotto o servizio"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
-          "source": "Create Sales Tax",
+          "source": "Create sales tax",
           "message": "Crea imposta sulle vendite"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Indica se l'imposta è recuperabile (può essere richiesta a rimborso)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "Crea transazione"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
@@ -700,7 +700,7 @@
           "message": "La descrizione della transazione"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Crea account"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Il codice valuta del conto"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
-          "source": "Create Income/Expense",
+          "source": "Create income/expense",
           "message": "Crea entrata/uscita"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Voce di uscita"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Crea fattura"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Il numero dell'ordine di acquisto associato alla fattura"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Elimina cliente"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Il cliente da eliminare"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "Invia fattura"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "La fattura da inviare"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aggiorna cliente"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Le nuove note interne sul cliente"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aggiorna Prodotto"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Variabili opzionali da passare alla query GraphQL"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Cerca clienti"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Numero massimo di risultati da restituire"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Cerca fatture"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Numero massimo di risultati da restituire"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Cerca prodotti"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Numero massimo di risultati da restituire"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Recupera cliente"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "Il cliente da recuperare"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
-          "source": "Get Customer by Email",
+          "source": "Get customer by email",
           "message": "Ottieni cliente tramite email"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "L'indirizzo email del cliente da recuperare"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "Invoice Created",
+          "source": "Invoice created",
           "message": "Fattura creata"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Attiva solo per le fatture di questa attività (opzionale)"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Recupera fattura"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "La fattura da recuperare"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Ottieni prodotto"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Il prodotto da recuperare"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Cerca account"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {

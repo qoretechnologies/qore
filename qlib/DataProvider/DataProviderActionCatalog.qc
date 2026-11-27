@@ -4086,7 +4086,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 throw "ACTION-ERROR", sprintf("action %s/%s has output data type %y, which is only valid for create "
                     "actions", action.app, action.action, DPAD_CREATE_OUTPUT);
             }
-            if (!action.output_type && !has_get_output_type) {
+            # the nothing type describes no output
+            if (AbstractDataProviderType::isNothingType(action.output_type) && !has_get_output_type) {
                 throw "ACTION-ERROR", sprintf("action %s/%s has output data type %y but no output type describing the "
                     "generated output", action.app, action.action, DPAD_CREATE_OUTPUT);
             }

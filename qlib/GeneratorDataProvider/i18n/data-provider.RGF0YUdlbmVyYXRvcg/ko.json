@@ -16,7 +16,7 @@
           "message": "외부 서비스 연결 없이 데이터 파이프라인을 테스트할 수 있도록 구성 가능한 레코드 스트림을 생성합니다."
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "레코드 생성"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "날짜 필드 생성을 위한 기준점으로 사용되는 고정 날짜/시간 값입니다. 시드와 함께 제공되면 여러 실행 간 날짜 필드의 완전한 재현성이 보장됩니다. 제공되지 않으면 생성 시작 시점의 현재 날짜/시간이 사용됩니다"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Generate From Template"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

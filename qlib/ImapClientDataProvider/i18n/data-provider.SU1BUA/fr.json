@@ -16,7 +16,7 @@
           "message": "Lisez et gérez les e-mails sur n'importe quel serveur IMAP.\n\n- recherchez dans une boîte aux lettres avec des critères côté serveur, afin que seuls les messages correspondants soient transférés\n- récupérez un message entier, ou une seule partie MIME lorsqu'une seule pièce jointe est nécessaire\n- réagissez aux nouveaux e-mails dès leur arrivée, en utilisant le push serveur lorsque le serveur le prend en charge\n- modifiez les indicateurs, déplacez des messages entre boîtes aux lettres et classez les messages avec `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) est le protocole de boîte aux lettres standard et, pour de nombreux fournisseurs de messagerie, c'est le seul accès programmatique proposé. Étant donné que les messages restent sur le serveur, une intégration peut surveiller une boîte aux lettres et agir sur ce qui arrive sans s'approprier la messagerie du compte.\n\nL'authentification par mot de passe et par jeton porteur OAuth2 sont toutes deux prises en charge ; le mécanisme est choisi en fonction de ce que le serveur annonce"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Rechercher des messages"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Ouvrir la boîte aux lettres avec `EXAMINE` au lieu de `SELECT`, afin que la récupération des messages ne puisse modifier aucun drapeau"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Récupérer un message"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Définissez l'indicateur `\\Seen` sur le message après l'avoir récupéré.\n\nLa récupération en elle-même ne modifie jamais les indicateurs, laissez donc cette option sur `False` pour inspecter un message sans que le client de messagerie de l'expéditeur ne l'affiche comme lu"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Récupérer une pièce jointe"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Le spécificateur de partie MIME à récupérer (ex. : `1`, `2.1`, `HEADER`, `TEXT`).\n\nLa récupération d'une seule partie évite de transférer le message entier, ce qui est utile lorsqu'une seule pièce jointe est nécessaire parmi plusieurs volumineuses"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Lister les boîtes aux lettres"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Lister uniquement les boîtes aux lettres auxquelles le compte est abonné, en utilisant `LSUB` au lieu de `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Modifier les drapeaux des messages"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Remplacer tous les drapeaux sur les messages par les drapeaux indiqués"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Déplacer des messages"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Copier les messages au lieu de les déplacer, en laissant les originaux en place"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Stocker un message"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "L'heure d'arrivée à enregistrer pour le message ; par défaut, l'heure à laquelle le serveur le stocke"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nouvel e-mail"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Marquer chaque message signalé avec le drapeau `\\Deleted` et le purger une fois son événement déclenché.\n\n**Cela supprime le courrier du serveur de manière permanente** ; préférez `mark_seen` ou un déplacement vers une autre boîte aux lettres, à moins que la boîte aux lettres ne soit une file d'attente destinée à être vidée.\n\nLe message est purgé dès que son événement a été **déclenché**, ce qui n'est pas identique au fait que le consommateur l'ait **traité**. Si le déclenchement de l'événement lève une exception, le message reste en place pour le prochain passage, mais un consommateur qui reçoit l'événement puis échoue, expire ou redémarre en cours de traitement a déjà perdu l'unique copie. Pour une charge de travail qui ne doit pas perdre le message source, laissez cette option désactivée et agissez depuis le consommateur une fois le traitement réussi : chaque événement porte son `uid`, et les actions `set-flags` et `move-messages` le prennent en charge"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nouvelles pièces jointes d'e-mail"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
-          "message": "Chat Completion"
+          "source": "Chat completion",
+          "message": "Chat completion"
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a locally-running Ollama model",
@@ -524,8 +524,8 @@
           "message": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`."
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
-          "message": "Create Embeddings"
+          "source": "Create embeddings",
+          "message": "Create embeddings"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
           "source": "Generate embedding vectors from a local Ollama embedding model",
@@ -596,8 +596,8 @@
           "message": "Duration string controlling how long Ollama keeps the model loaded in memory after the request completes (e.g. `\"5m\"`, `\"1h\"`, `\"0\"` for immediate unload)."
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Installed Models",
-          "message": "List Installed Models"
+          "source": "List installed models",
+          "message": "List installed models"
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List models currently installed on the Ollama runtime",

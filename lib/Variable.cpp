@@ -7187,15 +7187,15 @@ namespace {
 //! Removes a reference from the thread's references being resolved (see qore_reference_fast_resolution_enter())
 class ReferenceFastResolutionHelper {
 public:
-    DLLLOCAL ReferenceFastResolutionHelper(const lvalue_ref* r) : r(r) {
+    ReferenceFastResolutionHelper(const lvalue_ref* r) : r(r) {
     }
 
-    DLLLOCAL ~ReferenceFastResolutionHelper() {
+    ~ReferenceFastResolutionHelper() {
         thread_ref_remove(r);
     }
 
-    DLLLOCAL ReferenceFastResolutionHelper(const ReferenceFastResolutionHelper&) = delete;
-    DLLLOCAL ReferenceFastResolutionHelper& operator=(const ReferenceFastResolutionHelper&) = delete;
+    ReferenceFastResolutionHelper(const ReferenceFastResolutionHelper&) = delete;
+    ReferenceFastResolutionHelper& operator=(const ReferenceFastResolutionHelper&) = delete;
 
 private:
     const lvalue_ref* r;

@@ -1181,6 +1181,13 @@ if (pid = fork()) {
       crash if unsafe operations are called after a fork()
     - the signal-handling thread cannot be reliably started on some platforms after a fork(), so signal handling is
       currently disabled in the child process after a fork() on all platforms but Linux and macOS
+    - a child process created by a thread other than the main thread (the thread that initialized the library, which
+      ends the process when it returns), or by a thread of such a child that %Qore started, ends when its last thread
+      that %Qore started has ended, with exit status 0, as @ref exit() "exit()" ends a process; if another thread is
+      still finishing or a signal handler is running then, the process ends at once, after the buffers of its
+      standard output and error are written.  A thread of an embedding application or of a module's library that
+      runs %Qore code goes on with its own code: if such a thread still runs %Qore code then, the child does not end
+      by itself.  The code of the threads can end the child with @ref exit() "exit()", also with another status
  */
 int fork() [dom=PROCESS] {
 #ifdef HAVE_FORK

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
-          "source": "Create Client",
+          "source": "Create client",
           "message": "Створити клієнта"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
@@ -468,7 +468,7 @@
           "message": "Країна"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
-          "source": "Update Client",
+          "source": "Update client",
           "message": "Оновити клієнта"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
@@ -588,7 +588,7 @@
           "message": "Країна"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
-          "source": "Search Clients",
+          "source": "Search clients",
           "message": "Пошук клієнтів"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Максимальна кількість результатів для повернення (макс. 100)"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
-          "source": "Get Client",
+          "source": "Get client",
           "message": "Отримати клієнта"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Ідентифікатор клієнта"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
-          "source": "Delete Client",
+          "source": "Delete client",
           "message": "Видалити клієнта"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Клієнт для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
-          "source": "Create Service",
+          "source": "Create service",
           "message": "Створити послугу"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Чи є ця послуга оплачуваною для клієнтів"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
-          "source": "Update Service",
+          "source": "Update service",
           "message": "Оновити послугу"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
@@ -816,7 +816,7 @@
           "message": "Чи є послуга оплачуваною"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
-          "source": "Search Services",
+          "source": "Search services",
           "message": "Пошук послуг"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
-          "source": "Get Service",
+          "source": "Get service",
           "message": "Отримати послугу"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
@@ -888,7 +888,7 @@
           "message": "Ідентифікатор послуги"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
-          "source": "Delete Service",
+          "source": "Delete service",
           "message": "Видалити послугу"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Послуга для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Створити кошторис"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Номер замовлення на купівлю"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
-          "source": "Search Estimates",
+          "source": "Search estimates",
           "message": "Пошук кошторисів"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Отримати кошторис"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Ідентифікатор кошторису"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Оновити кошторис"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Номер замовлення на купівлю"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Видалити кошторис"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "Кошторис для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Створити витрату"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Відсоток податку"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Оновити витрату"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Відсоток податку"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Видалити витрату"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Витрата для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Отримати витрату"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Ідентифікатор витрати"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
-          "source": "Search Expenses",
+          "source": "Search expenses",
           "message": "Пошук витрат"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Створити рахунок-фактуру"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Номер замовлення на купівлю"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Оновити рахунок-фактуру"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "Номер замовлення на купівлю"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Пошук рахунків-фактур"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Отримати рахунок-фактуру"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Ідентифікатор рахунка-фактури"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Видалити рахунок-фактуру"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Рахунок-фактура для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Створити позицію"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Податок 2 за замовчуванням"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Оновити елемент"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "Податок 2 за замовчуванням"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
+          "source": "Search items",
           "message": "Пошук товарів"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Отримати елемент"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Ідентифікатор номенклатури"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Видалити елемент"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -2232,7 +2232,7 @@
           "message": "Елемент для видалення"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Створити платіж"
         },
         "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "Примітка до платежу"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Оновити платіж"
         },
         "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "Примітка до платежу"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Видалити платіж"
         },
         "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Платіж для видалення"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
-          "source": "Search Payments",
+          "source": "Search payments",
           "message": "Пошук платежів"
         },
         "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Отримати платіж"
         },
         "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "Ідентифікатор платежу"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Новий рахунок-фактура"
         },
         "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Новий платіж"
         },
         "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
-          "source": "New Client",
+          "source": "New client",
           "message": "Новий клієнт"
         },
         "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
@@ -2652,7 +2652,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Нова витрата"
         },
         "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Новий кошторис"
         },
         "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {

@@ -68,7 +68,7 @@ module CsvUtil {
             "path": "/",
             "action": "read",
             "subtype": "csvread",
-            "display_name": "Read CSV File",
+            "display_name": "Read CSV file",
             "short_desc": "Read CSV file data from a specific file location",
             "desc": "Read CSV file data from a specific file location",
             "action_code": DPAT_FIND,
@@ -90,7 +90,7 @@ module CsvUtil {
             "path": "/",
             "action": "read-data",
             "subtype": "csvread",
-            "display_name": "Read CSV Inline Data",
+            "display_name": "Read CSV inline data",
             "short_desc": "Read CSV inline data",
             "desc": "Read CSV inline data",
             "action_code": DPAT_FIND,
@@ -111,7 +111,7 @@ module CsvUtil {
             "app": CsvUtil::AppName,
             "path": "/",
             "action": "profile",
-            "display_name": "Profile CSV Data",
+            "display_name": "Profile CSV data",
             "short_desc": "Detect the format of CSV data and describe its layout and columns",
             "desc": "Detects the format of CSV data and describes how it is laid out, so it can be read correctly "
                 "before an integration is built around it.\n\n"
@@ -140,7 +140,7 @@ module CsvUtil {
             "path": "/",
             "action": "write",
             "subtype": "csvwrite",
-            "display_name": "Write CSV Data",
+            "display_name": "Write CSV data",
             "short_desc": "Write CSV file data to a specific file location",
             "desc": "Write CSV file data to a specific file location",
             "action_code": DPAT_CREATE,
@@ -161,7 +161,7 @@ module CsvUtil {
             "app": CsvUtil::AppName,
             "path": "/",
             "action": "write-data",
-            "display_name": "Create CSV Data",
+            "display_name": "Create CSV data",
             "short_desc": "Create CSV data from records and return it as bytes",
             "desc": "Creates CSV data from the records given to the action and returns it as bytes with the number "
                 "of records, for example to attach the data to an email, upload it with another action, or store "

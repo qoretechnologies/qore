@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
-          "source": "List Sources",
+          "source": "List sources",
           "message": "列出資料源"
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
@@ -364,7 +364,7 @@
           "message": "每頁結果數（`1`-`1000`，預設值：`100`）"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source",
+          "source": "Get source",
           "message": "取得來源"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "要擷取的 Segment 來源唯一識別碼"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
-          "source": "Create Source",
+          "source": "Create source",
           "message": "建立來源"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "設為 `True` 以在建立時中斷所有目前連線至此來源的倉儲；預設為 `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source",
+          "source": "Update source",
           "message": "更新來源"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -532,7 +532,7 @@
           "message": "來源的已更新配置設定；可用金鑰取決於來源類型"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source",
+          "source": "Delete source",
           "message": "刪除來源"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -556,7 +556,7 @@
           "message": "要刪除的 Segment 來源唯一識別碼"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
-          "source": "List Destinations",
+          "source": "List destinations",
           "message": "列出目的地"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
@@ -580,7 +580,7 @@
           "message": "每頁結果數（`1`-`1000`，預設值：`100`）"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination",
+          "source": "Get destination",
           "message": "取得目的地"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -604,7 +604,7 @@
           "message": "要擷取的 Segment 目的地唯一識別碼"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Create Destination",
+          "source": "Create destination",
           "message": "建立目的地"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -676,7 +676,7 @@
           "message": "設為 `True` 以啟用目的地，或設為 `False` 以在停用狀態下建立"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination",
+          "source": "Update destination",
           "message": "更新目的地"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -736,7 +736,7 @@
           "message": "目的地的已更新配置設定；可用金鑰取決於目的地類型"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination",
+          "source": "Delete destination",
           "message": "刪除目的地"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "要刪除的 Segment 目的地唯一識別碼"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "列出倉儲"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -784,7 +784,7 @@
           "message": "每頁結果數（`1`-`1000`，預設值：`100`）"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "取得資料倉儲"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "要擷取的 Segment 資料倉儲唯一識別碼"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "建立倉儲"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -880,7 +880,7 @@
           "message": "設為 `True` 以在建立時中斷所有目前連線至此倉儲的來源；預設為 `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "更新倉儲"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -940,7 +940,7 @@
           "message": "倉儲的新人類可讀顯示名稱"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Delete Warehouse",
+          "source": "Delete warehouse",
           "message": "刪除資料倉儲"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
@@ -964,7 +964,7 @@
           "message": "要刪除的 Segment 資料倉儲唯一識別碼"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
-          "source": "List Tracking Plans",
+          "source": "List tracking plans",
           "message": "列出追蹤計畫"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "範本追蹤計劃"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Get Tracking Plan",
+          "source": "Get tracking plan",
           "message": "取得追蹤計畫"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1064,7 +1064,7 @@
           "message": "要擷取的唯一 Segment 追蹤計畫 ID"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Create Tracking Plan",
+          "source": "Create tracking plan",
           "message": "建立追蹤計劃"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "追蹤計劃的描述"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Update Tracking Plan",
+          "source": "Update tracking plan",
           "message": "更新追蹤計畫"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "追蹤計畫的新描述"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Delete Tracking Plan",
+          "source": "Delete tracking plan",
           "message": "刪除追蹤計畫"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "要刪除的唯一 Segment 追蹤計畫 ID"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "列出標籤"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "每頁結果數（`1`-`1000`，預設值：`100`）"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "建立標籤"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "說明此標籤用途的選用易讀描述"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
-          "source": "Delete Label",
+          "source": "Delete label",
           "message": "刪除標籤"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {
