@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.display_name": {
-          "source": "List Schema Classes",
+          "source": "List schema classes",
           "message": "Zoznam tried schémy"
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.short_desc": {

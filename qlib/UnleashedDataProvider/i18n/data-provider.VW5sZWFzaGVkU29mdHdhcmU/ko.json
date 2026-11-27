@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "고객 검색"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "고객 코드, 이름, 이메일, 고객 유형 또는 수정 날짜별 선택적 필터링을 통해 Unleashed에서 고객 목록을 조회합니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "고객 생성"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -604,7 +604,7 @@
           "message": "도로 주소 라인"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "고객 조회"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -628,7 +628,7 @@
           "message": "조회할 고객의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "고객 업데이트"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -784,7 +784,7 @@
           "message": "이 고객에 대해 신용 거래가 중지되었는지 여부"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "제품 검색"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -796,7 +796,7 @@
           "message": "제품 코드, 설명 또는 바코드별 선택적 필터링을 통해 Unleashed에서 제품 목록을 조회합니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "제품 생성"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -916,7 +916,7 @@
           "message": "조립 제품인지 여부(부품으로 제작됨)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "제품 가져오기"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "조회할 제품의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "제품 업데이트"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "제품을 구매할 수 있는지 여부"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
-          "source": "Obsolete Product",
+          "source": "Obsolete product",
           "message": "제품 단종 처리"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "단종으로 표시할 제품의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
-          "source": "Search Sales Orders",
+          "source": "Search sales orders",
           "message": "판매 주문 검색"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "선택적 필터링을 통해 Unleashed에서 판매 주문 목록을 조회합니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "판매 주문 생성"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "배송지 우편번호"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "판매 주문 가져오기"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "조회할 판매 주문의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "판매 주문 업데이트"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "단위당 가격"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "판매 주문 삭제"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "삭제할 판매 주문의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
-          "source": "Complete Sales Order",
+          "source": "Complete sales order",
           "message": "판매 주문 완료"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "완료할 판매 주문의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
-          "source": "Search Credit Notes",
+          "source": "Search credit notes",
           "message": "대변전표 검색"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "선택적 필터링을 통해 Unleashed에서 대변전표 목록을 조회합니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Create Credit Note",
+          "source": "Create credit note",
           "message": "대변전표 생성"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "이 대변전표에 대한 코멘트 또는 메모"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Get Credit Note",
+          "source": "Get credit note",
           "message": "대변전표 조회"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "조회할 대변전표의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Update Credit Note",
+          "source": "Update credit note",
           "message": "대변전표 업데이트"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "이 대변전표에 대한 코멘트 또는 메모"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Delete Credit Note",
+          "source": "Delete credit note",
           "message": "대변전표 삭제"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "삭제할 대변전표의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
-          "source": "Complete Credit Note",
+          "source": "Complete credit note",
           "message": "크레딧 노트 완료"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "완료할 대변전표의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Create Credit Note Line",
+          "source": "Create credit note line",
           "message": "대변전표 품목 생성"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "이 품목의 단가"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Update Credit Note Line",
+          "source": "Update credit note line",
           "message": "대변전표 라인 업데이트"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "이 품목의 단가"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Delete Credit Note Line",
+          "source": "Delete credit note line",
           "message": "대변전표 라인 삭제"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "삭제할 라인의 고유 식별자(GUID)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "새 고객"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -2260,7 +2260,7 @@
           "message": "폴링을 통해 새 고객이 감지되거나 기존 고객이 수정될 때 트리거됩니다."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "새 판매 주문"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

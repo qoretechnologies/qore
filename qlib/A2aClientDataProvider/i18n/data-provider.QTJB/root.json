@@ -16,8 +16,8 @@
           "message": "Connect to A2A agents for agent-to-agent collaboration"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Agent Card",
-          "message": "Get Agent Card"
+          "source": "Get agent card",
+          "message": "Get agent card"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
           "source": "Get the agent's card",
@@ -28,8 +28,8 @@
           "message": "Retrieve the A2A agent's card with its capabilities and skills"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Extended Agent Card",
-          "message": "Get Extended Agent Card"
+          "source": "Get extended agent card",
+          "message": "Get extended agent card"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
           "source": "Get authenticated extended agent card",
@@ -40,8 +40,8 @@
           "message": "Get the authenticated extended agent card with additional details"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send Message",
-          "message": "Send Message"
+          "source": "Send message",
+          "message": "Send message"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
           "source": "Send a message to the agent",
@@ -160,8 +160,8 @@
           "message": "Optional tenant identifier for multi-tenancy support"
         },
         "app.QTJB.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
-          "message": "Get Task"
+          "source": "Get task",
+          "message": "Get task"
         },
         "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get task status by ID",
@@ -184,8 +184,8 @@
           "message": "The unique identifier of the task to retrieve"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
-          "source": "Cancel Task",
-          "message": "Cancel Task"
+          "source": "Cancel task",
+          "message": "Cancel task"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
           "source": "Cancel a running task",
@@ -208,8 +208,8 @@
           "message": "The unique identifier of the task to cancel"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List tasks with optional filtering",
@@ -256,8 +256,8 @@
           "message": "Optional cursor for retrieving the next page of results"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Set Push Notification Config",
-          "message": "Set Push Notification Config"
+          "source": "Set push notification config",
+          "message": "Set push notification config"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
           "source": "Set push notification config for a task",
@@ -304,8 +304,8 @@
           "message": "Optional verification token for the webhook"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Get Push Notification Config",
-          "message": "Get Push Notification Config"
+          "source": "Get push notification config",
+          "message": "Get push notification config"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
           "source": "Get push notification config for a task",
@@ -328,8 +328,8 @@
           "message": "The task ID to manage push notification config for"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
-          "source": "List Push Notification Configs",
-          "message": "List Push Notification Configs"
+          "source": "List push notification configs",
+          "message": "List push notification configs"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
           "source": "List push notification configs for a task",
@@ -352,8 +352,8 @@
           "message": "The task ID to manage push notification config for"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Delete Push Notification Config",
-          "message": "Delete Push Notification Config"
+          "source": "Delete push notification config",
+          "message": "Delete push notification config"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
           "source": "Delete push notification config for a task",
@@ -388,8 +388,8 @@
           "message": "The ID of the push notification config to delete"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
-          "source": "Task Status Update",
-          "message": "Task Status Update"
+          "source": "Task status update",
+          "message": "Task status update"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
           "source": "An A2A task status has changed",
@@ -400,8 +400,8 @@
           "message": "Receive a notification when an A2A task status changes"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
-          "source": "Task Artifact Update",
-          "message": "Task Artifact Update"
+          "source": "Task artifact update",
+          "message": "Task artifact update"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
           "source": "An A2A task artifact has been updated",
@@ -412,8 +412,8 @@
           "message": "Receive a notification when an A2A task artifact is added or modified"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
-          "source": "Task Message Update",
-          "message": "Task Message Update"
+          "source": "Task message update",
+          "message": "Task message update"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {
           "source": "An A2A task has a new message",

@@ -1,0 +1,398 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+# loaded by the host: the module's classes are trusted
+%requires ./SandboxSerializationModule.qm
+
+%exec-class SandboxSerializationTest
+
+#! a class of the host that the sandboxed Program cannot see
+class SsHostOnly inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "HOST-STATE";
+    }
+}
+
+#! Verifies that sandboxed code serializes, formats and deserializes the classes that trusted code declared with
+#! their public state only, unless a class inherits SandboxSerializable, and that trusted code deserializes into a
+#! sandboxed Program with Program::deserialize() (qore#7146)
+class SandboxSerializationTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Program
+        const SandboxedSource = "%modern
+
+class SsLocal inherits Serializable {
+    public {
+        string pub = \"PUB\";
+    }
+    private {
+        string lpriv = \"LOCAL-STATE\";
+    }
+
+    string getPriv() {
+        return lpriv;
+    }
+}
+
+#! a class that sandboxed code declares, inheriting a class that trusted code declared
+class SsSub inherits SsTrusted {
+    private {
+        string own = \"OWN-STATE\";
+    }
+}
+
+#! a class that sandboxed code declares, inheriting a trusted class with a transient non-public member
+class SsTransientSub inherits SsTransient {
+}
+
+#! a class that sandboxed code declares with the name of a class of the host that it cannot see
+class SsHostOnly inherits Serializable {
+    public {
+        string pub;
+        *string priv;
+    }
+}
+
+object sub make(string cls) {
+    switch (cls) {
+        case \"SsTrusted\": return new SsTrusted();
+        case \"SsPublicOnly\": return new SsPublicOnly();
+        case \"SsHook\": return new SsHook();
+        case \"SsHookPublic\": return new SsHookPublic();
+        case \"SsOptIn\": return new SsOptIn();
+        case \"SsOptInSub\": return new SsOptInSub();
+        case \"SsOptInSub2\": return new SsOptInSub2();
+        case \"SsLocal\": return new SsLocal();
+        case \"SsSub\": return new SsSub();
+        case \"SsTransient\": return new SsTransient();
+        case \"SsUnset\": return new SsUnset();
+        case \"SsTransientSub\": return new SsTransientSub();
+        case \"SsHookStatic\": return new SsHookStatic();
+        case \"SsDeserHook\": return new SsDeserHook();
+    }
+    throw \"UNKNOWN\", cls;
+}
+
+hash<SerializationInfo> sub ser_data(string cls, *int flags) {
+    return Serializable::serializeToData(make(cls), flags);
+}
+
+hash<SerializationInfo> sub ser_method(string cls) {
+    return make(cls).serializeToData();
+}
+
+binary sub ser_bin(string cls) {
+    return Serializable::serialize(make(cls));
+}
+
+binary sub ser_bin_method(string cls) {
+    return make(cls).serialize();
+}
+
+hash<SerializationInfo> sub ser_object(object o) {
+    return Serializable::serializeToData(o);
+}
+
+hash<SerializationInfo> sub ser_in_hash(string cls) {
+    return Serializable::serializeToData({\"a\": (make(cls),)});
+}
+
+hash<SerializationInfo> sub ser_self(string cls) {
+    return cast<SsTrusted>(make(cls)).serializeSelf();
+}
+
+string sub fmt(string fmt, string cls) {
+    return sprintf(fmt, make(cls));
+}
+
+string sub fmt_nested(string cls) {
+    return sprintf(\"%y\", {\"a\": (make(cls),)});
+}
+
+auto sub deser(auto d, *int flags) {
+    return Serializable::deserialize(d, flags);
+}
+
+string sub deser_priv(auto d) {
+    return Serializable::deserialize(d).getPriv();
+}
+
+auto sub program_deser(auto d) {
+    Program p();
+    return p.deserialize(d);
+}
+
+auto sub program_ser(auto v) {
+    Program p();
+    return p.serializeToData(v);
+}
+";
+    }
+
+    private {
+        Program p;
+    }
+
+    constructor() : Test("Sandbox serialization", "1.0", \ARGV) {
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        # the Program inherits the classes of the module that the host loaded
+        p.parse(SandboxedSource, "sandboxed");
+
+        addTestCase("serialize", \serializeTest());
+        addTestCase("hooks", \hookTest());
+        addTestCase("static vars", \staticVarTest());
+        addTestCase("format", \formatTest());
+        addTestCase("deserialize", \deserializeTest());
+        addTestCase("opt in", \optInTest());
+        addTestCase("trusted", \trustedTest());
+        addTestCase("Program::deserialize()", \programDeserializeTest());
+        set_return_value(main());
+    }
+
+    #! returns the member values of all objects in the serialized data, as one hash
+    static hash<auto> members(hash<SerializationInfo> h) {
+        hash<auto> rv = {};
+        foreach hash<auto> oh in (h._index.iterator()) {
+            # the containers of the index have no class data
+            if (!oh.hasKey("_class_data")) {
+                continue;
+            }
+            foreach hash<auto> ch in (oh._class_data.iterator()) {
+                rv += ch;
+            }
+        }
+        return rv;
+    }
+
+    serializeTest() {
+        # a non-public member with a value of a class that trusted code declared raises an exception, in every form
+        foreach string func in ("ser_data", "ser_method", "ser_bin", "ser_bin_method", "ser_in_hash") {
+            assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), (func, "SsTrusted"), func);
+        }
+        # also for an object that the host created, and for the trusted parent class of a class of sandboxed code
+        assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), ("ser_object", new SsTrusted()));
+        assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), ("ser_data", "SsSub"));
+
+        # non-public members without a value, and transient members, are not serialized
+        hash<auto> m = members(p.callFunction("ser_data", "SsUnset"));
+        assertEq("PUB", m.pub);
+        assertFalse(exists m.opt);
+        m = members(p.callFunction("ser_data", "SsTransient"));
+        assertEq("PUB", m.pub);
+
+        # a class that sandboxed code declared keeps its non-public members
+        m = members(p.callFunction("ser_data", "SsLocal"));
+        assertEq("LOCAL-STATE", m.lpriv);
+    }
+
+    hookTest() {
+        # the hook of a class with non-public state is not called for sandboxed code: its members are serialized,
+        # which raises an exception for the non-public member with a value
+        assertThrows("SERIALIZATION-ERROR", "SsHook::priv", \p.callFunction(), ("ser_data", "SsHook"));
+        hash<auto> m;
+
+        # the hook of a class declared by trusted code is not called for sandboxed code, also if the class has no
+        # non-public members
+        m = members(p.callFunction("ser_data", "SsHookPublic"));
+        assertEq("PUB", m.pub);
+        m = members(p.callFunction("ser_data", "SsHookStatic"));
+        assertEq("PUB", m.pub);
+        assertFalse(exists m.k);
+        assertThrows("DESERIALIZATION-ERROR", "SsDeserHook", \p.callFunction(), ("deser",
+            p.callFunction("ser_data", "SsDeserHook")));
+
+        # trusted code gets the hook's output
+        m = members(Serializable::serializeToData(new SsHook()));
+        assertEq("PRIV-STATE", m.leak);
+    }
+
+    staticVarTest() {
+        # a non-public static var with a value raises an exception
+        assertThrows("SERIALIZATION-ERROR", "spriv", \p.callFunction(), ("ser_data", "SsTrusted",
+            QSF_INCLUDE_STATIC_CLASS_VARS));
+        hash<SerializationInfo> h;
+        hash<auto> svars;
+
+        # the host's data with a non-public static var cannot be deserialized by sandboxed code
+        h = Serializable::serializeToData(new SsTrusted(), QSF_INCLUDE_STATIC_CLASS_VARS);
+        assertTrue(exists h._sdata.firstValue().spriv);
+        # the non-public static var only: a public static var of a module cannot be changed by sandboxed code anyway
+        hash<SerializationInfo> sh = h;
+        sh._data = NOTHING;
+        sh._index = NOTHING;
+        sh._sdata = map {$1.key: $1.value - "spub"}, h._sdata.pairIterator();
+        assertThrows("DESERIALIZATION-ERROR", "non-public static var", \p.callFunction(), ("deser", sh,
+            QDF_STATIC_CLASS_VARS));
+        assertEq("SPRIV-STATE", SsTrusted::getStaticPriv());
+
+        # an opted-in class's non-public static vars are serialized for sandboxed code
+        h = p.callFunction("ser_data", "SsOptIn", QSF_INCLUDE_STATIC_CLASS_VARS);
+        svars = {};
+        map svars += $1, h._sdata.iterator();
+        assertEq("OPT-SSTATE", svars.spriv);
+    }
+
+    formatTest() {
+        foreach string fmt in ("%y", "%N", "%n") {
+            string str = p.callFunction("fmt", fmt, "SsTrusted");
+            assertRegex("PUB", str, fmt);
+            assertNRegex("PRIV-STATE", str, fmt);
+            assertNRegex("TPRIV", str, fmt);
+
+            str = p.callFunction("fmt", fmt, "SsSub");
+            assertRegex("OWN-STATE", str, fmt);
+            assertNRegex("PRIV-STATE", str, fmt);
+
+            str = p.callFunction("fmt", fmt, "SsOptIn");
+            assertRegex("OPT-STATE", str, fmt);
+        }
+        string str = p.callFunction("fmt_nested", "SsTrusted");
+        assertRegex("PUB", str);
+        assertNRegex("PRIV-STATE", str);
+
+        # trusted code formats the object as before
+        assertRegex("PRIV-STATE", sprintf("%y", new SsTrusted()));
+    }
+
+    deserializeTest() {
+        # crafted data with a transient non-public member of a trusted class
+        {
+            hash<SerializationInfo> h = p.callFunction("ser_data", "SsTransient");
+            assertNothing(p.callFunction("deser", h).getToken());
+            h._index."0"._class_data.SsTransient.token = "ATTACKER";
+            assertThrows("DESERIALIZATION-ERROR", "token", \p.callFunction(), ("deser", h));
+            # also in the section of the trusted class of a subclass that sandboxed code declared
+            h = p.callFunction("ser_data", "SsTransientSub");
+            h._index."0"._class_data.SsTransient.token = "ATTACKER";
+            assertThrows("DESERIALIZATION-ERROR", "token", \p.callFunction(), ("deser", h));
+        }
+
+        # data with non-public state of a trusted class: refused, as data, binary and string
+        hash<SerializationInfo> h = Serializable::serializeToData(new SsTrusted());
+        binary b = Serializable::serialize(new SsTrusted());
+        foreach auto d in (h, b, b.toString()) {
+            assertThrows("DESERIALIZATION-ERROR", "SsTrusted", \p.callFunction(), ("deser", d));
+        }
+
+        # also without non-public data: the object would be created without its constructor
+        hash<SerializationInfo> pub = h;
+        remove pub._index."0"._class_data.SsTrusted.priv;
+        remove pub._index."0"._class_data.SsTrusted.intern;
+        assertThrows("DESERIALIZATION-ERROR", "SsTrusted", \p.callFunction(), ("deser", pub));
+
+        # a hook with non-public state
+        assertThrows("DESERIALIZATION-ERROR", "SsHook", \p.callFunction(), ("deser",
+            Serializable::serializeToData(new SsHook())));
+
+        # a class that sandboxed code declared that inherits a trusted class with non-public state
+        {
+            hash<SerializationInfo> subdata = pub;
+            subdata._index."0"._class = "SsSub";
+            subdata._index."0"._class_data.SsSub = {"own": "OWN-STATE"};
+            assertThrows("DESERIALIZATION-ERROR", "SsSub", \p.callFunction(), ("deser", subdata));
+        }
+
+        # a trusted class with public and transient members only
+        {
+            object o = p.callFunction("deser", p.callFunction("ser_data", "SsPublicOnly"));
+            assertEq("PUB", o.pub);
+            assertEq("TPRIV", o.getTransient());
+        }
+
+        # a class that sandboxed code declared
+        assertEq("LOCAL-STATE", p.callFunction("deser_priv", p.callFunction("ser_data", "SsLocal")));
+    }
+
+    optInTest() {
+        # serialized and deserialized with its non-public state
+        hash<auto> m = members(p.callFunction("ser_data", "SsOptIn"));
+        assertEq("OPT-STATE", m.priv);
+
+        hash<SerializationInfo> h = Serializable::serializeToData(new SsOptIn());
+        h._index."0"._class_data.SsOptIn.priv = "SET-BY-DATA";
+        assertEq("SET-BY-DATA", p.callFunction("deser_priv", h));
+
+        # the marker of the parent class does not open the members of a subclass
+        assertThrows("SERIALIZATION-ERROR", "SsOptInSub::sub_priv", \p.callFunction(), ("ser_data", "SsOptInSub"));
+        assertThrows("DESERIALIZATION-ERROR", "SsOptInSub", \p.callFunction(), ("deser",
+            Serializable::serializeToData(new SsOptInSub())));
+
+        # a subclass that inherits the marker itself
+        m = members(p.callFunction("ser_data", "SsOptInSub2"));
+        assertEq("OPT-STATE", m.priv);
+        assertEq("SUB2-STATE", m.sub_priv);
+        object o = p.callFunction("deser", Serializable::serializeToData(new SsOptInSub2()));
+        assertEq("SUB2-STATE", o.getSubPriv());
+    }
+
+    trustedTest() {
+        # trusted code serializes and deserializes as before
+        hash<SerializationInfo> h = Serializable::serializeToData(new SsTrusted());
+        hash<auto> m = members(h);
+        assertEq("PRIV-STATE", m.priv);
+        assertEq("INTERN-STATE", m.intern);
+        SsTrusted o = Serializable::deserialize(h);
+        assertEq("PRIV-STATE", o.getPriv());
+        assertEq("INTERN-STATE", o.getIntern());
+
+        # the code of a class that trusted code declared serializes for itself, also when sandboxed code calls it
+        m = members(p.callFunction("ser_self", "SsTrusted"));
+        assertEq("PRIV-STATE", m.priv);
+    }
+
+    programDeserializeTest() {
+        hash<SerializationInfo> h = Serializable::serializeToData(new SsTrusted());
+        binary b = Serializable::serialize(new SsTrusted());
+        foreach auto d in (h, b, b.toString()) {
+            object o = p.deserialize(d);
+            assertEq("SsTrusted", o.className());
+            assertEq("PRIV-STATE", o.getPriv());
+            assertEq("INTERN-STATE", o.getIntern());
+        }
+
+        # the classes are resolved in the target Program
+        {
+            hash<SerializationInfo> lh = p.callFunction("ser_data", "SsLocal");
+            assertThrows("DESERIALIZATION-ERROR", "SsLocal", \Serializable::deserialize(), lh);
+            object o = p.deserialize(lh);
+            assertEq("SsLocal", o.className());
+            assertEq("LOCAL-STATE", o.getPriv());
+            assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        }
+
+        # code that also runs with older versions of Qore tests for the method with a parse define
+%ifdef QORE_HAS_PROGRAM_DESERIALIZE
+        assertTrue(True, "QORE_HAS_PROGRAM_DESERIALIZE");
+%else
+        fail("QORE_HAS_PROGRAM_DESERIALIZE is not defined");
+%endif
+
+        # a class of the target Program with the name of a class of the caller that has non-public state
+        assertThrows("DESERIALIZATION-ERROR", "SsHostOnly", \p.deserialize(),
+            Serializable::serializeToData(new SsHostOnly()));
+
+        # the trusted counterpart that serializes with all state
+%ifdef QORE_HAS_PROGRAM_SERIALIZE
+        assertTrue(True, "QORE_HAS_PROGRAM_SERIALIZE");
+%else
+        fail("QORE_HAS_PROGRAM_SERIALIZE is not defined");
+%endif
+        assertEq("PRIV-STATE", members(p.serializeToData(new SsTrusted())).priv);
+        assertEq("PRIV-STATE", members(Serializable::deserializeToData(p.serialize(new SsTrusted()))).priv);
+        assertThrows("SANDBOX-ACCESS-ERROR", \p.callFunction(), ("program_ser", new SsTrusted()));
+
+        # sandboxed code cannot call it
+        assertThrows("SANDBOX-ACCESS-ERROR", \p.callFunction(), ("program_deser", h));
+    }
+}

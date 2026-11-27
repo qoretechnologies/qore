@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Vytvořit fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -496,7 +496,7 @@
           "message": "ID šablony PDF, která se má použít pro tuto fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aktualizovat fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -652,7 +652,7 @@
           "message": "ID šablony PDF, která se má použít pro tuto fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Smazat fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Faktura ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Získat fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Faktura k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Vypsat faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Vyhledat faktury podle čísla faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Odeslat fakturu e-mailem"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Tělo e-mailu"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.display_name": {
-          "source": "Mark Invoice Status",
+          "source": "Mark invoice status",
           "message": "Označit stav faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Označit jako koncept"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Create Recurring Invoice",
+          "source": "Create recurring invoice",
           "message": "Vytvořit opakující se fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "ID šablony PDF, která se má použít pro generované faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Update Recurring Invoice",
+          "source": "Update recurring invoice",
           "message": "Aktualizovat opakující se fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "ID šablony PDF, která se má použít pro generované faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Get Recurring Invoice",
+          "source": "Get recurring invoice",
           "message": "Získat opakující se fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Opakující se faktura k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.display_name": {
-          "source": "List Recurring Invoices",
+          "source": "List recurring invoices",
           "message": "Zobrazit opakující se faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Filtrovat podle zákazníka"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.display_name": {
-          "source": "Mark Recurring Invoice Status",
+          "source": "Mark recurring invoice status",
           "message": "Označit stav opakující se faktury"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Obnovit opakující se fakturu"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Vytvořit kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Interní poznámky k tomuto kontaktu (neviditelné pro zákazníka)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Aktualizovat kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Interní poznámky k tomuto kontaktu (neviditelné pro zákazníka)"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Smazat kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Kontakt k odstranění"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Získat kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Kontakt k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Seznam kontaktů"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Vyhledat kontakty podle e-mailové adresy"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact Status",
+          "source": "Mark contact status",
           "message": "Označit stav kontaktu"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Označit jako neaktivní"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Vytvořit výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Číslo účtenky nebo jiná reference"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Aktualizovat výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Číslo účtenky nebo jiná reference"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Smazat výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Výdaj ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Získat výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "Výdaj k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "Zobrazit výdaje"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Filtrovat výdaje k tomuto datu nebo před ním (`YYYY-MM-DD`)"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Create Recurring Expense",
+          "source": "Create recurring expense",
           "message": "Vytvořit opakující se výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Zda má být tento výdaj fakturován zákazníkovi"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Update Recurring Expense",
+          "source": "Update recurring expense",
           "message": "Aktualizovat opakující se výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Zda má být tento výdaj fakturován zákazníkovi"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Delete Recurring Expense",
+          "source": "Delete recurring expense",
           "message": "Smazat opakující se výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2376,7 +2376,7 @@
           "message": "Opakující se výdaj ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Get Recurring Expense",
+          "source": "Get recurring expense",
           "message": "Získat opakující se výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2404,7 +2404,7 @@
           "message": "Opakující se výdaj k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.display_name": {
-          "source": "List Recurring Expenses",
+          "source": "List recurring expenses",
           "message": "Zobrazit opakující se výdaje"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Organizace Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Vytvořit platbu"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Směnný kurz, pokud je platba v jiné měně"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Aktualizovat platbu"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Směnný kurz, pokud je platba v jiné měně"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Smazat platbu"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "Platba ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Získat platbu"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Platba, která se má načíst"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Zobrazit platby"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Vyhledat platby podle čísla šeku, ID transakce nebo jiné reference"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Refundovat platbu"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Částka refundace"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Vytvořit cenovou nabídku"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "ID šablony PDF, která se má použít pro tuto cenovou nabídku"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Aktualizovat odhad"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "ID šablony PDF, která se má použít pro tuto cenovou nabídku"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Smazat cenovou nabídku"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Cenová nabídka ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Získat cenovou nabídku"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "Odhad, který se má načíst"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "Seznam cenových nabídek"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Filtrovat podle zákazníka"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.display_name": {
-          "source": "Mark Estimate Status",
+          "source": "Mark estimate status",
           "message": "Označit stav cenové nabídky"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Označit jako odmítnuté"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Vytvořit projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Hodnota rozpočtu (částka nebo hodiny podle typu rozpočtu)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Aktualizovat projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Hodnota rozpočtu (částka nebo hodiny podle typu rozpočtu)"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Získat projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -3616,7 +3616,7 @@
           "message": "Projekt k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Seznam projektů"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Vyhledat projekty podle názvu (částečná shoda)"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.display_name": {
-          "source": "Mark Project Status",
+          "source": "Mark project status",
           "message": "Označit stav projektu"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Označit jako neaktivní"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Vytvořit položku"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Služby"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aktualizovat položku"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -3916,7 +3916,7 @@
           "message": "Služby"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Smazat položku"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -3944,7 +3944,7 @@
           "message": "Položka ke smazání"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Získat položku"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "Položka k načtení"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Zobrazit položky"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "Organizace Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nová faktura"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.short_desc": {
@@ -4020,7 +4020,7 @@
           "message": "Jak často kontrolovat nové faktury (v sekundách)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4048,7 +4048,7 @@
           "message": "Jak často kontrolovat nové kontakty (v sekundách)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Nová cenová nabídka"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -4076,7 +4076,7 @@
           "message": "Jak často kontrolovat nové cenové nabídky (v sekundách)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Nový výdaj"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Jak často kontrolovat nové výdaje (v sekundách)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Nová položka"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.short_desc": {
@@ -4132,7 +4132,7 @@
           "message": "Jak často kontrolovat nové položky (v sekundách)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Nový projekt"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.short_desc": {

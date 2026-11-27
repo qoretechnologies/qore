@@ -16,7 +16,7 @@
           "message": "Memcached 分散メモリオブジェクトキャッシュシステム"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
+          "source": "Set value",
           "message": "値を設定"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
@@ -28,7 +28,7 @@
           "message": "キーと値のペアをmemcachedに保存（既存の値は上書き）"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
+          "source": "Add value",
           "message": "値を追加"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
@@ -40,7 +40,7 @@
           "message": "キーがまだ存在しない場合にのみキーと値のペアをmemcachedに保存"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
+          "source": "Replace value",
           "message": "値を置換"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "キーが既に存在する場合にのみmemcached内の値を置換"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
+          "source": "Compare and swap",
           "message": "Compare and Swap"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
@@ -64,7 +64,7 @@
           "message": "CASトークンが一致する場合にのみ値を更新（楽観的ロック）"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
+          "source": "Get value",
           "message": "値を取得"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
@@ -88,7 +88,7 @@
           "message": "楽観的ロック用にCASトークン付きでキャッシュされた値を取得"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
+          "source": "Multi-get",
           "message": "マルチ取得"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
@@ -172,7 +172,7 @@
           "message": "memcachedサーバーのバージョンを取得"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
+          "source": "Flush all",
           "message": "すべてフラッシュ"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {

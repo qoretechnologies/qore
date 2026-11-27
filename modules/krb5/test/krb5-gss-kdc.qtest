@@ -5,6 +5,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires Util
+%requires FsUtil
 %requires krb5
 %requires Krb5Util
 %requires HttpServer
@@ -176,6 +178,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
             \testInitialCredentialsBooleanOptionsAccepted());
         addTestCase("gss channel binding mismatch rejected", \testGssChannelBindingMismatchRejected());
         addTestCase("keytab credential acquisition with kdc", \testKeytabCredentialAcquisition());
+        addTestCase("sandboxed acceptor replay cache", \testSandboxedAcceptorReplayCache());
         addTestCase("gss context reset and renegotiate", \testGssContextResetAndRenegotiate());
         addTestCase("gss integrity only wrap unwrap", \testGssIntegrityOnlyWrapUnwrap());
         addTestCase("gss wrap empty message", \testGssWrapEmptyMessage());
@@ -726,6 +729,107 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
             acceptor.step(initiatorInfo.token);
         });
         assertFalse(acceptor.isComplete());
+    }
+
+    #! a sandboxed acceptor writes the authenticators that it accepts to the replay cache of its isolation domain, not
+    #! to that of the process (KRB5RCACHENAME), and detects a replay with it (qore#7756)
+    private testSandboxedAcceptorReplayCache() {
+        hash<auto> setup = setupGssCredentials("sandbox-rcache");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        # the replay caches of the test are in a temporary directory (TMPDIR) of its own
+        TmpDir tmp("module-krb5-kdc-rcache-");
+        string host_rcache = tmp.path + "/host-rcache";
+        *string rcname = getenv("KRB5RCACHENAME");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit {
+            if (exists rcname) { setenv("KRB5RCACHENAME", rcname); } else { unsetenv("KRB5RCACHENAME"); }
+            if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        }
+        setenv("KRB5RCACHENAME", "file2:" + host_rcache);
+        setenv("TMPDIR", tmp.path);
+
+        string domain = "kdc-rcache-" + getpid();
+        string domain_rcache = realpath(tmp.path) + "/qore-krb5-rcache-" + geteuid() + "/qore-sandbox-d"
+            + make_hex_string(binary(domain)) + "-krb5-rcache";
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            hash<auto> sub accept(string keytab, string principal, string token) {
+                try {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::GssCredential cred = Qore::Krb5::GssCredential::fromKeytab(
+                        ctx.openKeytab(\"FILE:\" + keytab), new Qore::Krb5::Krb5Principal(principal));
+                    Qore::Krb5::GssAcceptorContext acceptor(cred);
+                    acceptor.step(token);
+                    return {\"complete\": acceptor.isComplete()};
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+            Qore::Krb5::GssCredential sub cred(string keytab, string principal) {
+                Qore::Krb5::Krb5Context ctx();
+                return Qore::Krb5::GssCredential::fromKeytab(ctx.openKeytab(\"FILE:\" + keytab),
+                    new Qore::Krb5::Krb5Principal(principal));
+            }
+            hash<auto> sub accept_with(Qore::Krb5::GssCredential cred, string token) {
+                try {
+                    Qore::Krb5::GssAcceptorContext acceptor(cred);
+                    acceptor.step(token);
+                    return {\"complete\": acceptor.isComplete()};
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+        ", "sandboxed_acceptor");
+        SandboxManager sm();
+        sm.setIsolationDomain(domain);
+        # no filesystem access is needed for the replay cache
+        sm.addFilesystemAllowedPath(serviceKeytab, QSEC_READ);
+        p.setSandboxManager(sm);
+
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.mechanism = "kerberos";
+        opts.name_type = "krb5-principal";
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred, opts);
+        string token = initiator.step().token;
+
+        hash<auto> r = p.callFunction("accept", serviceKeytab, setup.servicePrincipal, token);
+        assertEq({"complete": True}, r);
+        assertTrue(hstat(domain_rcache).size > 0, "the replay cache of the domain is written");
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not written");
+        # the same authenticator again: a replay that the replay cache of the domain detects
+        r = p.callFunction("accept", serviceKeytab, setup.servicePrincipal, token);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        assertRegex("replay", r.desc);
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not written");
+
+        # the replay cache replaced with a link after the credential was acquired: the acceptor refuses the
+        # authenticator, and the file that the link names is not written
+        Qore::Krb5::GssCredential cred = p.callFunction("cred", serviceKeytab, setup.servicePrincipal);
+        string target = tmp.path + "/read-only.dat";
+        File f();
+        f.open2(target, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write("unchanged");
+        f.close();
+        unlink(domain_rcache);
+        symlink(target, domain_rcache);
+        Qore::Krb5::GssClientContext link_initiator(setup.servicePrincipal, setup.initiatorCred, opts);
+        r = p.callFunction("accept_with", cred, link_initiator.step().token);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertEq("unchanged", ReadOnlyFile::readTextFile(target));
+        unlink(domain_rcache);
+
+        # the acceptor of the process writes the replay cache of KRB5RCACHENAME (which its credential resolves when
+        # it is acquired)
+        Qore::Krb5::GssCredential host_cred = Qore::Krb5::GssCredential::fromKeytab(
+            setup.ctx.openKeytab("FILE:" + serviceKeytab), new Qore::Krb5::Krb5Principal(setup.servicePrincipal));
+        Qore::Krb5::GssClientContext host_initiator(setup.servicePrincipal, setup.initiatorCred, opts);
+        Qore::Krb5::GssAcceptorContext host_acceptor(host_cred);
+        host_acceptor.step(host_initiator.step().token);
+        assertTrue(host_acceptor.isComplete());
+        assertTrue(is_file(host_rcache), "the replay cache of the process is written by its acceptor");
     }
 
     private testKeytabCredentialAcquisition() {

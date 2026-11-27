@@ -100,29 +100,21 @@ public class BedrockSchema {
         };
     }
 
-    private {
-        static list<OpenApi3::OpenApi3Schema> schemas = ();
-        static list<RestSchemaActions::RestSchemaActionSet> action_sets = ();
-    }
-
     private:internal {
-        static Mutex lck();
+        #! the parsed schemas and the action sets, built once for every caller as trusted code (qore#7684)
+        static LazySharedValue state(\BedrockSchema::buildState());
     }
 
     #! Returns the shared control-plane schema
     /** @return the parsed control-plane schema */
     static OpenApi3::OpenApi3Schema getControlSchema() {
-        AutoLock al(lck);
-        initIntern();
-        return schemas[0];
+        return state.get().schemas[0];
     }
 
     #! Returns the shared runtime schema
     /** @return the parsed runtime schema */
     static OpenApi3::OpenApi3Schema getRuntimeSchema() {
-        AutoLock al(lck);
-        initIntern();
-        return schemas[1];
+        return state.get().schemas[1];
     }
 
     #! Returns both shared, validated action sets
@@ -130,9 +122,7 @@ public class BedrockSchema {
         @throw REST-SCHEMA-ACTION-ERROR if a schema and manifest disagree
     */
     static list<RestSchemaActions::RestSchemaActionSet> getActionSets() {
-        AutoLock al(lck);
-        initIntern();
-        return action_sets;
+        return state.get().action_sets;
     }
 
     #! Finds the action set that owns an action
@@ -161,11 +151,8 @@ public class BedrockSchema {
         return set.getOperationEx(action);
     }
 
-    #! Loads both schemas and publishes the action sets atomically under the class lock
-    private static initIntern() {
-        if (action_sets) {
-            return;
-        }
+    #! Loads both schemas and returns them with the action sets, which are published together
+    private:internal static hash<auto> buildState() {
         list<OpenApi3::OpenApi3Schema> parsed = (
             OpenApi3::OpenApi3Loader::fromFile(
                 Priv::BedrockDataProviderModuleDir + "/bedrock-control-openapi.json"),
@@ -178,8 +165,7 @@ public class BedrockSchema {
         RestSchemaActions::RestSchemaActionSet runtime(parsed[1],
             BedrockRuntimeManifest::Manifest, NOTHING, (control,),
             NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
-        schemas = parsed;
-        action_sets = (control, runtime);
+        return {"schemas": parsed, "action_sets": (control, runtime)};
     }
 }
 }

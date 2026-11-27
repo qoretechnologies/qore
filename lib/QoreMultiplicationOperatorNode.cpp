@@ -54,7 +54,7 @@ static void set_binary_analysis_mul(QoreParseContext& parse_context,
 }
 
 QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink)
         return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);

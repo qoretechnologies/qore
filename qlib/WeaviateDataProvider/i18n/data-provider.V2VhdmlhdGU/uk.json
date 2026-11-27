@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.display_name": {
-          "source": "List Schema Classes",
+          "source": "List schema classes",
           "message": "Список класів схеми"
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.short_desc": {

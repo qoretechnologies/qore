@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "チャット補完"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "エンドユーザーを表す不透明な識別子。不正利用の追跡および利用状況の帰属のためにサーバー側でログ記録されます。生成には影響しません。"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "埋め込みを作成"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "エンドユーザーを表す不透明な識別子。不正利用の追跡と利用状況の帰属のためにサーバー側でログに記録されます。出力には影響しません。"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "制約付き生成"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "`True` の場合、各対数確率エントリにトークンIDに加えてデコードされたトークンテキストが含まれます。検査が容易になりますが、ペイロードが大きくなります。"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "サーバー情報の取得"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "SGLang サーバーの設定（モデル名、トークナイザーパス、max_total_tokens、chat_template など）とランタイム状態（バージョン、CUDA デバイス、GPU 数）を返します。ヘルスチェックや設定の検証に役立ちます。"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "KV キャッシュのフラッシュ"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

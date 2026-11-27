@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "Vytvořit zákazníka"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Externí referenční ID zákazníka"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -504,7 +504,7 @@
           "message": "Poznámka k zákazníkovi"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
-          "source": "Add Customer to Group",
+          "source": "Add customer to group",
           "message": "Přidat zákazníka do skupiny"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
@@ -536,7 +536,7 @@
           "message": "ID skupiny zákazníků"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
-          "source": "Remove Customer From Group",
+          "source": "Remove customer from group",
           "message": "Odebrat zákazníka ze skupiny"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
@@ -568,7 +568,7 @@
           "message": "ID skupiny zákazníků"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Seznam zákazníků"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Sestupné pořadí"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "Získat zákazníka"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -660,7 +660,7 @@
           "message": "ID zákazníka"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "Smazat zákazníka"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Aktuální verze profilu zákazníka (pro optimistické souběžné řízení)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Vytvořit objednávku"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -740,7 +740,7 @@
           "message": "Externí reference"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
+          "source": "Create paid order",
           "message": "Vytvořit zaplacenou objednávku"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
@@ -792,7 +792,7 @@
           "message": "Seznam ID plateb k použití. Pokud je prázdný, použije se externí platba."
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
-          "source": "Get Orders",
+          "source": "Get orders",
           "message": "Získat objednávky"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Filtrovat podle lokace"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
+          "source": "Search orders",
           "message": "Vyhledat objednávky"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Získat objednávku"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
@@ -948,7 +948,7 @@
           "message": "ID objednávky"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
-          "source": "Cancel an Order",
+          "source": "Cancel an order",
           "message": "Zrušit objednávku"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Aktuální verze objednávky (pro optimistickou souběžnost)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
+          "source": "Create a payment",
           "message": "Vytvořit platbu"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Pokud je `True` (výchozí), platba se dokončí okamžitě. Pokud je `False`, musí být dokončena později pomocí complete-payment."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
+          "source": "Complete payment",
           "message": "Dokončit platbu"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Token verze pro souběžnost"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Refundovat platbu"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "Důvod refundace"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Zobrazit platby"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get a Payment",
+          "source": "Get a payment",
           "message": "Získat platbu"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "ID platby"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Vytvořit fakturu"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Popis faktury"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Vypsat faktury"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "Získat fakturu"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "ID faktury"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "Odeslat fakturu"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Aktuální verze faktury (pro optimistický souběh)"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
-          "source": "Cancel Invoice",
+          "source": "Cancel invoice",
           "message": "Zrušit fakturu"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Aktuální verze faktury (pro optimistický souběh)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "Vytvořit schůzku"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Poznámka od zákazníka"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
-          "source": "List Bookings",
+          "source": "List bookings",
           "message": "Vypsat rezervace"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
-          "source": "Get a Booking",
+          "source": "Get a booking",
           "message": "Získat rezervaci"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "ID rezervace"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
-          "source": "Cancel Booking",
+          "source": "Cancel booking",
           "message": "Zrušit rezervaci"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "Aktuální verze rezervace (pro optimistickou souběžnost)"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
-          "source": "Change Inventory",
+          "source": "Change inventory",
           "message": "Změnit zásoby"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Žádný stav"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
-          "source": "Get Inventory Count",
+          "source": "Get inventory count",
           "message": "Získat stav zásob"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Volitelný seznam ID lokací k filtrování stavů zásob"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
-          "source": "Search Catalog",
+          "source": "Search catalog",
           "message": "Vyhledat v katalogu"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
-          "source": "Find Service",
+          "source": "Find service",
           "message": "Najít službu"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Vypsat refundace"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get a Refund",
+          "source": "Get a refund",
           "message": "Získat refundaci"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "ID refundace"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "Nový zákazník"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Objednávka vytvořena/aktualizována"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
-          "source": "Payment Created/Updated",
+          "source": "Payment created/updated",
           "message": "Platba vytvořena/aktualizována"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "Nová schůzka"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
-          "source": "New Catalog Item",
+          "source": "New catalog item",
           "message": "Nová položka katalogu"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nová faktura"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
+          "source": "New events",
           "message": "Nové události"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {

@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
-          "source": "Approve Invoice",
+          "source": "Approve invoice",
           "message": "송장 승인"
         },
         "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "승인할 송장"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "고객 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -472,7 +472,7 @@
           "message": "고객에 대한 내부 메모 (고객에게 표시되지 않음)"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "제품 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "제품 또는 서비스의 단가"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
-          "source": "Create Sales Tax",
+          "source": "Create sales tax",
           "message": "판매세 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
@@ -640,7 +640,7 @@
           "message": "세금이 환급 가능한지(환급 청구 가능) 여부"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "거래 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
@@ -700,7 +700,7 @@
           "message": "거래 설명"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "계정 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -824,7 +824,7 @@
           "message": "계정의 통화 코드"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
-          "source": "Create Income/Expense",
+          "source": "Create income/expense",
           "message": "수입/지출 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "지출 항목"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "인보이스 생성"
         },
         "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "인보이스와 연결된 구매 주문(PO) 번호"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "고객 삭제"
         },
         "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "삭제할 고객"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "청구서 전송"
         },
         "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "전송할 청구서"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "고객 업데이트"
         },
         "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "고객에 대한 새 내부 메모"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "제품 업데이트"
         },
         "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "GraphQL 쿼리에 전달할 선택적 변수"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "고객 검색"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "송장 검색"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "제품 검색"
         },
         "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "고객 조회"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "조회할 고객"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
-          "source": "Get Customer by Email",
+          "source": "Get customer by email",
           "message": "이메일로 고객 가져오기"
         },
         "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "조회할 고객의 이메일 주소"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "Invoice Created",
+          "source": "Invoice created",
           "message": "청구서 생성됨"
         },
         "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "이 비즈니스의 송장에 대해서만 트리거(선택 사항)"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "인보이스 가져오기"
         },
         "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "조회할 송장"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "제품 가져오기"
         },
         "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "조회할 상품"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "계정 검색"
         },
         "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {

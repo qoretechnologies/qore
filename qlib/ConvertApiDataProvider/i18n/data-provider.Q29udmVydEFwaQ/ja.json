@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "ファイルを変換"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "変換のタイムアウト（秒）。`10` から `1200` の範囲で指定します。未設定の場合はコンバーターのデフォルトが適用されます。たとえばOfficeドキュメントでは `900`、Webページでは `120` です。"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "コンバーター情報を取得"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "PDFを画像に変換"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "コンバーターのその他のパラメータ。ConvertAPIのパラメータ名から値へのハッシュで指定します。\n\n各コンバーターのパラメータは[ConvertAPIドキュメント](https://docs.convertapi.com)に記載されており、`get-converter-info` アクションでも取得できます。\n\n- スカラー値はそのまま送信されます\n- ファイルハッシュ（`name` と `content`）はファイルとして送信されます\n- ファイルハッシュのリストはファイルのリストとして送信されます\n\n**例**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "PDFファイルを結合"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

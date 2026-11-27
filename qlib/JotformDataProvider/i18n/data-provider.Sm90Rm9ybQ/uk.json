@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
+          "source": "Create submission",
           "message": "Створити надсилання форми"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Виберіть форму, для якої потрібно створити надсилання. Поля форми оновляться відповідно до вашого вибору."
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Отримати надсилання"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Унікальний ID надсилання, яке потрібно отримати"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
+          "source": "Get form submissions",
           "message": "Отримати відповіді форми"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Максимальна кількість надсилань для повернення"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
+          "source": "Update submission",
           "message": "Оновити надіслану форму"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "ID надісланої форми для оновлення"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Видалити надсилання"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -508,7 +508,7 @@
           "message": "ID надсилання, яке потрібно видалити"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Отримати форму"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Форма для отримання"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
+          "source": "Get forms",
           "message": "Отримати форми"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Максимальна кількість форм для повернення"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
+          "source": "Get form reports",
           "message": "Отримати звіти форми"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Форма для отримання звітів"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
+          "source": "New submission",
           "message": "Нове надсилання"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Виберіть форму для відстеження нових надсилань"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Новий платіж"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {

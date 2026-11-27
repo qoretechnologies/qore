@@ -16,7 +16,7 @@
           "message": "汎用RESTサーバー"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.display_name": {
-          "source": "Call REST API / Webhook",
+          "source": "Call REST API / webhook",
           "message": "REST API / Webhookを呼び出す"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.short_desc": {

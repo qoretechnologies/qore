@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
-          "source": "Get Current Member",
-          "message": "Get Current Member"
+          "source": "Get current member",
+          "message": "Get current member"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
           "source": "Get the authenticated member's profile",
@@ -352,8 +352,8 @@
           "message": "Retrieves the profile of the member whose authorization this connection carries.\n\nUseful for confirming which account a connection is bound to; the organizations that account administers are what every other action can reach."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
-          "message": "List Organizations"
+          "source": "List organizations",
+          "message": "List organizations"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
           "source": "List the organizations the authenticated member administers",
@@ -364,8 +364,8 @@
           "message": "Lists the organizations the authenticated member administers, with each one's name, description, logo, size, industries and page URL.\n\nThe `id` of an organization here is what every other action takes, and the `organizational_page` URN is what LinkedIn's analytics and follows APIs address."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
-          "message": "Get Organization"
+          "source": "Get organization",
+          "message": "Get organization"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Get one organization's profile",
@@ -388,8 +388,8 @@
           "message": "The organization whose data is read.  The list offers the organizations the authenticated member administers"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
-          "message": "List Posts"
+          "source": "List posts",
+          "message": "List posts"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
           "source": "List the posts an organization has published",
@@ -472,8 +472,8 @@
           "message": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
-          "message": "Get Post"
+          "source": "Get post",
+          "message": "Get post"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
           "source": "Get one of an organization's posts",
@@ -532,8 +532,8 @@
           "message": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
-          "message": "List Comments"
+          "source": "List comments",
+          "message": "List comments"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
           "source": "List the comments on a post or comment",
@@ -580,8 +580,8 @@
           "message": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
-          "source": "List Reactions",
-          "message": "List Reactions"
+          "source": "List reactions",
+          "message": "List reactions"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
           "source": "List the reactions on a post or comment",
@@ -628,8 +628,8 @@
           "message": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Engagement Summary",
-          "message": "Get Engagement Summary"
+          "source": "Get engagement summary",
+          "message": "Get engagement summary"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
           "source": "Get the reaction and comment counts of content",
@@ -652,8 +652,8 @@
           "message": "The URNs of the content to summarize: posts, activities or comments.  Several can be given at once, which is much cheaper than one call each"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
-          "source": "List Followers",
-          "message": "List Followers"
+          "source": "List followers",
+          "message": "List followers"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
           "source": "List the members and pages following an organization",
@@ -736,8 +736,8 @@
           "message": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
-          "source": "List Following",
-          "message": "List Following"
+          "source": "List following",
+          "message": "List following"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
           "source": "List the pages an organization follows",
@@ -784,8 +784,8 @@
           "message": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Follower Statistics",
-          "message": "Get Follower Statistics"
+          "source": "Get follower statistics",
+          "message": "Get follower statistics"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
           "source": "Break an organization's followers down by demographic",
@@ -904,8 +904,8 @@
           "message": "Break down by the member's relationship to the organization, which distinguishes employees from everyone else"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
-          "source": "Get Visitor Statistics",
-          "message": "Get Visitor Statistics"
+          "source": "Get visitor statistics",
+          "message": "Get visitor statistics"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
           "source": "Break an organization's page visitors down by demographic",
@@ -1156,8 +1156,8 @@
           "message": "The page's people tab"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
-          "message": "New Post"
+          "source": "New post",
+          "message": "New post"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {
           "source": "Fires when an organization publishes a post",

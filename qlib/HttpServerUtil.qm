@@ -1324,9 +1324,13 @@ public hashdecl HttpListenerOptionInfo {
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
         body that the HTTP/1 controller sends.  On HTTP/2 and HTTP/3 it applies to a body that a handler thread
-        sends, for each stream, and to a body that the I/O thread sends from an @ref Qore::InputStream "InputStream",
-        for the connection: the bodies that wait for a client whose streams together take less are ended, and so is
-        one that the client takes nothing of for @ref HttpServer::StreamStallTimeout "StreamStallTimeout".
+        sends, for each stream, and to a buffered body or one that the I/O thread sends from an
+        @ref Qore::InputStream "InputStream", for the connection, until the client has taken it (on HTTP/2, until its
+        \c END_STREAM frame has been written to the socket; on HTTP/3, until the client has acknowledged all its data):
+        the bodies that wait for a client whose streams together take less are ended, and so is one that the client
+        takes nothing of for @ref HttpServer::StreamStallTimeout "StreamStallTimeout".  The rest of an HTTP/2 body
+        whose \c END_STREAM frame has been sent is in the connection's send buffer, which a reset does not free: a
+        client that does not take it has its connection closed.
 
         @since HttpServerUtil 1.6
     */

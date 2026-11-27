@@ -190,6 +190,8 @@ code sub makeNegate() {
 const LeakIterations = 1000;
 
 #! the heap floats and heap ints that exist in the process
+# debug-builtin-guard: only the "live" and "live-retained" modes call it, which NanBoxDoubleTagCollision.qtest
+# runs only with library debugging
 hash<string, int> sub liveNodes() {
     return {
         "floats": call_function("dbg_get_live_bigfloat_count"),

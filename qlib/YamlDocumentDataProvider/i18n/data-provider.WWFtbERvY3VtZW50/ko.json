@@ -8,7 +8,7 @@
           "message": "특정 파일 위치에서 YAML 문서 데이터를 읽습니다.\n\nYAML 파일에는 `---` 구분 기호로 구분된 하나 이상의 문서가 포함될 수 있습니다. 각 문서는 별도의 레코드로 반복 처리됩니다.\n\n**주요 옵션**\n- `path`: 읽을 파일 위치(필수)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n- `skip_empty_documents`: 빈 문서 건너뛰기(기본값: `True`)\n- `max_documents`: 읽을 최대 문서 수(`0` = 무제한)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "YAML 문서 파일 읽기"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "문자열로 직접 제공된 YAML 인라인 데이터를 읽습니다.\n\nYAML 데이터에는 `---` 구분 기호로 구분된 하나 이상의 문서가 포함될 수 있습니다. 각 문서는 별도의 레코드로 반복 처리됩니다.\n\n**주요 옵션**\n- `data`: 파싱할 YAML 문자열(필수)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n- `skip_empty_documents`: 빈 문서 건너뛰기(기본값: `True`)\n- `max_documents`: 읽을 최대 문서 수(`0` = 무제한)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "YAML 인라인 데이터 읽기"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "YAML 문서 레코드를 다중 문서 스트림으로 특정 파일 위치에 씁니다.\n\n레코드는 누적되었다가 작업이 완료될 때 `---` 문서 구분자와 함께 기록됩니다.\n\n**주요 옵션**\n- `path`: 출력 파일 위치(필수)\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "YAML 문서 파일 쓰기"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "레코드에서 다중 문서 YAML 스트림을 생성하여 데이터로 반환합니다. 예를 들어 이메일에 첨부하거나 다른 작업으로 업로드할 수 있습니다.\n\n각 레코드는 `---` 마커로 구분된 하나의 YAML 문서가 됩니다. 작업은 생성된 데이터를 `data`에, 문서 수를 `record_count`에 반환합니다.\n\n**주요 옵션**\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "YAML 인라인 데이터 쓰기"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

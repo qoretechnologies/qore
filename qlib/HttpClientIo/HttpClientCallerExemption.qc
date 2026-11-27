@@ -63,6 +63,41 @@ class HttpClientIoSocketAccess {
         }
     }
 
+    #! Returns the connection of a stream for the code of this module, which acts for the stream itself (qore#7570)
+    /** The public accessor, HttpClientStreamHandle::getConnection(), refuses code that a sandbox restricts and that
+        does not own the connection manager
+    */
+    static HttpClientConnection connectionOf(HttpClientStreamHandle stream) {
+        return stream.getConnectionFor(token);
+    }
+
+    #! Returns @ref True if the calling code is restricted and does not own the connection (qore#7570)
+    static bool callerIsRestrictedNonOwner(HttpClientConnection conn) {
+        return conn.callerIsRestrictedNonOwnerFor(token);
+    }
+
+    #! Returns @ref True if restricted code of the given %Program took the connection out of the pool (qore#7570)
+    static bool isTakenBy(HttpClientConnection conn, int pgm_id) {
+        return conn.isTakenByFor(token, pgm_id);
+    }
+
+    #! Returns @ref True if the request of a stream has ended: the pool may give its connection to other requests
+    /** (qore#7570) */
+    static bool streamEnded(HttpClientStreamHandle stream) {
+        return stream.isEndedFor(token);
+    }
+
+    #! Records that the request of a stream has ended (qore#7570)
+    static markStreamEnded(HttpClientStreamHandle stream) {
+        stream.markEndedFor(token);
+    }
+
+    #! Creates the view of a stream's connection (qore#7570)
+    static HttpClientConnectionView newView(HttpClientConnection conn, HttpClientStreamHandle stream,
+            bool restricted, *int caller_pgm_id) {
+        return new HttpClientConnectionView(token, conn, stream, restricted, caller_pgm_id);
+    }
+
     #! Returns @ref True if the operation is of a poll operation class of this module (or a subclass of one)
     private:internal static bool isModuleOperation(HttpClientPollOperation op) {
         return op instanceof Http1ClientPollOperation || op instanceof Http2ClientPollOperation

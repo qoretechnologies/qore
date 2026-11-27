@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Crear factura"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Valores de campos personalizados para la factura"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Actualizar factura"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -1172,7 +1172,7 @@
           "message": "Valores de campos personalizados para la factura"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Eliminar factura"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "La factura a eliminar"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Obtener factura"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "La factura que se va a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Listar facturas"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Filtrar por cliente"
         },
         "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Enviar factura por correo electrónico"
         },
         "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Cuerpo del correo electrónico"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.display_name": {
-          "source": "Create Bill",
+          "source": "Create bill",
           "message": "Crear factura"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Términos de pago y entrega"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.display_name": {
-          "source": "Update Bill",
+          "source": "Update bill",
           "message": "Actualizar factura"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Términos de pago y entrega"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.display_name": {
-          "source": "Delete Bill",
+          "source": "Delete bill",
           "message": "Eliminar factura de proveedor"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "La factura de proveedor a eliminar"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.display_name": {
-          "source": "Get Bill",
+          "source": "Get bill",
           "message": "Obtener factura"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "La factura de compra a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.display_name": {
-          "source": "List Bills",
+          "source": "List bills",
           "message": "Listar facturas de proveedores"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "Filtrar por proveedor"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Crear pago"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "ID de la cuenta donde se depositará el pago"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Actualizar pago"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Lista de facturas con campos: `invoice_id`, `amount_applied`"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Eliminar pago"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "El pago a eliminar"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Obtener pago"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "El pago a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Crear contacto"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Notas adicionales"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Actualizar contacto"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Notas adicionales"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Listar contactos"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Solo contactos de proveedores"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Obtener contacto"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "El contacto para recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Crear gasto"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "Cliente al que facturar si el gasto es facturable"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Actualizar gasto"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Cliente al que facturar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "Listar gastos"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Obtener gasto"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "El gasto a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Crear artículo"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Impuesto a aplicar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Listar artículos"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Obtener elemento"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "El elemento que se va a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Crear presupuesto"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -2744,7 +2744,7 @@
           "message": "Número de referencia"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Actualizar presupuesto"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -2848,7 +2848,7 @@
           "message": "Número de referencia"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "Listar presupuestos"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Obtener presupuesto"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "El presupuesto a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Crear pedido de venta"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "Método de entrega"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Actualizar pedido de venta"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Método de entrega"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Eliminar pedido de venta"
         },
         "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "El pedido de venta a eliminar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "Listar pedidos de venta"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Obtener pedido de venta"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "El pedido de venta a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "Listar órdenes de compra"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "Obtener orden de compra"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "El pedido de compra a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Listar pagos"
         },
         "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Organización de Zoho Books"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nueva factura"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Con qué frecuencia verificar si hay nuevas facturas (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Nueva factura de proveedor"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Con qué frecuencia buscar nuevas facturas de proveedor (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nuevo pago"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos pagos (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "Nuevo cliente"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -3368,7 +3368,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos clientes (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Nuevo gasto"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos gastos (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "Nueva orden de venta"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos pedidos de venta (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Nuevo presupuesto"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos presupuestos (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Nuevo elemento"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "Con qué frecuencia verificar si hay nuevos artículos (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nueva orden de compra"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "Con qué frecuencia verificar si hay nuevas órdenes de compra (segundos)"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.display_name": {
-          "source": "New Vendor",
+          "source": "New vendor",
           "message": "Nuevo proveedor"
         },
         "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.short_desc": {

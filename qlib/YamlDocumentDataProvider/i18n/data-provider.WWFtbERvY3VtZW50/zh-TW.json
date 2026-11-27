@@ -8,7 +8,7 @@
           "message": "從特定的檔案位置讀取 YAML 文件資料。\n\nYAML 檔案可能包含一或多個由 `---` 標記分隔的文件。每個文件都會作為獨立記錄進行迭代。\n\n**主要選項**\n- `path`：要讀取的檔案位置（必填）\n- `encoding`：字元編碼（預設：`UTF-8`）\n- `skip_empty_documents`：略過空文件（預設：`True`）\n- `max_documents`：要讀取的文件數量上限（`0` = 無限制）\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "讀取 YAML 文件檔案"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "讀取直接以字串形式提供的 YAML 內嵌資料。\n\nYAML 資料可能包含一或多個由 `---` 標記分隔的文件。每個文件都會作為獨立記錄進行迭代。\n\n**主要選項**\n- `data`：要解析的 YAML 字串（必填）\n- `encoding`：字元編碼（預設：`UTF-8`）\n- `skip_empty_documents`：略過空文件（預設：`True`）\n- `max_documents`：要讀取的文件數量上限（`0` = 無限制）\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "讀取 YAML 內嵌資料"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "將 YAML 文件記錄以多文件串流形式寫入特定檔案位置。\n\n記錄會累積，並在動作完成時以 `---` 文件分隔符號寫入。\n\n**主要選項**\n- `path`：輸出檔案位置（必填）\n- `flow_style`：使用緊湊內嵌 YAML 輸出（預設：`False`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "寫入 YAML 文件檔案"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "從記錄產生多文件 YAML 串流並以資料形式傳回，例如附加至電子郵件或透過其他動作上傳。\n\n每筆記錄成為一份 YAML 文件，以 `---` 標記分隔；動作會在 `data` 中傳回產生的資料，並在 `record_count` 中傳回文件數。\n\n**主要選項**\n- `flow_style`：使用緊湊內嵌 YAML 輸出（預設：`False`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "寫入 YAML 內嵌資料"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

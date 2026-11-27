@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Completamento chat"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Identificatore pseudonimo per isolamento della cache e pianificazione. Usa lettere, cifre, trattini bassi o trattini; massimo 512 caratteri. Escludi informazioni personali."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Elenca modelli"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Trova i modelli disponibili per i tuoi flussi di lavoro."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
+          "source": "Get balance",
           "message": "Ottieni saldo"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Verifica il credito disponibile prima di eseguire i flussi di lavoro AI.\n\nRestituisce la disponibilità del credito e i saldi senza generare token."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
+          "source": "Fill in the middle",
           "message": "Compila il mezzo"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Numero di probabilità alternative dei token da `0` a `20`."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Crea risposta"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Identificatore pseudonimo per isolamento della cache e pianificazione. Usa lettere, cifre, trattini bassi o trattini; massimo 512 caratteri. Escludi informazioni personali."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
+          "source": "Upload image file",
           "message": "Carica file immagine"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Elimina automaticamente il file dopo `3600` a `2592000` secondi. Ometti per mantenerlo."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
+          "source": "List image files",
           "message": "Elenco file immagine"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Dati utente"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
+          "source": "Get image file",
           "message": "Ottieni file immagine"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Seleziona un file immagine caricato."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
+          "source": "Delete image file",
           "message": "Elimina file immagine"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {

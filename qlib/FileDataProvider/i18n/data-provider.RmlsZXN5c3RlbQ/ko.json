@@ -16,7 +16,7 @@
           "message": "서버 파일 시스템에 대한 액세스"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "파일 복사"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
@@ -64,7 +64,7 @@
           "message": "기존 대상 파일을 덮어쓸지 여부"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
+          "source": "Follow symlinks",
           "message": "심볼릭 링크 추적"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "심볼릭 링크를 따를지 여부"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
+          "source": "Create file",
           "message": "파일 생성"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "새 파일의 모드(기본값 `0664`)"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "파일 삭제"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
@@ -148,7 +148,7 @@
           "message": "파일 경로"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "파일 가져오기"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
@@ -196,7 +196,7 @@
           "message": "`text` = `True`인 경우 사용할 문자열 인코딩입니다(기본값: `UTF-8`)"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "인코딩 오류"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -208,7 +208,7 @@
           "message": "`text` = `True`인 경우 문자 인코딩에서 유효하지 않은 텍스트의 처리 방식입니다. `raise`(기본값)는 `INVALID-ENCODING` 오류를 발생시키고, `latin1`은 텍스트를 `ISO-8859-1`로 반환하며, `keep`은 검사 없이 해당 인코딩으로 반환합니다"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
+          "source": "Max len",
           "message": "최대 길이"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
@@ -220,7 +220,7 @@
           "message": "반환되는 데이터의 최대 길이(바이트 단위)"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "파일 목록 보기"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
@@ -244,7 +244,7 @@
           "message": "파일 경로"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
+          "source": "Create directory",
           "message": "디렉터리 생성"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
@@ -280,7 +280,7 @@
           "message": "새 파일의 모드(기본값: `0775`)"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "파일 이동"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
@@ -328,7 +328,7 @@
           "message": "기존 대상 파일을 덮어쓸지 여부"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
+          "source": "Get info",
           "message": "정보 가져오기"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {

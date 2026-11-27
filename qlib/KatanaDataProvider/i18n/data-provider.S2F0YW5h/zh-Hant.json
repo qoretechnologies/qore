@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -548,7 +548,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "取得產品"
         },
         "app.S2F0YW5h.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "產品 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "建立產品"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "若為 `True`，則產品在銷售訂單上自動組裝"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "更新產品"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "若為 `True`，則產品已封存（從使用中清單隱藏）"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "刪除產品"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "要刪除的產品 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.display_name": {
-          "source": "List Materials",
+          "source": "List materials",
           "message": "列出材料"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.display_name": {
-          "source": "Get Material",
+          "source": "Get material",
           "message": "獲取物料"
         },
         "app.S2F0YW5h.action.Z2V0LW1hdGVyaWFs.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "物料 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Create Material",
+          "source": "Create material",
           "message": "建立物料"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hdGVyaWFs.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "自訂欄位集合 ID"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.display_name": {
-          "source": "Update Material",
+          "source": "Update material",
           "message": "更新物料"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hdGVyaWFs.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "若為 `True`，則物料已封存（從使用中清單隱藏）"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.display_name": {
-          "source": "Delete Material",
+          "source": "Delete material",
           "message": "刪除物料"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hdGVyaWFs.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "要刪除的物料 ID"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.display_name": {
-          "source": "List Variants",
+          "source": "List variants",
           "message": "列出變體"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.display_name": {
-          "source": "Get Variant",
+          "source": "Get variant",
           "message": "獲取變體"
         },
         "app.S2F0YW5h.action.Z2V0LXZhcmlhbnQ.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "變體 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Create Variant",
+          "source": "Create variant",
           "message": "建立變體"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXZhcmlhbnQ.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "自訂欄位的值"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.display_name": {
-          "source": "Update Variant",
+          "source": "Update variant",
           "message": "更新變體"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXZhcmlhbnQ.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "自訂欄位的值"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.display_name": {
-          "source": "Delete Variant",
+          "source": "Delete variant",
           "message": "刪除變體"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXZhcmlhbnQ.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "要刪除的變體 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "List Manufacturing Orders",
+          "source": "List manufacturing orders",
           "message": "列出製造訂單"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
@@ -2732,7 +2732,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Get Manufacturing Order",
+          "source": "Get manufacturing order",
           "message": "獲取製造訂單"
         },
         "app.S2F0YW5h.action.Z2V0LW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "製造訂單 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Create Manufacturing Order",
+          "source": "Create manufacturing order",
           "message": "建立製造訂單"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "批次內進出數量"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Update Manufacturing Order",
+          "source": "Update manufacturing order",
           "message": "更新製造訂單"
         },
         "app.S2F0YW5h.action.dXBkYXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "製造訂單完成的日期"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.display_name": {
-          "source": "Delete Manufacturing Order",
+          "source": "Delete manufacturing order",
           "message": "刪除製造訂單"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLW1hbnVmYWN0dXJpbmctb3JkZXI.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "要刪除的 MO ID"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "列出銷售訂單"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "取得銷售訂單"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "銷售訂單 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "建立銷售訂單"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "自訂欄位值的自由格式雜湊（鍵取決於 Katana 中為銷售訂單設定的自訂欄位集合）"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "更新銷售訂單"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -4212,7 +4212,7 @@
           "message": "匯率適用的日期"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "刪除銷售訂單"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -4236,7 +4236,7 @@
           "message": "要刪除的銷售訂單 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.display_name": {
-          "source": "List Sales Order Rows",
+          "source": "List sales order rows",
           "message": "列出銷售訂單明細行"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Sales Order Row",
+          "source": "Get sales order row",
           "message": "獲取銷售訂單列"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4388,7 +4388,7 @@
           "message": "銷售訂單列 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Sales Order Row",
+          "source": "Create sales order row",
           "message": "建立銷售訂單行"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4532,7 +4532,7 @@
           "message": "自訂欄位值的自由格式雜湊"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Sales Order Row",
+          "source": "Update sales order row",
           "message": "更新銷售訂單資料列"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4676,7 +4676,7 @@
           "message": "自訂欄位值的自由格式雜湊"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Sales Order Row",
+          "source": "Delete sales order row",
           "message": "刪除銷售訂單資料列"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLXJvdw.short_desc": {
@@ -4700,7 +4700,7 @@
           "message": "要刪除的資料列 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.display_name": {
-          "source": "List Sales Order Addresses",
+          "source": "List sales order addresses",
           "message": "列出銷售訂單地址"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.short_desc": {
@@ -4840,7 +4840,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Get Sales Order Address",
+          "source": "Get sales order address",
           "message": "獲取銷售訂單地址"
         },
         "app.S2F0YW5h.action.Z2V0LXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -4860,7 +4860,7 @@
           "message": "地址 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Create Sales Order Address",
+          "source": "Create sales order address",
           "message": "建立銷售訂單地址"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "國家"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Update Sales Order Address",
+          "source": "Update sales order address",
           "message": "更新銷售訂單地址"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "國家"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Sales Order Address",
+          "source": "Delete sales order address",
           "message": "刪除銷售訂單地址"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXNhbGVzLW9yZGVyLWFkZHJlc3M.short_desc": {
@@ -5192,7 +5192,7 @@
           "message": "要刪除的地址 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "列出採購單"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -5368,7 +5368,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "取得採購單"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5388,7 +5388,7 @@
           "message": "採購訂單 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
+          "source": "Create purchase order",
           "message": "建立採購單"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5676,7 +5676,7 @@
           "message": "要購買的變體 ID"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
+          "source": "Update purchase order",
           "message": "更新採購單"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5840,7 +5840,7 @@
           "message": "追蹤地點的 ID"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
+          "source": "Delete purchase order",
           "message": "刪除採購單"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -5864,7 +5864,7 @@
           "message": "要刪除的採購單 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.display_name": {
-          "source": "List Purchase Order Rows",
+          "source": "List purchase order rows",
           "message": "列出採購單明細行"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.short_desc": {
@@ -5996,7 +5996,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Get Purchase Order Row",
+          "source": "Get purchase order row",
           "message": "獲取採購訂單列"
         },
         "app.S2F0YW5h.action.Z2V0LXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6016,7 +6016,7 @@
           "message": "採購訂單列 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Create Purchase Order Row",
+          "source": "Create purchase order row",
           "message": "建立採購單明細行"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "此明細行的 ISO 4217 貨幣代碼（覆蓋採購單貨幣）"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Update Purchase Order Row",
+          "source": "Update purchase order row",
           "message": "更新採購訂單列"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "接收該列項目的日期與時間"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.display_name": {
-          "source": "Delete Purchase Order Row",
+          "source": "Delete purchase order row",
           "message": "刪除採購單資料列"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVyLXJvdw.short_desc": {
@@ -6328,7 +6328,7 @@
           "message": "要刪除的資料列 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -6520,7 +6520,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -6540,7 +6540,7 @@
           "message": "客戶 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "建立客戶"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -6872,7 +6872,7 @@
           "message": "郵遞區號"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "預設運送地址的 ID"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "刪除客戶"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -7064,7 +7064,7 @@
           "message": "要刪除的客戶 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.display_name": {
-          "source": "List Customer Addresses",
+          "source": "List customer addresses",
           "message": "列出客戶地址"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.short_desc": {
@@ -7204,7 +7204,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Get Customer Address",
+          "source": "Get customer address",
           "message": "獲取客戶地址"
         },
         "app.S2F0YW5h.action.Z2V0LWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7224,7 +7224,7 @@
           "message": "地址 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create Customer Address",
+          "source": "Create customer address",
           "message": "建立客戶地址"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7388,7 +7388,7 @@
           "message": "國家"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update Customer Address",
+          "source": "Update customer address",
           "message": "更新客戶地址"
         },
         "app.S2F0YW5h.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7532,7 +7532,7 @@
           "message": "國家"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete Customer Address",
+          "source": "Delete customer address",
           "message": "刪除客戶地址"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -7556,7 +7556,7 @@
           "message": "要刪除的地址 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.display_name": {
-          "source": "List Suppliers",
+          "source": "List suppliers",
           "message": "列出供應商"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.short_desc": {
@@ -7688,7 +7688,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "取得供應商"
         },
         "app.S2F0YW5h.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -7708,7 +7708,7 @@
           "message": "供應商 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "建立供應商"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -7912,7 +7912,7 @@
           "message": "郵遞區號"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "更新供應商"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "預設貨幣"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.display_name": {
-          "source": "Delete Supplier",
+          "source": "Delete supplier",
           "message": "刪除供應商"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN1cHBsaWVy.short_desc": {
@@ -8020,7 +8020,7 @@
           "message": "要刪除的供應商 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
+          "source": "List locations",
           "message": "列出地點"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
@@ -8144,7 +8144,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
+          "source": "Get location",
           "message": "獲取位置"
         },
         "app.S2F0YW5h.action.Z2V0LWxvY2F0aW9u.short_desc": {
@@ -8164,7 +8164,7 @@
           "message": "位置 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
+          "source": "List inventory",
           "message": "列出庫存"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.display_name": {
-          "source": "Set Inventory Safety Stock Level",
+          "source": "Set inventory safety stock level",
           "message": "設定庫存安全庫存水平"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1zYWZldHktc3RvY2stbGV2ZWw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "要設定的閾值（安全庫存水平或再訂購點數量）"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.display_name": {
-          "source": "Set Inventory Reorder Point",
+          "source": "Set inventory reorder point",
           "message": "設定庫存再訂購點"
         },
         "app.S2F0YW5h.action.c2V0LWludmVudG9yeS1yZW9yZGVyLXBvaW50.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "要設定的閾值（安全庫存水平或再訂購點數量）"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.display_name": {
-          "source": "List Stock Adjustments",
+          "source": "List stock adjustments",
           "message": "列出庫存調整"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "取得庫存調整"
         },
         "app.S2F0YW5h.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8544,7 +8544,7 @@
           "message": "庫存調整 ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "建立庫存調整"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8700,7 +8700,7 @@
           "message": "要調整的變體 ID"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "更新庫存調整"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8784,7 +8784,7 @@
           "message": "自由格式的附加資訊"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "刪除庫存調整"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -8808,7 +8808,7 @@
           "message": "要刪除的庫存調整 ID"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.display_name": {
-          "source": "List Batch Stocks",
+          "source": "List batch stocks",
           "message": "列出批次庫存"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.short_desc": {
@@ -8948,7 +8948,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "列出稅率"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -9072,7 +9072,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "建立稅率"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -9108,7 +9108,7 @@
           "message": "以百分比表示的稅率（必填，0-999.999）"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "列出 Webhook"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9232,7 +9232,7 @@
           "message": "若為 `True`，則在回應中包含已軟刪除的記錄"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "取得 Webhook"
         },
         "app.S2F0YW5h.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -9252,7 +9252,7 @@
           "message": "Webhook ID"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "建立 Webhook"
         },
         "app.S2F0YW5h.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9536,7 +9536,7 @@
           "message": "Webhook 的描述"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "更新 Webhook"
         },
         "app.S2F0YW5h.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9844,7 +9844,7 @@
           "message": "若為 `True`，則 Webhook 處於活動狀態"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "刪除 Webhook"
         },
         "app.S2F0YW5h.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9868,7 +9868,7 @@
           "message": "要刪除的 Webhook ID"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Sales Order Created",
+          "source": "Sales order created",
           "message": "銷售訂單已建立"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItY3JlYXRlZA.short_desc": {
@@ -9880,7 +9880,7 @@
           "message": "在 Katana 中建立新銷售訂單時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Sales Order Updated",
+          "source": "Sales order updated",
           "message": "銷售訂單已更新"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItdXBkYXRlZA.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "當 Katana 中的銷售訂單更新時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Sales Order Deleted",
+          "source": "Sales order deleted",
           "message": "銷售訂單已刪除"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsZXRlZA.short_desc": {
@@ -9904,7 +9904,7 @@
           "message": "在 Katana 中刪除銷售訂單時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.display_name": {
-          "source": "Sales Order Packed",
+          "source": "Sales order packed",
           "message": "銷售訂單已包裝"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItcGFja2Vk.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "當 Katana 中的銷售訂單已包裝時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.display_name": {
-          "source": "Sales Order Delivered",
+          "source": "Sales order delivered",
           "message": "銷售訂單已交付"
         },
         "app.S2F0YW5h.action.c2FsZXMtb3JkZXItZGVsaXZlcmVk.short_desc": {
@@ -9928,7 +9928,7 @@
           "message": "當 Katana 中的銷售訂單已交付時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Purchase Order Created",
+          "source": "Purchase order created",
           "message": "採購訂單已建立"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItY3JlYXRlZA.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "當 Katana 中建立新採購訂單時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Purchase Order Updated",
+          "source": "Purchase order updated",
           "message": "採購訂單已更新"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItdXBkYXRlZA.short_desc": {
@@ -9952,7 +9952,7 @@
           "message": "當 Katana 中的採購訂單更新時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Purchase Order Deleted",
+          "source": "Purchase order deleted",
           "message": "採購訂單已刪除"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItZGVsZXRlZA.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "當 Katana 中的採購訂單被刪除時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Partially Received",
+          "source": "Purchase order partially received",
           "message": "採購訂單已部分收貨"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcGFydGlhbGx5LXJlY2VpdmVk.short_desc": {
@@ -9976,7 +9976,7 @@
           "message": "當 Katana 中的採購訂單部分收貨時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.display_name": {
-          "source": "Purchase Order Received",
+          "source": "Purchase order received",
           "message": "採購訂單已收貨"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcmVjZWl2ZWQ.short_desc": {
@@ -9988,7 +9988,7 @@
           "message": "當 Katana 中的採購訂單完全收貨時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.display_name": {
-          "source": "Purchase Order Row Created",
+          "source": "Purchase order row created",
           "message": "採購訂單列已建立"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWNyZWF0ZWQ.short_desc": {
@@ -10000,7 +10000,7 @@
           "message": "當 Katana 中建立採購訂單項目時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.display_name": {
-          "source": "Purchase Order Row Updated",
+          "source": "Purchase order row updated",
           "message": "採購訂單列已更新"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXVwZGF0ZWQ.short_desc": {
@@ -10012,7 +10012,7 @@
           "message": "當 Katana 中的採購訂單項目更新時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.display_name": {
-          "source": "Purchase Order Row Deleted",
+          "source": "Purchase order row deleted",
           "message": "採購訂單列已刪除"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LWRlbGV0ZWQ.short_desc": {
@@ -10024,7 +10024,7 @@
           "message": "當 Katana 中的採購訂單項目被刪除時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.display_name": {
-          "source": "Purchase Order Row Received",
+          "source": "Purchase order row received",
           "message": "採購訂單列已收貨"
         },
         "app.S2F0YW5h.action.cHVyY2hhc2Utb3JkZXItcm93LXJlY2VpdmVk.short_desc": {
@@ -10036,7 +10036,7 @@
           "message": "當 Katana 中的採購訂單項目已收貨時觸發（原生 Webhook）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.display_name": {
-          "source": "New Products",
+          "source": "New products",
           "message": "新產品"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXByb2R1Y3Rz.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "當在 Katana 中偵測到新產品時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.display_name": {
-          "source": "Updated Products",
+          "source": "Updated products",
           "message": "已更新的產品"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wcm9kdWN0cw.short_desc": {
@@ -10060,7 +10060,7 @@
           "message": "在 Katana 中更新產品時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.display_name": {
-          "source": "New Materials",
+          "source": "New materials",
           "message": "新物料"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hdGVyaWFscw.short_desc": {
@@ -10072,7 +10072,7 @@
           "message": "當在 Katana 中偵測到新物料時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.display_name": {
-          "source": "Updated Materials",
+          "source": "Updated materials",
           "message": "已更新的物料"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYXRlcmlhbHM.short_desc": {
@@ -10084,7 +10084,7 @@
           "message": "在 Katana 中更新物料時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.display_name": {
-          "source": "New Manufacturing Orders",
+          "source": "New manufacturing orders",
           "message": "新製造訂單"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LW1hbnVmYWN0dXJpbmctb3JkZXJz.short_desc": {
@@ -10096,7 +10096,7 @@
           "message": "當在 Katana 中偵測到新製造訂單時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.display_name": {
-          "source": "Updated Manufacturing Orders",
+          "source": "Updated manufacturing orders",
           "message": "已更新的製造訂單"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
@@ -10108,7 +10108,7 @@
           "message": "在 Katana 中更新製造訂單時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.display_name": {
-          "source": "New Sales Orders (Polling)",
+          "source": "New sales orders (polling)",
           "message": "新銷售訂單（輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXNhbGVzLW9yZGVycw.short_desc": {
@@ -10120,7 +10120,7 @@
           "message": "當在 Katana 中偵測到新銷售訂單時觸發（透過輪詢）；補充 `sales-order-created` Webhook 事件"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "Updated Sales Orders (Polling)",
+          "source": "Updated sales orders (polling)",
           "message": "已更新的銷售訂單（輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -10132,7 +10132,7 @@
           "message": "在 Katana 中更新銷售訂單時觸發（透過輪詢）；補充 `sales-order-updated` Webhook 事件"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.display_name": {
-          "source": "New Purchase Orders (Polling)",
+          "source": "New purchase orders (polling)",
           "message": "新採購訂單（輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXB1cmNoYXNlLW9yZGVycw.short_desc": {
@@ -10144,7 +10144,7 @@
           "message": "當在 Katana 中偵測到新採購訂單時觸發（透過輪詢）；補充 `purchase-order-created` Webhook 事件"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "Updated Purchase Orders (Polling)",
+          "source": "Updated purchase orders (polling)",
           "message": "已更新的採購訂單（輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "在 Katana 中更新採購訂單時觸發（透過輪詢）；補充 `purchase-order-updated` Webhook 事件"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.display_name": {
-          "source": "New Customers",
+          "source": "New customers",
           "message": "新客戶"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LWN1c3RvbWVycw.short_desc": {
@@ -10168,7 +10168,7 @@
           "message": "當在 Katana 中偵測到新客戶時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.display_name": {
-          "source": "Updated Customers",
+          "source": "Updated customers",
           "message": "已更新客戶"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1jdXN0b21lcnM.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "當 Katana 中的客戶更新時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.display_name": {
-          "source": "New Suppliers",
+          "source": "New suppliers",
           "message": "新供應商"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN1cHBsaWVycw.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "當在 Katana 中偵測到新供應商時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.display_name": {
-          "source": "Updated Suppliers",
+          "source": "Updated suppliers",
           "message": "已更新的供應商"
         },
         "app.S2F0YW5h.action.d2F0Y2gtdXBkYXRlZC1zdXBwbGllcnM.short_desc": {
@@ -10204,7 +10204,7 @@
           "message": "在 Katana 中更新供應商時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.display_name": {
-          "source": "Inventory Updated",
+          "source": "Inventory updated",
           "message": "庫存已更新"
         },
         "app.S2F0YW5h.action.d2F0Y2gtaW52ZW50b3J5LXVwZGF0ZWQ.short_desc": {
@@ -10216,7 +10216,7 @@
           "message": "當 Katana 中的庫存項目的庫存水平變更時觸發（透過輪詢）"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "New Stock Adjustments",
+          "source": "New stock adjustments",
           "message": "新庫存調整"
         },
         "app.S2F0YW5h.action.d2F0Y2gtbmV3LXN0b2NrLWFkanVzdG1lbnRz.short_desc": {

@@ -69,6 +69,7 @@ class SignalHandlerProgramDeleteWorker {
     }
 
     #! Deletes a Program whose signal callback is still finishing in the signal thread when this method returns
+    # debug-builtin-guard: only the "running" mode calls it, which runningTest() runs only with library debugging
     private static deleteProgramWhileCallbackFinishes() {
         Program p(PO_NO_INHERIT_USER_FUNC_VARIANTS | PO_NO_INHERIT_GLOBAL_VARS | PO_NO_INHERIT_USER_CLASSES);
         p.parse(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "signal-handler-program-delete.qi"),

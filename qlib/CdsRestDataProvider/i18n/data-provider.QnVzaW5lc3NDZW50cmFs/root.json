@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
-          "message": "Create Record"
+          "source": "Create record",
+          "message": "Create record"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.short_desc": {
           "source": "Create a record in a Business Central table",
@@ -376,8 +376,8 @@
           "message": "The name of the Business Central table, ex: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
-          "message": "Find Single Record"
+          "source": "Find single record",
+          "message": "Find single record"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
           "source": "Find a specific record in Business Central",
@@ -412,8 +412,8 @@
           "message": "The name of the Business Central table, ex: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
-          "message": "Find Records"
+          "source": "Find records",
+          "message": "Find records"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.short_desc": {
           "source": "Find records in Business Central",
@@ -448,8 +448,8 @@
           "message": "The name of the Business Central table, ex: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.short_desc": {
           "source": "Update records in Business Central",
@@ -484,8 +484,8 @@
           "message": "The name of the Business Central table, ex: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
           "source": "Delete records in Business Central",

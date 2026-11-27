@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "이슈 생성"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
@@ -524,7 +524,7 @@
           "message": "하위 이슈를 생성할 상위 이슈"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
+          "source": "Search issues",
           "message": "이슈 검색"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
@@ -640,7 +640,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "이슈 가져오기"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
@@ -664,7 +664,7 @@
           "message": "조회할 이슈"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "이슈 업데이트"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
@@ -848,7 +848,7 @@
           "message": "상위 이슈 ID(하위 이슈로 만드는 경우)"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
+          "source": "Archive issue",
           "message": "이슈 보관"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "보관할 이슈"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
+          "source": "Create comment",
           "message": "댓글 생성"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -908,7 +908,7 @@
           "message": "마크다운 형식의 댓글 본문/내용"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "프로젝트 생성"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "프로젝트의 목표 완료일"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "프로젝트 검색"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
+          "source": "Create cycle",
           "message": "사이클 생성"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "사이클 종료일"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
+          "source": "Search cycles",
           "message": "사이클 검색"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "라벨 생성"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "라벨을 생성할 팀(워크스페이스 라벨의 경우 비워 둠)"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
+          "source": "Search labels",
           "message": "라벨 검색"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
+          "source": "Search teams",
           "message": "팀 검색"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "반환할 결과의 최대 개수"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
+          "source": "Get team",
           "message": "팀 가져오기"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "조회할 팀"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
+          "source": "Issue created",
           "message": "이슈 생성됨"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "이 팀에서 생성된 이슈에 대해서만 트리거(선택 사항)"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
+          "source": "Issue updated",
           "message": "이슈 업데이트됨"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "이 팀에서 업데이트된 이슈에 대해서만 트리거(선택 사항)"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
+          "source": "Comment created",
           "message": "댓글 생성됨"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {

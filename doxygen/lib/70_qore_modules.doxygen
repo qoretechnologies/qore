@@ -434,6 +434,15 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
       and those that the module added to a Program at run time when something keeps them to the end of the process
       (an object or a Program held in static storage); the \c del function must leave what their constructors,
       destructors, methods and private data use valid, as the module's code is never unloaded
+    - a class, hashdecl or enum that the module adds to a Program at run time is freed with that Program once nothing
+      uses it: another Program's declarations, functions and imports that name it keep it, but a declaration that the
+      module adds at run time to a namespace that no Program owns (its own namespace or the static system namespace)
+      does not, as it would keep it until the end of the process, and a function variant added there that names it is
+      refused (QoreNamespace::addBuiltinVariant() throws a QoreStandardException); a variant added to a Program's copy
+      of a function that it shares with such a namespace is the Program's (the Program gets its own copy of the
+      function) and keeps what it names; a declaration or function that
+      names the declarations of a Program is added to that Program's namespace, where it keeps what it names for as
+      long as it lives
 
     @code{.cpp}
     static QoreNamespace MyModuleNS("Qore::mymodule");

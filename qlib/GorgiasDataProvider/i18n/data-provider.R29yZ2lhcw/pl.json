@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
-          "source": "Create a Ticket",
+          "source": "Create a ticket",
           "message": "Utwórz zgłoszenie"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Określa, czy oznaczyć zgłoszenie jako spam. Domyślnie: `False`"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
-          "source": "Update a Ticket",
+          "source": "Update a ticket",
           "message": "Zaktualizuj zgłoszenie"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Znacznik czasu ISO 8601, do którego zgłoszenie ma być odłożone"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
-          "source": "Delete a Ticket",
+          "source": "Delete a ticket",
           "message": "Usuń zgłoszenie"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Identyfikator zgłoszenia do usunięcia"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
-          "source": "List Tickets",
+          "source": "List tickets",
           "message": "Wyświetl listę zgłoszeń"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
-          "source": "Get a Ticket",
+          "source": "Get a ticket",
           "message": "Pobierz zgłoszenie"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Identyfikator zgłoszenia"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "Utwórz klienta"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "Zaktualizuj klienta"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "Usuń klienta"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Identyfikator klienta do usunięcia"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Wyświetl listę klientów"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "Pobierz klienta"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Identyfikator klienta"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Utwórz tag"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "Kod koloru szesnastkowego dla tagu (np. `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "Zaktualizuj etykietę"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Kod koloru szesnastkowego dla tagu (np. `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Usuń tag"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Identyfikator tagu do usunięcia"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Lista tagów"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Pobierz tag"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Identyfikator tagu"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create a Message",
+          "source": "Create a message",
           "message": "Utwórz wiadomość"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
@@ -2412,7 +2412,7 @@
           "message": "URL pliku załącznika"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
-          "source": "List Messages",
+          "source": "List messages",
           "message": "Lista wiadomości"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get a Message",
+          "source": "Get a message",
           "message": "Pobierz wiadomość"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Identyfikator wiadomości"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Update a Message",
+          "source": "Update a message",
           "message": "Zaktualizuj wiadomość"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "URL pliku załącznika"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Usuń wiadomość"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "ID wiadomości do usunięcia"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Lista użytkowników"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
+          "source": "Get a user",
           "message": "Pobierz użytkownika"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "Identyfikator użytkownika"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
-          "source": "New Ticket",
+          "source": "New ticket",
           "message": "Nowe zgłoszenie"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "Uruchamia się po utworzeniu nowego zgłoszenia w Gorgias"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
-          "source": "Ticket Updated",
+          "source": "Ticket updated",
           "message": "Zgłoszenie zaktualizowane"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {

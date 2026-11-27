@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Vypísat soubory"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Hodnota `next_page_token` vrácená předchozím výpisem, použitá k načtení následující stránky"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Získat informace o souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Identifikátor souboru na Disku; Disk adresuje soubory pomocí neměnného ID namísto cesty, takže dva soubory ve stejné složce mohou mít stejný název"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stáhnout soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Identifikátor souboru na Disku; Disk adresuje soubory pomocí neměnného ID namísto cesty, takže dva soubory ve stejné složce mohou mít stejný název"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
-          "source": "Export Document",
+          "source": "Export document",
           "message": "Exportovat dokument"
         },
         "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Prostý text; k dispozici pro Dokumenty"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Nahrát soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Popis, který se má uložit se souborem"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Vytvořit textový soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Typ MIME, který se má uložit s novým souborem"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
-          "source": "Replace File Content",
+          "source": "Replace file content",
           "message": "Nahradit obsah souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Název souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Vytvořit složku"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Složka, ve které se má vytvořit nová složka; pokud není nastavena, použije se kořenový adresář `My Drive` uživatele"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File",
+          "source": "Copy file",
           "message": "Zkopírovat soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Složka, do které se má kopie umístit; pokud není nastavena, kopie se umístí vedle originálu"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
-          "source": "Move File",
+          "source": "Move file",
           "message": "Přesunout soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Složka, do které se má soubor přesunout"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
-          "source": "Rename File",
+          "source": "Rename file",
           "message": "Přejmenovat soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Nový popis, který se má uložit se souborem; pokud není nastaveno, stávající popis zůstane beze změny"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Smazat soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Odstranit soubor trvale místo přesunutí do koše. **Tuto akci nelze vrátit zpět**; ponechte prázdné pro přesunutí souboru do koše, odkud jej lze ještě obnovit"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
-          "source": "Share File",
+          "source": "Share file",
           "message": "Sdílet soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Odeslat příjemci e-mailové oznámení"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
-          "source": "Restore from Trash",
+          "source": "Restore from trash",
           "message": "Obnovit z koše"
         },
         "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Identifikátor souboru na Disku, který se má obnovit z koše"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
-          "source": "Create Shortcut",
+          "source": "Create shortcut",
           "message": "Vytvořit zástupce"
         },
         "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Složka, ve které se má zástupce vytvořit; pokud není nastavena, použije se kořenový adresář `My Drive` uživatele"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
-          "source": "List Shared Drives",
+          "source": "List shared drives",
           "message": "Vypsat sdílené disky"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Hodnota `next_page_token` vrácená předchozím výpisem"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
-          "source": "Get Storage Quota",
+          "source": "Get storage quota",
           "message": "Získat kvótu úložiště"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
@@ -1576,7 +1576,7 @@
           "message": "Vrátí, jak velká část úložiště účtu je využita a kolik je k dispozici.\n\nUžitečné před nahráváním velkého objemu dat: Disk odmítne nahrávání, které by překročilo kvótu, a ohlásí to jako běžnou chybu zápisu, nikoli jako problém s kapacitou. Soubory v koši se stále započítávají do kvóty, takže `usage_in_drive_trash` představuje to, co by se jeho vysypáním uvolnilo."
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
-          "source": "List Permissions",
+          "source": "List permissions",
           "message": "Vypsat oprávnění"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Identifikátor Disku pro soubor, jehož oprávnění mají být vypsána"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
-          "source": "Remove Permission",
+          "source": "Remove permission",
           "message": "Odebrat oprávnění"
         },
         "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Identifikátor oprávnění k odebrání, jak jej vrátila akce `list-permissions` nebo `share-file`"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Zobrazit revize souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Identifikátor Disku pro soubor, jehož revize mají být vypsány"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
-          "source": "Get File Revision",
+          "source": "Get file revision",
           "message": "Získat revizi souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Identifikátor revize vrácený operací `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
-          "source": "Delete File Revision",
+          "source": "Delete file revision",
           "message": "Smazat revizi souboru"
         },
         "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Identifikátor revize vrácený operací `list-revisions`"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files",
+          "source": "Find files",
           "message": "Vyhledat soubory"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Kolik souborů načíst v jednom požadavku; Disk omezuje maximum na `1000`.\n\nToto ovlivňuje, jak je procházení rozděleno do požadavků, nikoli kolik záznamů je vráceno – iterátor načítá další stránky podle potřeby"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Nový soubor"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Sledovat tento sdílený disk (dříve „Týmový disk“) místo vlastního `My Drive` uživatele.\n\nSdílený disk si udržuje vlastní kanál změn, takže sledování pokrývá buď jeden, nebo druhý, nikoli oba současně"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Nová složka"
         },
         "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {

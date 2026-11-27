@@ -648,7 +648,7 @@ static int quic_client_send_packets(QuicSession& session, int fd, QuicPacketBatc
 
     // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
     // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, nullptr, 0);
     ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
         fd, count, static_cast<int>(rc));
@@ -2305,6 +2305,17 @@ void SocketQuicServerPollOperation::setMaxRequestBodySize(int64_t size) {
     }
 }
 
+void SocketQuicServerPollOperation::setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms,
+        int64_t stall_ms) {
+    send_bound_set_ = true;
+    send_bound_min_rate_ = min_rate;
+    send_bound_window_ms_ = window_ms;
+    send_bound_stall_ms_ = stall_ms;
+    for (auto& [id, session] : sessions_) {
+        session->setInputStreamSendBound(min_rate, window_ms, stall_ms, true);
+    }
+}
+
 QoreHashNode* SocketQuicServerPollOperation::checkHeadersOnlyDispatch(bool& handled,
         ExceptionSink* xsink) {
     handled = false;
@@ -2497,7 +2508,7 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 
         // the datagrams not sent are kept by the session for its next write: all sessions share the socket, and
         // each keeps its own, so that none is dropped by another session's write (qore#7414)
-        int count = pkt_batch_.size();
+        [[maybe_unused]] int count = pkt_batch_.size();
         QuicSendResult rc = session->sendPackets(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
@@ -2709,6 +2720,11 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Propagate max request body size to new sessions
         if (max_request_body_size_ > 0) {
             new_session->setMaxRequestBodySize(max_request_body_size_);
+        }
+        // the listener's default bounds of the response bodies (qore#7653)
+        if (send_bound_set_) {
+            new_session->setInputStreamSendBound(send_bound_min_rate_, send_bound_window_ms_, send_bound_stall_ms_,
+                true);
         }
 
         target_session = new_session.get();
@@ -3362,7 +3378,7 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
 static int sendKeepingUnsent(QuicSession& session, int fd, QuicPacketBatch& batch,
         const struct sockaddr_storage& peer_addr, socklen_t peer_addrlen, const struct sockaddr_storage& local_addr,
         socklen_t local_addrlen, ngtcp2_tstamp& next_expiry, const char* op, ExceptionSink* xsink) {
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, reinterpret_cast<const struct sockaddr*>(&peer_addr),
         peer_addrlen, reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
     switch (rc) {

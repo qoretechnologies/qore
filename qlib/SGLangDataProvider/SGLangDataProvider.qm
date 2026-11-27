@@ -73,7 +73,7 @@ module SGLangDataProvider {
             "app": SGLangDataProvider::AppName,
             "path": "/chat-completion",
             "action": "chat-completion",
-            "display_name": "Chat Completion",
+            "display_name": "Chat completion",
             "short_desc": "Generate a chat completion from a local SGLang model server",
             "desc": "Sends a list of chat messages to a local SGLang model server using the "
                 "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n"
@@ -108,7 +108,7 @@ module SGLangDataProvider {
             "app": SGLangDataProvider::AppName,
             "path": "/create-embeddings",
             "action": "create-embeddings",
-            "display_name": "Create Embeddings",
+            "display_name": "Create embeddings",
             "short_desc": "Generate embedding vectors from a local SGLang model server",
             "desc": "Converts text inputs into embedding vectors using the local SGLang model via the "
                 "OpenAI-compatible `/v1/embeddings` endpoint.\n\n"
@@ -141,7 +141,7 @@ module SGLangDataProvider {
             "app": SGLangDataProvider::AppName,
             "path": "/generate",
             "action": "generate",
-            "display_name": "Constrained Generation",
+            "display_name": "Constrained generation",
             "short_desc": "Generate text with schema/regex/grammar-enforced output structure",
             "desc": "Uses SGLang's native `/generate` endpoint with constrained decoding — the model "
                 "is guaranteed to emit output matching a JSON schema, regex pattern, or EBNF grammar.\n\n"
@@ -179,7 +179,7 @@ module SGLangDataProvider {
             "app": SGLangDataProvider::AppName,
             "path": "/server-info",
             "action": "server-info",
-            "display_name": "Get Server Info",
+            "display_name": "Get server info",
             "short_desc": "Retrieve SGLang server configuration and runtime metadata",
             "desc": "Returns the SGLang server's configuration (model name, tokenizer path, "
                 "max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, "
@@ -196,7 +196,7 @@ module SGLangDataProvider {
             "app": SGLangDataProvider::AppName,
             "path": "/flush-cache",
             "action": "flush-cache",
-            "display_name": "Flush KV Cache",
+            "display_name": "Flush KV cache",
             "short_desc": "Flush the SGLang server's KV cache",
             "desc": "Instructs the SGLang server to flush its KV cache.  Useful after switching "
                 "workloads or for freeing memory.  Safe to call at any time; does not interrupt "

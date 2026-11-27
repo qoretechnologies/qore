@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.display_name": {
-          "source": "List Schema Classes",
+          "source": "List schema classes",
           "message": "スキーマクラスを一覧表示"
         },
         "app.V2VhdmlhdGU.action.bGlzdC1jbGFzc2Vz.short_desc": {

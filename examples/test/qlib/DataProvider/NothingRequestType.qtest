@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  NothingRequestType.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# tests qore#7772: an action whose request type is the nothing type takes no request and is not offered a
+# request_data option; AbstractDataProviderType::isNothingType() recognises the nothing type however it is made
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class NothingRequestTypeTest
+
+#! A request provider whose request type is given in the constructor
+class TypedRequestProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "TypedRequestProvider",
+            "supports_request": True,
+        };
+
+        *AbstractDataProviderType request_type;
+        int request_count = 0;
+    }
+
+    constructor(*AbstractDataProviderType request_type) {
+        self.request_type = request_type;
+    }
+
+    string getName() {
+        return "typed-request";
+    }
+
+    int getRequestCount() {
+        return request_count;
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        ++request_count;
+        return req;
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return request_type;
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderTypeMap."nothing";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+public class NothingRequestTypeTest inherits QUnit::Test {
+    private {
+        const Action = <DataProviderActionInfo>{
+            "app": "NothingRequestTypeTest",
+            "path": "/",
+            "action": "request",
+            "display_name": "Request",
+            "short_desc": "Request",
+            "desc": "Request",
+            "action_code": DPAT_API,
+            "options": {
+                "label": <ActionOptionInfo>{
+                    "display_name": "Label",
+                    "desc": "A static option of the action",
+                    "type": AbstractDataProviderTypeMap."string",
+                },
+            },
+        };
+    }
+
+    constructor() : Test("NothingRequestTypeTest", "1.0") {
+        addTestCase("isNothingType() recognises the nothing type", \testIsNothingType());
+        addTestCase("nothing request type: no request_data option", \testNothingRequestType());
+        addTestCase("no request type: no request_data option", \testNoRequestType());
+        addTestCase("value request types: request_data offered", \testValueRequestType());
+        addTestCase("request type with fields: field options", \testFieldsRequestType());
+        addTestCase("dispatch by action code", \testDispatch());
+        addTestCase("nothing request type still validates requests", \testNothingRequestValidation());
+
+        set_return_value(main());
+    }
+
+    testIsNothingType() {
+        # no type
+        assertTrue(AbstractDataProviderType::isNothingType());
+        assertTrue(AbstractDataProviderType::isNothingType(NOTHING));
+        # the nothing type, however it is made: from the type map, from the Qore nothing type, from a new Type
+        assertTrue(AbstractDataProviderType::isNothingType(AbstractDataProviderTypeMap."nothing"));
+        assertTrue(AbstractDataProviderType::isNothingType(AbstractDataProviderType::get(NothingType)));
+        assertTrue(AbstractDataProviderType::isNothingType(AbstractDataProviderType::get(new Type("nothing"))));
+
+        # types that accept a value
+        foreach string name in ("string", "*string", "int", "*int", "auto", "any", "hash", "*hash", "list",
+                "binary", "*binary", "softint", "*softstring") {
+            *AbstractDataProviderType type = AbstractDataProviderTypeMap{name}
+                ?? AbstractDataProviderType::get(new Type(name));
+            assertTrue(exists type, name);
+            assertFalse(AbstractDataProviderType::isNothingType(type), name);
+        }
+        HashDataType hash_type("fields");
+        hash_type.addField(new QoreDataField("id", "the ID", AbstractDataProviderTypeMap."int"));
+        assertFalse(AbstractDataProviderType::isNothingType(hash_type));
+        assertFalse(AbstractDataProviderType::isNothingType(hash_type.getOrNothingType()));
+        # a hash type without fields accepts a value too
+        assertFalse(AbstractDataProviderType::isNothingType(new HashDataType("empty")));
+        assertFalse(AbstractDataProviderType::isNothingType(new ListDataType("list",
+            AbstractDataProviderTypeMap."string")));
+    }
+
+    testNothingRequestType() {
+        foreach AbstractDataProviderType type in (AbstractDataProviderTypeMap."nothing",
+                AbstractDataProviderType::get(NothingType), AbstractDataProviderType::get(new Type("nothing"))) {
+            TypedRequestProvider prov(type);
+            *hash<string, hash<ActionOptionInfo>> opts = prov.tryGetActionOptionsForRequestWithOptions(Action);
+            assertFalse(opts.hasKey("request_data"));
+            # the static options of the action are kept
+            assertEq("Label", opts.label.display_name);
+            # with option data too
+            opts = prov.tryGetActionOptionsForRequestWithOptions(Action, {"label": "x"});
+            assertFalse(opts.hasKey("request_data"));
+            assertEq("Label", opts.label.display_name);
+        }
+    }
+
+    testNoRequestType() {
+        TypedRequestProvider prov();
+        *hash<string, hash<ActionOptionInfo>> opts = prov.tryGetActionOptionsForRequestWithOptions(Action);
+        assertFalse(opts.hasKey("request_data"));
+        assertEq(("label",), keys opts);
+    }
+
+    testValueRequestType() {
+        foreach string name in ("string", "*string", "auto", "int") {
+            AbstractDataProviderType type = AbstractDataProviderTypeMap{name};
+            TypedRequestProvider prov(type);
+            *hash<string, hash<ActionOptionInfo>> opts = prov.tryGetActionOptionsForRequestWithOptions(Action);
+            assertTrue(opts.hasKey("request_data"), name);
+            assertEq("API Request Data", opts.request_data.display_name, name);
+            assertEq("The request data", opts.request_data.desc, name);
+            assertEq(type, opts.request_data.type, name);
+            assertEq("Label", opts.label.display_name, name);
+        }
+    }
+
+    testFieldsRequestType() {
+        HashDataType type("request");
+        type.addField(new QoreDataField("id", "the ID", AbstractDataProviderTypeMap."int"));
+        TypedRequestProvider prov(type);
+        *hash<string, hash<ActionOptionInfo>> opts = prov.tryGetActionOptionsForRequestWithOptions(Action);
+        # the fields are options; there is no request_data option
+        assertFalse(opts.hasKey("request_data"));
+        assertTrue(opts.hasKey("id"));
+        assertTrue(opts.hasKey("label"));
+    }
+
+    testDispatch() {
+        # the generic API dispatches an API action to the request options
+        hash<DataProviderActionInfo> action = Action;
+        action.data_dependent_options = True;
+        TypedRequestProvider prov(AbstractDataProviderTypeMap."nothing");
+        *hash<string, hash<ActionOptionInfo>> opts = prov.tryGetActionOptionsWithOptions(action);
+        assertFalse(opts.hasKey("request_data"));
+        assertEq("Label", opts.label.display_name);
+
+        prov = new TypedRequestProvider(AbstractDataProviderTypeMap."string");
+        opts = prov.tryGetActionOptionsWithOptions(action);
+        assertTrue(opts.hasKey("request_data"));
+    }
+
+    testNothingRequestValidation() {
+        # an action that takes no request is called without one, and a value given to it is refused
+        TypedRequestProvider prov(AbstractDataProviderTypeMap."nothing");
+        assertEq(NOTHING, prov.doRequest());
+        assertEq(1, prov.getRequestCount());
+        # the request type with the data refuses the value before the request is made
+        assertThrows("TYPE-VALUE-ERROR", "expects type 'nothing'", \prov.doRequest(), {"x": 1});
+        assertEq(1, prov.getRequestCount());
+    }
+}

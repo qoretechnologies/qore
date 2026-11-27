@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
-          "message": "Create Submission"
+          "source": "Create submission",
+          "message": "Create submission"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
           "source": "Create a new form submission",
@@ -364,8 +364,8 @@
           "message": "Select the form to create a submission for. The submission fields will update based on your selection."
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
-          "message": "Get Submission"
+          "source": "Get submission",
+          "message": "Get submission"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
           "source": "Get a specific form submission",
@@ -388,8 +388,8 @@
           "message": "The unique ID of the submission to retrieve"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
-          "message": "Get Form Submissions"
+          "source": "Get form submissions",
+          "message": "Get form submissions"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
           "source": "List submissions for a form",
@@ -448,8 +448,8 @@
           "message": "Maximum number of submissions to return"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
-          "message": "Update Submission"
+          "source": "Update submission",
+          "message": "Update submission"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
           "source": "Update an existing submission",
@@ -484,8 +484,8 @@
           "message": "The ID of the submission to update"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
-          "message": "Delete Submission"
+          "source": "Delete submission",
+          "message": "Delete submission"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
           "source": "Delete a form submission",
@@ -508,8 +508,8 @@
           "message": "The ID of the submission to delete"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
-          "message": "Get Form"
+          "source": "Get form",
+          "message": "Get form"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
           "source": "Get form details",
@@ -532,8 +532,8 @@
           "message": "The form to retrieve"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
-          "message": "Get Forms"
+          "source": "Get forms",
+          "message": "Get forms"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
           "source": "List all forms",
@@ -580,8 +580,8 @@
           "message": "Maximum number of forms to return"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
-          "message": "Get Form Reports"
+          "source": "Get form reports",
+          "message": "Get form reports"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
           "source": "Get form analytics and reports",
@@ -604,8 +604,8 @@
           "message": "The form to retrieve reports for"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
-          "message": "New Submission"
+          "source": "New submission",
+          "message": "New submission"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
           "source": "Trigger when a form receives a new submission",
@@ -628,8 +628,8 @@
           "message": "Select the form to monitor for new submissions"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
-          "message": "New Payment"
+          "source": "New payment",
+          "message": "New payment"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {
           "source": "Trigger when a payment is received",

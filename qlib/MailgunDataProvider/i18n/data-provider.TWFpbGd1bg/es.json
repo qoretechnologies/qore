@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "Enviar correo electrónico"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Dirección de correo electrónico para respuestas"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "Validar correo electrónico"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "La dirección de correo electrónico a validar"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
+          "source": "Add mailing list member",
           "message": "Añadir miembro de lista de distribución"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Si es `True`, actualiza el miembro si ya existe (predeterminado: `False`)"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
+          "source": "Get mailing list member",
           "message": "Obtener miembro de lista de distribución"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -640,7 +640,7 @@
           "message": "La dirección de correo electrónico del miembro que se va a recuperar"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
+          "source": "Delete mailing list member",
           "message": "Eliminar miembro de lista de distribución"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -676,7 +676,7 @@
           "message": "La dirección de correo electrónico del miembro que se va a eliminar"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
+          "source": "List mailing list members",
           "message": "Listar miembros de lista de distribución"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Número máximo de miembros a devolver"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
+          "source": "Create route",
           "message": "Crear ruta"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Una descripción de lo que hace esta ruta"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
+          "source": "List routes",
           "message": "Listar rutas"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Número máximo de rutas a devolver"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
+          "source": "List mailing lists",
           "message": "Listar listas de distribución"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Número máximo de listas de distribución a devolver"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "Listar dominios"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Número máximo de dominios a devolver"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "Enlace de correo electrónico pulsado"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Seleccione el dominio a supervisar para eventos de clics"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
+          "source": "Email delivered",
           "message": "Correo electrónico entregado"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Seleccione el dominio que supervisar para eventos de entrega"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "Correo electrónico abierto"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Seleccione el dominio que supervisar para eventos de apertura"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
+          "source": "Permanent failure",
           "message": "Fallo permanente"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Seleccione el dominio a monitorear para eventos de fallo permanente"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
+          "source": "Temporary failure",
           "message": "Fallo temporal"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Seleccione el dominio a monitorear para eventos de fallo temporal"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
+          "source": "Spam complaint",
           "message": "Queja de spam"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {

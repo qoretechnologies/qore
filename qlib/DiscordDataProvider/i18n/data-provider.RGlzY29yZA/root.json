@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.display_name": {
-          "source": "Get User Info",
-          "message": "Get User Info"
+          "source": "Get user info",
+          "message": "Get user info"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.short_desc": {
           "source": "Get info about the current user",
@@ -352,8 +352,8 @@
           "message": "Get info about the current user"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.display_name": {
-          "source": "Get Server Info",
-          "message": "Get Server Info"
+          "source": "Get server info",
+          "message": "Get server info"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.short_desc": {
           "source": "Get info about a Discord server accessible to the user",

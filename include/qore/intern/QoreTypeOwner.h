@@ -48,6 +48,7 @@ class TypedHashDecl;
 class QoreEnumDecl;
 
 class qore_ns_private;
+class qore_root_ns_private;
 struct QoreTypeOwnerGroup;
 
 //! A class, hashdecl or enum declaration, whose types can be named after it is destroyed (issue #5790)
@@ -147,6 +148,12 @@ public:
     //! the binary module declarations that they name directly or through compound types (qore_type_owner_add_name())
     DLLLOCAL virtual void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const = 0;
 
+    //! Returns the namespace of the declaration, or nullptr if it has none (anymore)
+    /** Its root namespace tells the Program that owns a declaration that a binary module added to a Program
+        (qore_type_owner_take_runtime_refs(), qore#7680)
+    */
+    DLLLOCAL virtual const qore_ns_private* getTypeOwnerNamespace() const = 0;
+
     //! Adds the declarations that this one holds a reference to beyond the names (type_owner_refs): the base classes
     //! of a class, the source of an imported class, the parent and the source of a hashdecl
     /** Every reference is added (once per reference held), so that the references that only declarations of a cycle
@@ -210,6 +217,18 @@ public:
         (typed_hash_decl_private::copy_module_names)
     */
     std::vector<QoreTypeOwner*> type_owner_module_refs;
+    //! the mortal declarations of other Programs that this one names, referenced until it is destroyed (qore#7680)
+    /** Taken with type_owner_module_refs by a builtin declaration that becomes mortal at run time (a declaration that
+        a binary module added to a Program, the import copy of a builtin class, an instance of such a generic hashdecl;
+        qore_type_owner_take_runtime_refs()): the other Program can be deleted first, and its declarations are freed
+        with it unless something references them.  The declarations of its own Program are left to its
+        QoreTypeOwnerBatch, which decides them together
+    */
+    std::vector<QoreTypeOwner*> type_owner_xrefs;
+    //! true if the references of qore_type_owner_take_runtime_refs() could not be taken (an allocation failed) and are
+    //! taken by the completion of a marking event of the root namespace of its Program (qore#7680); guarded by the type
+    //! lock
+    bool type_owner_refs_pending = false;
     //! the group of survivors of a Program that the declaration is a member of, if any
     QoreTypeOwnerGroup* type_owner_group = nullptr;
     //! true while the declaration is a live member of its group: its last reference has not been released
@@ -300,6 +319,10 @@ public:
         owner->getTypeOwnerHeldRefs(refs);
     }
 
+    DLLLOCAL virtual const qore_ns_private* getTypeOwnerNamespace() const {
+        return owner->getTypeOwnerNamespace();
+    }
+
     DLLLOCAL virtual void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
         owner->getTypeOwnerCachedDecls(owners);
     }
@@ -354,15 +377,76 @@ DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 */
 DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all = false);
 
-//! Gives builtin declarations that became mortal at run time the references to the binary module declarations that
-//! they name now (qore#7540, qore#7533)
-/** A declaration of a Program takes them at its first QoreTypeOwnerBatch; one that a binary module added to a Program
-    at run time has none before its Program's teardown, which can come after the module that it names is deleted (at
-    process exit, a native module that no user module requires is deleted before the user modules' Programs).  A
-    failed allocation takes none: the declaration then takes them at its batch, as before.  The declaration must be
-    complete when its namespace is attached: a method or member added to it later is not walked for them
+//! Gives builtin declarations that became mortal at run time the references to the declarations that they name now
+//! (qore#7540, qore#7533, qore#7680)
+/** A declaration of a Program takes the references to the binary module declarations that it names at its first
+    QoreTypeOwnerBatch; one that a binary module added to a Program at run time (and the import copy of a builtin class,
+    and an instance of such a generic hashdecl) has none before its Program's teardown, which can come after the module
+    that it names is deleted (at process exit, a native module that no user module requires is deleted before the user
+    modules' Programs), so it takes them when it becomes mortal (type_owner_module_refs).  It also references the
+    mortal declarations of other Programs that it names (type_owner_xrefs), which are freed with their Program while it
+    can still read them; those of \a root, its own Program's root namespace, and the other declarations of \a owners
+    are left to its Program's batch.  A builtin declaration that is not mortal yet is a module declaration here: it is
+    referenced with the module ones, also if it is marked later.
+
+    All or nothing: every list is made before any reference is taken, so that a failed allocation takes none (the
+    caller then records the declarations for a retry: qore_root_ns_private::takeRuntimeRefs()).  The declaration must
+    be complete when it becomes mortal: a method or member added to it later is not walked for them.  Called under the
+    runtime namespace write lock of \a root, if any; takes the type lock
+
+    @return true if the references were taken (or nothing was to be taken), false if an allocation failed
 */
-DLLLOCAL void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners);
+DLLLOCAL bool qore_type_owner_take_runtime_refs(const std::vector<QoreTypeOwner*>& owners,
+        const qore_root_ns_private* root);
+
+//! Flags the declarations of \a owners whose references of qore_type_owner_take_runtime_refs() are not taken as
+//! pending (QoreTypeOwner::type_owner_refs_pending) and returns the number flagged now; takes the type lock, does not
+//! allocate or throw (qore#7680)
+DLLLOCAL size_t qore_type_owner_set_refs_pending(const std::vector<QoreTypeOwner*>& owners);
+
+//! Appends the declarations of \a all that are flagged as pending to \a pending; takes the type lock (qore#7680)
+DLLLOCAL void qore_type_owner_get_refs_pending(const std::vector<QoreTypeOwner*>& all,
+        std::vector<QoreTypeOwner*>& pending);
+
+#ifdef DEBUG
+//! Makes the next \a count calls of qore_type_owner_take_runtime_refs() fail as an allocation failure would (debug
+//! builds; qore#7680)
+DLLLOCAL void qore_dbg_fail_next_runtime_refs(int count);
+
+//! Returns the number of survivors of deleted Programs that only each other keep and that hold references to mortal
+//! declarations of other Programs (type_owner_xrefs or type_owner_module_refs; debug builds, qore#7680)
+/** Two Programs whose declarations name each other keep them until library cleanup, which frees them; any other such
+    cycle is unexpected
+*/
+DLLLOCAL size_t qore_dbg_cross_program_cycle_count();
+
+//! Returns the number of builtin declarations added at run time to a namespace that no Program owns (a module's or
+//! the static system namespace) that name a mortal declaration of a Program (debug builds, qore#7680)
+/** They take no reference to it, which would keep it until library cleanup; a binary module must add such a
+    declaration to the Program's own namespace
+*/
+DLLLOCAL int64 qore_dbg_unowned_program_local_names();
+
+//! Returns the number of builtin variants refused because they were added to a namespace that no Program owns and
+//! named a mortal declaration of a Program (debug builds, qore#7680)
+DLLLOCAL int64 qore_dbg_refused_shared_variants();
+
+//! Counts a refused builtin variant (qore_dbg_refused_shared_variants(); debug builds)
+DLLLOCAL void qore_dbg_count_refused_shared_variant();
+
+//! Counts a declaration added at run time to a namespace that no Program owns if it names a mortal declaration
+//! (qore_dbg_unowned_program_local_names(); debug builds)
+DLLLOCAL void qore_dbg_check_unowned_names(const QoreTypeOwner* owner);
+#endif
+
+//! Returns true once a builtin declaration became mortal at run time in any Program (qore#7680)
+/** Until then, no builtin variant of a namespace that no Program owns can name a mortal declaration, and the walk of
+    its signature is skipped
+*/
+DLLLOCAL bool qore_runtime_mortal_decls_exist();
+
+//! Records that a builtin declaration became mortal at run time (qore_runtime_mortal_decls_exist())
+DLLLOCAL void qore_set_runtime_mortal_decls_exist();
 
 #ifdef DEBUG
 //! Returns the number of scans of qore_upgrade_program_local_derived_types() (debug builds; qore#7540)

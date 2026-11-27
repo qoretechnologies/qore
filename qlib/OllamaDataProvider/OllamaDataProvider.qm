@@ -70,7 +70,7 @@ module OllamaDataProvider {
             "app": OllamaDataProvider::AppName,
             "path": "/chat-completion",
             "action": "chat-completion",
-            "display_name": "Chat Completion",
+            "display_name": "Chat completion",
             "short_desc": "Generate a chat completion from a locally-running Ollama model",
             "desc": "Sends a list of chat messages to a local Ollama model via the "
                 "OpenAI-compatible `/v1/chat/completions` endpoint.",
@@ -97,7 +97,7 @@ module OllamaDataProvider {
             "app": OllamaDataProvider::AppName,
             "path": "/create-embeddings",
             "action": "create-embeddings",
-            "display_name": "Create Embeddings",
+            "display_name": "Create embeddings",
             "short_desc": "Generate embedding vectors from a local Ollama embedding model",
             "desc": "Converts text inputs into embedding vectors using a local Ollama embedding "
                 "model (e.g. `nomic-embed-text`, `mxbai-embed-large`, `snowflake-arctic-embed`) "
@@ -119,7 +119,7 @@ module OllamaDataProvider {
             "app": OllamaDataProvider::AppName,
             "path": "/list-models",
             "action": "list-models",
-            "display_name": "List Installed Models",
+            "display_name": "List installed models",
             "short_desc": "List models currently installed on the Ollama runtime",
             "desc": "Returns the list of models installed in the local Ollama runtime, with "
                 "size, family, parameter count, and modification timestamps.",

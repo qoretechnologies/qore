@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Zobrazit seznam objednávek"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Vyloučit objednávky, jejichž `parent_id` je v tomto seznamu"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Získat objednávku"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Jedinečný identifikátor objednávky k načtení"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Vytvořit objednávku"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "Aktualizovat objednávku"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Smazat objednávku"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Pokud `True`, trvale smaže objednávku; jinak ji přesune do koše"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Update Order Status",
+          "source": "Update order status",
           "message": "Aktualizovat stav objednávky"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "Stav objednávky: trash"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Create Order Note",
+          "source": "Create order note",
           "message": "Vytvořit poznámku k objednávce"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Pokud je `True`, poznámka je pro zákazníka viditelná"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.display_name": {
-          "source": "List Order Notes",
+          "source": "List order notes",
           "message": "Zobrazit poznámky k objednávce"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Pouze interní poznámky"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Delete Order Note",
+          "source": "Delete order note",
           "message": "Smazat poznámku k objednávce"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Pokud `True`, trvale smaže poznámku"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "Vytvořit refundaci"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Pokud je `True`, refundace se zpracuje přes platební bránu"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Vypsat refundace"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Aktuální stránka kolekce (počínaje 1)"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Vypsat produkty"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Vyloučit produkty, jejichž `parent_id` je v tomto seznamu"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Jedinečný identifikátor produktu, který chcete získat"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Vytvořit produkt"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -4732,7 +4732,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -5892,7 +5892,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Smazat produkt"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Pokud `True`, trvale smazat produkt; jinak přesunout do koše"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.display_name": {
-          "source": "Update Stock Quantity",
+          "source": "Update stock quantity",
           "message": "Aktualizovat skladové množství"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Pokud je `True`, správa skladu je povolena (výchozí hodnota je `True`)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Create Variation",
+          "source": "Create variation",
           "message": "Vytvořit variantu"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6228,7 +6228,7 @@
           "message": "URL obrázku"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Update Variation",
+          "source": "Update variation",
           "message": "Aktualizovat variantu"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "URL obrázku"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.display_name": {
-          "source": "List Variations",
+          "source": "List variations",
           "message": "Vypsat varianty"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.short_desc": {
@@ -6552,7 +6552,7 @@
           "message": "Omezit výsledky na ty, které odpovídají vyhledávacímu řetězci"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Create Category",
+          "source": "Create category",
           "message": "Vytvořit kategorii"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.short_desc": {
@@ -6672,7 +6672,7 @@
           "message": "URL obrázku"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Update Category",
+          "source": "Update category",
           "message": "Aktualizovat kategorii"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "Popis kategorie"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.display_name": {
-          "source": "Delete Category",
+          "source": "Delete category",
           "message": "Smazat kategorii"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "Musí být `True`, protože kategorie nepodporují koš"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Delete Variation",
+          "source": "Delete variation",
           "message": "Smazat variantu"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6828,7 +6828,7 @@
           "message": "Pokud `True`, trvale smazat variantu; jinak přesunout do koše"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.display_name": {
-          "source": "Get Variation",
+          "source": "Get variation",
           "message": "Získat variantu"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.short_desc": {
@@ -6864,7 +6864,7 @@
           "message": "Jedinečný identifikátor varianty"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.display_name": {
-          "source": "List Categories",
+          "source": "List categories",
           "message": "Vypsat kategorie"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.short_desc": {
@@ -6996,7 +6996,7 @@
           "message": "Počet produktů"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Vytvořit štítek"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -7044,7 +7044,7 @@
           "message": "Popis štítku"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Aktualizovat štítek"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.short_desc": {
@@ -7104,7 +7104,7 @@
           "message": "Popis štítku"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Smazat štítek"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -7140,7 +7140,7 @@
           "message": "Musí být `True`, protože štítky nepodporují koš"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Seznam štítků"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.short_desc": {
@@ -7260,7 +7260,7 @@
           "message": "Počet produktů"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Seznam zákazníků"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "Jedinečný identifikátor zákazníka, kterého chcete získat"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvořit zákazníka"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -7792,7 +7792,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Smazat zákazníka"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -8236,7 +8236,7 @@
           "message": "ID uživatele, kterému mají být znovu přiřazeny příspěvky a odkazy"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.display_name": {
-          "source": "List Coupons",
+          "source": "List coupons",
           "message": "Vypsat kupóny"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.short_desc": {
@@ -8372,7 +8372,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "Získat kupón"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -8396,7 +8396,7 @@
           "message": "Jedinečný identifikátor kupónu, který chcete získat"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "Vytvořit kupón"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -8696,7 +8696,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "Aktualizovat kupón"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "Hodnota meta (libovolný typ serializovatelný do JSON)"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "Smazat kupón"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -9044,7 +9044,7 @@
           "message": "Pokud `True`, trvale smazat kupón; jinak přesunout do koše"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Vypsat webhooky"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "Název"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Vytvořit webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9436,7 +9436,7 @@
           "message": "Stav webhooku: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Aktualizovat webhook"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9664,7 +9664,7 @@
           "message": "Stav webhooku: disabled"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Smazat webhook"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9700,7 +9700,7 @@
           "message": "Pokud `True`, trvale smazat webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.display_name": {
-          "source": "Sales Report",
+          "source": "Sales report",
           "message": "Přehled prodejů"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.short_desc": {
@@ -9764,7 +9764,7 @@
           "message": "Tento rok"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.display_name": {
-          "source": "Top Sellers Report",
+          "source": "Top sellers report",
           "message": "Přehled nejprodávanějších produktů"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "Tento rok"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.display_name": {
-          "source": "Orders Totals",
+          "source": "Orders totals",
           "message": "Součty objednávek"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.short_desc": {
@@ -9840,7 +9840,7 @@
           "message": "Získat celkové počty objednávek seskupené podle stavu z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.display_name": {
-          "source": "Products Totals",
+          "source": "Products totals",
           "message": "Součty produktů"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.short_desc": {
@@ -9852,7 +9852,7 @@
           "message": "Získat celkové počty produktů seskupené podle typu z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.display_name": {
-          "source": "Customers Totals",
+          "source": "Customers totals",
           "message": "Součty zákazníků"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "Získat celkové počty zákazníků seskupené podle role z WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.display_name": {
-          "source": "List Shipping Zones",
+          "source": "List shipping zones",
           "message": "Zobrazit seznam zón dopravy"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "Načíst všechny zóny dopravy nakonfigurované ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Vypsat způsoby dopravy"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "Jedinečný identifikátor zóny dopravy"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "Vytvořit sazbu daně"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -10068,7 +10068,7 @@
           "message": "Daňová třída, do které tato sazba patří"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.display_name": {
-          "source": "Get Tax Rate",
+          "source": "Get tax rate",
           "message": "Získat daňovou sazbu"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.short_desc": {
@@ -10092,7 +10092,7 @@
           "message": "Jedinečný identifikátor daňové sazby"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.display_name": {
-          "source": "Update Tax Rate",
+          "source": "Update tax rate",
           "message": "Aktualizovat daňovou sazbu"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.short_desc": {
@@ -10272,7 +10272,7 @@
           "message": "Daňová třída, do které tato sazba patří"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.display_name": {
-          "source": "Delete Tax Rate",
+          "source": "Delete tax rate",
           "message": "Smazat daňovou sazbu"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "Musí být `True`, protože daňové sazby nepodporují koš"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "Vypsat daňové sazby"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Pořadí zobrazení"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.display_name": {
-          "source": "Get Setting",
+          "source": "Get setting",
           "message": "Získat nastavení"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.short_desc": {
@@ -10432,7 +10432,7 @@
           "message": "Identifikátor nastavení v rámci skupiny"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.display_name": {
-          "source": "Update Setting",
+          "source": "Update setting",
           "message": "Aktualizovat nastavení"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Nová hodnota pro nastavení"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.display_name": {
-          "source": "System Status",
+          "source": "System status",
           "message": "Stav systému"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.short_desc": {
@@ -10492,7 +10492,7 @@
           "message": "Získat informace o stavu systému WooCommerce včetně prostředí, databáze, aktivních pluginů, šablony a nastavení."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Objednávka vytvořena"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -10504,7 +10504,7 @@
           "message": "Spustí se při vytvoření nové objednávky ve WooCommerce. Kompletní data objednávky jsou obsažena v datech události (payload). **Poznámka:** Spustí se také pro objednávky se selhanou platbou."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "Objednávka aktualizována"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -10516,7 +10516,7 @@
           "message": "Spustí se při aktualizaci objednávky ve WooCommerce. **Poznámka:** Může se spustit vícekrát při jedné akci uživatele; deduplikujte na straně příjemce."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Order Deleted",
+          "source": "Order deleted",
           "message": "Objednávka smazána"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Spustí se při smazání objednávky ve WooCommerce. **Poznámka:** Data události (payload) mohou obsahovat pouze minimální data (pouze ID objednávky), protože data objednávky byla odstraněna."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.display_name": {
-          "source": "Order Restored",
+          "source": "Order restored",
           "message": "Objednávka obnovena"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Spustí se při obnovení objednávky z koše ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Produkt vytvořen"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Spustí se při vytvoření nového produktu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Produkt aktualizován"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Spustí se při aktualizaci produktu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.display_name": {
-          "source": "Product Deleted",
+          "source": "Product deleted",
           "message": "Produkt odstraněn"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.short_desc": {
@@ -10576,7 +10576,7 @@
           "message": "Spustí se při smazání produktu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.display_name": {
-          "source": "Product Restored",
+          "source": "Product restored",
           "message": "Produkt obnoven"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.short_desc": {
@@ -10588,7 +10588,7 @@
           "message": "Spustí se při obnovení produktu z koše ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Zákazník vytvořen"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -10600,7 +10600,7 @@
           "message": "Spustí se při vytvoření nového zákazníka ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Zákazník aktualizován"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -10612,7 +10612,7 @@
           "message": "Spustí se při aktualizaci zákazníka ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.display_name": {
-          "source": "Customer Deleted",
+          "source": "Customer deleted",
           "message": "Zákazník smazán"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.short_desc": {
@@ -10624,7 +10624,7 @@
           "message": "Spustí se při smazání zákazníka ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.display_name": {
-          "source": "Coupon Created",
+          "source": "Coupon created",
           "message": "Kupón vytvořen"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.short_desc": {
@@ -10636,7 +10636,7 @@
           "message": "Spustí se při vytvoření nového kupónu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.display_name": {
-          "source": "Coupon Updated",
+          "source": "Coupon updated",
           "message": "Kupón aktualizován"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.short_desc": {
@@ -10648,7 +10648,7 @@
           "message": "Spustí se při aktualizaci kupónu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.display_name": {
-          "source": "Coupon Deleted",
+          "source": "Coupon deleted",
           "message": "Kupón smazán"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "Spustí se při smazání kupónu ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.display_name": {
-          "source": "Coupon Restored",
+          "source": "Coupon restored",
           "message": "Kupón obnoven"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.short_desc": {
@@ -10672,7 +10672,7 @@
           "message": "Spustí se při obnovení kupónu z koše ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.display_name": {
-          "source": "Payment Complete",
+          "source": "Payment complete",
           "message": "Platba dokončena"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.short_desc": {
@@ -10684,7 +10684,7 @@
           "message": "Spustí se po dokončení platby objednávky. Spouští se pouze pro objednávky dříve ve stavu `pending`, `on-hold`, `failed` nebo `cancelled`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.display_name": {
-          "source": "Order Status: Pending",
+          "source": "Order status: pending",
           "message": "Stav objednávky: Čeká na platbu"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.short_desc": {
@@ -10696,7 +10696,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `pending`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.display_name": {
-          "source": "Order Status: Processing",
+          "source": "Order status: processing",
           "message": "Stav objednávky: Zpracovává se"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.short_desc": {
@@ -10708,7 +10708,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `processing`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.display_name": {
-          "source": "Order Status: Completed",
+          "source": "Order status: completed",
           "message": "Stav objednávky: Dokončeno"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.short_desc": {
@@ -10720,7 +10720,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `completed`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.display_name": {
-          "source": "Order Status: On Hold",
+          "source": "Order status: on hold",
           "message": "Stav objednávky: Pozastaveno"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.short_desc": {
@@ -10732,7 +10732,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `on-hold`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.display_name": {
-          "source": "Order Status: Refunded",
+          "source": "Order status: refunded",
           "message": "Stav objednávky: Vráceno"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.short_desc": {
@@ -10744,7 +10744,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `refunded`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.display_name": {
-          "source": "Order Status: Failed",
+          "source": "Order status: failed",
           "message": "Stav objednávky: Selhalo"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.short_desc": {
@@ -10756,7 +10756,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `failed`."
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.display_name": {
-          "source": "Order Status: Cancelled",
+          "source": "Order status: cancelled",
           "message": "Stav objednávky: Zrušeno"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.short_desc": {
@@ -10768,7 +10768,7 @@
           "message": "Spustí se, když se stav objednávky ve WooCommerce změní na `cancelled`."
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.display_name": {
-          "source": "Product Added to Cart",
+          "source": "Product added to cart",
           "message": "Produkt přidán do košíku"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.short_desc": {
@@ -10780,7 +10780,7 @@
           "message": "Spustí se při přidání produktu do košíku zákazníka. Datová část obsahuje pouze `action` a `arg` (klíč položky košíku)."
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.display_name": {
-          "source": "Product Low Stock",
+          "source": "Product low stock",
           "message": "Nízký stav skladu produktu"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.short_desc": {
@@ -10792,7 +10792,7 @@
           "message": "Spustí se, když skladové množství produktu dosáhne prahové hodnoty nízkého stavu skladu nakonfigurované ve WooCommerce."
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.display_name": {
-          "source": "Product Out of Stock",
+          "source": "Product out of stock",
           "message": "Produkt není skladem"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.short_desc": {

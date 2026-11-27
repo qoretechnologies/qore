@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.display_name": {
-          "source": "Upload Audio",
+          "source": "Upload audio",
           "message": "오디오 업로드"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.short_desc": {
@@ -364,7 +364,7 @@
           "message": "REST 요청 본문 인수"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Create Transcript",
+          "source": "Create transcript",
           "message": "성적 증명서 만들기"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "스크립트로 작성할 오디오 또는 비디오 파일의 URL입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "오디오 종료 시간"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -400,7 +400,7 @@
           "message": "미디어 파일에서 전사를 중지할 시점(밀리초)입니다. 자세한 내용은 [녹취록의 시작과 끝 설정](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "오디오 시작 위치"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "미디어 파일에서 복사를 시작하는 시점(밀리초)입니다. 자세한 내용은 [녹취록의 시작과 끝 설정](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "자동 챕터"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Universal-2로 장 요약을 생성합니다. `punctuate: true`이 필요하며 `summarization`과 결합할 수 없습니다. **더 이상 사용되지 않음:** 유연한 장 요약을 위해 [LLM 게이트웨이](https://www.assemblyai.com/docs/llm-gateway/quickstart)를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "자동 하이라이트"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "[핵심 문구](https://www.assemblyai.com/docs/speech-understanding/key-phrases) 활성화(true 또는 false)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "콘텐츠 안전"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "[콘텐츠 조정](https://www.assemblyai.com/docs/content-moderation) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "콘텐츠 안전에 대한 확신"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "[콘텐츠 조정](https://www.assemblyai.com/docs/content-moderation) 모델의 신뢰도 임계값입니다. 값은 25에서 100 사이여야 합니다. 활성화하려면 `content_safety`이 필요합니다. 그렇지 않으면 무시됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "맞춤 철자법"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -524,7 +524,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "개체 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -536,7 +536,7 @@
           "message": "[엔티티 감지](https://www.assemblyai.com/docs/speech-understanding/entity-detection) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "욕설 필터링"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -548,7 +548,7 @@
           "message": "스크립트된 텍스트에서 욕설을 필터링합니다. true 또는 false일 수 있습니다. 자세한 내용은 [욕설 필터링](https://www.assemblyai.com/docs/profanity-filtering)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "텍스트 서식 지정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -560,7 +560,7 @@
           "message": "[텍스트 서식](https://www.assemblyai.com/docs/pre-recorded-audio) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Iab 카테고리"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -572,7 +572,7 @@
           "message": "[주제 감지](https://www.assemblyai.com/docs/speech-understanding/topic-detection) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "핵심 용어 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -584,7 +584,7 @@
           "message": "최대 200개(Universal-2의 경우) 또는 1000개(Universal-3.5 Pro의 경우) 도메인별 단어 또는 구문(구문당 최대 6단어)으로 정확성을 향상합니다. 자세한 내용은 [키워드 프롬프트](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "요루바어"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "요루바어"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "언어 자신감 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "자동으로 감지된 언어에 대한 신뢰도 임계값입니다.\n언어 신뢰도가 이 임계값보다 낮으면 오류가 반환됩니다.\n기본값은 0입니다. `language_detection`이 활성화된 경우에만 설정할 수 있습니다. 자세한 내용은 [자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "언어 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "[자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)는 음성 언어를 식별하고 요청을 최상의 모델로 라우팅합니다. `language_code`을 지정하지 않으면 자동으로 적용됩니다. `language_code`과 함께만 `false`로 설정합니다. 언어를 지정하지 않고 비활성화하면 오류가 반환됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "언어 감지 옵션"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "[자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) 옵션을 지정합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "코드 전환"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "[코드 전환](/speech-to-text/pre-recorded-audio/code-switching)을 감지해야 하는지 여부입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "코드 전환 신뢰도 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "[코드 전환](/음성-텍스트/사전 녹음된 오디오/코드 전환) 감지에 대한 신뢰도 임계값입니다. 코드 전환 신뢰도가 이 임계값보다 낮으면 `language_detection_confidence` 점수가 가장 높은 언어로 스크립트가 처리됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "예상 언어"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "오디오 파일에 예상되는 언어 목록입니다. 지정되지 않은 경우 기본값은 `[\"all\"]`입니다. 자세한 내용은 [자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "대체 언어"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "영어가 감지되면 `en_au` 또는 `en_uk` 철자를 사용하세요. 기본 언어당 하나의 변형만 허용됩니다. `en` 또는 `en_us` 같은 기본/기본 코드는 거부됩니다. 응답의 `language_code`는 선택한 지역 코드를 보고합니다. 감지된 다른 언어는 이 설정을 무시합니다. [언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "음성이 감지되지 않은 경우"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "PII 수정 모델을 사용하여 복사된 텍스트에서 PII를 수정하는 것은 true 또는 false일 수 있습니다. `true`이 되려면 `format_text`이 필요합니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "PII 오디오 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "음성 PII \"신호음\"이 포함된 원본 미디어 파일의 복사본을 생성합니다. 이는 참이거나 거짓일 수 있습니다. `true`이 되려면 `redact_pii`이 필요합니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "PII 오디오 옵션 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "[PII 수정된 오디오](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) 파일에 대한 옵션을 지정합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "오디오 편집 방법 재정의"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "침묵"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "편집된 음성 오디오 없음 반환"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "기본적으로 오디오 편집은 음성이 감지된 경우에만 편집된 오디오 URL을 제공합니다. 그러나 사용 사례에서 대화가 없는 무음 오디오 파일에도 편집된 오디오 파일이 특별히 필요한 경우 이 매개변수를 `true`로 설정하여 이러한 URL을 수신하도록 선택할 수 있습니다. `true`이 되려면 `redact_pii_audio`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "PII 오디오 품질 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "PII 정책 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "활성화할 PII 수정 정책 목록입니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "개인정보 대체 형식"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "해시"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "원본 텍스트도 반환"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "수정된 필드와 함께 `unredacted_text`, `unredacted_words` 및 `unredacted_utterances`를 반환합니다. `redact_pii: true`이 필요합니다. **민감한 출력:** 이를 활성화하면 원본 개인 정보가 유지됩니다. 기본적으로 비활성화되어 있습니다. [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "정적 엔터티 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "**독점적 용어 보호**\n- 교정 레이블을 정확한 용어에 매핑합니다(예: `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`). `redact_pii: true`이 필요하고 `redact_pii_sub`를 사용합니다. 일치에서는 대/소문자 구분, 구두점 및 사소한 간격 차이를 허용합니다. 제공된 용어 이상으로 일반화하지 않습니다.\n- `redact_pii_audio`을 사용하면 일치하는 항목도 오디오에서 제거됩니다.\n\n**한도**\n- 최대 100개의 라벨, 라벨당 200개의 용어, 용어당 200자까지 가능합니다.\n- 라벨에는 문자, 숫자, 공백, 밑줄, 하이픈을 사용할 수 있으며 최대 80자까지 가능합니다.\n\n[정적 엔터티 수정](https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "감정 분석"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -1728,7 +1728,7 @@
           "message": "[감정 분석](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis) 활성화는 true 또는 false일 수 있습니다. `true`이 되려면 `punctuate`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "화자 라벨"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "[스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers)을 활성화합니다. true 또는 false일 수 있습니다. `true`이 되려면 `punctuate`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "스피커 옵션"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "[스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)에 대한 옵션을 지정합니다. 이를 사용하여 가능한 스피커 범위를 설정합니다. `speaker_labels`이(가) `true`여야 하며 `speakers_expected`과(와) 함께 사용할 수 없습니다. 두 경계가 모두 설정된 경우 `min_speakers_expected`는 `max_speakers_expected`보다 작거나 같아야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "화자 신뢰도 포함"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "`true`인 경우 응답의 단어당 및 발화당 `speaker_confidence` 필드를 포함합니다. 자세한 내용은 [스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "최대 스피커 예상"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "화자 라벨 수를 제한합니다. 추가 스피커가 기존 라벨에 병합됩니다. **한도가 너무 높으면 하나의 스피커를 여러 개로 분할하여 정확도가 떨어질 수 있습니다.** 기본값: 0~2분 동안 제한 없음, 2~10분 동안 10, 10분 이상 30. [스피커 범위](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "최소 연사 예상"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "화자 레이블 수에 대한 엄격한 하한 - 모델은 이보다 적은 수의 화자를 반환하지 않습니다. 자세한 내용은 [가능한 스피커 범위 설정](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "예상 연사"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "식별을 시도해야 하는 화자 수를 화자 레이블 모델에 알려줍니다. `speaker_labels`은(는) `true`이어야 하며 양의 정수여야 합니다. `speaker_options`와 함께 사용할 수 없습니다. 자세한 내용은 [예상 스피커 수 설정](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "음성 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "음성 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -1832,7 +1832,7 @@
           "message": "이 음성 비율 미만을 포함하는 오디오 파일을 거부합니다.\n유효한 값은 [0, 1] 범위에 있습니다. 자세한 내용은 [음성 임계값](https://www.assemblyai.com/docs/speech-threshold)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "음성 이해"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "공식적인 언어 스타일을 사용하십시오. 자세한 내용은 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "원본 발화 일치"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "화자 레이블을 활성화하면 발화 배열에 번역된 텍스트가 반환됩니다. 각 발화에는 각 대상 언어에 대한 번역이 포함된 `translated_texts` 키가 포함됩니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "대상 언어"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -1888,11 +1888,11 @@
           "message": "대상 언어 코드 목록(예: `[\"es\", \"de\"]`) 지원되는 언어는 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "화자 식별"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "알려진 값"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Speaker_type이 \"role\"인 경우 필수입니다. 각 값은 35자 이하여야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "스피커 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "발표자의 역할. `speaker_type`이 \"역할\"인 경우 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "사용자 정의 형식"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -2000,7 +2000,7 @@
           "message": "이메일 형식 패턴(예: `\"username@domain.com\"`). 자세한 내용은 [사용자 정의 서식](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "전화번호"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "요약 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -2048,7 +2048,7 @@
           "message": "총알"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "조치 항목"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -2064,7 +2064,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "결정 포함"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Universal-2 성적표를 요약합니다. `punctuate: true` 및 `format_text: true`이 필요합니다. `auto_chapters`와 결합할 수 없습니다. **더 이상 사용되지 않음:** 유연한 요약을 위해 [LLM 게이트웨이](https://www.assemblyai.com/docs/llm-gateway/quickstart)를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "요약 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "기억에 남는"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "요약 유형"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "단락"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "오디오 태그 제거"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "모델의 응답에 주입되는 무작위성의 양을 제어합니다. 자세한 내용은 [메시지 안내](https://www.assemblyai.com/docs/pre-recorded-audio/prompting)를 참조하세요.\n\n참고: 이 매개변수는 Universal-3.5 Pro 모델에만 적용됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "웹훅 인증 헤더 이름"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "완료되거나 실패한 [웹훅](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) 요청 기록과 함께 전송될 헤더 이름입니다. 1~1000자여야 하며 ASCII 문자, 숫자, 하이픈, 밑줄만 포함해야 합니다. `webhook_auth_header_value` 및 `webhook_url`도 설정해야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "웹훅 인증 헤더 값"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "[웹훅](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) 요청을 보내는 URL입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "맞춤 주제"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "이 매개변수에는 현재 연결된 기능이 없습니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "음성 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "이 매개변수에는 현재 연결된 기능이 없습니다."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.display_name": {
-          "source": "List Transcripts",
+          "source": "List transcripts",
           "message": "성적표 나열"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "오류"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "생성 날짜"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "이 성적표 ID 이후에 생성된 성적표 가져오기"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.display_name": {
-          "source": "Throttled Only",
+          "source": "Throttled only",
           "message": "제한된 경우에만"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "제한된 스크립트만 가져오고 상태 필터를 재정의합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
+          "source": "Get transcript",
           "message": "성적 증명서 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
+          "source": "Delete transcript",
           "message": "성적 증명서 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
+          "source": "Get subtitles",
           "message": "자막 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
@@ -2440,7 +2440,7 @@
           "message": "WebVTT"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.display_name": {
-          "source": "Chars per Caption",
+          "source": "Chars per caption",
           "message": "캡션당 문자 수"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "캡션당 최대 문자 수"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
+          "source": "Get transcript sentences",
           "message": "성적 증명서 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
+          "source": "Get transcript paragraphs",
           "message": "성적표 단락 가져오기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
+          "source": "Search transcript words",
           "message": "성적 증명서 단어 검색"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "검색할 키워드"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
+          "source": "Get redacted audio",
           "message": "편집된 오디오 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
@@ -2560,7 +2560,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.display_name": {
-          "source": "Create Voice Agent",
+          "source": "Create voice agent",
           "message": "음성 에이전트 만들기"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "에이전트의 표시 이름입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "시스템 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "샘플 레이트"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -2672,7 +2672,7 @@
           "message": "최대 100개의 전사 바이어스 문자열 또는 null입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "턴 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "도구를 호출할 시기. 모델의 주요 신호입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "실행 모드"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "통화할 때마다 전송됩니다. 값은 유휴 상태 및 쓰기 전용으로 암호화됩니다(응답에서 \"***\"로 마스크됨)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "HTTP 메서드"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "객체"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "시간 초과 시간(초)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.display_name": {
@@ -2908,7 +2908,7 @@
           "message": "AssemblyAI 대신 자체 OpenAI 호환 LLM을 연결하세요.\n관리형 모델. 최대 하나의 구성을 제공하세요. 관리되는 사용을 생략\nLLM. 다중 구성(대체)은 아직 지원되지 않습니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "API 키"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "채팅 완료 요청 본문에 전송된 모델 이름입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "사전 연결 요청"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "인바운드에 응답하기 전에 플랫폼이 순서대로 실행하는 HTTPS 조회\n전화 통화. 각각은 통화 사실(예: 발신자의 정보)을 보낼 수 있습니다.\n번호) 및 이전 항목에서 캡처한 값을 캡처하고\n인사말과 대화에 대한 JSON 응답입니다. 전화통신\n단지; WebSocket 세션에서는 무시됩니다. 참조\n[사전 연결 요청](/voice-agents/voice-agent-api/pre-connect-requests)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "재정의 허용"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "통화할 때마다 전송됩니다. 값은 유휴 상태 및 쓰기 전용으로 암호화됩니다(응답에서 \"***\"로 마스크됨)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "HTTP 메서드"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "이 끝점에 보낼 이름(POST, PUT 및 JSON 본문)\nPATCH 또는 GET 및 DELETE에 대한 쿼리 매개변수로 사용됩니다. 모든 항목의 이름은 다음과 같습니다.\n플랫폼의 호출 사실 `caller_number`, `dialed_number`,\n`direction`, `agent_id` 및 `session_id`; 이후 항목의 이름도 지정할 수 있습니다.\n캡처된 이전 항목의 가치를 평가합니다. 항목별 선택: 아무것도 전송되지 않습니다.\n이름이 없는 한. 플랫폼에 없는 사실(예:\n보류된 발신자 번호)는 공백으로 전송되지 않고 생략됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "시간 초과(M)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "이 항목의 시간 초과를 낮춥니다. 모든 항목에는 고유한 800ms 상한선이 있습니다.\n이렇게 하면 시간이 단축될 뿐입니다. 전체 천장은 생략합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.display_name": {
-          "source": "List Voice Agents",
+          "source": "List voice agents",
           "message": "음성 에이전트 나열"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "이 계정의 경량 상담원 기록을 최신 항목부터 나열합니다. 전체 구성을 검색하려면 Get Voice Agent를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
+          "source": "Get voice agent",
           "message": "음성 에이전트 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "상담원의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
+          "source": "Update voice agent",
           "message": "음성 에이전트 업데이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -3172,7 +3172,7 @@
           "message": "이름"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "시스템 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dm9pY2U.display_name": {
@@ -3228,7 +3228,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "샘플 레이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -3244,7 +3244,7 @@
           "message": "최대 100개의 전사 바이어스 문자열 또는 null입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "턴 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "도구를 호출할 시기. 모델의 주요 신호입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "실행 모드"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -3356,7 +3356,7 @@
           "message": "통화할 때마다 전송됩니다. 값은 유휴 상태 및 쓰기 전용으로 암호화됩니다(응답에서 \"***\"로 마스크됨)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "HTTP 메서드"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "객체"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "시간 초과 시간(초)"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.display_name": {
@@ -3464,7 +3464,7 @@
           "message": "LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "API 키"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "채팅 완료 요청 본문에 전송된 모델 이름입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "사전 연결 요청"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "전체 목록을 대체합니다. 생성 요청을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "재정의 허용"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "통화할 때마다 전송됩니다. 값은 유휴 상태 및 쓰기 전용으로 암호화됩니다(응답에서 \"***\"로 마스크됨)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "HTTP 메서드"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "이 끝점에 보낼 이름(POST, PUT 및 JSON 본문)\nPATCH 또는 GET 및 DELETE에 대한 쿼리 매개변수로 사용됩니다. 모든 항목의 이름은 다음과 같습니다.\n플랫폼의 호출 사실 `caller_number`, `dialed_number`,\n`direction`, `agent_id` 및 `session_id`; 이후 항목의 이름도 지정할 수 있습니다.\n캡처된 이전 항목의 가치를 평가합니다. 항목별 선택: 아무것도 전송되지 않습니다.\n이름이 없는 한. 플랫폼에 없는 사실(예:\n보류된 발신자 번호)는 공백으로 전송되지 않고 생략됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "시간 초과(M)"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "이 항목의 시간 초과를 낮춥니다. 모든 항목에는 고유한 800ms 상한선이 있습니다.\n이렇게 하면 시간이 단축될 뿐입니다. 전체 천장은 생략합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
+          "source": "Delete voice agent",
           "message": "음성 에이전트 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -3688,7 +3688,7 @@
           "message": "상담원의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.display_name": {
-          "source": "List Voice Agent Sessions",
+          "source": "List voice agent sessions",
           "message": "음성 에이전트 세션 나열"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "이 에이전트에 대한 세션만 반환합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
+          "source": "Get voice agent session",
           "message": "음성 에이전트 세션 가져오기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "세션의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
+          "source": "Delete voice agent session",
           "message": "음성 에이전트 세션 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "세션의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.display_name": {
-          "source": "Create Chat Completion",
+          "source": "Create chat completion",
           "message": "채팅 완료 만들기"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "도구"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "도구 호출 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "이 요청에 사용할 모델의 ID입니다. 사용 가능한 모델은 [LLM 게이트웨이 개요](https://www.assemblyai.com/docs/llm-gateway/quickstart#available-models)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.display_name": {
-          "source": "Model Region",
+          "source": "Model region",
           "message": "모델 지역"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "글로벌"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "최대 토큰 수"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.short_desc": {
@@ -4056,7 +4056,7 @@
           "message": "함수"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "도구 선택"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "함수"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
-          "source": "Response Format",
+          "source": "Response format",
           "message": "응답 형식"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "모델의 응답 형식을 지정합니다. `json_schema` 유형을 사용하여 모델이 스키마와 일치하는 유효한 JSON을 출력하도록 제한합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "JSON 스키마"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "대체 객체의 배열입니다. 각 객체는 `model`을 포함해야 하며 선택적으로 원래 요청의 모든 필드를 재정의할 수 있습니다. 기본 모델이 실패하면 LLM 게이트웨이는 성공할 때까지 각 대체 모델을 순서대로 시도합니다. 자세한 내용은 [대체 모델 지정](https://www.assemblyai.com/docs/llm-gateway/fallback)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "최대 토큰 수"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.short_desc": {
@@ -4256,7 +4256,7 @@
           "message": "도구"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "도구 호출 ID"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "대체 요청의 온도를 재정의합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.display_name": {
-          "source": "Fallback Config",
+          "source": "Fallback config",
           "message": "대체 구성"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "실패 시 500ms 후에 요청을 자동으로 재시도할지 여부입니다. 기본값은 `true`입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.display_name": {
-          "source": "Post Processing Steps",
+          "source": "Post processing steps",
           "message": "사후 처리 단계"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.short_desc": {
@@ -4356,7 +4356,7 @@
           "message": "json-repair"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.display_name": {
-          "source": "Understand Speech",
+          "source": "Understand speech",
           "message": "음성 이해"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.short_desc": {
@@ -4380,7 +4380,7 @@
           "message": "처리할 성적표의 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "음성 이해"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -4412,7 +4412,7 @@
           "message": "공식적인 언어 스타일을 사용하십시오. 자세한 내용은 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "원본 발화 일치"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -4424,7 +4424,7 @@
           "message": "화자 레이블을 활성화하면 발화 배열에 번역된 텍스트가 반환됩니다. 각 발화에는 각 대상 언어에 대한 번역이 포함된 `translated_texts` 키가 포함됩니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "대상 언어"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -4436,11 +4436,11 @@
           "message": "대상 언어 코드 목록(예: `[\"es\", \"de\"]`) 지원되는 언어는 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "화자 식별"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "알려진 값"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -4452,7 +4452,7 @@
           "message": "Speaker_type이 \"role\"인 경우 필수입니다. 각 값은 35자 이하여야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "스피커 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -4520,7 +4520,7 @@
           "message": "발표자의 역할. `speaker_type`이 \"역할\"인 경우 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "사용자 정의 형식"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -4548,7 +4548,7 @@
           "message": "이메일 형식 패턴(예: `\"username@domain.com\"`). 자세한 내용은 [사용자 정의 서식](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "전화번호"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -4576,7 +4576,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "요약 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -4596,7 +4596,7 @@
           "message": "총알"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "조치 항목"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -4612,7 +4612,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "결정 포함"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -4624,7 +4624,7 @@
           "message": "작업 항목에 의사결정을 포함하는 옵션입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List LLM Models",
+          "source": "List LLM models",
           "message": "LLM 모델 나열"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4636,7 +4636,7 @@
           "message": "사용 가능한 LLM 게이트웨이 모델, 지원되는 매개변수, 컨텍스트 제한, 가격 및 지역별 가용성을 나열합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.display_name": {
-          "source": "Create Streaming Token",
+          "source": "Create streaming token",
           "message": "스트리밍 토큰 생성"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "실시간 전사 WebSocket 세션을 위한 임시 토큰을 만듭니다. 클라이언트 애플리케이션과 토큰을 공유하기 전에 토큰 유효성 및 세션 기간을 제한하십시오."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "몇 초 안에 만료됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "토큰 상환 기간(초)입니다. 이 창 내에서 WebSocket 연결을 열려면 토큰을 사용해야 합니다. WebSocket이 열릴 때 창이 경과되면 서버는 첫 번째 프레임에서 세션을 거부합니다. 이는 결과 스트리밍 세션의 기간을 제한하지 않습니다. WebSocket이 열리면 세션은 최대 `max_session_duration_seconds` 동안 실행됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "최대 세션 기간(초)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4672,7 +4672,7 @@
           "message": "이 토큰으로 시작된 스트리밍 세션의 최대 기간(초)입니다. 세션이 끝나기 전에 작업을 마무리해야 하는 경우 여기에 전달한 값을 사용하여 클라이언트 측 타이머를 실행하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.display_name": {
-          "source": "Create Voice Agent Token",
+          "source": "Create voice agent token",
           "message": "음성 에이전트 토큰 생성"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.short_desc": {
@@ -4684,7 +4684,7 @@
           "message": "음성 에이전트 WebSocket 세션에 대한 일회용 임시 토큰을 만듭니다. 사용량은 이 연결을 소유한 프로젝트에 기인합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "몇 초 안에 만료됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4696,7 +4696,7 @@
           "message": "토큰 상환 기간(초)입니다. 이 창 내에서 WebSocket 연결을 열려면 토큰을 사용해야 합니다. WebSocket이 열릴 때 창이 경과된 경우 서버는 첫 번째 프레임에서 `session.ready` 대신 `unauthorized` 코드와 함께 `session.error`을 반환합니다. 이는 결과 음성 에이전트 세션의 지속 시간을 제한하지 않습니다. WebSocket이 열리면 세션은 최대 `max_session_duration_seconds` 동안 실행됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "최대 세션 기간(초)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4708,7 +4708,7 @@
           "message": "이 토큰으로 시작된 음성 에이전트 세션의 최대 기간(초)입니다. 세션이 끝나기 전에 \"곧 종료\" 경고 이벤트가 없으므로 정상적으로 종료해야 하는 경우(예: 마무리 메시지 재생, 상태 저장) 여기에 전달한 값을 사용하여 클라이언트 측 타이머를 실행하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook Subscription",
+          "source": "Create webhook subscription",
           "message": "웹훅 구독 생성"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -4764,7 +4764,7 @@
           "message": "사용됨"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhook Subscriptions",
+          "source": "List webhook subscriptions",
           "message": "웹훅 구독 나열"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "커서"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
+          "source": "Get webhook subscription",
           "message": "웹훅 구독 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -4800,7 +4800,7 @@
           "message": "구독"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
+          "source": "Update webhook subscription",
           "message": "웹훅 구독 업데이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "사용됨"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
+          "source": "Delete webhook subscription",
           "message": "웹훅 구독 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -4848,7 +4848,7 @@
           "message": "구독"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.display_name": {
-          "source": "Transcribe Short Audio",
+          "source": "Transcribe short audio",
           "message": "짧은 오디오 녹음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "대화 컨텍스트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5036,7 +5036,7 @@
           "message": "대화 차례 전반에 걸쳐 연속성을 향상시키기 위해 선행 대화를 제공합니다. 가장 오래된 것부터 최신 순으로 정렬된 목록이나 단일 회전으로 처리되는 하나의 문자열을 허용합니다. 제한은 500턴, 총 16,000자입니다. 모델의 컨텍스트 창이 초과된 경우를 포함하여 초과 컨텍스트는 가장 오래된 회전에서 잘립니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "핵심 용어 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "특정 토큰에 대해 디코더를 편향시키는 키워드입니다. 전체 용어는 최대 100개의 용어와 총 8,000자까지 가능합니다. `keyterms` 또는 `word_boost`로도 허용됩니다. 세 가지 중 하나만 제공하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "모델의 시스템 프롬프트 앞에 추가되는 사용자 정의 전사 명령입니다. 생략하면 기본 프롬프트가 적용됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "샘플 레이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.display_name": {
-          "source": "Transcribe Audio Upload",
+          "source": "Transcribe audio upload",
           "message": "오디오 업로드 녹음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.short_desc": {
@@ -5184,7 +5184,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "대화 컨텍스트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5196,7 +5196,7 @@
           "message": "동일한 대화의 이전 차례가 연대순(가장 오래된 것부터 가장 최근의 것)으로 컨텍스트로 제공되므로 모델은 더 큰 연속성을 가지고 현재 클립을 기록합니다. 회전 목록이나 단일 문자열을 허용합니다. 컨텍스트 창 제한을 초과하면 가장 오래된 턴이 먼저 삭제됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "핵심 용어 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5208,7 +5208,7 @@
           "message": "특정 토큰에 대해 디코더를 편향시키는 키워드입니다. 모든 용어에 걸쳐 최대 총 2048자입니다. `keyterms` 또는 `word_boost`로도 허용됩니다. 세 가지 중 하나만 제공하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5232,7 +5232,7 @@
           "message": "모델의 시스템 프롬프트 앞에 추가되는 사용자 정의 전사 명령입니다. 생략하면 기본 프롬프트가 적용됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "샘플 레이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5432,7 +5432,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.display_name": {
-          "source": "Transcribe Dictation",
+          "source": "Transcribe dictation",
           "message": "받아쓰기 받아쓰기"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "오디오 채널 수. `audio`이 `audio/pcm`인 경우 필요합니다. WAV에서는 무시됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "핵심 용어 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "이름이나 전문 용어 등 전사를 편향시키는 용어입니다. 최대 100개의 용어, 총 8000자까지 가능합니다. 레거시 이름 `keyterms` 및 `word_boost`도 허용됩니다. 세 가지 중 하나만 보내지 않으면 `400`로 요청이 거부됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "ISO 언어 코드로 표시되는 오디오 언어입니다. 이 세트 외부의 코드는 `400`로 거부됩니다. 기본값은 `[\"en\"]`입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.display_name": {
-          "source": "LLM Instruction",
+          "source": "LLM instruction",
           "message": "LLM 수업"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.short_desc": {
@@ -5504,7 +5504,7 @@
           "message": "기본 정리 작업을 대체하는 텍스트를 넣을 모양에 대한 일반 영어 설명입니다. 변환만 설명합니다. 출력 형식, 텍스트 응답 거부 및 깨끗한 입력 처리에 대한 규칙이 자동으로 적용됩니다. 필드를 생략하거나 `null`로 설정하면 필러를 제거하고 자체 수정을 해결하며 구두점과 대문자를 적용하는 기본 정리 작업이 유지됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "샘플 레이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5516,7 +5516,7 @@
           "message": "소스 샘플링 속도(Hz)(예: `16000`) `audio`이 `audio/pcm`인 경우 필요합니다. 파일 헤더에 샘플링 속도를 전달하는 WAV의 경우 무시됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.display_name": {
-          "source": "STT Prompt",
+          "source": "STT prompt",
           "message": "STT 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.short_desc": {
@@ -5660,7 +5660,7 @@
           "message": "파일 이름"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "오디오 텍스트 변환"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.short_desc": {
@@ -5684,7 +5684,7 @@
           "message": "스크립트로 작성할 오디오 또는 비디오 파일의 URL입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "오디오 종료 시간"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -5696,7 +5696,7 @@
           "message": "미디어 파일에서 전사를 중지할 시점(밀리초)입니다. 자세한 내용은 [녹취록의 시작과 끝 설정](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "오디오 시작 위치"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -5708,7 +5708,7 @@
           "message": "미디어 파일에서 복사를 시작하는 시점(밀리초)입니다. 자세한 내용은 [녹취록의 시작과 끝 설정](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "자동 챕터"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Universal-2로 장 요약을 생성합니다. `punctuate: true`이 필요하며 `summarization`과 결합할 수 없습니다. **더 이상 사용되지 않음:** 유연한 장 요약을 위해 [LLM 게이트웨이](https://www.assemblyai.com/docs/llm-gateway/quickstart)를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "자동 하이라이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -5732,7 +5732,7 @@
           "message": "[핵심 문구](https://www.assemblyai.com/docs/speech-understanding/key-phrases) 활성화(true 또는 false)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "콘텐츠 안전"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -5744,7 +5744,7 @@
           "message": "[콘텐츠 조정](https://www.assemblyai.com/docs/content-moderation) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "콘텐츠 안전에 대한 확신"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -5756,7 +5756,7 @@
           "message": "[콘텐츠 조정](https://www.assemblyai.com/docs/content-moderation) 모델의 신뢰도 임계값입니다. 값은 25에서 100 사이여야 합니다. 활성화하려면 `content_safety`이 필요합니다. 그렇지 않으면 무시됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "맞춤 철자법"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "개체 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "[엔티티 감지](https://www.assemblyai.com/docs/speech-understanding/entity-detection) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "욕설 필터링"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "스크립트된 텍스트에서 욕설을 필터링합니다. true 또는 false일 수 있습니다. 자세한 내용은 [욕설 필터링](https://www.assemblyai.com/docs/profanity-filtering)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "텍스트 서식 지정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -5856,7 +5856,7 @@
           "message": "[텍스트 서식](https://www.assemblyai.com/docs/pre-recorded-audio) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Iab 카테고리"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "[주제 감지](https://www.assemblyai.com/docs/speech-understanding/topic-detection) 활성화, true 또는 false일 수 있음"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "핵심 용어 프롬프트"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5880,7 +5880,7 @@
           "message": "최대 200개(Universal-2의 경우) 또는 1000개(Universal-3.5 Pro의 경우) 도메인별 단어 또는 구문(구문당 최대 6단어)으로 정확성을 향상합니다. 자세한 내용은 [키워드 프롬프트](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -6300,7 +6300,7 @@
           "message": "요루바어"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "언어 코드"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -6720,7 +6720,7 @@
           "message": "요루바어"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "언어 자신감 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6732,7 +6732,7 @@
           "message": "자동으로 감지된 언어에 대한 신뢰도 임계값입니다.\n언어 신뢰도가 이 임계값보다 낮으면 오류가 반환됩니다.\n기본값은 0입니다. `language_detection`이 활성화된 경우에만 설정할 수 있습니다. 자세한 내용은 [자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "언어 감지"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "[자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)는 음성 언어를 식별하고 요청을 최상의 모델로 라우팅합니다. `language_code`을 지정하지 않으면 자동으로 적용됩니다. `language_code`과 함께만 `false`로 설정합니다. 언어를 지정하지 않고 비활성화하면 오류가 반환됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "언어 감지 옵션"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -6756,7 +6756,7 @@
           "message": "[자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) 옵션을 지정합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "코드 전환"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -6768,7 +6768,7 @@
           "message": "[코드 전환](/speech-to-text/pre-recorded-audio/code-switching)을 감지해야 하는지 여부입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "코드 전환 신뢰도 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "[코드 전환](/음성-텍스트/사전 녹음된 오디오/코드 전환) 감지에 대한 신뢰도 임계값입니다. 코드 전환 신뢰도가 이 임계값보다 낮으면 `language_detection_confidence` 점수가 가장 높은 언어로 스크립트가 처리됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "예상 언어"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -6792,7 +6792,7 @@
           "message": "오디오 파일에 예상되는 언어 목록입니다. 지정되지 않은 경우 기본값은 `[\"all\"]`입니다. 자세한 내용은 [자동 언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "대체 언어"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -6816,7 +6816,7 @@
           "message": "영어가 감지되면 `en_au` 또는 `en_uk` 철자를 사용하세요. 기본 언어당 하나의 변형만 허용됩니다. `en` 또는 `en_us` 같은 기본/기본 코드는 거부됩니다. 응답의 `language_code`는 선택한 지역 코드를 보고합니다. 감지된 다른 언어는 이 설정을 무시합니다. [언어 감지](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "음성이 감지되지 않은 경우"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "PII 수정 모델을 사용하여 복사된 텍스트에서 PII를 수정하는 것은 true 또는 false일 수 있습니다. `true`이 되려면 `format_text`이 필요합니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "PII 오디오 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -6896,7 +6896,7 @@
           "message": "음성 PII \"신호음\"이 포함된 원본 미디어 파일의 복사본을 생성합니다. 이는 참이거나 거짓일 수 있습니다. `true`이 되려면 `redact_pii`이 필요합니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "PII 오디오 옵션 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "[PII 수정된 오디오](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) 파일에 대한 옵션을 지정합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "오디오 편집 방법 재정의"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "침묵"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "편집된 음성 오디오 없음 반환"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -6936,7 +6936,7 @@
           "message": "기본적으로 오디오 편집은 음성이 감지된 경우에만 편집된 오디오 URL을 제공합니다. 그러나 사용 사례에서 대화가 없는 무음 오디오 파일에도 편집된 오디오 파일이 특별히 필요한 경우 이 매개변수를 `true`로 설정하여 이러한 URL을 수신하도록 선택할 수 있습니다. `true`이 되려면 `redact_pii_audio`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "PII 오디오 품질 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -6956,7 +6956,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "PII 정책 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -6968,7 +6968,7 @@
           "message": "활성화할 PII 수정 정책 목록입니다. 자세한 내용은 [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "개인정보 대체 형식"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -6988,7 +6988,7 @@
           "message": "해시"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "원본 텍스트도 반환"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -7000,7 +7000,7 @@
           "message": "수정된 필드와 함께 `unredacted_text`, `unredacted_words` 및 `unredacted_utterances`를 반환합니다. `redact_pii: true`이 필요합니다. **민감한 출력:** 이를 활성화하면 원본 개인 정보가 유지됩니다. 기본적으로 비활성화되어 있습니다. [PII 수정](https://www.assemblyai.com/docs/pii-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "정적 엔터티 수정"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -7012,7 +7012,7 @@
           "message": "**독점적 용어 보호**\n- 교정 레이블을 정확한 용어에 매핑합니다(예: `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`). `redact_pii: true`이 필요하고 `redact_pii_sub`를 사용합니다. 일치에서는 대/소문자 구분, 구두점 및 사소한 간격 차이를 허용합니다. 제공된 용어 이상으로 일반화하지 않습니다.\n- `redact_pii_audio`을 사용하면 일치하는 항목도 오디오에서 제거됩니다.\n\n**한도**\n- 최대 100개의 라벨, 라벨당 200개의 용어, 용어당 200자까지 가능합니다.\n- 라벨에는 문자, 숫자, 공백, 밑줄, 하이픈을 사용할 수 있으며 최대 80자까지 가능합니다.\n\n[정적 엔터티 수정](https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "감정 분석"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -7024,7 +7024,7 @@
           "message": "[감정 분석](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis) 활성화는 true 또는 false일 수 있습니다. `true`이 되려면 `punctuate`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "화자 라벨"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -7036,7 +7036,7 @@
           "message": "[스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers)을 활성화합니다. true 또는 false일 수 있습니다. `true`이 되려면 `punctuate`이 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "스피커 옵션"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -7048,7 +7048,7 @@
           "message": "[스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)에 대한 옵션을 지정합니다. 이를 사용하여 가능한 스피커 범위를 설정합니다. `speaker_labels`이(가) `true`여야 하며 `speakers_expected`과(와) 함께 사용할 수 없습니다. 두 경계가 모두 설정된 경우 `min_speakers_expected`는 `max_speakers_expected`보다 작거나 같아야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "화자 신뢰도 포함"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -7060,7 +7060,7 @@
           "message": "`true`인 경우 응답의 단어당 및 발화당 `speaker_confidence` 필드를 포함합니다. 자세한 내용은 [스피커 분할](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "최대 스피커 예상"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7072,7 +7072,7 @@
           "message": "화자 라벨 수를 제한합니다. 추가 스피커가 기존 라벨에 병합됩니다. **한도가 너무 높으면 하나의 스피커를 여러 개로 분할하여 정확도가 떨어질 수 있습니다.** 기본값: 0~2분 동안 제한 없음, 2~10분 동안 10, 10분 이상 30. [스피커 범위](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)를 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "최소 연사 예상"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7084,7 +7084,7 @@
           "message": "화자 레이블 수에 대한 엄격한 하한 - 모델은 이보다 적은 수의 화자를 반환하지 않습니다. 자세한 내용은 [가능한 스피커 범위 설정](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "예상 연사"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -7096,7 +7096,7 @@
           "message": "식별을 시도해야 하는 화자 수를 화자 레이블 모델에 알려줍니다. `speaker_labels`은(는) `true`이어야 하며 양의 정수여야 합니다. `speaker_options`와 함께 사용할 수 없습니다. 자세한 내용은 [예상 스피커 수 설정](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "음성 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "음성 임계값"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -7128,7 +7128,7 @@
           "message": "이 음성 비율 미만을 포함하는 오디오 파일을 거부합니다.\n유효한 값은 [0, 1] 범위에 있습니다. 자세한 내용은 [음성 임계값](https://www.assemblyai.com/docs/speech-threshold)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "음성 이해"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -7160,7 +7160,7 @@
           "message": "공식적인 언어 스타일을 사용하십시오. 자세한 내용은 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "원본 발화 일치"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "화자 레이블을 활성화하면 발화 배열에 번역된 텍스트가 반환됩니다. 각 발화에는 각 대상 언어에 대한 번역이 포함된 `translated_texts` 키가 포함됩니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "대상 언어"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -7184,11 +7184,11 @@
           "message": "대상 언어 코드 목록(예: `[\"es\", \"de\"]`) 지원되는 언어는 [번역](https://www.assemblyai.com/docs/speech-understanding/translation)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "화자 식별"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "알려진 값"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -7200,7 +7200,7 @@
           "message": "Speaker_type이 \"role\"인 경우 필수입니다. 각 값은 35자 이하여야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "스피커 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -7268,7 +7268,7 @@
           "message": "발표자의 역할. `speaker_type`이 \"역할\"인 경우 필요합니다."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "사용자 정의 형식"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -7296,7 +7296,7 @@
           "message": "이메일 형식 패턴(예: `\"username@domain.com\"`). 자세한 내용은 [사용자 정의 서식](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)을 참조하세요."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "전화번호"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -7324,7 +7324,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "요약 유형"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "총알"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "조치 항목"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -7360,7 +7360,7 @@
           "message": "보통"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "결정 포함"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Universal-2 성적표를 요약합니다. `punctuate: true` 및 `format_text: true`이 필요합니다. `auto_chapters`와 결합할 수 없습니다. **더 이상 사용되지 않음:** 유연한 요약을 위해 [LLM 게이트웨이](https://www.assemblyai.com/docs/llm-gateway/quickstart)를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "요약 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "기억에 남는"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "요약 유형"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "단락"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "오디오 태그 제거"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -7472,7 +7472,7 @@
           "message": "모델의 응답에 주입되는 무작위성의 양을 제어합니다. 자세한 내용은 [메시지 안내](https://www.assemblyai.com/docs/pre-recorded-audio/prompting)를 참조하세요.\n\n참고: 이 매개변수는 Universal-3.5 Pro 모델에만 적용됩니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "웹훅 인증 헤더 이름"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "완료되거나 실패한 [웹훅](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) 요청 기록과 함께 전송될 헤더 이름입니다. 1~1000자여야 하며 ASCII 문자, 숫자, 하이픈, 밑줄만 포함해야 합니다. `webhook_auth_header_value` 및 `webhook_url`도 설정해야 합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "웹훅 인증 헤더 값"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -7508,7 +7508,7 @@
           "message": "[웹훅](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio) 요청을 보내는 URL입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "맞춤 주제"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -7520,7 +7520,7 @@
           "message": "이 매개변수에는 현재 연결된 기능이 없습니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "음성 모델"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.short_desc": {

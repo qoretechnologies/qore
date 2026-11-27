@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
-          "source": "List Sources",
+          "source": "List sources",
           "message": "Zoznam zdrojov"
         },
         "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Počet výsledkov na stránku (`1`-`1000`, predvolené: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source",
+          "source": "Get source",
           "message": "Získať zdroj"
         },
         "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Jedinečný identifikátor zdroja Segment, ktorý sa má získať"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
-          "source": "Create Source",
+          "source": "Create source",
           "message": "Zdroj vytvorenia"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Nastavte na `True` na odpojenie všetkých aktuálne pripojených dátových skladov od tohto zdroja pri vytvorení; predvolená hodnota je `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source",
+          "source": "Update source",
           "message": "Zdroj aktualizácie"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Aktualizované konfiguračné nastavenia zdroja; dostupné kľúče závisia od typu zdroja"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source",
+          "source": "Delete source",
           "message": "Odstrániť zdroj"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Jedinečný identifikátor zdroja Segment, ktorý sa má odstrániť"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
-          "source": "List Destinations",
+          "source": "List destinations",
           "message": "Zoznam cieľov"
         },
         "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Počet výsledkov na stránku (`1`-`1000`, predvolené: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination",
+          "source": "Get destination",
           "message": "Získať cieľovú destináciu"
         },
         "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Jedinečný identifikátor cieľovej destinácie Segment, ktorá sa má získať"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Create Destination",
+          "source": "Create destination",
           "message": "Vytvoriť destináciu"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -676,7 +676,7 @@
           "message": "Nastavte na `True` na povolenie destinácie alebo na `False` na jej vytvorenie v zakázanom stave"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination",
+          "source": "Update destination",
           "message": "Aktualizovať cieľ"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Aktualizované konfiguračné nastavenia cieľa; dostupné kľúče závisia od typu cieľa"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination",
+          "source": "Delete destination",
           "message": "Odstrániť cieľovú destináciu"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Jedinečný identifikátor cieľovej destinácie Segment, ktorá sa má odstrániť"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "Zoznam skladov"
         },
         "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Počet výsledkov na stránku (`1`-`1000`, predvolené: `100`)"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "Získať sklad"
         },
         "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Jedinečný identifikátor skladu Segment, ktorý sa má získať"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "Vytvoriť dátový sklad"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Nastavte na `True` na odpojenie všetkých aktuálne pripojených zdrojov od tohto dátového skladu pri vytvorení; predvolená hodnota je `False`"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "Aktualizovať sklad"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Nový čitateľný zobrazovaný názov skladu"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Delete Warehouse",
+          "source": "Delete warehouse",
           "message": "Odstrániť sklad"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Jedinečný identifikátor skladu Segment, ktorý sa má odstrániť"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
-          "source": "List Tracking Plans",
+          "source": "List tracking plans",
           "message": "Zoznam plánov sledovania"
         },
         "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Šablóna plánu sledovania"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Get Tracking Plan",
+          "source": "Get tracking plan",
           "message": "Získať plán sledovania"
         },
         "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1064,7 +1064,7 @@
           "message": "Jedinečné ID plánu sledovania Segment, ktorý sa má získať"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Create Tracking Plan",
+          "source": "Create tracking plan",
           "message": "Vytvoriť plán sledovania"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Popis plánu sledovania"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Update Tracking Plan",
+          "source": "Update tracking plan",
           "message": "Aktualizovať plán sledovania"
         },
         "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Nový popis pre plán sledovania"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
-          "source": "Delete Tracking Plan",
+          "source": "Delete tracking plan",
           "message": "Odstrániť plán sledovania"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Jedinečné ID plánu sledovania Segment, ktorý sa má odstrániť"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Zoznam štítkov"
         },
         "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Počet výsledkov na stránku (`1`-`1000`, predvolené: `100`)"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "Vytvoriť štítok"
         },
         "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Voliteľný, pre človeka čitateľný popis vysvetľujúci účel tohto štítka"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
-          "source": "Delete Label",
+          "source": "Delete label",
           "message": "Odstrániť štítok"
         },
         "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {

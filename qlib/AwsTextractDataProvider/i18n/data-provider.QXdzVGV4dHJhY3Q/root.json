@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
-          "message": "Detect Document Text"
+          "source": "Detect document text",
+          "message": "Detect document text"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
           "source": "Extract lines and words from a document",
@@ -412,8 +412,8 @@
           "message": "Optional S3 object version ID for versioned buckets."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
-          "message": "Analyze Document"
+          "source": "Analyze document",
+          "message": "Analyze document"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
           "source": "Extract tables, forms, signatures, layout, and query answers",
@@ -576,8 +576,8 @@
           "message": "Human review settings for existing Amazon A2I customers only."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.display_name": {
-          "source": "Data Attributes",
-          "message": "Data Attributes"
+          "source": "Data attributes",
+          "message": "Data attributes"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.short_desc": {
           "source": "Content declarations used to route the document for human review",
@@ -588,8 +588,8 @@
           "message": "Content declarations used to route the document for human review."
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
-          "source": "Content Classifiers",
-          "message": "Content Classifiers"
+          "source": "Content classifiers",
+          "message": "Content classifiers"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
           "source": "Content declarations for the human review workflow",
@@ -600,16 +600,16 @@
           "message": "Content declarations for the human review workflow."
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
-          "source": "Free of Personally Identifiable Information",
-          "message": "Free of Personally Identifiable Information"
+          "source": "Free of personally identifiable information",
+          "message": "Free of personally identifiable information"
         },
         "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
-          "source": "Free of Adult Content",
-          "message": "Free of Adult Content"
+          "source": "Free of adult content",
+          "message": "Free of adult content"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
-          "source": "Flow Definition Arn",
-          "message": "Flow Definition Arn"
+          "source": "Flow definition arn",
+          "message": "Flow definition arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.short_desc": {
           "source": "ARN of an existing Amazon A2I human review workflow",
@@ -620,8 +620,8 @@
           "message": "ARN of an existing Amazon A2I human review workflow."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.display_name": {
-          "source": "Human Loop Name",
-          "message": "Human Loop Name"
+          "source": "Human loop name",
+          "message": "Human loop name"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.short_desc": {
           "source": "Unique name for this human review in the AWS region",
@@ -692,8 +692,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
-          "message": "Analyze Expense"
+          "source": "Analyze expense",
+          "message": "Analyze expense"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
           "source": "Extract invoice and receipt totals, vendors, and line items",
@@ -780,8 +780,8 @@
           "message": "Extract identity fields from US passports and driver's licenses. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html)."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.display_name": {
-          "source": "Document Pages",
-          "message": "Document Pages"
+          "source": "Document pages",
+          "message": "Document pages"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.short_desc": {
           "source": "One or two images of a US passport or driver's license",
@@ -852,8 +852,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
-          "message": "Create Adapter"
+          "source": "Create adapter",
+          "message": "Create adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
           "source": "Create a custom query adapter",
@@ -864,8 +864,8 @@
           "message": "Create a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html)."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
-          "source": "Adapter Name",
-          "message": "Adapter Name"
+          "source": "Adapter name",
+          "message": "Adapter name"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
           "source": "A descriptive name for the custom query adapter",
@@ -876,8 +876,8 @@
           "message": "A descriptive name for the custom query adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -900,8 +900,8 @@
           "message": "A description explaining the adapter's purpose."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.display_name": {
-          "source": "Feature Types",
-          "message": "Feature Types"
+          "source": "Feature types",
+          "message": "Feature types"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.short_desc": {
           "source": "Custom adapters support the 'QUERIES' feature only",
@@ -916,8 +916,8 @@
           "message": "Queries"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
-          "source": "Auto Update",
-          "message": "Auto Update"
+          "source": "Auto update",
+          "message": "Auto update"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
           "source": "Whether AWS may automatically update the adapter",
@@ -948,8 +948,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
-          "message": "Create Adapter Version"
+          "source": "Create adapter version",
+          "message": "Create adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Train a version of a custom query adapter",
@@ -972,8 +972,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -984,8 +984,8 @@
           "message": "Idempotency token for safely retrying the same request."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.display_name": {
-          "source": "Dataset Config",
-          "message": "Dataset Config"
+          "source": "Dataset config",
+          "message": "Dataset config"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.short_desc": {
           "source": "S3 manifest identifying the training and test documents",
@@ -1036,8 +1036,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
-          "message": "KMS Key ID"
+          "source": "KMS key ID",
+          "message": "KMS key ID"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.short_desc": {
           "source": "KMS key ID or ARN for encrypting output",
@@ -1048,8 +1048,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
-          "message": "Output Config"
+          "source": "Output config",
+          "message": "Output config"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
           "source": "S3Bucket",
@@ -1088,8 +1088,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
-          "message": "Delete Adapter"
+          "source": "Delete adapter",
+          "message": "Delete adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
           "source": "Delete an unused custom query adapter",
@@ -1112,8 +1112,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
-          "message": "Delete Adapter Version"
+          "source": "Delete adapter version",
+          "message": "Delete adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Delete a version of a custom query adapter",
@@ -1136,8 +1136,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
-          "source": "Adapter Version",
-          "message": "Adapter Version"
+          "source": "Adapter version",
+          "message": "Adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
           "source": "Version belonging to the selected adapter",
@@ -1148,8 +1148,8 @@
           "message": "Version belonging to the selected adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
-          "message": "Get Adapter"
+          "source": "Get adapter",
+          "message": "Get adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
           "source": "Read a custom query adapter's settings",
@@ -1172,8 +1172,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
-          "message": "Get Adapter Version"
+          "source": "Get adapter version",
+          "message": "Get adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Read training status and evaluation results for an adapter version",
@@ -1196,8 +1196,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
-          "source": "Adapter Version",
-          "message": "Adapter Version"
+          "source": "Adapter version",
+          "message": "Adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
           "source": "Version belonging to the selected adapter",
@@ -1208,8 +1208,8 @@
           "message": "Version belonging to the selected adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
-          "message": "Get Document Analysis"
+          "source": "Get document analysis",
+          "message": "Get document analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
           "source": "Read a page of asynchronous document analysis results",
@@ -1232,8 +1232,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1244,8 +1244,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1256,8 +1256,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
-          "message": "Get Document Text Detection"
+          "source": "Get document text detection",
+          "message": "Get document text detection"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
           "source": "Read a page of asynchronous text detection results",
@@ -1280,8 +1280,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1292,8 +1292,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1304,8 +1304,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
-          "message": "Get Expense Analysis"
+          "source": "Get expense analysis",
+          "message": "Get expense analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
           "source": "Read a page of asynchronous expense analysis results",
@@ -1328,8 +1328,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1340,8 +1340,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1352,8 +1352,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
-          "message": "Get Lending Analysis"
+          "source": "Get lending analysis",
+          "message": "Get lending analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
           "source": "Read a page of asynchronous lending analysis results",
@@ -1376,8 +1376,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1388,8 +1388,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1400,8 +1400,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
-          "message": "Get Lending Analysis Summary"
+          "source": "Get lending analysis summary",
+          "message": "Get lending analysis summary"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
           "source": "Read the document classification summary for a lending job",
@@ -1424,8 +1424,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
-          "message": "List Adapter Versions"
+          "source": "List adapter versions",
+          "message": "List adapter versions"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
           "source": "List versions of custom query adapters",
@@ -1448,8 +1448,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
-          "source": "After Creation Time",
-          "message": "After Creation Time"
+          "source": "After creation time",
+          "message": "After creation time"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
           "source": "Return resources created after this time",
@@ -1460,8 +1460,8 @@
           "message": "Return resources created after this time."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
-          "source": "Before Creation Time",
-          "message": "Before Creation Time"
+          "source": "Before creation time",
+          "message": "Before creation time"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
           "source": "Return resources created before this time",
@@ -1472,8 +1472,8 @@
           "message": "Return resources created before this time."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1484,8 +1484,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1496,8 +1496,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
-          "message": "List Adapters"
+          "source": "List adapters",
+          "message": "List adapters"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
           "source": "List custom query adapters in this account and region",
@@ -1508,8 +1508,8 @@
           "message": "List custom query adapters in this account and region. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Pass `NextToken` to the same action to retrieve the next page."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
-          "source": "After Creation Time",
-          "message": "After Creation Time"
+          "source": "After creation time",
+          "message": "After creation time"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
           "source": "Return resources created after this time",
@@ -1520,8 +1520,8 @@
           "message": "Return resources created after this time."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
-          "source": "Before Creation Time",
-          "message": "Before Creation Time"
+          "source": "Before creation time",
+          "message": "Before creation time"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
           "source": "Return resources created before this time",
@@ -1532,8 +1532,8 @@
           "message": "Return resources created before this time."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.display_name": {
-          "source": "Max Results",
-          "message": "Max Results"
+          "source": "Max results",
+          "message": "Max results"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.short_desc": {
           "source": "Maximum number of results in this response page",
@@ -1544,8 +1544,8 @@
           "message": "Maximum number of results in this response page."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.display_name": {
-          "source": "Next Token",
-          "message": "Next Token"
+          "source": "Next token",
+          "message": "Next token"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.short_desc": {
           "source": "Continuation token from the preceding response in the same operation",
@@ -1556,8 +1556,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
-          "message": "List Tags For Resource"
+          "source": "List tags for resource",
+          "message": "List tags for resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
           "source": "Read the tags attached to a Textract resource",
@@ -1580,8 +1580,8 @@
           "message": "Textract resource ARN in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
-          "message": "Start Document Analysis"
+          "source": "Start document analysis",
+          "message": "Start document analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
           "source": "Start asynchronous extraction of document structure",
@@ -1592,8 +1592,8 @@
           "message": "Start asynchronous extraction of document structure. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
-          "message": "Document Location"
+          "source": "Document location",
+          "message": "Document location"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
           "source": "S3 document location for an asynchronous analysis job",
@@ -1652,8 +1652,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
-          "source": "Feature Types",
-          "message": "Feature Types"
+          "source": "Feature types",
+          "message": "Feature types"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.short_desc": {
           "source": "Document features to extract",
@@ -1684,8 +1684,8 @@
           "message": "Layout"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -1696,8 +1696,8 @@
           "message": "Idempotency token for safely retrying the same request."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
-          "message": "Job Tag"
+          "source": "Job tag",
+          "message": "Job tag"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.short_desc": {
           "source": "A label included in the job completion notification",
@@ -1708,8 +1708,8 @@
           "message": "A label included in the job completion notification."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
-          "message": "Notification Channel"
+          "source": "Notification channel",
+          "message": "Notification channel"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
           "source": "SNS topic and IAM role for asynchronous completion notifications",
@@ -1720,8 +1720,8 @@
           "message": "SNS topic and IAM role for asynchronous completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
           "source": "IAM role ARN allowing Textract to publish to the SNS topic",
@@ -1732,8 +1732,8 @@
           "message": "IAM role ARN allowing Textract to publish to the SNS topic."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
-          "message": "SNS Topic Arn"
+          "source": "SNS topic arn",
+          "message": "SNS topic arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
           "source": "SNS topic ARN in the connection's region for completion notifications",
@@ -1744,8 +1744,8 @@
           "message": "SNS topic ARN in the connection's region for completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
-          "message": "Output Config"
+          "source": "Output config",
+          "message": "Output config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.short_desc": {
           "source": "S3 destination for analysis or training output",
@@ -1780,8 +1780,8 @@
           "message": "Object-key prefix for output files in the destination bucket."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
-          "message": "KMS Key ID"
+          "source": "KMS key ID",
+          "message": "KMS key ID"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.short_desc": {
           "source": "KMS key ID or ARN for encrypting output",
@@ -1792,8 +1792,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.display_name": {
-          "source": "Queries Config",
-          "message": "Queries Config"
+          "source": "Queries config",
+          "message": "Queries config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.field.UXVlcmllcw.display_name": {
           "source": "Queries",
@@ -1836,8 +1836,8 @@
           "message": "Question to answer, for example `What is the invoice total?`."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.display_name": {
-          "source": "Adapters Config",
-          "message": "Adapters Config"
+          "source": "Adapters config",
+          "message": "Adapters config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.short_desc": {
           "source": "Custom query adapters and versions to use for selected pages",
@@ -1896,8 +1896,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
-          "message": "Start Document Text Detection"
+          "source": "Start document text detection",
+          "message": "Start document text detection"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
           "source": "Start asynchronous extraction of document text",
@@ -1908,8 +1908,8 @@
           "message": "Start asynchronous extraction of document text. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Retain `JobId` and use the matching get action to check status and retrieve every result page."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
-          "message": "Document Location"
+          "source": "Document location",
+          "message": "Document location"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
           "source": "S3 document location for an asynchronous analysis job",
@@ -1968,8 +1968,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -1980,8 +1980,8 @@
           "message": "Idempotency token for safely retrying the same request."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
-          "message": "Job Tag"
+          "source": "Job tag",
+          "message": "Job tag"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.short_desc": {
           "source": "A label included in the job completion notification",
@@ -1992,8 +1992,8 @@
           "message": "A label included in the job completion notification."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
-          "message": "Notification Channel"
+          "source": "Notification channel",
+          "message": "Notification channel"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
           "source": "SNS topic and IAM role for asynchronous completion notifications",
@@ -2004,8 +2004,8 @@
           "message": "SNS topic and IAM role for asynchronous completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
           "source": "IAM role ARN allowing Textract to publish to the SNS topic",
@@ -2016,8 +2016,8 @@
           "message": "IAM role ARN allowing Textract to publish to the SNS topic."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
-          "message": "SNS Topic Arn"
+          "source": "SNS topic arn",
+          "message": "SNS topic arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
           "source": "SNS topic ARN in the connection's region for completion notifications",
@@ -2028,8 +2028,8 @@
           "message": "SNS topic ARN in the connection's region for completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
-          "message": "Output Config"
+          "source": "Output config",
+          "message": "Output config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.short_desc": {
           "source": "S3 destination for analysis or training output",
@@ -2064,8 +2064,8 @@
           "message": "Object-key prefix for output files in the destination bucket."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
-          "message": "KMS Key ID"
+          "source": "KMS key ID",
+          "message": "KMS key ID"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.short_desc": {
           "source": "KMS key ID or ARN for encrypting output",
@@ -2076,8 +2076,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
-          "message": "Start Expense Analysis"
+          "source": "Start expense analysis",
+          "message": "Start expense analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
           "source": "Start asynchronous invoice and receipt analysis",
@@ -2088,8 +2088,8 @@
           "message": "Start asynchronous invoice and receipt analysis. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
-          "message": "Document Location"
+          "source": "Document location",
+          "message": "Document location"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
           "source": "S3 document location for an asynchronous analysis job",
@@ -2148,8 +2148,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -2160,8 +2160,8 @@
           "message": "Idempotency token for safely retrying the same request."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
-          "message": "Job Tag"
+          "source": "Job tag",
+          "message": "Job tag"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
           "source": "A label included in the job completion notification",
@@ -2172,8 +2172,8 @@
           "message": "A label included in the job completion notification."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
-          "message": "Notification Channel"
+          "source": "Notification channel",
+          "message": "Notification channel"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
           "source": "SNS topic and IAM role for asynchronous completion notifications",
@@ -2184,8 +2184,8 @@
           "message": "SNS topic and IAM role for asynchronous completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
           "source": "IAM role ARN allowing Textract to publish to the SNS topic",
@@ -2196,8 +2196,8 @@
           "message": "IAM role ARN allowing Textract to publish to the SNS topic."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
-          "message": "SNS Topic Arn"
+          "source": "SNS topic arn",
+          "message": "SNS topic arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
           "source": "SNS topic ARN in the connection's region for completion notifications",
@@ -2208,8 +2208,8 @@
           "message": "SNS topic ARN in the connection's region for completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
-          "message": "Output Config"
+          "source": "Output config",
+          "message": "Output config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.short_desc": {
           "source": "S3 destination for analysis or training output",
@@ -2244,8 +2244,8 @@
           "message": "Object-key prefix for output files in the destination bucket."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
-          "message": "KMS Key ID"
+          "source": "KMS key ID",
+          "message": "KMS key ID"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
           "source": "KMS key ID or ARN for encrypting output",
@@ -2256,8 +2256,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
-          "message": "Start Lending Analysis"
+          "source": "Start lending analysis",
+          "message": "Start lending analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
           "source": "Start asynchronous classification and extraction of lending documents",
@@ -2268,8 +2268,8 @@
           "message": "Start asynchronous classification and extraction of lending documents. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
-          "source": "Document Location",
-          "message": "Document Location"
+          "source": "Document location",
+          "message": "Document location"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
           "source": "S3Object",
@@ -2320,8 +2320,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
-          "source": "Client Request Token",
-          "message": "Client Request Token"
+          "source": "Client request token",
+          "message": "Client request token"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
           "source": "Idempotency token for safely retrying the same request",
@@ -2332,8 +2332,8 @@
           "message": "Idempotency token for safely retrying the same request."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
-          "source": "Job Tag",
-          "message": "Job Tag"
+          "source": "Job tag",
+          "message": "Job tag"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
           "source": "A label included in the job completion notification",
@@ -2344,12 +2344,12 @@
           "message": "A label included in the job completion notification."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
-          "source": "Notification Channel",
-          "message": "Notification Channel"
+          "source": "Notification channel",
+          "message": "Notification channel"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
           "source": "IAM role ARN allowing Textract to publish to the SNS topic",
@@ -2360,8 +2360,8 @@
           "message": "IAM role ARN allowing Textract to publish to the SNS topic."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
-          "source": "SNS Topic Arn",
-          "message": "SNS Topic Arn"
+          "source": "SNS topic arn",
+          "message": "SNS topic arn"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
           "source": "SNS topic ARN in the connection's region for completion notifications",
@@ -2372,8 +2372,8 @@
           "message": "SNS topic ARN in the connection's region for completion notifications."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
-          "source": "Output Config",
-          "message": "Output Config"
+          "source": "Output config",
+          "message": "Output config"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
           "source": "S3Bucket",
@@ -2400,8 +2400,8 @@
           "message": "Object-key prefix for output files in the destination bucket."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
-          "source": "KMS Key ID",
-          "message": "KMS Key ID"
+          "source": "KMS key ID",
+          "message": "KMS key ID"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
           "source": "KMS key ID or ARN for encrypting output",
@@ -2412,8 +2412,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
-          "message": "Tag Resource"
+          "source": "Tag resource",
+          "message": "Tag resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
           "source": "Add or update tags on a Textract resource",
@@ -2448,8 +2448,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
-          "message": "Untag Resource"
+          "source": "Untag resource",
+          "message": "Untag resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
           "source": "Remove tags from a Textract resource",
@@ -2472,8 +2472,8 @@
           "message": "Textract resource ARN in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.display_name": {
-          "source": "Tag Keys",
-          "message": "Tag Keys"
+          "source": "Tag keys",
+          "message": "Tag keys"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.short_desc": {
           "source": "Names of the resource tags to remove",
@@ -2484,8 +2484,8 @@
           "message": "Names of the resource tags to remove."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
-          "message": "Update Adapter"
+          "source": "Update adapter",
+          "message": "Update adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
           "source": "Update a custom query adapter's settings",
@@ -2520,8 +2520,8 @@
           "message": "A description explaining the adapter's purpose."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
-          "source": "Adapter Name",
-          "message": "Adapter Name"
+          "source": "Adapter name",
+          "message": "Adapter name"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
           "source": "A descriptive name for the custom query adapter",
@@ -2532,8 +2532,8 @@
           "message": "A descriptive name for the custom query adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
-          "source": "Auto Update",
-          "message": "Auto Update"
+          "source": "Auto update",
+          "message": "Auto update"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
           "source": "Whether AWS may automatically update the adapter",

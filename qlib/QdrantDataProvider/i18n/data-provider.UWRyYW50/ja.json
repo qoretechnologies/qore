@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
-          "source": "Query Points",
+          "source": "Query points",
           "message": "ポイントのクエリ"
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Qdrantコレクションでベクトル類似度検索、フィルタリング、ハイブリッド検索を実行します"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
-          "source": "Upsert Points",
+          "source": "Upsert points",
           "message": "ポイントのアップサート"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Qdrantコレクションにベクトルおよびオプションのペイロードを含むポイントを挿入または更新します"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "コレクションの作成"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -376,7 +376,7 @@
           "message": "設定可能なベクトルパラメータと距離メトリックを使用して新しいベクトルコレクションを作成します"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "コレクションの一覧表示"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Qdrantインスタンス内のすべてのコレクションのリストを取得します"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
-          "source": "Count Points",
+          "source": "Count points",
           "message": "ポイント数のカウント"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Qdrantコレクション内のポイント数をカウントします（オプションでフィルタ付き）"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
-          "source": "Health Check",
+          "source": "Health check",
           "message": "ヘルスチェック"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Qdrantサーバーのヘルスステータスを確認します"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
-          "source": "Delete Points",
+          "source": "Delete points",
           "message": "ポイントの削除"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "ポイントIDまたはフィルター条件によってQdrantコレクションからポイントを削除します"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
-          "source": "Get Points",
+          "source": "Get points",
           "message": "ポイントの取得"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
@@ -436,7 +436,7 @@
           "message": "IDによってQdrantコレクションから特定のポイント（ベクトルおよびペイロードを含む）を取得します"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
-          "source": "Scroll Points",
+          "source": "Scroll points",
           "message": "ポイントのスクロール"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
@@ -448,7 +448,7 @@
           "message": "オプションのフィルタリングを伴うスクロールベースのページネーションを使用して、Qdrantコレクション内のすべてのポイントを反復処理します"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "コレクションを取得"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "設定やステータスを含む、特定のQdrantコレクションに関する詳細情報を取得します"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "コレクションを削除"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Qdrantインスタンスからコレクションとそのすべてのデータを削除します"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
-          "source": "Collection Exists",
+          "source": "Collection exists",
           "message": "コレクションの存在確認"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Qdrantインスタンスに特定のコレクションが存在するかどうかを確認します"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
-          "source": "Query Batch Points",
+          "source": "Query batch points",
           "message": "ポイントの一括クエリ"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Qdrantコレクションに対して単一のバッチリクエストで複数のベクトル類似度検索クエリを実行します"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
-          "source": "Query Grouped Points",
+          "source": "Query grouped points",
           "message": "グループ化されたポイントのクエリ"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "指定したペイロードフィールドでグループ化された結果を含むベクトル類似度検索をQdrantコレクションで実行します"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
-          "source": "List All Aliases",
+          "source": "List all aliases",
           "message": "すべてのエイリアスを一覧表示"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Qdrantインスタンス内のすべてのエイリアスおよび関連付けられたコレクションのリストを取得します"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
-          "source": "Update Aliases",
+          "source": "Update aliases",
           "message": "エイリアスの更新"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Qdrantインスタンスでコレクションエイリアスを作成、名前変更、または削除します"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
-          "source": "Set Payload",
+          "source": "Set payload",
           "message": "ペイロードの設定"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "ポイントIDまたはフィルター条件によってQdrantコレクション内のポイントのペイロードキー/値ペアを設定または更新します"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
-          "source": "Liveness Check",
+          "source": "Liveness check",
           "message": "ライブネスチェック"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Qdrantサーバーが稼働中で応答可能か確認します"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
-          "source": "Batch Update Points",
+          "source": "Batch update points",
           "message": "ポイントの一括更新"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "高性能な一括更新のために、異種ポイント操作のバッチ（アップサート、削除、ペイロードの設定/上書き/削除/クリア、ベクトルの更新/削除）を単一のリクエストで実行します"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
-          "source": "Search Points",
+          "source": "Search points",
           "message": "ポイントの検索"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "効率的なパイプライン処理のために結果をレコードストリームとして返す、Qdrantコレクションでのベクトル類似度検索"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
-          "source": "Create/Upsert Point",
+          "source": "Create/upsert point",
           "message": "ポイントの作成/アップサート"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {

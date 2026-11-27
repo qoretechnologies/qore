@@ -16,7 +16,7 @@
           "message": "Generovať konfigurovateľné streamy záznamov na testovanie dátových potrubí bez pripojenia k externým službám"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Generovať záznamy"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Pevná hodnota dátumu a času použitá ako referenčný bod na generovanie dátumových polí; pri zadaní so seedom zaisťuje úplnú reprodukovateľnosť dátumových polí medzi spusteniami; ak nie je zadaná, použije sa aktuálny dátum a čas na začiatku generovania"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Generovať zo šablóny"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

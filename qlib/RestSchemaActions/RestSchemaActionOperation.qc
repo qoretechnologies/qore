@@ -201,6 +201,26 @@ public class RestSchemaActionOperation {
                 buildResponseType();
             }
         }
+        # an operation that trusted code builds belongs to a set that is shared by every Program of the process:
+        # sandboxed code cannot change or delete it, nor the types that it gives (qore#7714)
+        if (SandboxManager::createsSharedObjects()) {
+            if (request_type) {
+                request_type.freeze();
+            }
+            if (response_type) {
+                response_type.freeze();
+            }
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! Copies the operation
+    /** The copy shares the type objects of the operation copied, which are frozen if it is shared (qore#7714)
+
+        @since RestSchemaActions 1.0
+    */
+    copy() {
+        # no own guarded state: the types of a shared operation are frozen
     }
 
     #! Returns the stable action ID
@@ -288,7 +308,9 @@ public class RestSchemaActionOperation {
                     on_error rethrow $1.err, sprintf("%s (while building the output type of action %y from "
                         "\"%s %s\")", $1.desc, info.action, info.method.upr(), info.path);
                     built = buildResponseValues();
-                    if (DataProvider::mayRegisterShared()) {
+                    # a shared operation is changed only by code that may change shared state (qore#7714)
+                    if (DataProvider::mayRegisterShared() && (!SandboxManager::isSharedObject(self)
+                            || SandboxManager::isProcessWideRegistrationAllowed())) {
                         publishResponseValues(built);
                     }
                 }
@@ -1537,6 +1559,10 @@ public class RestSchemaActionOperation {
 
     #! Keeps the output type and the response conversions that buildResponseValues() built
     private publishResponseValues(hash<auto> values) {
+        # the types of a shared operation are shared with it (qore#7714); only code that may change it publishes them
+        if (values.type && SandboxManager::isSharedObject(self)) {
+            values.type.freeze();
+        }
         response_type = values.type;
         response_conv = values.conv;
         remove response_schema;

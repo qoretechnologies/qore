@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.display_name": {
-          "source": "Get User Info",
+          "source": "Get user info",
           "message": "獲取使用者資訊"
         },
         "app.RGlzY29yZA.action.dXNlci1pbmZv.short_desc": {
@@ -352,7 +352,7 @@
           "message": "取得目前使用者的資訊"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "取得伺服器資訊"
         },
         "app.RGlzY29yZA.action.Z3VpbGQtaW5mbw.short_desc": {

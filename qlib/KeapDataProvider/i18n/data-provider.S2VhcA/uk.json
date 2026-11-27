@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Створити контакт"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Часовий пояс контакту"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Оновити контакт"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Часовий пояс контакту"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Видалити контакт"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Контакт для видалення"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
+          "source": "Merge contacts",
           "message": "Об'єднати контакти"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Контакт для об'єднання та видалення"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Отримати контакт"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -804,7 +804,7 @@
           "message": "ID контакту"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
+          "source": "Create a company",
           "message": "Створити компанію"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Вебсайт компанії"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
+          "source": "Update a company",
           "message": "Оновити компанію"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Вебсайт компанії"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
+          "source": "Delete a company",
           "message": "Видалити компанію"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Компанія для видалення"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Список компаній"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
+          "source": "Get a company",
           "message": "Отримати компанію"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "ID компанії"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Створити можливість"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Примітки до нагоди"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Оновити можливість"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "Примітки до нагоди"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Видалити можливість"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "Можливість для видалення"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Список можливостей"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Отримати можливість"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "ID можливості"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Створити замовлення"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Промокоди"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Список замовлень"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Отримати замовлення"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "ID замовлення"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Створити тег"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Категорія тегу"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Видалити тег"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "Тег для видалення"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Застосувати тег до контакту"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Список цілочисельних ID тегів"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Видалити тег із контакту"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Тег для видалення"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Отримати тег"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "ID тегу"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Створити нотатку"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Тип примітки"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Оновити примітку"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Текст примітки"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Видалити примітку"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Нотатка для видалення"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Список нотаток"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Створити завдання"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Призначений користувач"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Оновити завдання"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Стан виконання завдання"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Видалити завдання"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Завдання для видалення"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Отримати список завдань"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Отримати завдання"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "ID завдання"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Отримати список електронних листів"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "Завантажити файл"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Видимість файлу"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
+          "source": "Get a file",
           "message": "Отримати файл"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Файл для отримання"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
+          "source": "Delete a file",
           "message": "Видалити файл"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Файл для видалення"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Список файлів"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Список продуктів"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Отримати товар"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Ідентифікатор товару"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Список кампаній"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
+          "source": "List affiliates",
           "message": "Список партнерів"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
@@ -2256,7 +2256,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
+          "source": "Contact added",
           "message": "Контакт додано"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "Спрацьовує, коли створюється новий контакт у Keap"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Контакт оновлено"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Спрацьовує, коли контакт оновлюється в Keap"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
+          "source": "Tag applied",
           "message": "Тег застосовано"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
@@ -2292,7 +2292,7 @@
           "message": "Спрацьовує, коли тег застосовується до контакту в Keap"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
+          "source": "Opportunity added",
           "message": "Угоду додано"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Спрацьовує, коли в Keap створюється нова угода"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
+          "source": "Order added",
           "message": "Замовлення додано"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Спрацьовує, коли в Keap створюється нове замовлення"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
+          "source": "Task created",
           "message": "Завдання створено"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Спрацьовує, коли в Keap створюється нове завдання"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
+          "source": "Note added",
           "message": "Нотатку додано"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {

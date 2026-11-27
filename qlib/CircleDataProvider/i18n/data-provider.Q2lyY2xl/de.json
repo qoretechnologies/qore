@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "Beiträge auflisten"
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
@@ -396,7 +396,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get a Post",
+          "source": "Get a post",
           "message": "Beitrag abrufen"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
@@ -416,7 +416,7 @@
           "message": "Die Beitrags-ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
-          "source": "Create a Post",
+          "source": "Create a post",
           "message": "Beitrag erstellen"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
@@ -548,7 +548,7 @@
           "message": "Wenn `True`, werden keine Benachrichtigungen über diesen Beitrag an Mitglieder gesendet"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update a Post",
+          "source": "Update a post",
           "message": "Beitrag aktualisieren"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Wenn `True`, werden keine Benachrichtigungen über diese Aktualisierung gesendet"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete a Post",
+          "source": "Delete a post",
           "message": "Einen Beitrag löschen"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Beitrags"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "Kommentare auflisten"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
-          "source": "Get a Comment",
+          "source": "Get a comment",
           "message": "Kommentar abrufen"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "Die Kommentar-ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create a Comment",
+          "source": "Create a comment",
           "message": "Kommentar erstellen"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Der Hauptteil des Kommentars im HTML-Format. Beispiel: `<p>Great post!</p>`"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
-          "source": "Delete a Comment",
+          "source": "Delete a comment",
           "message": "Einen Kommentar löschen"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kommentars"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
-          "source": "List Members",
+          "source": "List members",
           "message": "Mitglieder auflisten"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
-          "source": "Invite a Member",
+          "source": "Invite a member",
           "message": "Ein Mitglied einladen"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
@@ -956,7 +956,7 @@
           "message": "Liste der Space-IDs, zu denen das Mitglied bei der Einladung hinzugefügt werden soll"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
-          "source": "Remove a Member",
+          "source": "Remove a member",
           "message": "Mitglied entfernen"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Die eindeutige Kennung des zu entfernenden Community-Mitglieds"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
-          "source": "Tag a Member",
+          "source": "Tag a member",
           "message": "Mitglied mit Tag versehen"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Der dem Mitglied zuzuweisende Tag"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
-          "source": "Untag a Member",
+          "source": "Untag a member",
           "message": "Tag von Mitglied entfernen"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Die ID des vom Mitglied zu entfernenden Tags"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Bereiche auflisten"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get a Space",
+          "source": "Get a space",
           "message": "Einen Space abrufen"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "Die Space-ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create a Space",
+          "source": "Create a space",
           "message": "Space erstellen"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "Gibt an, ob das Posten für Mitglieder in diesem Space deaktiviert ist"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update a Space",
+          "source": "Update a space",
           "message": "Space aktualisieren"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Gibt an, ob dieser Space in hervorgehobenen Bereichen der Community ausgeblendet werden soll"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete a Space",
+          "source": "Delete a space",
           "message": "Einen Space löschen"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Space"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
-          "source": "Add a Member to a Space",
+          "source": "Add a member to a space",
           "message": "Mitglied zu einem Space hinzufügen"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Die E-Mail-Adresse des Mitglieds, das zum Space hinzugefügt werden soll"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
-          "source": "Remove a Member from a Space",
+          "source": "Remove a member from a space",
           "message": "Mitglied aus einem Space entfernen"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Die ID des Community-Mitglieds, das aus dem Space entfernt werden soll"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
-          "source": "Add a Member to a Space Group",
+          "source": "Add a member to a space group",
           "message": "Mitglied zu einer Space-Gruppe hinzufügen"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Die E-Mail-Adresse des Mitglieds, das zur Space-Gruppe hinzugefügt werden soll"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
-          "source": "Remove a Member from a Space Group",
+          "source": "Remove a member from a space group",
           "message": "Mitglied aus einer Space-Gruppe entfernen"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "Die ID des Community-Mitglieds, das aus der Space-Gruppe entfernt werden soll"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "Communities auflisten"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
-          "source": "Get a Community",
+          "source": "Get a community",
           "message": "Community abrufen"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "Die Community-ID"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Nachricht senden"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Der Textinhalt der Nachricht"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
-          "source": "New Comment",
+          "source": "New comment",
           "message": "Neuer Kommentar"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Wird ausgelöst, wenn neue Kommentare in der Circle-Community gepostet werden"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
-          "source": "New Community",
+          "source": "New community",
           "message": "Neue Community"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Wird ausgelöst, wenn neue Communitys in Circle erstellt werden"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
-          "source": "Member Accepted an Invitation",
+          "source": "Member accepted an invitation",
           "message": "Mitglied hat eine Einladung angenommen"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "Wird ausgelöst, wenn ein Mitglied eine Einladung zur Circle-Community annimmt"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "Neuer Beitrag"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Wird ausgelöst, wenn neue Beiträge in der Circle-Community erstellt werden"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
-          "source": "New Space",
+          "source": "New space",
           "message": "Neuer Space"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Wird ausgelöst, wenn neue Spaces in der Circle-Community erstellt werden"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
-          "source": "Member Tagged",
+          "source": "Member tagged",
           "message": "Mitglied markiert"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {

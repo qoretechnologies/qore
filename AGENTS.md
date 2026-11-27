@@ -96,6 +96,14 @@
   the release build, and the test jobs still run it.  The marker has no value, only the reason (unlike the
   `<value> - <why>` form of the markers above), ex: `# test-release-build: its release budgets are checked only in a
   release build`; `examples/test/runner/test_release_build_markers.py` enforces the form (#6540).
+- A release build of the library (the macOS job's and the performance job's) has none of the builtins that only a
+  debug build registers (`dbg_*()` and the other hooks of `init_debug_functions()`), so a test or a fixture that it
+  runs calls them only under a guard: `%ifdef QoreDebug` for a direct call, which a release build cannot parse, or a
+  check of `Option::HAVE_LIBRARY_DEBUGGING` that skips the case for a call by name (`call_function()`), which would
+  otherwise raise `NO-FUNCTION`, or hang the test in a thread that another waits for.
+  `examples/test/qore/misc/debug-builtin-guards.qtest` derives those builtins from the sources and reports the calls
+  without a guard; a call whose guard it cannot see (a server's callback for the requests of cases that skip) takes a
+  `# debug-builtin-guard: <where the guard is>` comment.
 - `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs, the
   Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
   `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must
@@ -118,6 +126,17 @@
   same port number.  A test that needs the name `localhost` (a TLS host name check, an origin that must differ from
   `127.0.0.1`, a fallback from `::1`) listens on both loopback addresses, or holds the port on `::1`, and declares
   `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
+- A CI job runs all of its test suites, also when an earlier one fails, and ends with one summary of every failing
+  suite and of its failing tests: the CI scripts run each suite with `qore_ci_suite` and end with
+  `qore_ci_suites_summary` (`examples/test/docker_test/ci-suites.sh`; `examples/test/runner/test_ci_suites.py`
+  checks it); a failed build still ends the job.  Run a new suite of a CI script the same way.
+- The `check-build-warnings` CI job reports the compiler warnings in Qore's own sources (not in bundled third-party
+  code) from the logs of the jobs that build Qore (`examples/test/docker_test/ci-build-log.sh`: the Linux build jobs,
+  the macOS job, the build of separate compilation units, which shows warnings that the single unit hides, and
+  `build-perf`, the only gcc release build), by platform and build type, with
+  `examples/test/docker_test/check-build-warnings.py`: it exits with 3, which the job allows, so a pipeline with
+  warnings passes with a warning (an orange job) and the warnings are fixed in the next batch; keep the build free of
+  them (qore#7757).
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 - The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the

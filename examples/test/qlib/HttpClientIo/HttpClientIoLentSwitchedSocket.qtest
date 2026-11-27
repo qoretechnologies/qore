@@ -135,7 +135,7 @@ our object sock;
 int sub take(HttpClientConnectionManager mgr, string url) {
     sh = mgr.acquireAndStartStreaming(url, \"GET\", \"/up\", {\"Upgrade\": \"foo\", \"Connection\": \"Upgrade\"});
     int status = sh.readData(20s).status_code;
-    conn = sh.getConnection();
+    conn = sh.getConnectionView();
     sock = conn.getSocket();
     return status;
 }

@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Http3ReadNextRequestMaxBody.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/3 connections accepted over QUIC by an Http3ServerPollOperation
+# The limits that an Http3ServerPollOperation was created with apply to the connections that it accepts after
+# startReadNextRequest(), which reads the next request with a new QUIC server operation, as to those that it accepted
+# before
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http3ReadNextRequestMaxBodyTest
+
+#! the request body limit of the operation
+const MaxBody = 1024;
+
+class Http3ReadNextRequestMaxBodyTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Http3ReadNextRequestMaxBody", "1.0") {
+        addTestCase("a connection accepted after startReadNextRequest() has the request body limit",
+            \testMaxBodyAfterReadNext());
+        set_return_value(main());
+    }
+
+    #! runs the operation until its goal is reached, or until @p stop is True
+    private runUntilGoal(Http3ServerPollOperation op, code<bool()> stop, timeout limit = 20s) {
+        int deadline = clock_get_monotonic_us() + limit * 1000;
+        while (!op.goalReached() && !stop()) {
+            if (op.isClosed() || op.hasError()) {
+                throw "TEST-ERROR", sprintf("the operation ended: %y", op.getError());
+            }
+            if (clock_get_monotonic_us() > deadline) {
+                throw "TEST-TIMEOUT", sprintf("the operation did not reach its goal (state: %s)", op.getState());
+            }
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (info && !op.goalReached()) {
+                Socket::poll((info,), 100ms);
+            }
+        }
+    }
+
+    #! sends a request on a connection of its own; returns its result or its error in the queue
+    private startRequest(int port, string method, *binary body, Queue result) {
+        background sub () {
+            try {
+                HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "accept_all_certs": True,
+                    "request_timeout": 15s,
+                    "connect_timeout": 15s,
+                });
+                on_exit delete mgr;
+                hash<auto> r = mgr.request("https://127.0.0.1:" + port, method, "/", NOTHING, body);
+                result.push({"status_code": r.status_code});
+            } catch (hash<ExceptionInfo> ex) {
+                result.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+    }
+
+    testMaxBodyAfterReadNext() {
+        Socket udp();
+        udp.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        udp.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+        udp.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        int port = udp.getSocketInfo(False).port;
+        # the whole request body is read before the request is ready
+        Http3ServerPollOperation op(udp, 1s, False, MaxBody);
+        on_exit op.abort();
+
+        # the first connection, answered, after which the operation reads the next request with a new QUIC server
+        # operation
+        Queue first();
+        startRequest(port, "GET", NOTHING, first);
+        runUntilGoal(op, bool sub () { return False; });
+        # the response answers the request that the operation holds, on the connection's first request stream (0)
+        op.startSendResponse(200, {"Content-Type": "text/plain"}, binary("ok"));
+        runUntilGoal(op, bool sub () { return False; });
+        assertEq({"status_code": 200}, first.get(15s), "the first request was answered");
+        op.startReadNextRequest();
+
+        # a second connection sends a body over the limit: its request is made ready with the error of the limit, not
+        # with the whole body
+        Queue second();
+        startRequest(port, "POST", binary(strmul("x", 4 * MaxBody)), second);
+        runUntilGoal(op, bool sub () { return second.size() > 0; });
+        assertTrue(op.goalReached(), "the request of the second connection was read");
+        hash<auto> req = op.getOutput();
+        assertEq("QUIC-BODY-TOO-LARGE", req.err, "the request body limit applies to the second connection");
+        assertLt(4 * MaxBody, req.body.size(), "the body was not read in full");
+        if (!second.size()) {
+            # the request was not refused yet: the client is told when the operation ends
+            op.abort();
+        }
+        # the request is never answered: the client gets the error of the aborted connection
+        hash<auto> r = second.get(15s);
+        assertTrue(exists r.err, sprintf("the oversized request was not answered: %y", r));
+    }
+}

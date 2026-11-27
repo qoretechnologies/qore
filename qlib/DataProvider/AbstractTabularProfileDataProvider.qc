@@ -62,6 +62,14 @@ public class TabularProfileRequestDataType inherits HashDataType {
                 "desc": "The number of sample data rows returned per sheet",
                 "default_value": 5,
             },
+            "header_row": {
+                "display_name": "Header Row",
+                "short_desc": "The row holding the column names, or 0 for none",
+                "type": SoftIntOrNothingType,
+                "desc": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; "
+                    "when not given, the header row is found from the sheet's content. Use it when the person who "
+                    "knows the file says where the column names are",
+            },
             "redact": {
                 "display_name": "Redact Samples",
                 "short_desc": "Return sample values redacted to their shape",
@@ -140,8 +148,8 @@ public class AbstractTabularProfileDataProvider inherits AbstractDataProvider {
 
         @return the profile; see @ref TabularWorkbookProfileDataType
 
-        @throw TABULAR-PROFILE-ERROR neither or both of \c path and \c data were given, or \c max_rows is not
-        positive
+        @throw TABULAR-PROFILE-ERROR neither or both of \c path and \c data were given, \c max_rows is not
+        positive, or \c header_row is negative
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (exists req.path == exists req.data) {
@@ -157,6 +165,7 @@ public class AbstractTabularProfileDataProvider inherits AbstractDataProvider {
         return TabularProfiler::profile(grid, <TabularProfileOptions>{
             "sample_rows": req.sample_rows ?? 5,
             "redact": req.redact ?? True,
+            "header_row": req.header_row,
         });
     }
 

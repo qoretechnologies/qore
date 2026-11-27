@@ -47,14 +47,18 @@ fi
 
 # the tests take the build's tools from these variables (a qpp in the PATH would be the image's)
 cd ${QORE_SRC_DIR}
-TEST_RC=0
-gosu qore env \
+# both suites run, also when the first fails, and the job ends with the summary of the failing ones (see ci-suites.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-suites.sh"
+qore_ci_suite "build-system tests (examples/test/cmake)" gosu qore env \
     QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" \
     QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" \
     QORE_BINARY="${BUILD_DIR}/qore" \
     QORE_TEST_BUILD_DIR="${BUILD_DIR}" \
-    python3 -B -W error -m unittest discover -s examples/test/cmake -v || TEST_RC=$?
-gosu qore python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py" -v || TEST_RC=$?
+    python3 -B -W error -m unittest discover -s examples/test/cmake -v
+qore_ci_suite "runner checks (examples/test/runner)" \
+    gosu qore python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py" -v
+TEST_RC=0
+qore_ci_suites_summary || TEST_RC=1
 
 # the runner ends the job only when no process the job started still holds its output
 if ! qore_ci_end_job_processes; then

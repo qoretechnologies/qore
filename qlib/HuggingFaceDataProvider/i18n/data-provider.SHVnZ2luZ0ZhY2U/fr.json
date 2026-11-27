@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lister les modèles"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -500,7 +500,7 @@
           "message": "Indique s'il faut inclure les métadonnées de la fiche du modèle telles que les émissions de carbone, les métriques et les tags de jeu de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtenir le modèle"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
@@ -524,7 +524,7 @@
           "message": "L'ID de dépôt du modèle au format `namespace/name` (ex. : `meta-llama/Llama-3.1-8B`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "Créer un modèle"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -572,7 +572,7 @@
           "message": "Indique si le dépôt doit être privé. Par défaut : `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "Mettre à jour le modèle"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Indique s'il faut désactiver la fonctionnalité de discussions sur ce dépôt"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Supprimer le modèle"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -676,7 +676,7 @@
           "message": "L'ID de dépôt du modèle au format `namespace/name` à supprimer"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Lister les jeux de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Indique s'il faut récupérer toutes les métadonnées, y compris la date de dernière modification, le SHA, les fichiers et les tags"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Obtenir le jeu de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -824,7 +824,7 @@
           "message": "L'ID de dépôt du jeu de données au format `namespace/name` (ex. : `stanfordnlp/imdb`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Créer un jeu de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Indique si le dépôt doit être privé. Par défaut : `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Mettre à jour le jeu de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Indique s'il faut désactiver la fonctionnalité de discussions sur ce dépôt"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Supprimer le jeu de données"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -976,7 +976,7 @@
           "message": "L'ID de dépôt du jeu de données au format `namespace/name` à supprimer"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Lister les espaces"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Indique s'il faut récupérer toutes les métadonnées, y compris la date de dernière modification, le SHA, les fichiers et les tags"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "Obtenir l'espace"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "L'ID de dépôt du Space au format `namespace/name` (ex. : `gradio/chatbot`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create Space",
+          "source": "Create space",
           "message": "Créer un Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Indique si le dépôt doit être privé. Par défaut : `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update Space",
+          "source": "Update space",
           "message": "Mettre à jour le Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Indique s'il faut désactiver la fonctionnalité de discussions sur ce Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete Space",
+          "source": "Delete space",
           "message": "Supprimer le Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "L'ID de dépôt du Space au format `namespace/name` à supprimer"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
-          "source": "Chat Completions",
+          "source": "Chat completions",
           "message": "Complétions de chat"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {

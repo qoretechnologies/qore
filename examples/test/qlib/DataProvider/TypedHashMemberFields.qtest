@@ -40,13 +40,13 @@ class TypedHashMemberFieldsTest inherits QUnit::Test {
         };
 
         const DisplayNames = {
-            "str_val": "Str Val",
-            "int_val": "Int Val",
-            "date_val": "Date Val",
-            "list_val": "List Val",
-            "hash_val": "Hash Val",
-            "plain_str": "Plain Str",
-            "plain_int": "Plain Int",
+            "str_val": "Str val",
+            "int_val": "Int val",
+            "date_val": "Date val",
+            "list_val": "List val",
+            "hash_val": "Hash val",
+            "plain_str": "Plain str",
+            "plain_int": "Plain int",
         };
     }
 
