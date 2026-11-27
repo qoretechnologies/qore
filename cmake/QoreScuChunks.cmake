@@ -203,3 +203,123 @@ function(qore_scu_split_chunks CONTENT CHUNKS COST_FILE OUT_PREFIX OUT_FILES_VAR
     set(${OUT_FILES_VAR} "${_out}" PARENT_SCOPE)
     set(${OUT_ISOLATED_VAR} "${_isolated}" PARENT_SCOPE)
 endfunction ()
+
+# The sources of the interpreter's call path, which SINGLE_COMPILATION_UNIT_SPLIT compiles as one translation unit
+# apart from the rest of the wrapper (qore#7780): the IR interpreter, the JIT/AOT runtime and the LLVM users that it
+# includes, and the sources of the functions whose frames are on each level of a recursion of interpreted code (the
+# functions of tools/stack-usage-budgets.txt).  The inlining among them, and so their frames, are those of the single
+# wrapper: recursion-frame-budget.qtest gave the same bytes per level for every recursion with both builds (debug,
+# gcc 15.2, develop 13d4150b7d), so the budgets that are calibrated for the single wrapper apply to the split build.
+# A source with a function on that path that is not listed here makes the split build's frames differ from the single
+# wrapper's: add it here.
+set(QORE_SCU_CALL_PATH_FILES
+    AbstractQoreNode.cpp AbstractStatement.cpp Function.cpp FunctionCallNode.cpp JITRuntime.cpp QoreAOT.cpp
+    QoreAOTBinary.cpp QoreAOTExprNodeRegistry.cpp QoreAOTExprRegistry.cpp QoreAOTExprSlotRegistry.cpp
+    QoreAOTInstRegistry.cpp QoreAOTRuntime.cpp QoreClass.cpp QoreClosureNode.cpp QoreClosureParseNode.cpp
+    QoreIRAnalysis.cpp QoreIRBuilder.cpp QoreIRFrameCheck.cpp QoreIRInterpreter.cpp QoreIRIntrinsic.cpp
+    QoreIRLowering.cpp QoreIRPrinter.cpp QoreIRToLLVM.cpp QoreIRVerifier.cpp QoreJIT.cpp QoreProgram.cpp QoreValue.cpp
+    ReturnStatement.cpp StatementBlock.cpp thread.cpp)
+
+# qore_scu_split_call_path(<wrapper text> <output file prefix> <output list variable>)
+# writes <prefix>call-path.cpp with the units of the wrapper (as qore_scu_split_chunks() splits it into units) that
+# include a file of QORE_SCU_CALL_PATH_FILES, and <prefix>rest.cpp with the others, each in the order of the wrapper
+# and only when its content changes; sets <output list variable> in the caller to the two files, the call path first
+# (the caller compiles the rest after it, so that the two never compile at the same time).  A conditional group goes
+# to the rest whole; a file of the list in a group is an error, as it would leave the call path.
+function(qore_scu_split_call_path CONTENT OUT_PREFIX OUT_FILES_VAR)
+    foreach (_bad ";" "[" "]" "\\")
+        string(FIND "${CONTENT}" "${_bad}" _badpos)
+        if (NOT _badpos EQUAL -1)
+            message(FATAL_ERROR "qore_scu_split_call_path: the wrapper text (including the source and build "
+                "directory paths) must not contain '${_bad}'; SINGLE_COMPILATION_UNIT_SPLIT cannot be used with "
+                "such a path")
+        endif ()
+    endforeach ()
+    set(_call "// Auto-generated libqore unit: the interpreter's call path (see cmake/QoreScuChunks.cmake)\n")
+    set(_rest "// Auto-generated libqore unit: all but the interpreter's call path (see cmake/QoreScuChunks.cmake)\n")
+    set(_found "")
+    set(_in_group OFF)
+    set(_last "")
+    string(REPLACE "\n" ";" _lines "${CONTENT}")
+    foreach (_line IN LISTS _lines)
+        if (_line STREQUAL "" OR _line MATCHES "^//")
+            continue()
+        endif ()
+        if (_line MATCHES "^#if")
+            if (_in_group)
+                message(FATAL_ERROR "qore_scu_split_call_path: nested conditional '${_line}'")
+            endif ()
+            set(_in_group ON)
+            string(APPEND _rest "${_line}\n")
+            set(_last rest)
+        elseif (_line MATCHES "^#endif")
+            if (NOT _in_group)
+                message(FATAL_ERROR "qore_scu_split_call_path: unmatched '${_line}'")
+            endif ()
+            set(_in_group OFF)
+            string(APPEND _rest "${_line}\n")
+        elseif (_line MATCHES "^#undef ")
+            # belongs to the unit before it (the scanner)
+            if (_last STREQUAL "call")
+                string(APPEND _call "${_line}\n")
+            elseif (_last STREQUAL "rest")
+                string(APPEND _rest "${_line}\n")
+            else ()
+                message(FATAL_ERROR "qore_scu_split_call_path: unexpected '${_line}'")
+            endif ()
+        elseif (_line MATCHES "^#include \"([^\"]+)\"")
+            get_filename_component(_fname "${CMAKE_MATCH_1}" NAME)
+            if (_fname IN_LIST QORE_SCU_CALL_PATH_FILES)
+                if (_in_group)
+                    message(FATAL_ERROR "qore_scu_split_call_path: call path file ${_fname} inside a conditional")
+                endif ()
+                string(APPEND _call "${_line}\n")
+                list(APPEND _found "${_fname}")
+                set(_last call)
+            else ()
+                string(APPEND _rest "${_line}\n")
+                set(_last rest)
+            endif ()
+        elseif (_in_group)
+            string(APPEND _rest "${_line}\n")
+        else ()
+            message(FATAL_ERROR "qore_scu_split_call_path: unsupported wrapper line '${_line}'")
+        endif ()
+    endforeach ()
+    if (_in_group)
+        message(FATAL_ERROR "qore_scu_split_call_path: unterminated conditional")
+    endif ()
+    # a listed file that the wrapper does not include was renamed or removed: the list must follow it
+    foreach (_f IN LISTS QORE_SCU_CALL_PATH_FILES)
+        if (NOT _f IN_LIST _found)
+            message(FATAL_ERROR "qore_scu_split_call_path: ${_f} of QORE_SCU_CALL_PATH_FILES is not in the wrapper")
+        endif ()
+    endforeach ()
+    set(_out "")
+    foreach (_part call-path rest)
+        if (_part STREQUAL "call-path")
+            set(_text "${_call}")
+        else ()
+            set(_text "${_rest}")
+        endif ()
+        file(WRITE ${OUT_PREFIX}${_part}.cpp.in "${_text}")
+        # mtime-stable, as for the single wrapper
+        configure_file(${OUT_PREFIX}${_part}.cpp.in ${OUT_PREFIX}${_part}.cpp COPYONLY)
+        list(APPEND _out ${OUT_PREFIX}${_part}.cpp)
+    endforeach ()
+    set(${OUT_FILES_VAR} "${_out}" PARENT_SCOPE)
+endfunction ()
+
+# qore_scu_compile_after(<target> <first source> <second source>)
+# makes the object of <second source> depend on the object of <first source>, both sources of <target> in the build
+# directory, so that a parallel build never compiles them at the same time (qore#7780: the two units of
+# SINGLE_COMPILATION_UNIT_SPLIT); the object path is the one that the Makefile and the Ninja generators give a source
+# of the current binary directory (examples/test/cmake/test_scu_split.py checks both)
+function(qore_scu_compile_after TARGET FIRST SECOND)
+    file(RELATIVE_PATH _rel ${CMAKE_CURRENT_BINARY_DIR} ${FIRST})
+    if (_rel MATCHES "^\\.\\./")
+        message(FATAL_ERROR "qore_scu_compile_after: ${FIRST} is not in ${CMAKE_CURRENT_BINARY_DIR}")
+    endif ()
+    set_property(SOURCE ${SECOND} APPEND PROPERTY OBJECT_DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir/${_rel}${CMAKE_CXX_OUTPUT_EXTENSION})
+endfunction ()

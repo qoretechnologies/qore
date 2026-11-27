@@ -81,6 +81,16 @@ if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
     message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
 endif ()
 
+# qore#7780: the single compilation unit of a debug build needs about 16 GB of memory to compile; split, each part
+# needs about 9 GB, and the parts compile one after the other, so that a parallel build needs no more
+option(SINGLE_COMPILATION_UNIT_SPLIT
+       "With SINGLE_COMPILATION_UNIT and one chunk: compile libqore as two units, the interpreter's call path and the rest, one after the other, which halves the memory of the compile (see cmake/QoreScuChunks.cmake)"
+       OFF)
+if (SINGLE_COMPILATION_UNIT_SPLIT AND (NOT SINGLE_COMPILATION_UNIT OR SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1))
+    message(WARNING "SINGLE_COMPILATION_UNIT_SPLIT is ignored without SINGLE_COMPILATION_UNIT or with SINGLE_COMPILATION_UNIT_CHUNKS > 1")
+    set(SINGLE_COMPILATION_UNIT_SPLIT OFF)
+endif ()
+
 option(QORE_COMPILE_RACE_GUARD
        "Compile libqore through tools/compile-race-guard.py, so that a source edited while its object compiles (minutes for a single compilation unit) is compiled again by the next build (see design/compile-race-guard.md)"
        ON)
@@ -2624,8 +2634,25 @@ if (SINGLE_COMPILATION_UNIT)
         qore_scu_split_chunks("${_scu_content}" ${SINGLE_COMPILATION_UNIT_CHUNKS}
             ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt
             ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk LIBQORE_SCU_SRC LIBQORE_SCU_ISOLATED_SRC)
-        # a stale single wrapper from an earlier configure must not be picked up by anything
-        file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+        # a stale single wrapper or split from an earlier configure must not be picked up by anything
+        file(GLOB _scu_old ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-call-path.cpp*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-rest.cpp*)
+        if (_scu_old)
+            file(REMOVE ${_scu_old})
+        endif ()
+    elseif (SINGLE_COMPILATION_UNIT_SPLIT)
+        # the interpreter's call path and the rest, compiled one after the other (see below and
+        # cmake/QoreScuChunks.cmake)
+        include(cmake/QoreScuChunks.cmake)
+        qore_scu_split_call_path("${_scu_content}" ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-
+            LIBQORE_SCU_SRC)
+        # the single wrapper and the chunks of an earlier configure must not be picked up by anything
+        file(GLOB _scu_old ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        if (_scu_old)
+            file(REMOVE ${_scu_old})
+        endif ()
     else ()
         file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
             "${_scu_content}")
@@ -2634,8 +2661,10 @@ if (SINGLE_COMPILATION_UNIT)
             ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
             COPYONLY)
         set(LIBQORE_SCU_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
-        # chunk files of an earlier chunked configure of this build directory are not used any more
-        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        # chunk and split files of an earlier configure of this build directory are not used any more
+        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-call-path.cpp*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-rest.cpp*)
         if (_scu_old_chunks)
             file(REMOVE ${_scu_old_chunks})
         endif ()
@@ -2690,6 +2719,12 @@ if (SINGLE_COMPILATION_UNIT)
         list(REMOVE_DUPLICATES _scu_object_deps)
         set_source_files_properties(${_scu_file} PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
     endforeach ()
+    if (SINGLE_COMPILATION_UNIT_SPLIT)
+        # the rest compiles after the call path, never at the same time (qore#7780)
+        list(GET LIBQORE_SCU_SRC 0 _scu_call_path)
+        list(GET LIBQORE_SCU_SRC 1 _scu_rest)
+        qore_scu_compile_after(libqore ${_scu_call_path} ${_scu_rest})
+    endif ()
 
     add_library(libqore SHARED ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)

@@ -382,6 +382,17 @@ memory as well as by the cores.  N is limited to 256.  Dynamic initialization of
 ordered between chunks, as it is not between the translation units of a build with SINGLE_COMPILATION_UNIT=OFF.
 Adding, removing or re-costing a source can move other sources to other chunks, which recompiles those chunks once.
 
+-DSINGLE_COMPILATION_UNIT_SPLIT=ON (with SINGLE_COMPILATION_UNIT and one chunk) compiles libqore as two translation
+units instead, one after the other: the interpreter's call path (the sources of QORE_SCU_CALL_PATH_FILES in
+cmake/QoreScuChunks.cmake: the IR interpreter, the JIT/AOT runtime and the sources of the functions on each level of
+a recursion of interpreted code) and the rest.  Each needs about 9 GB of memory to compile in a debug build, where
+the single unit needs about 16 GB, and the rest is not compiled until the call path is, so a parallel build needs no
+more (qore#7780); the CI build jobs use it.  As the call path is one unit, its inlining and its frames are those of
+the single unit, so the library reports SingleCompilationUnit as True and the stack usage budgets apply to it.  A
+source with a function on that path must be in the list (examples/test/cmake/test_scu_split.py checks the functions
+of tools/stack-usage-budgets.txt).  The option is ignored (with a warning) without SINGLE_COMPILATION_UNIT or with
+SINGLE_COMPILATION_UNIT_CHUNKS > 1.
+
 A source edited while the object that includes it compiles is compiled again by the next build: libqore is
 compiled through tools/compile-race-guard.py, which then makes the object older than the edit
 (-DQORE_COMPILE_RACE_GUARD=OFF, or QORE_COMPILE_RACE_GUARD=0 in the environment of the build, turns it off; see
