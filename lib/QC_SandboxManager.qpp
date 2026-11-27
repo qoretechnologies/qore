@@ -2606,11 +2606,15 @@ static bool SandboxManager::isObjectOwnedByCaller(object obj) [flags=RET_VALUE_O
 
 //! Refuses a change to the given object by sandboxed code whose sandbox did not create it
 /** Decides as isObjectOwnedByCaller() does, and raises an exception if the calling code may not change \a obj as
-    its owner.
+    its owner.  A @ref sandbox_shared_objects "shared object" is checked first, as for checkSharedObjectChange():
+    code that is restricted or acts for restricted code cannot change it, also if its sandbox created it, so such a
+    change is refused with \c SHARED-OBJECT-ERROR, the more specific error, whoever created the object (see
+    @ref sandbox_object_check_order).
 
     @param obj the object to check
     @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
 
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code tried to change a shared object
     @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change an object that
     its sandbox did not create
 
@@ -2627,11 +2631,16 @@ setLogger(*LoggerInterface logger) {
     @since %Qore 3.0
 */
 static nothing SandboxManager::checkObjectOwnedByCaller(object obj, string what) {
-    if (qore_caller_owns_object(*obj)) {
+    const qore_object_private* opriv = qore_object_private::get(*obj);
+    if (!opriv->isShared() && qore_caller_owns_object(*obj)) {
         return QoreValue();
     }
     TempEncodingHelper str(what, QCS_DEFAULT, xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // the shared-object rule (qore#6843) first, as for a deletion, then the owner rule (qore#6842)
+    if (opriv->checkSharedOwnerChange(str->c_str(), xsink)) {
         return QoreValue();
     }
     qore_check_caller_owns_object(*obj, str->c_str(), xsink);
@@ -2681,7 +2690,9 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
       \c remove and \c delete), a write through a reference to the member, and the \c += operator with a hash on the
       object raise a \c SHARED-OBJECT-ERROR exception before anything is changed; reading the members, also through a
       reference, is not affected
-    - cannot delete the object with the \c delete operator (\c SHARED-OBJECT-ERROR)
+    - cannot delete the object with the \c delete operator or with the functions and methods that delete an object or
+      take it over for their caller (\c SHARED-OBJECT-ERROR), also if its sandbox created the object: this rule is
+      checked before the owner rules of tenant isolation (see @ref sandbox_object_check_order)
     - cannot copy the object (\c SHARED-OBJECT-ERROR), also not with Reflection, unless a class of the copy (the
       object's class or one of its base classes) declares a \c copy() method in %Qore code, which resets what its
       class guards for a shared object: the copy has copies of all members, also the private ones; a class that guards

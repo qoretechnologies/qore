@@ -139,9 +139,9 @@ auto DestructorMethod::call(object obj) {
         return QoreValue();
     }
 
-    // an explicit deletion: for code that is sandboxed or acts for sandboxed code, only of an object that its sandbox
-    // owns (qore#6842)
-    if (qore_check_caller_owns_object(*obj, "delete", xsink)) {
+    // an explicit deletion: never of a system object; for code that is restricted or acts for restricted code, not of
+    // a shared object (qore#6843), then only of an object that its sandbox owns (qore#6842)
+    if (qore_check_caller_deletes_object(*obj, xsink)) {
         return QoreValue();
     }
     obj->doDelete(xsink);

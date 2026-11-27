@@ -31,3 +31,7 @@ the object's own class code for the tenant: SHARED-OBJECT-ERROR, s: "orig"
 the tenant copies it: SHARED-OBJECT-ERROR, s: "orig"
 a trusted caller: changed: s: "trusted method" i: 10 h: {} l: [1, 2, 3, 4] obj.x: "inner" members: ["s", "i", "h", "l", "obj"]
 trusted code deletes a shared object: OBJECT-ALREADY-DELETED
+order: delete_object: a shared object of the host: SHARED-OBJECT-ERROR (kept); a shared object of the tenant: SHARED-OBJECT-ERROR (kept); one of the host that is not shared: SANDBOX-OBJECT-ACCESS-ERROR (kept); one of the tenant that is not shared: changed (deleted)
+order: delete_thread_data_object: a shared object of the host: SHARED-OBJECT-ERROR (kept); a shared object of the tenant: SHARED-OBJECT-ERROR (kept); one of the host that is not shared: SANDBOX-OBJECT-ACCESS-ERROR (kept); one of the tenant that is not shared: changed (deleted)
+order: Reflection destructor call: a shared object of the tenant: SHARED-OBJECT-ERROR (kept); one of the tenant that is not shared: changed (deleted)
+order at code safety: delete: a shared object of the host: SHARED-OBJECT-ERROR (kept); one of the host that is not shared: changed (deleted)

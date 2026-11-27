@@ -1445,7 +1445,24 @@ DLLEXPORT bool qore_caller_owns_object(const QoreObject& obj);
 */
 DLLEXPORT int qore_check_caller_owns_object(const QoreObject& obj, const char* what, ExceptionSink* xsink);
 
-//! defined if qore_caller_owns_object() and qore_check_caller_owns_object() are available
+//! Refuses the explicit deletion of an object for the calling code that the calling code may not delete
+/** For a binary module's API that deletes an object for its caller (such as a call of a destructor with the
+    reflection API).  The checks are made in the order of the \c delete operator: a system constant object is never
+    deleted (\c SYSTEM-OBJECT-ERROR); code that is restricted or acts for restricted code cannot delete a shared object
+    (\c SHARED-OBJECT-ERROR, see \c SandboxManager::shareObject()), whoever created it; then the owner check of
+    qore_check_caller_owns_object() (\c SANDBOX-OBJECT-ACCESS-ERROR)
+
+    @param obj the object to delete
+    @param xsink for the exception if the deletion is refused
+
+    @return 0 if the calling code may delete \a obj, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_check_caller_deletes_object(const QoreObject& obj, ExceptionSink* xsink);
+
+//! defined if qore_caller_owns_object(), qore_check_caller_owns_object() and qore_check_caller_deletes_object() are
+//! available
 /** @since %Qore 3.0
 */
 #define QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK 1

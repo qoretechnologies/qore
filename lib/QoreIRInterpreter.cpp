@@ -21892,10 +21892,8 @@ load_local_done:
                             "cannot delete a system constant object (class '%s')", o->getClassName());
                         return;
                     }
-                    // sandboxed code cannot delete a shared object (qore#6843)
-                    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-                        return;
-                    }
+                    // refused for a shared object (qore#6843), then for one that the code's sandbox does not
+                    // own (qore#6842), in qore_operator_delete_object()
                     qore_operator_delete_object(o, xsink);
                 };
                 // direct_list: the removed value is the synthetic list of elements a list index or range
@@ -22148,8 +22146,9 @@ load_local_done:
                                 if (o->isSystemObject()) {
                                     xsink->raiseException("SYSTEM-OBJECT-ERROR",
                                         "cannot delete a system constant object (class '%s')", o->getClassName());
-                                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-                                    // sandboxed code cannot delete a shared object (qore#6843)
+                                } else {
+                                    // refused for a shared object (qore#6843), then for one that the code's sandbox
+                                    // does not own (qore#6842), in qore_operator_delete_object()
                                     qore_operator_delete_object(o, xsink);
                                 }
                             }
