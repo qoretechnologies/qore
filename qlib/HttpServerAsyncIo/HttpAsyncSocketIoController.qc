@@ -2918,6 +2918,26 @@ public class HttpAsyncSocketIoController {
         };
     }
 
+    #! Returns the numbers of the stream registrations of the HTTP/3 listeners' poll operations (for diagnostics)
+    /** @return a list of hashes, one for each HTTP/3 listener with a poll operation, as given by
+        @ref Qore::Http3ServerPollOperation::getStreamRegistrationInfo() "Http3ServerPollOperation::getStreamRegistrationInfo()",
+        which are bounded by the streams in use (qore#7802)
+
+        @since HttpServerAsyncIo 1.0
+    */
+    list<hash<auto>> getQuicStreamRegistrationInfo() {
+        list<Http3ServerPollOperation> ops = ();
+        {
+            AutoReadLock al(m);
+            foreach hash<auto> i in (listeners.pairIterator()) {
+                if (i.value.h3op) {
+                    push ops, i.value.h3op;
+                }
+            }
+        }
+        return map $1.getStreamRegistrationInfo(), ops;
+    }
+
     #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
     /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
         after connections are closed indicates a cache leak (poll operations not properly cancelled).
@@ -3743,7 +3763,15 @@ public class HttpAsyncSocketIoController {
                 listener.registerQuicConnectStreamQueue(session_id, stream_id,
                     stream_data_queue);
             }
-            # Register the Queue with the H3 poll operation for dispatch tracking
+            # test hook: widens the window between the read of the request and the registration of its Queue, in
+            # which the client can close the stream's session (qore#7836); compiled out without --enable-debug
+            @debug {
+                if (*string delay_ms = getenv("QORE_H3_CONNECT_QUEUE_DELAY_MS")) {
+                    usleep(delay_ms.toInt() * 1000);
+                }
+            }
+            # Register the Queue with the H3 poll operation for dispatch tracking; a Queue of a stream whose session
+            # has closed meanwhile is not registered, and gets the end of the stream (qore#7836)
             h3op.registerStreamQueue(session_id, stream_id, stream_data_queue, !stream_uses_frame_state);
         }
 
@@ -4103,6 +4131,15 @@ public class HttpAsyncSocketIoController {
                     log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
                         session_id, stream_id, uh);
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
+                    return;
+                }
+                # the stream closed before the response, as when the client reset it at the deadline of its request
+                # while the handler still ran: the client takes no response on it, and has nothing to be told
+                # (qoretechnologies/qore#7803; a response with a body in memory is then not sent without an error, as
+                # with HTTP/2)
+                if (ex.err == "QUIC-STREAM-CLOSED") {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the response is not sent: %s",
+                        session_id, stream_id, uh, ex.desc);
                     return;
                 }
                 log(LoggerLevel::ERROR,

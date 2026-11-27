@@ -224,7 +224,7 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 41, "PENDING_AOT3": 0, "PENDING": 126}
+SIZES = {"ALLOWED": 41, "PENDING_AOT3": 0, "PENDING": 107}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -291,8 +291,6 @@ PENDING = {
     "examples/test/ir/SwitchStringEncoding.qtest": 1,
     "examples/test/ir/ThrowingTempCleanup.qtest": 1,
     "examples/test/ir/qcc-test-libqore.qtest": 1,
-    "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest": 1,
-    "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest": 1,
     "examples/test/qore/classes/Program/reparse-toplevel-run.qtest": 1,
     "examples/test/qore/classes/abstract-mixed-variants/abstract-mixed-variants.qtest": 1,
     "examples/test/qore/classes/abstract-second-parent/abstract-second-parent.qtest": 1,
@@ -324,11 +322,6 @@ PENDING = {
     "examples/test/qore/classes/self-call-dispatch/self-call-dispatch.qtest": 1,
     "examples/test/qore/classes/sibling-private-member/sibling-private-member.qtest": 1,
     "examples/test/qore/classes/static-method-ref-deleted-program/static-method-ref-deleted-program.qtest": 1,
-    "examples/test/qore/debug/debugger-dismiss-call-sites/debugger-dismiss-call-sites.qtest": 1,
-    "examples/test/qore/enums/enum-hash-int-operand/enum-hash-int-operand.qtest": 1,
-    "examples/test/qore/enums/enum-read-fast-paths/enum-read-fast-paths.qtest": 1,
-    "examples/test/qore/enums/string-enum-compiled-paths/string-enum-compiled-paths.qtest": 1,
-    "examples/test/qore/enums/union-enum-member/union-enum-member.qtest": 1,
     "examples/test/qore/functions/call-reference-error-line/call-reference-error-line.qtest": 1,
     "examples/test/qore/functions/generic-function-local-object-type/generic-function-local-object-type.qtest": 1,
     "examples/test/qore/functions/local-dtor-return-expr-location/local-dtor-return-expr-location.qtest": 1,
@@ -341,8 +334,6 @@ PENDING = {
     "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest": 1,
     "examples/test/qore/misc/set-time-zone-compiled/set-time-zone-compiled.qtest": 1,
     "examples/test/qore/misc/stdio/stdio-startup.qtest": 1,
-    "examples/test/qore/namespaces/declaration-type-identity/declaration-type-identity.qtest": 1,
-    "examples/test/qore/namespaces/inherits-namespace-lookup/inherits-namespace-lookup.qtest": 1,
     "examples/test/qore/operators/background-call-arg-lvalue/background-call-arg-lvalue.qtest": 1,
     "examples/test/qore/operators/background-copy-method.qtest": 1,
     "examples/test/qore/operators/background-lvalue-path/background-lvalue-path.qtest": 2,
@@ -351,16 +342,6 @@ PENDING = {
     "examples/test/qore/operators/new-initializer-lvalues/new-initializer-lvalues.qtest": 1,
     "examples/test/qore/operators/range-effective-range/range-effective-range.qtest": 1,
     "examples/test/qore/operators/soft-compound-assignment/soft-compound-assignment.qtest": 1,
-    "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary.qc": 2,
-    "examples/test/qore/statements/reference-local-read-in-try/reference-local-read-in-try.qtest": 1,
-    "examples/test/qore/strings/byte-offsets/byte-offsets.qtest": 2,
-    "examples/test/qore/strings/char-offsets/char-offsets.qtest": 2,
-    "examples/test/qore/threads/frame-check-stack.qtest": 1,
-    "examples/test/qore/values/reference-element-store/reference-element-store.qtest": 1,
-    "examples/test/qore/vars/nothing-argument-overload-error/nothing-argument-overload-error.qtest": 1,
-    "examples/test/qore/vars/reference-cycle-scope-exit/reference-cycle-scope-exit.qtest": 1,
-    "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest": 1,
-    "modules/dataframe/test/dataframe-plugin-ornothing-dispatch.qtest": 1,
 }
 
 

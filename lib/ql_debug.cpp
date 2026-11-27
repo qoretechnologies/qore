@@ -9296,19 +9296,19 @@ public:
         return std::string("; ") + call + "() failed with errno " + std::to_string(err) + " (" + strerror(err) + ")";
     }
 
-    //! Makes a target that gets no answer for the connection tests; returns false if it cannot be made
-    /** On Linux a listener whose accept queue is full, which drops the connection requests that it cannot queue;
-        elsewhere a port that is bound and does not listen, which macOS does not answer.  The descriptors made are
-        added to @p fds, which the caller closes.
+    //! Makes a TCP socket bound to 127.0.0.1 with a port that the kernel chooses, for a connection test target
+    /** The descriptor is added to @p fds, which the caller closes; @p sa is set to the address bound
+
+        @return the descriptor, or -1 after a failed assertion
     */
-    static bool makeSilentTarget(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
+    static int bindTarget4(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
             const std::string& when) {
         int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
         int err = errno;
         UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when
             + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
-            return false;
+            return -1;
         }
         fds.push_back(lfd);
         sa = {};
@@ -9324,22 +9324,477 @@ public:
         err = errno;
         UT_ASSERT(c, !failed, ("connect close target is bound" + when
             + (failed ? silentTargetError(failed, err) : std::string())).c_str());
-        if (failed) {
+        return failed ? -1 : lfd;
+    }
+
+    //! Makes a TCP socket bound to ::1 with the given port (IPv6 only), for a connection test target (qore#7820)
+    /** The descriptor is added to @p fds, which the caller closes.  A bind that fails with EADDRINUSE is not asserted:
+        the descriptor is then closed and removed from @p fds, and @p addr_in_use is set, so that the caller can make a
+        new pair of targets
+
+        @return the descriptor, or -1 after a failed assertion or with @p addr_in_use set
+    */
+    static int bindTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when,
+            bool& addr_in_use) {
+        addr_in_use = false;
+        int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
+        if (lfd < 0) {
+            return -1;
+        }
+        fds.push_back(lfd);
+        int on = 1;
+        bool v6only = !setsockopt(lfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+        err = errno;
+        UT_ASSERT(c, v6only, ("the IPv6 connect close target is IPv6 only" + when
+            + (v6only ? std::string() : silentTargetError("setsockopt(IPV6_V6ONLY)", err))).c_str());
+        if (!v6only) {
+            return -1;
+        }
+        struct sockaddr_in6 sa6 = {};
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_addr = in6addr_loopback;
+        sa6.sin6_port = port;
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
+        err = errno;
+        if (!ok && err == EADDRINUSE) {
+            assert(fds.back() == lfd);
+            fds.pop_back();
+            ::close(lfd);
+            addr_in_use = true;
+            return -1;
+        }
+        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when
+            + (ok ? std::string() : silentTargetError("bind", err))).c_str());
+        return ok ? lfd : -1;
+    }
+
+#ifdef __linux__
+    //! Makes a bound target silent: it listens with a backlog of 0, and its accept queue is filled
+    /** The descriptors of the connections that fill the queue are added to @p fds, which the caller closes
+    */
+    static bool silenceTarget(UnitTestCounters& c, int lfd, const struct sockaddr* sa, socklen_t salen,
+            std::vector<int>& fds, const std::string& what, const std::string& when) {
+        bool listening = !::listen(lfd, 0);
+        int err = errno;
+        UT_ASSERT(c, listening, (what + " listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        if (!listening) {
+            return false;
+        }
+        std::string why;
+        bool full = fillAcceptQueue(lfd, sa, salen, fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the " + what + " is full" + when + why).c_str());
+        return full;
+    }
+#endif
+
+    //! Makes a target that gets no answer for the connection tests; returns false if it cannot be made
+    /** On Linux a listener whose accept queue is full, which drops the connection requests that it cannot queue;
+        elsewhere a port that is bound and does not listen, which macOS does not answer.  The descriptors made are
+        added to @p fds, which the caller closes.
+    */
+    static bool makeSilentTarget(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
+            const std::string& when) {
+        int lfd = bindTarget4(c, fds, sa, when);
+        if (lfd < 0) {
             return false;
         }
 #ifdef __linux__
-        bool listening = !::listen(lfd, 0);
-        err = errno;
-        UT_ASSERT(c, listening, ("connect close target listens" + when
-            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
-        std::string why;
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds, &why);
-        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when + why).c_str());
-        if (!full) {
+        if (!silenceTarget(c, lfd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa), fds, "connect close target",
+                when)) {
             return false;
         }
 #endif
         return true;
+    }
+
+    //! The number of pairs of targets that makeTargetPair() binds before it gives up (qore#7820)
+    static constexpr int TARGET_PAIR_MAX_ATTEMPTS = 32;
+
+    //! Called by makeTargetPair() between the binds of its IPv4 and IPv6 targets, with the attempt (starting at 0) and
+    //! the port (in network byte order) of the IPv4 target, if set (qore#7820)
+    static inline void (*target_pair_before_bind6)(int attempt, in_port_t port) = nullptr;
+
+    //! Makes the bound targets of makeTargetPair() listen (qore#7820)
+    static bool listenTargetPair(UnitTestCounters& c, std::vector<int>& fds, const struct sockaddr_in& sa, int lfd4,
+            int lfd6, bool silent4, const std::string& when) {
+        if (silent4) {
+#ifdef __linux__
+            if (!silenceTarget(c, lfd4, reinterpret_cast<const struct sockaddr*>(&sa), sizeof(sa), fds,
+                    "connect close target", when)) {
+                return false;
+            }
+#endif
+        } else {
+            bool listening = !::listen(lfd4, 16);
+            int err = errno;
+            UT_ASSERT(c, listening, ("the listener listens" + when
+                + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+            if (!listening) {
+                return false;
+            }
+        }
+#ifdef __linux__
+        struct sockaddr_in6 sa6 = {};
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_addr = in6addr_loopback;
+        sa6.sin6_port = sa.sin_port;
+        if (!silenceTarget(c, lfd6, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds,
+                "IPv6 connect close target", when)) {
+            return false;
+        }
+#else
+        (void)lfd6;
+#endif
+        return true;
+    }
+
+    //! Makes a target on 127.0.0.1 and one on ::1 with the same port, which the kernel chooses (qore#7820)
+    /** The kernel chooses a port that is free on 127.0.0.1, and another socket can hold it on ::1 or on the IPv6
+        wildcard: the bind of the IPv6 target then fails with EADDRINUSE, and both are closed and a new pair is made,
+        at most TARGET_PAIR_MAX_ATTEMPTS times; any other error fails.  The targets listen only once both are bound:
+        the IPv6 one is a silent target (see makeSilentTarget()), and so is the IPv4 one with @p silent4; otherwise
+        the IPv4 one is a listener with a backlog of 16, whose connections are accepted by the kernel.
+
+        The descriptors made are added to @p fds, which the caller closes; those of a discarded pair are closed and
+        removed from it.
+
+        @param sa set to the address of the IPv4 target
+        @param attempts if not null, set to the number of pairs that were bound (attempts)
+        @param exhausted if not null, the message of the failure when every attempt found the port taken on ::1 is
+        stored there instead of being asserted (for the test of this helper)
+
+        @return true if both targets were made
+    */
+    static bool makeTargetPair(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa, bool silent4,
+            const std::string& when, int* attempts = nullptr, std::string* exhausted = nullptr) {
+        std::string tried;
+        for (int attempt = 0; attempt < TARGET_PAIR_MAX_ATTEMPTS; ++attempt) {
+            if (attempts) {
+                *attempts = attempt + 1;
+            }
+            const size_t mark = fds.size();
+            int lfd4 = bindTarget4(c, fds, sa, when);
+            if (lfd4 < 0) {
+                return false;
+            }
+            if (auto hook = target_pair_before_bind6) {
+                hook(attempt, sa.sin_port);
+            }
+            bool addr_in_use = false;
+            int lfd6 = bindTarget6(c, fds, sa.sin_port, when, addr_in_use);
+            if (lfd6 >= 0) {
+                return listenTargetPair(c, fds, sa, lfd4, lfd6, silent4, when);
+            }
+            if (!addr_in_use) {
+                return false;
+            }
+            // the port is taken on ::1: the IPv4 target is closed and removed, and a new pair is made
+            assert(fds.size() == mark + 1 && fds.back() == lfd4);
+            for (size_t i = mark; i < fds.size(); ++i) {
+                ::close(fds[i]);
+            }
+            fds.resize(mark);
+            if (!tried.empty()) {
+                tried += ", ";
+            }
+            tried += std::to_string(ntohs(sa.sin_port));
+        }
+        std::string msg = "the IPv4 and IPv6 connect close targets are bound to one port" + when
+            + "; the port was taken on ::1 in each of " + std::to_string(TARGET_PAIR_MAX_ATTEMPTS) + " attempts (ports "
+            + tried + ")";
+        if (exhausted) {
+            *exhausted = std::move(msg);
+        } else {
+            UT_ASSERT(c, false, msg.c_str());
+        }
+        return false;
+    }
+
+    //! The state of takeTargetPairPort(), the hook with which runTargetPairPortTaken() takes the port of attempts of
+    //! makeTargetPair() on ::1 (qore#7820)
+    struct TargetPairTaker {
+        //! the number of attempts whose port is taken
+        int take = 0;
+        //! the number of attempts that the hook saw
+        int seen = 0;
+        //! the IPv6 sockets of the hook, which hold the ports in `held`
+        std::vector<int> fds;
+        //! the ports that the sockets of the hook hold on ::1, in host byte order
+        std::vector<int> held;
+        //! the ports of the first `take` attempts, in host byte order, one per attempt (the kernel can choose a port
+        //! again); each is taken on ::1, by a socket of the hook or by another one
+        std::vector<int> ports;
+        //! the attempts after the first `take` ones whose port a socket of the hook holds (the kernel chose it again),
+        //! which the helper must discard
+        int repeats = 0;
+        //! the attempts after the first `take` ones whose port another socket holds on ::1, the condition of
+        //! qore#7820, verified with a bind of the hook that failed with EADDRINUSE; the helper must discard them
+        int outside = 0;
+        //! the attempts after the first `take` ones whose port was free on ::1 (a bind of the hook succeeded) and
+        //! that the helper discarded all the same; must stay 0
+        int unexpected = 0;
+        //! the port of the last attempt that the hook saw was free on ::1
+        bool last_free = false;
+        //! the error of a socket call of the hook, empty if none
+        std::string error;
+
+        ~TargetPairTaker() {
+            for (int fd : fds) {
+                ::close(fd);
+            }
+        }
+    };
+
+    //! The state of the hook of runTargetPairPortTaken(); null when it takes no port
+    static inline TargetPairTaker* target_pair_taker = nullptr;
+
+    //! Binds a new IPv6-only TCP socket to ::1 with @p port (network byte order)
+    /** @return the descriptor, or -1 with errno set and @p failed set to the call that failed
+    */
+    static int bindLoopback6(in_port_t port, const char*& failed) {
+        int fd = ::socket(AF_INET6, SOCK_STREAM, 0);
+        if (fd < 0) {
+            failed = "socket";
+            return -1;
+        }
+        int on = 1;
+        struct sockaddr_in6 sa6 = {};
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_addr = in6addr_loopback;
+        sa6.sin6_port = port;
+        failed = nullptr;
+        if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on))) {
+            failed = "setsockopt(IPV6_V6ONLY)";
+        } else if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6))) {
+            failed = "bind";
+        }
+        if (failed) {
+            int err = errno;
+            ::close(fd);
+            errno = err;
+            return -1;
+        }
+        return fd;
+    }
+
+    //! Takes the port of the first attempts of makeTargetPair() on ::1 with an IPv6-only socket, as another process can
+    /** The port of each of the first TargetPairTaker::take attempts is added to TargetPairTaker::ports, and a socket of
+        the hook takes it if none holds it already; if another socket holds it, the bind of the hook fails with
+        EADDRINUSE and the port is taken all the same.  The port of each later attempt is classified: held by a socket
+        of the hook (the kernel chose it again), held by another socket (verified: a bind of the hook fails with
+        EADDRINUSE), or free (the bind succeeds and is closed at once); the helper must discard the attempts of the
+        first two kinds and keep the pair of the third, which the next call of the hook checks.
+    */
+    static void takeTargetPairPort(int attempt, in_port_t port) {
+        TargetPairTaker* t = target_pair_taker;
+        if (!t) {
+            return;
+        }
+        ++t->seen;
+        // the port of the last attempt was free on ::1, and the helper discarded its pair all the same
+        if (t->last_free) {
+            ++t->unexpected;
+            t->last_free = false;
+        }
+        const int p = ntohs(port);
+        const bool held = std::find(t->held.begin(), t->held.end(), p) != t->held.end();
+        if (attempt >= t->take) {
+            if (held) {
+                ++t->repeats;
+                return;
+            }
+            const char* failed = nullptr;
+            int fd = bindLoopback6(port, failed);
+            int err = errno;
+            if (fd >= 0) {
+                ::close(fd);
+                t->last_free = true;
+            } else if (err == EADDRINUSE) {
+                ++t->outside;
+            } else {
+                t->error = silentTargetError(failed, err);
+            }
+            return;
+        }
+        t->ports.push_back(p);
+        if (held) {
+            return;
+        }
+        const char* failed = nullptr;
+        int fd = bindLoopback6(port, failed);
+        int err = errno;
+        if (fd < 0) {
+            // another socket holds the port on ::1: it is taken all the same
+            if (err != EADDRINUSE) {
+                t->error = silentTargetError(failed, err);
+            }
+            return;
+        }
+        try {
+            t->fds.push_back(fd);
+        } catch (...) {
+            ::close(fd);
+            throw;
+        }
+        t->held.push_back(p);
+    }
+
+    //! Checks the descriptors of a pair of targets that makeTargetPair() made on the port @p port (network byte order)
+    //! while the ports @p taken (host byte order) were taken on ::1 (qore#7820)
+    /** Every descriptor is open and listed once, the IPv4 and IPv6 targets are bound to @p port, and no target of a
+        discarded pair is left: a descriptor of a discarded pair that was closed but left in @p fds would be closed,
+        or listed twice once its number was reused
+    */
+    static void checkTargetPairDescriptors(UnitTestCounters& c, const std::vector<int>& fds, in_port_t port,
+            const std::vector<int>& taken, const std::string& when) {
+        bool all_open = true;
+        bool unique = true;
+        bool have4 = false;
+        bool have6 = false;
+        bool discarded_left = false;
+        for (size_t i = 0; i < fds.size(); ++i) {
+            int fd = fds[i];
+            if (fcntl(fd, F_GETFD) == -1) {
+                all_open = false;
+                continue;
+            }
+            if (std::find(fds.begin() + i + 1, fds.end(), fd) != fds.end()) {
+                unique = false;
+            }
+            // a target has no peer; the connections that fill an accept queue do
+            struct sockaddr_storage peer = {};
+            socklen_t peer_len = sizeof(peer);
+            if (!::getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &peer_len)) {
+                continue;
+            }
+            struct sockaddr_storage ss = {};
+            socklen_t len = sizeof(ss);
+            if (::getsockname(fd, reinterpret_cast<struct sockaddr*>(&ss), &len)) {
+                continue;
+            }
+            in_port_t p = 0;
+            if (ss.ss_family == AF_INET) {
+                const struct sockaddr_in* sa4 = reinterpret_cast<const struct sockaddr_in*>(&ss);
+                p = sa4->sin_port;
+                if (p == port && sa4->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+                    have4 = true;
+                }
+            } else if (ss.ss_family == AF_INET6) {
+                const struct sockaddr_in6* sa6 = reinterpret_cast<const struct sockaddr_in6*>(&ss);
+                p = sa6->sin6_port;
+                if (p == port && !memcmp(&sa6->sin6_addr, &in6addr_loopback, sizeof(in6addr_loopback))) {
+                    have6 = true;
+                }
+            }
+            if (std::find(taken.begin(), taken.end(), (int)ntohs(p)) != taken.end()) {
+                discarded_left = true;
+            }
+        }
+        UT_ASSERT(c, all_open, ("every descriptor of the pair of targets is open" + when).c_str());
+        UT_ASSERT(c, unique, ("every descriptor of the pair of targets is listed once" + when).c_str());
+        UT_ASSERT(c, have4, ("the IPv4 target is bound to 127.0.0.1 with the port of the pair" + when).c_str());
+        UT_ASSERT(c, have6, ("the IPv6 target is bound to ::1 with the port of the pair" + when).c_str());
+        UT_ASSERT(c, !discarded_left, ("no target of a discarded pair is left" + when).c_str());
+    }
+
+    //! A pair of targets whose port is taken on ::1 is made again on another port (qore#7820)
+    /** The kernel chooses the port of the IPv4 target of makeTargetPair(), which another socket can hold on ::1; a hook
+        between the binds takes the port of the first attempts on ::1 with an IPv6-only socket of its own.  The pair
+        must be made in the attempt that follows on a port that was not taken, with the descriptors of the discarded
+        attempts closed and removed; if every attempt finds its port taken, the helper must fail with a message that
+        names the ports tried and leave no descriptor.
+    */
+    static void runTargetPairPortTaken(UnitTestCounters& c) {
+        struct HookCleanup {
+            ~HookCleanup() {
+                target_pair_before_bind6 = nullptr;
+                target_pair_taker = nullptr;
+            }
+        } hook_cleanup;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+                fds.clear();
+            }
+        };
+        target_pair_before_bind6 = takeTargetPairPort;
+        const int take = 3;
+        for (bool silent4 : {true, false}) {
+            const std::string when = " (the port of " + std::to_string(take) + " attempts taken on ::1, "
+                + (silent4 ? "silent" : "listening") + " IPv4 target)";
+            TargetPairTaker taker;
+            taker.take = take;
+            target_pair_taker = &taker;
+            std::vector<int> fds;
+            FdCloser fd_closer{fds};
+            struct sockaddr_in sa = {};
+            int attempts = 0;
+            bool ok = makeTargetPair(c, fds, sa, silent4, when, &attempts);
+            target_pair_taker = nullptr;
+            UT_ASSERT(c, taker.error.empty(), ("the hook takes the port on ::1" + when + taker.error).c_str());
+            UT_ASSERT(c, ok, ("the pair of targets is made" + when).c_str());
+            // an attempt after the first take ones is discarded only if its port is taken on ::1 all the same: by a
+            // socket of the hook (the kernel chose a port that it holds) or by another socket (verified by the hook)
+            UT_ASSERT_EQ(c, take + 1 + taker.repeats + taker.outside, attempts,
+                ("the pair is made in the attempt after those whose port is taken (" + std::to_string(taker.repeats)
+                + " ports chosen again, " + std::to_string(taker.outside) + " held by another socket)" + when)
+                .c_str());
+            UT_ASSERT_EQ(c, 0, taker.unexpected,
+                ("the helper keeps the pair of an attempt whose port is free on ::1" + when).c_str());
+            UT_ASSERT_EQ(c, attempts, taker.seen, ("the hook is called once in each attempt" + when).c_str());
+            UT_ASSERT_EQ(c, (size_t)take, taker.ports.size(), ("the hook took the port of each attempt" + when).c_str());
+            const int port = ntohs(sa.sin_port);
+            UT_ASSERT(c, port && std::find(taker.ports.begin(), taker.ports.end(), port) == taker.ports.end(),
+                ("the pair is made on a port that was not taken" + when + " (port " + std::to_string(port)
+                + ")").c_str());
+            if (ok) {
+                checkTargetPairDescriptors(c, fds, sa.sin_port, taker.ports, when);
+            }
+        }
+
+        // the port of every attempt is taken: the helper gives up with a message that names the ports tried
+        {
+            // the port of every attempt is held by a socket of the hook or by another socket that holds it until the
+            // helper's bind; this assumes that the holders are stable, as the hook's own sockets are
+            const std::string when = " (the port of every attempt taken on ::1)";
+            TargetPairTaker taker;
+            taker.take = TARGET_PAIR_MAX_ATTEMPTS + 1;
+            target_pair_taker = &taker;
+            std::vector<int> fds;
+            FdCloser fd_closer{fds};
+            struct sockaddr_in sa = {};
+            int attempts = 0;
+            std::string exhausted;
+            UnitTestCounters helper_c;
+            bool ok = makeTargetPair(helper_c, fds, sa, true, when, &attempts, &exhausted);
+            target_pair_taker = nullptr;
+            UT_ASSERT(c, taker.error.empty(), ("the hook takes the port on ::1" + when + taker.error).c_str());
+            UT_ASSERT(c, !ok, ("the pair of targets is not made" + when).c_str());
+            UT_ASSERT_EQ(c, TARGET_PAIR_MAX_ATTEMPTS, attempts, ("the helper makes every attempt" + when).c_str());
+            UT_ASSERT_EQ(c, attempts, taker.seen, ("the hook is called once in each attempt" + when).c_str());
+            UT_ASSERT_EQ(c, (size_t)TARGET_PAIR_MAX_ATTEMPTS, taker.ports.size(),
+                ("the hook took the port of each attempt" + when).c_str());
+            UT_ASSERT_EQ(c, 0, helper_c.fail_count, ("the helper asserts no other failure" + when).c_str());
+            UT_ASSERT_EQ(c, (size_t)0, fds.size(), ("no descriptor of a discarded pair is left" + when).c_str());
+            std::string ports;
+            for (int p : taker.ports) {
+                if (!ports.empty()) {
+                    ports += ", ";
+                }
+                ports += std::to_string(p);
+            }
+            const std::string expected = "in each of " + std::to_string(TARGET_PAIR_MAX_ATTEMPTS)
+                + " attempts (ports " + ports + ")";
+            UT_ASSERT(c, exhausted.find(expected) != std::string::npos, ("the failure names the attempts and the "
+                "ports tried" + when + " (message: \"" + exhausted + "\")").c_str());
+        }
     }
 
     //! The state of the check that runConnectCloseRegistered() makes in the close (see qore_dbg_before_close_wakes)
@@ -10052,7 +10507,7 @@ public:
         while (silent_target_restarts.load() - before < 10 && std::chrono::steady_clock::now() < limit) {
             std::vector<int> fds;
             struct sockaddr_in sa = {};
-            bool ok = makeSilentTarget(c, fds, sa, when) && makeSilentTarget6(c, fds, sa.sin_port, when);
+            bool ok = makeTargetPair(c, fds, sa, true, when);
             for (int fd : fds) {
                 ::close(fd);
             }
@@ -10188,44 +10643,6 @@ public:
     }
 #endif
 
-    //! Makes a target on ::1 with the given port that gets no answer, as makeSilentTarget() does on 127.0.0.1
-    static bool makeSilentTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when) {
-        int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
-        int err = errno;
-        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when
-            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
-        if (lfd < 0) {
-            return false;
-        }
-        fds.push_back(lfd);
-        int on = 1;
-        setsockopt(lfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
-        struct sockaddr_in6 sa6 = {};
-        sa6.sin6_family = AF_INET6;
-        sa6.sin6_addr = in6addr_loopback;
-        sa6.sin6_port = port;
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
-        err = errno;
-        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when
-            + (ok ? std::string() : silentTargetError("bind", err))).c_str());
-        if (!ok) {
-            return false;
-        }
-#ifdef __linux__
-        bool listening = !::listen(lfd, 0);
-        err = errno;
-        UT_ASSERT(c, listening, ("the IPv6 connect close target listens" + when
-            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
-        std::string why;
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds, &why);
-        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when + why).c_str());
-        if (!full) {
-            return false;
-        }
-#endif
-        return true;
-    }
-
     //! A connection with two attempts in progress, both registered in an event loop, closed by another thread,
     //! closes each attempt's descriptor once (qore#6962)
     /** A name that resolves to ::1 and 127.0.0.1 (a hosts file of the test's own, dbg_cares_set_hosts_file()) gives a
@@ -10247,7 +10664,7 @@ public:
             }
         } fd_closer{fds};
         struct sockaddr_in sa = {};
-        if (!makeSilentTarget(c, fds, sa, when) || !makeSilentTarget6(c, fds, sa.sin_port, when)) {
+        if (!makeTargetPair(c, fds, sa, true, when)) {
             return;
         }
         int sp[2];
@@ -10572,21 +10989,28 @@ public:
                 }
             }
         } fd_closer{fds};
-        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
-        if (lfd < 0) {
-            return;
-        }
-        fds.push_back(lfd);
         struct sockaddr_in sa = {};
-        sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        socklen_t salen = sizeof(sa);
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
-            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) && !::listen(lfd, 16);
-        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
-        if (!ok || (two_addresses && !makeSilentTarget6(c, fds, sa.sin_port, when))) {
-            return;
+        if (two_addresses) {
+            // a listener on 127.0.0.1 and a silent target on ::1 with its port (qore#7820)
+            if (!makeTargetPair(c, fds, sa, false, when)) {
+                return;
+            }
+        } else {
+            int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
+            UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
+            if (lfd < 0) {
+                return;
+            }
+            fds.push_back(lfd);
+            sa.sin_family = AF_INET;
+            sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t salen = sizeof(sa);
+            bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
+                && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) && !::listen(lfd, 16);
+            UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
+            if (!ok) {
+                return;
+            }
         }
 
         const char* tmp = getenv("TMPDIR");
@@ -32196,6 +32620,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInPreClose(c);
     AsyncIoDescriptorHoldTest::runConnectCheckAfterShutdown(c);
+    AsyncIoDescriptorHoldTest::runTargetPairPortTaken(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_ASSIGN, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_CONNECTED, false);
@@ -33247,9 +33672,11 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
         rv = QoreJIT::BgCompileHoldPoint::Commit;
     } else if (!strcmp(point->c_str(), "install")) {
         rv = QoreJIT::BgCompileHoldPoint::Install;
+    } else if (!strcmp(point->c_str(), "finish")) {
+        rv = QoreJIT::BgCompileHoldPoint::Finish;
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown background compile hold point '%s'; expecting "
-            "\"lowering\", \"llvm\", \"commit\" or \"install\"", point->c_str());
+            "\"lowering\", \"llvm\", \"commit\", \"install\" or \"finish\"", point->c_str());
         return false;
     }
     return true;
@@ -33281,7 +33708,8 @@ static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, Runtime
     return QoreValue();
 }
 
-//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
+//! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit", \c "install" or
+//! \c "finish", at the end of the compile)
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
 
@@ -33329,6 +33757,11 @@ static QoreValue f_dbg_wait_sync_compile_waiting(const QoreListNode* params, Run
 //! returns True if the background JIT compiler is stopped at a hold point
 static QoreValue f_dbg_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return QoreJIT::instance().dbgBgCompileHeld();
+}
+
+//! returns True if the background JIT compiler is idle as dbg_wait_bg_compile_idle() waits for it (qore#7831)
+static QoreValue f_dbg_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return QoreJIT::instance().dbgBgCompileIdle();
 }
 
 //! lets the held background JIT compile continue and waits until it has left the hold point; False on timeout
@@ -37064,6 +37497,7 @@ static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, Runtim
 
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
+std::atomic<int64_t> qore_dbg_quic_responses_on_closed_streams{0};
 std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
 std::atomic<int64_t> qore_dbg_quic_server_validated_drops{0};
 
@@ -37090,6 +37524,16 @@ static QoreValue f_dbg_quic_stateless_reset_counts(const QoreListNode* params, R
     h->setKeyValue("sent", qore_dbg_quic_stateless_resets_sent.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("received", qore_dbg_quic_stateless_resets_received.load(std::memory_order_relaxed), xsink);
     return h.release();
+}
+
+//! returns the responses that the HTTP/3 servers of the process were given for streams that had closed before them
+/** Counted since the process started, when the server takes the response and does not send it (a response with its
+    body in memory, which is dropped, and a streaming response, which raises \c QUIC-STREAM-CLOSED), so that a test
+    can tell that a late response was handled (qore#7803).
+*/
+static QoreValue f_dbg_quic_responses_on_closed_streams(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_responses_on_closed_streams.load(std::memory_order_acquire);
 }
 
 namespace {
@@ -40460,6 +40904,7 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_bg_compile_idle", f_dbg_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_wait_sync_compile_waiting", f_dbg_wait_sync_compile_waiting, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_bg_compile", f_dbg_continue_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -40768,6 +41213,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QoreValue(0), "skip");
     qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_responses_on_closed_streams", f_dbg_quic_responses_on_closed_streams,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
         listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,

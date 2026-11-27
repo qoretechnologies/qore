@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileGetDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,12 +73,15 @@ public class FileGetDataProvider inherits FileDataProviderBase {
         if (root.val() && lock) {
             checkPath(\req.path);
         }
-        return {
-            "path": req.path,
-            "data": req.text
-                ? ReadOnlyFile::readTextFile(req.path, req.encoding, req.max_len, req.encoding_errors)
-                : ReadOnlyFile::readBinaryFile(req.path, req.max_len),
-        };
+        # the file read must be under the root directory, also if the path changes after it was checked (qore#7821)
+        return runConfined(hash<auto> sub () {
+            return {
+                "path": req.path,
+                "data": req.text
+                    ? ReadOnlyFile::readTextFile(req.path, req.encoding, req.max_len, req.encoding_errors)
+                    : ReadOnlyFile::readBinaryFile(req.path, req.max_len),
+            };
+        });
     }
 
     #! Returns the description of a successful request message, if any

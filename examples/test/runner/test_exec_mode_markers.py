@@ -192,8 +192,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
-        # - TerminalIoRestrictedLoad (#6438): the modules are loaded first in child processes that set their own
-        #   --exec-mode and in a qcc executable
         # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
@@ -205,15 +203,9 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   differ
         # - default-encoding-keys (#6604): its checks run in child processes whose default character encodings
         #   differ
-        # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
-        # - ParseStackBoundary-5 (#6420): the AOT module loads that it checks run in child processes (the fixture)
         # - parse-load-module-location (#6047): its module loads run in child processes, one for each stack size
-        # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
-        #   in qcc executables and with a module compiled by qcc
         # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
         #   --exec-mode
-        # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
-        #   executables and with a module compiled by qcc
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
@@ -241,8 +233,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and arm a debug hook in them
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables, which arm a debug hook
-        # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
-        #   processes and in qcc executables
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
@@ -331,7 +321,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
-                                 "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
@@ -339,8 +328,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
-                                 "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest",
-                                 "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest",
                                  "examples/test/module-cpp-api/parse-load-module-location/"
                                  "parse-load-module-location.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
@@ -353,7 +340,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTModuleMissingDependencyFallback.qtest",
-                                 "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
@@ -398,7 +384,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/WebSocketClient/WebSocketAsyncTextEncoding.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketHandlerRestrictedTimers.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
-                                 "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
                                  "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
                                  "examples/test/qlib/QUnit/global-error-label.qtest",
                                  "examples/test/qlib/QUnit/globalsetup-stop.qtest",
@@ -407,7 +392,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
                                  "modules/tokenizer/test/default-encoding-tokens.qtest",
                                  "modules/protobuf/test/default-encoding-keys.qtest",
-                                 "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
                                  "modules/dataframe/test/parquet-memory-pool.qtest",

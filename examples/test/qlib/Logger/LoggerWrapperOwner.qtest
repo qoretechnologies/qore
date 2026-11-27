@@ -256,7 +256,9 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
         object tenant_rest = p.callFunction("make_client");
         # the host's client
         object rest = new_rest_client();
-        assertEq(Err, p.callFunction("set_mgr_logger", rest), "the connection manager of the host's client");
+        # the manager refuses restricted code that does not own it before its owner rule (qore#7830)
+        assertEq("PERMISSION-DENIED", p.callFunction("set_mgr_logger", rest),
+            "the connection manager of the host's client");
         assertEq(Err, p.callFunction("set_logger", rest), "the host's client");
         # the tenant's own client
         assertEq("ok", p.callFunction("set_mgr_logger", tenant_rest), "the connection manager of the tenant's client");

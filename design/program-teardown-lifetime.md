@@ -144,7 +144,10 @@ and the functions can be compiled again under the same names.  The compile threa
 between the steps of the LLVM phase to skip the steps that remain, and the optimizer skips its optional passes once it
 is set (`registerShouldRunOptionalPassCallback()`); a pass that is running, or LLVM's code generation, is not
 interrupted.  `bg_active_work` counts a detached compile until the compile thread finishes it, so
-`QoreJIT::waitForBgCompileQueue()` without a Program waits for it.  A synchronous compile (top-level code in the jit
+`QoreJIT::waitForBgCompileQueue()` without a Program waits for it; the compile thread releases the count under
+`bg_queue_mutex` in the same step that clears the in-progress claim and `bg_in_progress_detached`
+(`finishBgCompileWork()`), so a waiter never sees the compiler idle while a detached compile is still being finished
+(qore#7831).  A synchronous compile (top-level code in the jit
 mode, generic specializations) does not wait for a detached compile: it falls back to the IR tier when the compile
 lock is held by one (`lockForSyncCompile()`), as it does once the compiler stops.
 
@@ -167,10 +170,12 @@ as usual.  A process that exits with neither waits for the thread in the library
 options), but not the function-local statics LLVM creates during its first compile.
 
 `examples/test/ir/BgCompileTeardownDetach.qtest` tests it with the debug build's holds of the compile thread
-(`dbg_hold_bg_compile()` at the start of the lowering, at the start of the LLVM phase, at its end, or before the
-result is installed, with
+(`dbg_hold_bg_compile()` at the start of the lowering, at the start of the LLVM phase, at its end, before the result
+is installed, or in `finishBgCompileWork()` before it releases the work (`"finish"`), with
 `dbg_wait_bg_compile_held()`, `dbg_continue_bg_compile()` and `dbg_wait_bg_compile_teardown_waiting()`) and the count
 of discarded compiles (`dbg_get_bg_compile_discarded_count()`).
+`examples/test/ir/jit-code-release/BgCompileIdleDetached.qtest` holds a detached compile at `"finish"` and checks with
+`dbg_bg_compile_idle()` (the predicate of `waitForBgCompileQueue()`) that the compiler is not idle there (qore#7831).
 
 ## Caches that outlive their objects
 

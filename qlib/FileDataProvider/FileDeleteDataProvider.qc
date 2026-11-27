@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileDeleteDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileDeleteDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,7 +73,13 @@ public class FileDeleteDataProvider inherits FileDataProviderBase {
         }
         checkReadOnly("delete");
 
-        remove_path(req.path);
+        if (root.val() && lock) {
+            # what is removed must be under the root directory, also if the path changes after it was checked
+            # (qore#7821)
+            removePathConfined(req.path);
+        } else {
+            remove_path(req.path);
+        }
         return {
             "path": req.path,
         };

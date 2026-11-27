@@ -9042,6 +9042,11 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
     The operation fails with a \c HASH-SECRET-KEY-ERROR exception if no random source works to create the secret
     key of the keyed hashes of the process (see @ref keyed_internal_tables)
 
+    @note A response on a stream that has closed before it, as when the client reset the stream at the deadline of
+    its request while the response was being made, is not sent and raises no error: the operation completes as for a
+    response that was sent, with nothing sent, as with @ref submitQuicResponse(); the client takes no response on the
+    stream (qoretechnologies/qore#7803)
+
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
@@ -9656,6 +9661,10 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
     @note This method requires an active QUIC server session, typically established via
     @ref startPollQuicAccept()
 
+    @note A response on a stream that has closed before it, as when the client reset the stream at the deadline of
+    its request while the response was being made, is not sent and raises no error, as with
+    @ref submitHttp2Response(): the client takes no response on the stream (qoretechnologies/qore#7803)
+
     @since %Qore 3.0
 */
 nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers,
@@ -9974,6 +9983,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+    @throw QUIC-STREAM-CLOSED the stream has closed before the response, as when the client reset it
+    (qoretechnologies/qore#7803)
 
     @since %Qore 3.0
 */
@@ -10182,6 +10193,8 @@ nothing Socket::setQuicInputStreamSendBound(int session_id, int min_rate, timeou
     use handler-thread fallback
 
     @throw QUIC-ERROR if the session or stream is not found or submission fails
+    @throw QUIC-STREAM-CLOSED the stream has closed before the response, as when the client reset it
+    (qoretechnologies/qore#7803)
 
     @since %Qore 3.0
 */
