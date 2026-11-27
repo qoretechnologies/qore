@@ -20,7 +20,12 @@
     from a parent class without a domain, or an overload of a method that it declares itself.  Code restricted from
     the domain is refused that call as any other call of a builtin method of the class, in every form of the call,
     while an implementation without a domain, the class's own %Qore code and the module code that calls the builtin
-    method for the restricted code stay callable.
+    method for the restricted code stay callable.  A builtin class owned by a %Program (created for it at run time, as
+    the classes of language bridge modules are; the "restrictedbuiltinprobe" test module) runs that %Program's foreign
+    code: the uncontrolled API of the objects of the class that it gives to restricted code is a capability
+    (qore#5521), which a sandbox that refuses uncontrolled APIs still refuses, the other domains of its methods are
+    checked against the calling code, and restricted code cannot create such an object for a %Program with more
+    rights.
     The checks are in inherited-implementation-domain/inherited-implementation-domain-worker.q, which is run in each
     execution mode and as a program compiled with qcc.
 */
@@ -29,7 +34,13 @@ class InheritedImplementationDomainTest inherits QUnit::Test {
         #! the cases of the worker, in the order it runs them
         const Cases = ("network-poll-operation", "network-no-connection", "network-poll-operation-allowed",
             "network-module-method", "filesystem-file", "filesystem-file-allowed", "filesystem-own-overload",
-            "filesystem-own-overload-own", "no-domain-builtin", "no-domain-qore");
+            "filesystem-own-overload-own", "no-domain-builtin", "no-domain-qore", "static-builtin-object",
+            "owned-builtin-capability", "owned-builtin-sandboxed", "owned-builtin-sandboxed-restricted",
+            "owned-builtin-sandbox-allows", "owned-builtin-other-domain", "owned-builtin-other-domain-allowed",
+            "owned-builtin-mixed-domain", "owned-builtin-mixed-domain-uncontrolled",
+            "unowned-builtin-through-owner-class", "unowned-builtin-object", "owned-builtin-trusted-module", "owned-builtin-trusted-module-sandboxed", "owned-builtin-own-class",
+            "owned-builtin-own-module", "owned-builtin-own-program", "owned-builtin-owner-calls-ref",
+            "owned-builtin-owner-calls-closure", "owned-builtin-owner-calls-own-object");
     }
 
     private {

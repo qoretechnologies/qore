@@ -521,7 +521,17 @@ public class Registry {
       a module or of another %Program) inherits from a builtin class of the domain and that the call reaches through a
       method of the %Qore class, such as the implementation of an abstract method that the class inherits from another
       parent class, or an overload of a method that the class declares itself: the builtin method is checked against
-      the restrictions of the code that calls it, as when it is called on an object of the builtin class
+      the restrictions of the code that calls it, as when it is called on an object of the builtin class.  A builtin
+      class that a module creates for a %Program at run time (such as the classes of the Python objects of the
+      \c python module and of the Java classes of the \c jni module) runs that %Program's foreign code: the
+      \c UNCONTROLLED_API domain of its methods is checked against the options of that %Program, so an object of the
+      class that the %Program gives to restricted code (also as an inherited constant, or as the return value of a
+      function of a module that the %Program loaded before the restricted code did) is a capability, as an object of
+      one of the %Program's %Qore classes is.  Such an object gives the restricted code the whole foreign runtime of that %Program: its methods,
+      and the objects that they return, reach every Python or Java API that the %Program can use.  The other domains
+      of its methods are checked against the calling code, and a @ref Qore::SandboxManager "SandboxManager" that
+      governs the calling code still refuses the methods of such classes when it does not allow uncontrolled APIs (see
+      @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()")
 
     A call that the parser resolved and checked calls the variant it resolved in every execution mode: a restriction
     that @ref Qore::Program::setParseOptions() "Program::setParseOptions()" sets after the code was parsed does not
