@@ -65,7 +65,11 @@ module HttpClientIo {
       ends the race with that error (see
       @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError() "HttpClientConnectionManager::isTerminalConnectionError()").  Alt-Svc advertisements supply the UDP port for
       later races.  Poll-operation callers race without blocking with
-      @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync() "acquireConnectionAsync()" and can
+      @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync() "acquireConnectionAsync()", which gives
+      the pooled connection itself to code that no sandbox restricts or that owns the manager; code that only waits
+      for a connection, as a sandboxed borrower of a lent manager does, uses
+      @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionStatusAsync() "acquireConnectionStatusAsync()",
+      which gives its state (@ref HttpClientIo::HttpClientConnectionStatus "HttpClientConnectionStatus").  They can
       cancel a race with
       @ref HttpClientIo::HttpClientConnectionManager::abandonAsyncHEForUrl() "abandonAsyncHEForUrl()"
     - <b>HTTP/1.1 support</b>: Serial request/response with keep-alive; connection manager creates

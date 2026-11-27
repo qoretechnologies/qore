@@ -900,6 +900,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
     }
 
+    #! Raises an exception if restricted code that does not own the manager asks for a pooled connection (qore#7813)
+    /** A pooled connection serves the requests of every caller of the manager: restricted code that does not own the
+        manager is not given it, as it could close it or lease it while a request of the host uses it (see
+        checkLeaseCaller())
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkAcquireCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot acquire a pooled connection of a "
+                "connection manager that it does not own";
+        }
+    }
+
     #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
     private:internal checkPinCaller() {
         bool restricted;
@@ -1085,8 +1109,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Delegate to the V2 cancelable non-blocking entry so pre-warm uses the
         # same real H3/H2 happy-eyeballs race as the connection-monitor ping op
         # (and shares its per-key race state).  Never blocks the caller.
+        # the connection is not given to the caller, so the check of acquireConnectionAsync() does not apply
         *HttpClientConnection conn_out;
-        return acquireConnectionAsync(url, \conn_out);
+        return acquireConnectionAsyncIntern(url, \conn_out);
     }
 
     #! Acquires a stream and starts streaming with automatic retry on stale connections
@@ -4340,6 +4365,10 @@ printf("%d connection(s) migrated\n", migrated);
         @ref NOTHING if a usable connection is already available (caller should
         proceed immediately)
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7813): the
+        connection given in \a conn_out is the pooled connection that the manager's other callers use, which such code
+        could close or lease while a request of the host uses it; a request that such code makes with the manager
+        (@ref requestAsync()) does not need this method
         @throw HTTPCLIENT-URL-ERROR the URL is invalid
         @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
         @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
@@ -4354,6 +4383,67 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     *EventNotifier acquireConnectionAsync(string url, reference<*HttpClientConnection> conn_out) {
+        checkAcquireCaller();
+        return acquireConnectionAsyncIntern(url, \conn_out);
+    }
+
+    #! Advances the acquisition of a connection like acquireConnectionAsync(), and gives its state, not the connection
+    /** The code that waits for a connection to be established and counts the attempts that fail needs the state of the
+        connection only (see @ref HttpClientConnectionStatus): this method gives it to every caller, also to code that a
+        sandbox restricts and that does not own the manager, which acquireConnectionAsync() refuses (qore#7813)
+
+        @note Like ensureConnectionAsync() and the requests that the module makes, this method does not call
+        acquireConnectionAsync(): a subclass of the manager that overrides acquireConnectionAsync() does not see these
+        calls
+
+        @param url the target URL (only scheme, host, and port are used)
+        @param status_out set to the state of the connection that the caller should track for failure detection (see
+        acquireConnectionAsync() for \a conn_out)
+
+        @return as acquireConnectionAsync()
+
+        @throw HTTPCLIENT-URL-ERROR the URL is invalid
+        @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
+        @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
+        connected either
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate
+        @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection
+        @throw HTTPCLIENT-CONNECT-ERROR no protocol connected
+
+        @since HttpClientIo 1.0
+    */
+    *EventNotifier acquireConnectionStatusAsync(string url, reference<*HttpClientConnectionStatus> status_out) {
+        *HttpClientConnection conn;
+        *EventNotifier rv = acquireConnectionAsyncIntern(url, \conn);
+        status_out = conn ? HttpClientIoSocketAccess::newStatus(conn) : NOTHING;
+        return rv;
+    }
+
+    #! Acquires a connection step for the code of this module, which acts for the request that it makes (qore#7813)
+    /** The public method, acquireConnectionAsync(), refuses code that a sandbox restricts and that does not own the
+        manager, as it gives the pooled connection, which the code of this module uses for the request that a restricted
+        caller makes with the manager (@ref requestAsync(), for example).  Reserved for the code of this module (see
+        HttpClientIoSocketAccess::acquireConnectionAsync())
+
+        @param access the token of the module
+        @param url the target URL (only scheme, host, and port are used)
+        @param conn_out set as by acquireConnectionAsync()
+
+        @return as acquireConnectionAsync()
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final *EventNotifier acquireConnectionAsyncFor(object access, string url,
+            reference<*HttpClientConnection> conn_out) {
+        HttpClientIoSocketAccess::check(access);
+        return acquireConnectionAsyncIntern(url, \conn_out);
+    }
+
+    #! The body of acquireConnectionAsync(), for the callers that were checked
+    private:internal *EventNotifier acquireConnectionAsyncIntern(string url,
+            reference<*HttpClientConnection> conn_out) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
