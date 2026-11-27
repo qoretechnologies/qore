@@ -231,7 +231,15 @@ module HttpServerUtil {
       never given
 
     A request handler that dispatches requests to the code of other components withholds their credentials with
-    @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()".  The
+    @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()".  A
+    request handler that calls the code of an application with the request (a closure or call reference, such as an
+    RPC method or a callback, or an object, such as an authorizer) gives the code of a restricted %Program the request
+    without its credentials, also when trusted code registered it with the handler: see
+    @ref HttpServer::AbstractHttpRequestHandler::getContextForCode() "getContextForCode()",
+    @ref HttpServer::AbstractHttpRequestHandler::getContextForObject() "getContextForObject()" and
+    @ref HttpServer::AbstractHttpRequestHandler::filterRequestForCode() "filterRequestForCode()", which give the code
+    the keys of the request that the filter gives and the handler's own keys of plain data
+    (@ref HttpServer::AbstractHttpRequestHandler::getDispatchContextKeys() "getDispatchContextKeys()").  The
     stream request itself serves the request with the raw request, which it keeps in members that only its own code
     reads: the request handler gives it to the stream request that it creates in the HTTP server's dispatch; a stream
     request created otherwise, for example by code that calls a handler directly, serves the request with the context
@@ -253,6 +261,10 @@ module HttpServerUtil {
     - the methods of a handler of restricted code that the HTTP server calls for a request get the request without its
       credentials, and the handler's trusted authenticator authenticates the raw request first
       (@ref httpserverutil_request_credentials; issue #7303)
+    - added @ref HttpServer::AbstractHttpRequestHandler::getContextForCode() "AbstractHttpRequestHandler::getContextForCode()",
+      @ref HttpServer::AbstractHttpRequestHandler::getContextForObject() "getContextForObject()" and
+      @ref HttpServer::AbstractHttpRequestHandler::filterRequestForCode() "filterRequestForCode()": a handler gives
+      the code of a restricted %Program that it calls the request without its credentials (issue #7303)
     - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
       @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
@@ -6101,6 +6113,190 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     */
     private final hash<HttpFilteredRequestInfo> filterRequestForHandler(hash<auto> cx, hash<auto> hdr) {
         return AbstractStreamRequest::filterRequest(cx, hdr, getRequestFilterOptions());
+    }
+
+    #! Returns the request context for code that the handler calls: without the credentials of the request for the
+    #! code of a restricted %Program (qore#7303)
+    /** The code of a closure or call reference that the handler calls with the request context, such as the method of
+        an RPC handler or a callback that an application registered with the handler, gets the context filtered (see
+        filterRequestForCode()) when the code is of a %Program that a sandbox that does not trust its code governs
+        (codeIsRestricted(), which fails closed), also when trusted code registered it; other code gets \a cx as given.
+
+        @param c the code that gets the context
+        @param cx the request context
+
+        @return \a cx for trusted code, else the request context without its credentials
+
+        @see @ref httpserverutil_request_credentials
+
+        @since HttpServerUtil 1.6
+    */
+    private final hash<auto> getContextForCode(code c, hash<auto> cx) {
+        if (!AbstractHttpRequestHandler::codeIsRestricted(c)) {
+            return cx;
+        }
+        return filterRequestForCode(cx, cx.hdr ?? {}).cx;
+    }
+
+    #! Returns the request context for an object whose code the handler calls: without the credentials of the
+    #! request when the object is of a restricted %Program (qore#7303)
+    /** As getContextForCode(), for an object that the handler calls with the request context, such as an authorizer
+        or a resolver that an application gave the handler (objectIsRestricted(), which fails closed)
+
+        @param obj the object whose code gets the context
+        @param cx the request context
+
+        @return \a cx for an object of trusted code, else the request context without its credentials
+
+        @since HttpServerUtil 1.6
+    */
+    private final hash<auto> getContextForObject(object obj, hash<auto> cx) {
+        if (!AbstractHttpRequestHandler::objectIsRestricted(obj)) {
+            return cx;
+        }
+        return filterRequestForCode(cx, cx.hdr ?? {}).cx;
+    }
+
+    #! Returns the request without its credentials for the code of a restricted %Program that the handler calls
+    #! (qore#7303)
+    /** The request is filtered with the options of this handler (see
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()": its
+        authenticator and setRequestCredentialHeaders()), and the header fields that getDispatchWithheldHeaders()
+        returns are withheld as well; the request context then has the keys of the request that the filter gives and
+        the keys of getDispatchContextKeys() that hold plain data: a name of a key of the request that the filter
+        gives (@ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys") is not copied
+        from \a cx, and the server's objects
+        (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "AbstractStreamRequest::ServerContextKeys") and
+        values that are objects or code, or hold one at any depth, are not given in any case.
+
+        The handler calls it when it decided that the code that gets the request is restricted; see
+        getContextForCode() and getContextForObject().  It returns only a copy of the request that it is given.
+
+        @param cx the request context
+        @param hdr the request header fields
+
+        @return the request without its credentials
+
+        @since HttpServerUtil 1.6
+    */
+    private final hash<HttpFilteredRequestInfo> filterRequestForCode(hash<auto> cx, hash<auto> hdr) {
+        hash<HttpRequestFilterOptions> opts = getRequestFilterOptions();
+        *list<string> withheld_headers = getDispatchWithheldHeaders();
+        if (withheld_headers) {
+            opts.platform_headers = (opts.platform_headers ?? ()) + withheld_headers;
+        }
+        hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr, opts);
+        # the keys that the handler adds for the code that it calls: plain data only, never the request keys or the
+        # server's objects
+        foreach string key in (getDispatchContextKeys()) {
+            if (cx.hasKey(key) && !rv.cx.hasKey(key) && !inlist(key, AbstractStreamRequest::ContextKeys)
+                    && !inlist(key, AbstractStreamRequest::ServerContextKeys)
+                    && !AbstractHttpRequestHandler::holdsObjectOrCode(cx{key})) {
+                rv.cx{key} = cx{key};
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the names of the keys of the request context that the handler adds for the code that it calls, which
+    #! the code of a restricted %Program gets also when the request is filtered for it (qore#7303)
+    /** See filterRequestForCode(): the keys must hold plain data and no credentials, as the code of a restricted
+        %Program gets them; a key that holds an object or code is not given.  A subclass that adds keys to the request
+        context for the code that it calls returns their names here, with those of its base class.
+
+        The default implementation returns no names.
+
+        @return the names of the keys of the request context that the handler adds for the code that it calls
+
+        @since HttpServerUtil 1.6
+    */
+    private *list<string> getDispatchContextKeys() {
+    }
+
+    #! Returns the names of more request header fields that the code of a restricted %Program that the handler calls
+    #! does not get (qore#7303)
+    /** See filterRequestForCode(): the fields are withheld as the fields of
+        @ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders" are, for example a session ID of
+        the protocol of the handler, which identifies the session of the client to the handler.
+
+        The default implementation returns no names.
+
+        @return the names of more request header fields that the code of a restricted %Program does not get
+        (compared without regard to case)
+
+        @since HttpServerUtil 1.6
+    */
+    private *list<string> getDispatchWithheldHeaders() {
+    }
+
+    #! Returns @ref True if the code of the closure or call reference is of a restricted %Program (qore#7303)
+    /** See @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()";
+        fails closed: @ref True if it cannot be decided
+
+        @param c the closure or call reference
+
+        @return @ref True if a sandbox that does not trust its code governs the code
+
+        @since HttpServerUtil 1.6
+    */
+    static bool codeIsRestricted(code c) {
+        try {
+            return SandboxManager::isCodeFromRestrictedProgram(c);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns @ref True if the object is of a restricted %Program (qore#7303)
+    /** See @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; fails
+        closed: @ref True if it cannot be decided
+
+        @param obj the object
+
+        @return @ref True if a sandbox that does not trust its code governs the %Program of the class of the object
+
+        @since HttpServerUtil 1.6
+    */
+    static bool objectIsRestricted(object obj) {
+        try {
+            return SandboxManager::isFromRestrictedProgram(obj);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns @ref True if the value is an object or code (a closure or call reference), or a hash or list that holds
+    #! one at any depth: a value that the code of a restricted %Program does not get (qore#7726)
+    /** A call reference to a method also carries its object;
+        @ref HttpServer::AbstractStreamRequest::holdsObject() "AbstractStreamRequest::holdsObject()" does not see code
+
+        @param v the value
+
+        @return @ref True if the value is or holds an object or code
+
+        @since HttpServerUtil 1.6
+    */
+    static bool holdsObjectOrCode(auto v) {
+        if (v.typeCode() == NT_OBJECT || v.callp()) {
+            return True;
+        }
+        switch (v.typeCode()) {
+            case NT_HASH:
+                foreach string k in (keys v) {
+                    if (AbstractHttpRequestHandler::holdsObjectOrCode(v{k})) {
+                        return True;
+                    }
+                }
+                break;
+            case NT_LIST:
+                foreach auto e in (v) {
+                    if (AbstractHttpRequestHandler::holdsObjectOrCode(e)) {
+                        return True;
+                    }
+                }
+                break;
+        }
+        return False;
     }
 
     #! returns the options of the filter of this handler: its authenticator and setRequestCredentialHeaders()
