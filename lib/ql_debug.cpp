@@ -9470,18 +9470,24 @@ public:
         int take = 0;
         //! the number of attempts that the hook saw
         int seen = 0;
-        //! the IPv6 sockets that hold the ports taken
+        //! the IPv6 sockets of the hook, which hold the ports in `held`
         std::vector<int> fds;
-        //! the ports taken, in host byte order, one per attempt (the kernel can choose a port again)
+        //! the ports that the sockets of the hook hold on ::1, in host byte order
+        std::vector<int> held;
+        //! the ports of the first `take` attempts, in host byte order, one per attempt (the kernel can choose a port
+        //! again); each is taken on ::1, by a socket of the hook or by another one
         std::vector<int> ports;
-        //! the attempts after the first `take` ones whose port the hook held already (the kernel chose it again),
+        //! the attempts after the first `take` ones whose port a socket of the hook holds (the kernel chose it again),
         //! which the helper must discard
         int repeats = 0;
-        //! the attempts after the first `take` ones that the helper discarded although the hook did not hold their
-        //! port: another socket held it on ::1, the condition of qore#7820
+        //! the attempts after the first `take` ones whose port another socket holds on ::1, the condition of
+        //! qore#7820, verified with a bind of the hook that failed with EADDRINUSE; the helper must discard them
         int outside = 0;
-        //! the hook held the port of the last attempt that it saw
-        bool last_held = false;
+        //! the attempts after the first `take` ones whose port was free on ::1 (a bind of the hook succeeded) and
+        //! that the helper discarded all the same; must stay 0
+        int unexpected = 0;
+        //! the port of the last attempt that the hook saw was free on ::1
+        bool last_free = false;
         //! the error of a socket call of the hook, empty if none
         std::string error;
 
@@ -9495,11 +9501,42 @@ public:
     //! The state of the hook of runTargetPairPortTaken(); null when it takes no port
     static inline TargetPairTaker* target_pair_taker = nullptr;
 
+    //! Binds a new IPv6-only TCP socket to ::1 with @p port (network byte order)
+    /** @return the descriptor, or -1 with errno set and @p failed set to the call that failed
+    */
+    static int bindLoopback6(in_port_t port, const char*& failed) {
+        int fd = ::socket(AF_INET6, SOCK_STREAM, 0);
+        if (fd < 0) {
+            failed = "socket";
+            return -1;
+        }
+        int on = 1;
+        struct sockaddr_in6 sa6 = {};
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_addr = in6addr_loopback;
+        sa6.sin6_port = port;
+        failed = nullptr;
+        if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on))) {
+            failed = "setsockopt(IPV6_V6ONLY)";
+        } else if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6))) {
+            failed = "bind";
+        }
+        if (failed) {
+            int err = errno;
+            ::close(fd);
+            errno = err;
+            return -1;
+        }
+        return fd;
+    }
+
     //! Takes the port of the first attempts of makeTargetPair() on ::1 with an IPv6-only socket, as another process can
-    /** The port of each attempt taken is added to TargetPairTaker::ports, once per attempt: the kernel can choose a
-        port that the hook holds already, and another socket can hold it on ::1, in which case the hook's own bind fails
-        with EADDRINUSE and the port is taken all the same.  The attempts after the first TargetPairTaker::take ones
-        whose port is taken all the same are counted, as the helper must discard them too.
+    /** The port of each of the first TargetPairTaker::take attempts is added to TargetPairTaker::ports, and a socket of
+        the hook takes it if none holds it already; if another socket holds it, the bind of the hook fails with
+        EADDRINUSE and the port is taken all the same.  The port of each later attempt is classified: held by a socket
+        of the hook (the kernel chose it again), held by another socket (verified: a bind of the hook fails with
+        EADDRINUSE), or free (the bind succeeds and is closed at once); the helper must discard the attempts of the
+        first two kinds and keep the pair of the third, which the next call of the hook checks.
     */
     static void takeTargetPairPort(int attempt, in_port_t port) {
         TargetPairTaker* t = target_pair_taker;
@@ -9507,48 +9544,52 @@ public:
             return;
         }
         ++t->seen;
-        // the helper discarded the last attempt, which was not one whose port the hook took or held
-        if (attempt > t->take && !t->last_held) {
-            ++t->outside;
+        // the port of the last attempt was free on ::1, and the helper discarded its pair all the same
+        if (t->last_free) {
+            ++t->unexpected;
+            t->last_free = false;
         }
-        const bool held = std::find(t->ports.begin(), t->ports.end(), (int)ntohs(port)) != t->ports.end();
-        t->last_held = held;
+        const int p = ntohs(port);
+        const bool held = std::find(t->held.begin(), t->held.end(), p) != t->held.end();
         if (attempt >= t->take) {
             if (held) {
                 ++t->repeats;
-            }
-            return;
-        }
-        t->last_held = true;
-        int fd = ::socket(AF_INET6, SOCK_STREAM, 0);
-        if (fd < 0) {
-            t->error = silentTargetError("socket", errno);
-            return;
-        }
-        t->fds.push_back(fd);
-        int on = 1;
-        if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on))) {
-            t->error = silentTargetError("setsockopt(IPV6_V6ONLY)", errno);
-            return;
-        }
-        struct sockaddr_in6 sa6 = {};
-        sa6.sin6_family = AF_INET6;
-        sa6.sin6_addr = in6addr_loopback;
-        sa6.sin6_port = port;
-        if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6))) {
-            int err = errno;
-            // the port is taken on ::1 already: by the hook, as the kernel can choose the port of a discarded attempt
-            // again, or by another socket
-            if (err == EADDRINUSE) {
-                t->fds.pop_back();
-                ::close(fd);
-                t->ports.push_back(ntohs(port));
                 return;
             }
-            t->error = silentTargetError("bind", err);
+            const char* failed = nullptr;
+            int fd = bindLoopback6(port, failed);
+            int err = errno;
+            if (fd >= 0) {
+                ::close(fd);
+                t->last_free = true;
+            } else if (err == EADDRINUSE) {
+                ++t->outside;
+            } else {
+                t->error = silentTargetError(failed, err);
+            }
             return;
         }
-        t->ports.push_back(ntohs(port));
+        t->ports.push_back(p);
+        if (held) {
+            return;
+        }
+        const char* failed = nullptr;
+        int fd = bindLoopback6(port, failed);
+        int err = errno;
+        if (fd < 0) {
+            // another socket holds the port on ::1: it is taken all the same
+            if (err != EADDRINUSE) {
+                t->error = silentTargetError(failed, err);
+            }
+            return;
+        }
+        try {
+            t->fds.push_back(fd);
+        } catch (...) {
+            ::close(fd);
+            throw;
+        }
+        t->held.push_back(p);
     }
 
     //! Checks the descriptors of a pair of targets that makeTargetPair() made on the port @p port (network byte order)
@@ -9648,12 +9689,14 @@ public:
             target_pair_taker = nullptr;
             UT_ASSERT(c, taker.error.empty(), ("the hook takes the port on ::1" + when + taker.error).c_str());
             UT_ASSERT(c, ok, ("the pair of targets is made" + when).c_str());
-            // an attempt after the first take ones is discarded only if its port is taken on ::1 all the same: by the
-            // hook (the kernel chose a port that it holds) or by another socket
+            // an attempt after the first take ones is discarded only if its port is taken on ::1 all the same: by a
+            // socket of the hook (the kernel chose a port that it holds) or by another socket (verified by the hook)
             UT_ASSERT_EQ(c, take + 1 + taker.repeats + taker.outside, attempts,
                 ("the pair is made in the attempt after those whose port is taken (" + std::to_string(taker.repeats)
-                + " ports chosen again, " + std::to_string(taker.outside) + " taken by another socket)" + when)
+                + " ports chosen again, " + std::to_string(taker.outside) + " held by another socket)" + when)
                 .c_str());
+            UT_ASSERT_EQ(c, 0, taker.unexpected,
+                ("the helper keeps the pair of an attempt whose port is free on ::1" + when).c_str());
             UT_ASSERT_EQ(c, attempts, taker.seen, ("the hook is called once in each attempt" + when).c_str());
             UT_ASSERT_EQ(c, (size_t)take, taker.ports.size(), ("the hook took the port of each attempt" + when).c_str());
             const int port = ntohs(sa.sin_port);
@@ -9667,6 +9710,8 @@ public:
 
         // the port of every attempt is taken: the helper gives up with a message that names the ports tried
         {
+            // the port of every attempt is held by a socket of the hook or by another socket that holds it until the
+            // helper's bind; this assumes that the holders are stable, as the hook's own sockets are
             const std::string when = " (the port of every attempt taken on ::1)";
             TargetPairTaker taker;
             taker.take = TARGET_PAIR_MAX_ATTEMPTS + 1;
