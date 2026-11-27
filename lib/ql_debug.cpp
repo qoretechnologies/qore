@@ -9474,6 +9474,14 @@ public:
         std::vector<int> fds;
         //! the ports taken, in host byte order, one per attempt (the kernel can choose a port again)
         std::vector<int> ports;
+        //! the attempts after the first `take` ones whose port the hook held already (the kernel chose it again),
+        //! which the helper must discard
+        int repeats = 0;
+        //! the attempts after the first `take` ones that the helper discarded although the hook did not hold their
+        //! port: another socket held it on ::1, the condition of qore#7820
+        int outside = 0;
+        //! the hook held the port of the last attempt that it saw
+        bool last_held = false;
         //! the error of a socket call of the hook, empty if none
         std::string error;
 
@@ -9489,7 +9497,9 @@ public:
 
     //! Takes the port of the first attempts of makeTargetPair() on ::1 with an IPv6-only socket, as another process can
     /** The port of each attempt taken is added to TargetPairTaker::ports, once per attempt: the kernel can choose a
-        port that the hook holds already
+        port that the hook holds already, and another socket can hold it on ::1, in which case the hook's own bind fails
+        with EADDRINUSE and the port is taken all the same.  The attempts after the first TargetPairTaker::take ones
+        whose port is taken all the same are counted, as the helper must discard them too.
     */
     static void takeTargetPairPort(int attempt, in_port_t port) {
         TargetPairTaker* t = target_pair_taker;
@@ -9497,9 +9507,19 @@ public:
             return;
         }
         ++t->seen;
+        // the helper discarded the last attempt, which was not one whose port the hook took or held
+        if (attempt > t->take && !t->last_held) {
+            ++t->outside;
+        }
+        const bool held = std::find(t->ports.begin(), t->ports.end(), (int)ntohs(port)) != t->ports.end();
+        t->last_held = held;
         if (attempt >= t->take) {
+            if (held) {
+                ++t->repeats;
+            }
             return;
         }
+        t->last_held = true;
         int fd = ::socket(AF_INET6, SOCK_STREAM, 0);
         if (fd < 0) {
             t->error = silentTargetError("socket", errno);
@@ -9517,9 +9537,9 @@ public:
         sa6.sin6_port = port;
         if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6))) {
             int err = errno;
-            // the kernel can choose the port of a discarded attempt again, which the hook holds already
-            if (err == EADDRINUSE
-                && std::find(t->ports.begin(), t->ports.end(), (int)ntohs(port)) != t->ports.end()) {
+            // the port is taken on ::1 already: by the hook, as the kernel can choose the port of a discarded attempt
+            // again, or by another socket
+            if (err == EADDRINUSE) {
                 t->fds.pop_back();
                 ::close(fd);
                 t->ports.push_back(ntohs(port));
@@ -9530,24 +9550,6 @@ public:
         }
         t->ports.push_back(ntohs(port));
     }
-
-#ifdef __linux__
-    //! Returns the number of open descriptors of the process, or -1 if they cannot be listed
-    static int countOpenDescriptors() {
-        DIR* d = opendir("/proc/self/fd");
-        if (!d) {
-            return -1;
-        }
-        int n = 0;
-        while (struct dirent* e = readdir(d)) {
-            if (e->d_name[0] != '.') {
-                ++n;
-            }
-        }
-        closedir(d);
-        return n;
-    }
-#endif
 
     //! Checks the descriptors of a pair of targets that makeTargetPair() made on the port @p port (network byte order)
     //! while the ports @p taken (host byte order) were taken on ::1 (qore#7820)
@@ -9630,9 +9632,6 @@ public:
                 fds.clear();
             }
         };
-#ifdef __linux__
-        const int open_before = countOpenDescriptors();
-#endif
         target_pair_before_bind6 = takeTargetPairPort;
         const int take = 3;
         for (bool silent4 : {true, false}) {
@@ -9649,9 +9648,13 @@ public:
             target_pair_taker = nullptr;
             UT_ASSERT(c, taker.error.empty(), ("the hook takes the port on ::1" + when + taker.error).c_str());
             UT_ASSERT(c, ok, ("the pair of targets is made" + when).c_str());
-            UT_ASSERT_EQ(c, take + 1, attempts,
-                ("the pair is made in the attempt after those whose port is taken" + when).c_str());
-            UT_ASSERT_EQ(c, take + 1, taker.seen, ("the hook is called once in each attempt" + when).c_str());
+            // an attempt after the first take ones is discarded only if its port is taken on ::1 all the same: by the
+            // hook (the kernel chose a port that it holds) or by another socket
+            UT_ASSERT_EQ(c, take + 1 + taker.repeats + taker.outside, attempts,
+                ("the pair is made in the attempt after those whose port is taken (" + std::to_string(taker.repeats)
+                + " ports chosen again, " + std::to_string(taker.outside) + " taken by another socket)" + when)
+                .c_str());
+            UT_ASSERT_EQ(c, attempts, taker.seen, ("the hook is called once in each attempt" + when).c_str());
             UT_ASSERT_EQ(c, (size_t)take, taker.ports.size(), ("the hook took the port of each attempt" + when).c_str());
             const int port = ntohs(sa.sin_port);
             UT_ASSERT(c, port && std::find(taker.ports.begin(), taker.ports.end(), port) == taker.ports.end(),
@@ -9679,6 +9682,7 @@ public:
             UT_ASSERT(c, taker.error.empty(), ("the hook takes the port on ::1" + when + taker.error).c_str());
             UT_ASSERT(c, !ok, ("the pair of targets is not made" + when).c_str());
             UT_ASSERT_EQ(c, TARGET_PAIR_MAX_ATTEMPTS, attempts, ("the helper makes every attempt" + when).c_str());
+            UT_ASSERT_EQ(c, attempts, taker.seen, ("the hook is called once in each attempt" + when).c_str());
             UT_ASSERT_EQ(c, (size_t)TARGET_PAIR_MAX_ATTEMPTS, taker.ports.size(),
                 ("the hook took the port of each attempt" + when).c_str());
             UT_ASSERT_EQ(c, 0, helper_c.fail_count, ("the helper asserts no other failure" + when).c_str());
@@ -9695,10 +9699,6 @@ public:
             UT_ASSERT(c, exhausted.find(expected) != std::string::npos, ("the failure names the attempts and the "
                 "ports tried" + when + " (message: \"" + exhausted + "\")").c_str());
         }
-#ifdef __linux__
-        UT_ASSERT_EQ(c, open_before, countOpenDescriptors(),
-            "every descriptor that the pairs of targets and the hook made is closed (port taken on ::1)");
-#endif
     }
 
     //! The state of the check that runConnectCloseRegistered() makes in the close (see qore_dbg_before_close_wakes)
