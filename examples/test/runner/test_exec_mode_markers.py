@@ -183,8 +183,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
         #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
-        # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
-        #   compiled with qcc
         # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - index-writer-filesystem (#6500): each execution mode runs in a child process of its own, which loads the
         #   modules once
@@ -491,7 +489,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
-                                 "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
                                  "examples/test/qore/security/sandbox-timezone-paths-library.qtest",
                                  "examples/test/qore/misc/small-main-stack-startup.qtest",
