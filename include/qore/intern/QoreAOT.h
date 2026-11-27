@@ -1315,6 +1315,17 @@ DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink);
 //! Gets the modules that the registered AOT user module \a name requires; returns false if it is not one
 DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std::string>& deps);
 
+//! Gets the direct requirements and the reexports of the registered AOT user module \a name
+/** @param name the module's feature name
+    @param required receives the modules that the directives of the module's source required directly, in their
+    order: \c %%requires, \c %%requires(reexport) and the \c %%try-module requests that succeeded when it was compiled
+    @param reexported receives the modules that its \c %%requires(reexport) directives reexport
+
+    @return false if \a name is not a registered AOT user module (the lists are then unchanged)
+ */
+DLLLOCAL bool qore_aot_get_module_requirements(const char* name, std::vector<std::string>& required,
+    std::vector<std::string>& reexported);
+
 //! Returns true if a registered AOT user module other than \a name requires the module \a name
 /** Used at shutdown to delete an AOT user module only after the AOT user modules that require it
  */

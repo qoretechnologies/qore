@@ -1534,6 +1534,11 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Direct Module Requirements in the Module Hash
+    @ref Qore::get_module_hash() "get_module_hash()" reports the direct requirements of each module as
+    \c required-modules, and the reexports of a compiled module as \c reexported-modules as for its source
+    (<a href="https://github.com/qoretechnologies/qore/issues/7796">issue 7796</a>).
+
     @par Shared Objects in Binary Modules
     Binary modules mark the objects that they keep for every %Program as shared, check changes and callbacks and
     update them in an update scope with a C++ API (\c qore_share_object(), \c qore_update_shared_object() and their

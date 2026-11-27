@@ -3642,6 +3642,8 @@ DLLLOCAL void remove_constant(ConstantEntry* ce);
 
 DLLLOCAL QoreAbstractModule* set_reexport(QoreAbstractModule* m, bool current_reexport, bool& old_reexport);
 DLLLOCAL void set_reexport(QoreAbstractModule* m, bool reexport);
+//! returns the module that this thread is loading, whose directives are parsed (see ModuleReExportHelper), or nullptr
+DLLLOCAL QoreAbstractModule* get_reexport_module();
 
 DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
         const AbstractQoreFunctionVariant* variant, const char*& old_code, const QoreTypeInfo*& old_returnTypeInfo,

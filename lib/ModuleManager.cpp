@@ -1954,6 +1954,14 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
             l->push(new QoreStringNode(*i), nullptr);
         ph->setKeyValueIntern("reexported-modules", l);
     }
+    if (!reqmod.empty()) {
+        // the direct requirements of the module (#7796)
+        QoreListNode* l = new QoreListNode(stringTypeInfo);
+        for (const std::string& r : reqmod) {
+            l->push(new QoreStringNode(r), nullptr);
+        }
+        ph->setKeyValueIntern("required-modules", l);
+    }
     if (!children.empty()) {
         // child modules declared with %try-child-module, keyed by feature name in declaration order
         QoreHashNode* ch = new QoreHashNode(autoTypeInfo);
@@ -2510,6 +2518,10 @@ static QoreStringNode* loadModuleError(const char* name, ExceptionSink& xsink) {
 
 QoreProgram* QoreBuiltinModule::getModuleProgram() const {
     return qore_is_aot_user_module(name.c_str()) ? qore_aot_get_module_pgm(name.c_str()) : nullptr;
+}
+
+bool QoreBuiltinModule::reexportsInNamespaceInit() const {
+    return qore_is_aot_user_module(name.c_str());
 }
 
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
@@ -5927,9 +5939,19 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
         OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
         mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, mo == MOD_OP_NONE ? nullptr : &iv);
-        // If reexport directive is present, register module for reexport (module context is correct here)
-        if (reexport && mod && !xsink) {
-            ModuleReExportHelper mrh(mod, true);
+        if (mod && !xsink) {
+            // a directive parsed into the Program of the module that this thread is loading is a direct requirement
+            // of that module (#7796); not one of another Program that the module's code parses while it is loaded,
+            // nor one of a module that does not have its own Program (the module context of a binary module is
+            // set only after its initialization)
+            QoreAbstractModule* reqmi = get_reexport_module();
+            if (reqmi && reqmi != mod && reqmi->getModuleProgram() == pgm) {
+                reqmi->addModuleRequirement(mod->getName());
+            }
+            // If reexport directive is present, register module for reexport (module context is correct here)
+            if (reexport) {
+                ModuleReExportHelper mrh(mod, true);
+            }
         }
     }
 
@@ -7857,6 +7879,36 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // embedded source is parsed (see design/qore-module-structure.md "Child Modules")
     if (!mod_info.child_modules.empty()) {
         bmi->setChildModules(mod_info.child_modules);
+    }
+    // the direct requirements and the reexports of the module (#7796): an AOT user module has those of the
+    // directives of its source, which its image records, and which it loads in its initialization, not in a module
+    // context of its own; a binary module has the dependencies that it declares
+    if (qore_is_aot_user_module(name)) {
+        name_vec_t required, reexported;
+        qore_aot_get_module_requirements(name, required, reexported);
+        // a module compiled before its image recorded its direct requirements has its recorded dependencies, which
+        // can name the "qore" feature and features that are builtin
+        for (const std::string& dep : required) {
+            if (dep != "qore" && qoreFeatureList.find(dep) == qoreFeatureList.end()) {
+                bmi->addModuleRequirement(dep.c_str());
+            }
+        }
+        for (const std::string& dep : reexported) {
+            bool dup = false;
+            for (const std::string& r : bmi->rmod) {
+                if (r == dep) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                bmi->addModuleReExport(dep.c_str());
+            }
+        }
+    } else {
+        for (const std::string& dep : mod_info.dependencies) {
+            bmi->addModuleRequirement(dep.c_str());
+        }
     }
     mi = bmi.get();
     QMM.addModule(bmi.release());
