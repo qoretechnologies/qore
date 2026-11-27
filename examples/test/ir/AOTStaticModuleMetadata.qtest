@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in C++ hosts that link modules compiled with qcc
 # test-platform: macos - a .qo module statically linked into a C++ host by the system linker, its linked metadata
 
 # Copyright 2026 Qore Technologies, s.r.o.
@@ -10,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires ../QoreBuildTree.qm
 %requires FsUtil
 %requires Util
@@ -286,8 +288,17 @@ int main(int argc, char** argv) {
         return max(MinStackKb, (min_kb + step_kb - 1) / step_kb * step_kb);
     }
 
+    #! runs a command (qcc or a host) in its default environment
+    /** @return the output on stdout followed by the output on stderr, apart from the warnings of the module loader
+        that a module is loaded from its source, which are not output of the run (qore#7805)
+    */
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return runResult(cmd).out;
+    }
+
+    #! runs a command (qcc or a host) in its default environment and returns its result (qore#7805)
+    private hash<ExecModeHarness::ModeRunResult> runResult(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private static write(string path, string contents) {
@@ -356,8 +367,11 @@ int main(int argc, char** argv) {
 
         # the optional module is available now: the module is used, and the missing functionality is reported
         writeModule(opt_dir, "StatOpt", "", "public namespace StatOpt {}");
-        out = trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s %s", env, src_dir, opt_dir, exe)));
-        assertEq("own-noopt", out.split("\n").last(), out);
+        hash<ExecModeHarness::ModeRunResult> r = runResult(sprintf("%s QORE_MODULE_DIR=%s:%s %s", env, src_dir,
+            opt_dir, exe));
+        out = trim(r.out);
+        # the result is the last line that the host prints; the warning is on stderr
+        assertEq("own-noopt", trim(r.stdout).split("\n").last(), out);
         assertRegex("warning: AOT module 'StatMod' linked into this program was compiled when optional module "
             "'StatOpt' was not available, but it is available now", out);
     }

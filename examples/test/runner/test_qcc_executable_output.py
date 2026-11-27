@@ -99,12 +99,27 @@ ALLOWED = {
         "key=<number> pairs",
     ("examples/test/ir/AOTDataProviderExecutable.qtest", 'echo $? > %s", libqore_dir, exe_path, status_path)'):
         "the executable runs a QUnit test: its exit status and a regex match of the QUnit summary line",
+    ("examples/test/ir/AOTModuleMetadataSection.qtest", '"%s %s 2>&1", reseal_bin, qmod)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
+    ("examples/test/ir/AOTLinkDeploymentTarget.qtest", 'shellQuote(lib_dir), cmd)'):
+        "run() runs qcc links (the command in cmd), checked for no linker warning and by the files they write; the "
+        "executable runs through checkExecutable()",
+    ("examples/test/ir/AOTStaticModuleMetadata.qtest", '"%s %s --min-stack 2>&1", env, exe)'):
+        "the C++ host prints its minimum stack size and returns before qore_init(): no module is loaded",
+    ("examples/test/ir/aot-ir-value-ids/AotIrValueIds.qc", '"%s %s %d %d 2>&1", reseal_bin, path, meta_pos, meta_len)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
+    ("examples/test/ir/aot-section-bounds/AotSectionBounds.qc",
+        '"%s %s %d %d 2>&1", reseal_bin, path, meta_pos, meta_len)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
+    ("examples/test/ir/AOTStaticModuleMetadata.qtest", 'env, tmp.path, exe, RegisterStackSize, kb)'):
+        "the C++ host's registration runs: its exit status, and finds and regex matches in the output, whose order of "
+        "stdout and stderr (the errors before \"registered\") the checks read",
 }
 
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 14, "PENDING_AOT3": 14, "PENDING": 61}
+SIZES = {"ALLOWED": 20, "PENDING_AOT3": 14, "PENDING": 0}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -128,72 +143,8 @@ PENDING_AOT3 = {
     "examples/test/qore/vars/weak-store-destructor-exception.qtest": 1,
 }
 PENDING = {
-    # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
-    # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTLLVM23Terminator.qtest": 1,
-    "examples/test/ir/AOTLateExceptionEdgeElision.qtest": 1,
-    "examples/test/ir/AOTLinkDeploymentTarget.qtest": 1,
-    "examples/test/ir/AOTLinkUnresolvedReference.qtest": 1,
-    "examples/test/ir/AOTLinkedExitWaitsForThreads.qtest": 1,
-    "examples/test/ir/AOTMemberInitNegativeOffsets.qtest": 1,
-    "examples/test/ir/AOTModuleDependencyRestrictions.qtest": 1,
-    "examples/test/ir/AOTModuleHeaderRequests.qtest": 1,
-    "examples/test/ir/AOTModuleMetadataSection.qtest": 1,
-    "examples/test/ir/AOTNamedCallRefModules.qtest": 1,
-    "examples/test/ir/AOTNativeClosure.qtest": 8,
-    "examples/test/ir/AOTNestedCfgSelectSummary.qtest": 2,
-    "examples/test/ir/AOTNonescapingObjectScalarProjection.qtest": 1,
-    "examples/test/ir/AOTNoopDecrefPrune.qtest": 2,
-    "examples/test/ir/AOTObjectMemberCompoundGet.qtest": 2,
-    "examples/test/ir/AOTObjectMemberCompoundGetCrossObject.qtest": 1,
-    "examples/test/ir/AOTObjectMemberSetGet.qtest": 5,
-    "examples/test/ir/AOTObjectMemberSetGetCrossObject.qtest": 1,
-    "examples/test/ir/AOTOptionalScalarFastEntry.qtest": 2,
-    "examples/test/ir/AOTOptionalScalarSpecialization.qtest": 1,
-    "examples/test/ir/AOTReferenceFreeResult.qtest": 1,
-    "examples/test/ir/AOTRegexCaseLoadFailure.qtest": 1,
-    "examples/test/ir/AOTReturnTypeCoercion.qtest": 2,
-    "examples/test/ir/AOTRuntimeLocationCache.qtest": 1,
-    "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest": 1,
-    "examples/test/ir/AOTScalarObjectGetter.qtest": 3,
-    "examples/test/ir/AOTScalarizedAggregateReturnProjection.qtest": 1,
-    "examples/test/ir/AOTSelfCallPrivateInternal.qtest": 1,
-    "examples/test/ir/AOTStaticModuleMetadata.qtest": 2,
-    "examples/test/ir/AOTStoredCaptureCache.qtest": 2,
-    "examples/test/ir/AOTStringCasePipeline.qtest": 1,
-    "examples/test/ir/AOTStringOrdering.qtest": 2,
-    "examples/test/ir/AOTStringSummaryCfg.qtest": 1,
-    "examples/test/ir/AOTStringTransformCfg.qtest": 1,
-    "examples/test/ir/AOTStringTransformConsumer.qtest": 3,
-    "examples/test/ir/AOTStringTransformSwitch.qtest": 2,
-    "examples/test/ir/AOTSummaryExceptionElision.qtest": 2,
-    "examples/test/ir/AOTWideIntExpressionSummary.qtest": 2,
-    "examples/test/ir/IRContextElision.qtest": 1,
-    "examples/test/ir/IRNativeLocalSSA.qtest": 1,
-    "examples/test/ir/IRTypedForeach.qtest": 1,
-    "examples/test/ir/JITReloadChainFlush.qc": 1,
-    "examples/test/ir/LoopInvariantHashProjection.qtest": 1,
-    "examples/test/ir/LoopInvariantReadOnlyQuery.qtest": 1,
-    "examples/test/ir/aot-closure-toplevel-local-update/aot-closure-toplevel-local-update.qtest": 1,
-    "examples/test/ir/aot-ir-value-ids/AotIrValueIds.qc": 2,
-    # its two runs have the same text: an image with a patched format version, which the runtime refuses (exit
-    # status and matches of the error, which may stay), and compileAndRun()'s, which compares the output of a
-    # successful run (to convert)
-    "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest": 2,
-    "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest": 4,
-    "examples/test/ir/aot-section-bounds/AotSectionBounds.qc": 1,
-    "examples/test/ir/aot-shadowed-locals/aot-shadowed-locals.qtest": 1,
-    "examples/test/ir/batch-callee-closure-frame/batch-callee-closure-frame.qtest": 1,
-    "examples/test/ir/catch-scope-rethrow/catch-scope-rethrow.qtest": 1,
-    "examples/test/ir/cleared-captured-local/cleared-captured-local.qtest": 1,
-    "examples/test/ir/closure-destroyed-self/closure-destroyed-self.qtest": 1,
-    "examples/test/ir/image-ir-temp-drain/image-ir-temp-drain.qtest": 1,
-    "examples/test/ir/inline-handler-flow-loop/InlineHandlerFlowLoop.qc": 2,
-    "examples/test/ir/inline-handler-second-request/InlineHandlerSecondRequest.qtest": 2,
-    "examples/test/ir/on-block-exit-outer-vars/on-block-exit-outer-vars.qtest": 1,
-    "examples/test/ir/on-error-rethrow/on-error-rethrow.qtest": 1,
-    "examples/test/ir/qcc-load-modules.qtest": 2,
-    "examples/test/ir/static-closure-class-context/static-closure-class-context.qtest": 1,
+    # empty: every test is converted (#7805); the list stays, with its size pinned at 0, so that a new run of a qcc
+    # executable with 2>&1 fails test_tests (a test cannot be added here: the lists only shrink)
 }
 
 
