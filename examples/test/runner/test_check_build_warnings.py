@@ -185,6 +185,11 @@ class FetchTest(unittest.TestCase):
         env.update(env_extra or {})
         report = self.dir / "report.txt"
         with mock.patch.dict(os.environ, env, clear=False), mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            # the tokens are only the ones that the test gives: a CI job has QORE_CI_READ_API_TOKEN set, and the
+            # checker would take it (patch.dict restores it on exit)
+            for name in ("QORE_CI_READ_API_TOKEN",):
+                if name not in env:
+                    os.environ.pop(name, None)
             return cbw.main(["--fetch", "--download-dir", str(self.dir / "logs"), "--report", str(report)]), report
 
     def test_fetch_reports_each_platform(self):
