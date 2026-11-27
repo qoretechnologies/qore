@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 # test-platform: macos - qcc-linked executable run as a process, signal thread and -b signal handling
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -8,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTExecutableOptionsTest
@@ -66,13 +68,16 @@ try {
         return exe;
     }
 
-    #! runs the executable with the arguments given and returns its output
+    #! runs the executable with the arguments given in its default environment and returns its output on stdout
+    /** It must end normally and write nothing to stderr; a warning of the module loader on stderr is not output
+        (qore#7805)
+    */
     private string run(string exe, string args) {
-        int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir,
-            libqore_dir, exe, args), \rc);
-        assertEq(0, rc, out);
-        return out;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, exe, args), NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        assertEq("", r.stderr, args + ": stderr");
+        return r.stdout;
     }
 
     testSignals() {
