@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %include UndefinedArithmetic.qc
 

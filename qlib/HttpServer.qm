@@ -344,6 +344,23 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     destroyed the server in the thread that released it, while its other requests ran (see
     <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>).
 
+    @section http_session_token The Session Token of a Request
+
+    The handler of a request gets the session token of the request's connection (for HTTP/3, of its QUIC session) in
+    \c cx.session_token: an opaque string that is the same for every request of the connection, also for the
+    requests of a persistent session, and different for every connection (the inline requests of
+    @ref HttpServer::AbstractHttpRequestHandler::canHandleInline() "canHandleInline()" handlers, whose context has
+    the peer information only, have none).  It names the persistent session of an HTTP/1.x connection to
+    @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose() "signalPersistentSessionClose()"; on
+    HTTP/2 and HTTP/3, whose persistent sessions are stream-scoped and end with their response, it closes nothing.
+    The token of one connection closes no other connection's session, and a value that is not a token, such as the
+    internal key of a connection, closes nothing.
+
+    The request context does not have the internal key of the connection's asynchronous I/O operations; a key cannot
+    be recovered from a token, and a token cannot be computed from a key without the server's asynchronous I/O
+    controller, which sandboxed code does not get.  \c cx.sock_key is the same token; it is deprecated: use
+    \c cx.session_token.
+
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
     When a TLS listener is added with \c enable_h3 (or when
@@ -442,6 +459,9 @@ log("started listener on %s", lh.desc);
       releases while requests run is destroyed after the last of them, in its thread, and all of them are answered
       (see @ref httpserver_lifetime;
       <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>)
+    - the handler of a request gets the opaque session token of its connection in \c cx.session_token, which
+      @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose() "signalPersistentSessionClose()" takes
+      (see @ref http_session_token)
     - the HTML error pages of a server that code restricted from external information created do not show the
       hostname (see @ref sandbox_ambient_host_data)
     - a listener can serve only its own handlers
@@ -8141,8 +8161,8 @@ class HttpHandlerThreadContexts {
 /** The connection, its transport and the request's stream (\c "header-info"), and the server's connection state;
     see HttpServer::handleRequest() (qore#6953)
 */
-const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "logger", "sock_key", "socket",
-    "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
+const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "logger", "session_token", "sock_key",
+    "socket", "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
@@ -8555,27 +8575,28 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         its result takes a reference to the server to the controller, which releases it in the callback that runs the
         request, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
 
-        @param info connection and request information
+        @param sock the socket of the connection
+        @param cx the connection context
+        @param hdr the request header
+        @param header_info the header information of the request
 
         @return result info for the controller to act on, or @ref nothing if the request's handler does not answer it
         inline
 
         @since HttpServer 1.7
     */
-    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
-            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(Socket sock, hash<auto> cx, hash<auto> hdr,
+            hash<auto> header_info) {
         *hash<HttpServerAsyncIo::HttpRequestResultInfo> rv;
-        {
-            *HttpServer server_hold = serv;
-            *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(info.hdr);
-            if (handler && (handler.handlerCodeIsRestricted()
-                    ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
-                        handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
-                    : handler.canHandleInline(info.cx, info.hdr))) {
-                rv = processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
-            }
-            remove server_hold;
+        *HttpServer server_hold = serv;
+        *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(hdr);
+        if (handler && (handler.handlerCodeIsRestricted()
+                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(cx, hdr).cx,
+                    handler.withholdCredentialsForDispatch(cx, hdr).hdr)
+                : handler.canHandleInline(cx, hdr))) {
+            rv = processInlineRequest(sock, cx, hdr, handler, header_info);
         }
+        remove server_hold;
         # the request released the last reference to the server (the program released it while the request ran, and
         # the request has no response to give that would hold the server): its stop closed the connections (qore#6508)
         if (!serv) {
@@ -9050,9 +9071,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Force-closes the persistent session for the given connection
     /** Override of @ref HttpServer::HttpListenerInterface::signalPersistentSessionClose();
         delegates to the underlying async-I/O controller's
-        @ref HttpServerAsyncIo::HttpAsyncSocketIoController::signalPersistentQueuesForConnection(),
+        @ref HttpServerAsyncIo::HttpAsyncSocketIoController::signalPersistentQueuesForSessionToken(),
         which pushes a \c "close" marker into the dedicated persistent
-        handler queue identified by @c uh, unblocking the dedicated thread
+        handler queue of the session whose token is @c uh, unblocking the dedicated thread
         if it is parked in @c Queue::get().  The dedicated thread's
         persistent loop then exits and its @c on_exit runs the normal
         cleanup path (@c removeUserThreadContext() + @c persistentClosed()),
@@ -9061,14 +9082,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         completes, preventing the close-notification program or its resources
         from being unloaded while the callback is still queued.
 
-        Safe to call from any thread; idempotent (no-op if no queue is
-        registered under @c uh, e.g. when the dedicated thread has already
+        Safe to call from any thread; idempotent (no-op if no session with the token
+        @c uh is registered, e.g. when the dedicated thread has already
         exited).  The wait for the cleanup is bounded by
         @ref PersistentSessionCloseTimeout: if the dedicated thread has not completed its cleanup by then, the wait
         ends and an error is logged (qore#6921).
 
-        @param uh the connection unique hash identifying the persistent
-            session to close
+        @param uh the session token of the persistent session to close (\c cx.session_token in the request context
+            of its requests, see @ref http_session_token); any other value, such as the internal key of a
+            connection, closes nothing
     */
     signalPersistentSessionClose(softstring uh) {
         signalPersistentSessionCloseIntern(uh);
@@ -9078,7 +9100,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     /** As signalPersistentSessionClose(softstring), but the session is closed only if \a handler registered it
         (qore#6921)
 
-        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param uh the session token of the persistent session (\c cx.session_token in the request context, see
+            @ref http_session_token)
         @param handler the handler whose persistent session it is
 
         @since HttpServer 1.7
@@ -9093,7 +9116,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             ? serv.getHttpAsyncIo() : NOTHING;
         if (ctrl) {
             Queue close_ack(1);
-            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack, owner)) {
+            if (ctrl.signalPersistentQueuesForSessionToken(uh, close_ack, owner)) {
                 try {
                     close_ack.get(PersistentSessionCloseTimeout);
                 } catch (hash<ExceptionInfo> ex) {
@@ -10211,6 +10234,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
+    #! Returns the session token of the connection with the given internal key (see @ref http_session_token)
+    private:internal string getSessionToken(string sock_key) {
+        # the server's controller is created with the server and never removed
+        *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv.getHttpAsyncIo();
+        if (!ctrl) {
+            throw "HTTP-SERVER-ERROR", "the server has no asynchronous I/O controller";
+        }
+        return ctrl.getSessionToken(sock_key);
+    }
+
     #! Processes an HTTP request natively for async I/O
     /** This method performs context setup, calls handleRequest() with async response capture,
         and translates the result to HttpRequestResultInfo for the controller to send.
@@ -10283,15 +10316,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             sock_key = s.uniqueHash();
         }
 
-        # Expose the per-connection unique hash on @c cx so handler code can
-        # match against the framework's persistent-queue key (e.g. to pass to
-        # @ref HttpListenerInterface::signalPersistentSessionClose()).  For
-        # HTTP/3 this includes the QUIC session_id suffix matching the
-        # multiplexed sock_key derivation above; for HTTP/1.x and HTTP/2 it
-        # is the underlying socket's uniqueHash().  Computed and assigned
-        # before dispatch so every handler sees the same key the framework
-        # uses for its persistent queue.
-        cx.sock_key = sock_key;
+        # The handler gets the session token of the connection (of the QUIC session for HTTP/3), which names its
+        # persistent session to HttpListenerInterface::signalPersistentSessionClose(), and never the internal key
+        # (sock_key) of the connection's asynchronous I/O operations; cx.sock_key is the same token (qore#7251)
+        cx.session_token = cx.sock_key = getSessionToken(sock_key);
 
         # Get peer info for handleRequest
         hash<auto> info = cx."peer-info";
@@ -11059,8 +11087,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "queued persistent mode");
         log("cid %d: entering queued persistent loop", cx.id);
 
-        # Static listener context template
+        # Static listener context template; each request of the session gets its session token, as the first one
+        # did in processNativeRequest() (qore#7251)
         hash<auto> cx_listener = getContextTemplate(info);
+        cx_listener.session_token = cx_listener.sock_key = getSessionToken(sock_key);
         *Queue close_ack;
         # the requests of the connection that this thread runs can be for other handlers than the session's; each
         # handler runs with its own thread context (issue #6847)
@@ -14813,7 +14843,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         if (!inlineHeadValid(info.hdr, info.header_info)) {
             return NOTHING;
         }
-        return cast<HttpListener>(info.listener).tryInlineRequest(info);
+        return cast<HttpListener>(info.listener).tryInlineRequest(info.sock, info.cx, info.hdr, info.header_info);
     }
 
     #! Called when an HTTP request is ready (header fully parsed)

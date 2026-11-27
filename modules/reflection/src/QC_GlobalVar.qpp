@@ -293,7 +293,10 @@ Namespace GlobalVar::getNamespace() [flags=RET_VALUE_ONLY] {
 auto val = var.getValue();
     @endcode
 
-    @return the value of the global variable
+    @return the value of the global variable; the process-information variables (\c Qore::ARGV, \c Qore::QORE_ARGV
+    and \c Qore::ENV) of a @ref Qore::Program "Program" that is not restricted from external information are returned
+    empty to code that is restricted from it (see @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"), as they are in
+    its own %Program (since %Qore 3.0)
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the global variable has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write (see @ref reflection_caller_privilege)
@@ -308,6 +311,14 @@ auto GlobalVar::getValue() [flags=RET_VALUE_ONLY] {
     if (caller.checkModuleExport(caller.canSeeDeclaration(v->pgm, v->ns, reflection_exported(v->var)),
             "global variable", v->var->getName(), xsink)) {
         return QoreValue();
+    }
+    // the process-information variables are external information; checked before the switch to the variable's
+    // Program, as the calling code decides
+    {
+        QoreValue rv;
+        if (v->pgm->withholdGlobalVarValue(v->var, rv)) {
+            return rv;
+        }
     }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);

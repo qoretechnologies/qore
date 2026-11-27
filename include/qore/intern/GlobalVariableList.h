@@ -94,6 +94,14 @@ public:
 
     DLLLOCAL Var* runtimeCreateVar(const char* name, const QoreTypeInfo* typeInfo, bool builtin = false);
 
+    //! creates a variable of the list's own at runtime, also in place of a reference to a variable of another Program
+    //! that the list inherited (a Program created for a debugger inherits all variables as references)
+    /** @param replaced set to the reference that the new variable replaces, which the caller releases, if any
+
+        @return the new variable, or nullptr if the list has a variable of its own with this name
+    */
+    DLLLOCAL Var* runtimeCreateOwnVar(const char* name, const QoreTypeInfo* typeInfo, bool builtin, Var*& replaced);
+
     DLLLOCAL Var* parseFindVar(const char* name);
     DLLLOCAL Var* parseCreatePendingVar(const QoreProgramLocation* loc, const char* name, const QoreTypeInfo* typeInfo);
     DLLLOCAL Var* parseCreateAOTImportVar(const QoreProgramLocation* loc, const char* name);

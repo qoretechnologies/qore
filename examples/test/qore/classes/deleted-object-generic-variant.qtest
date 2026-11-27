@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class DeletedObjectGenericVariantTest
 
@@ -94,10 +95,17 @@ class DeletedObjectGenericVariantTest inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 file));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
-                libqore_dir, exe)), "qcc " + opt);
-            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+            # the executable runs with the default environment and with the JIT environment of its own: the
+            # environment of the harness only traces native compilation (the trace and the module loader's warnings
+            # are not output of the program)
+            foreach string jit in (("", "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 ")) {
+                string lbl = "qcc " + opt + (jit ? ", JIT" : "");
+                hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%sLD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s %s", jit, libqore_dir, libqore_dir, exe), NOTHING, "QORE_JIT_TIMING=1");
+                assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", lbl, res.out));
+                assertEq(expected, res.stdout, lbl);
+                assertEq("", res.stderr, lbl + ": stderr");
+            }
         }
     }
 }

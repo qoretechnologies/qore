@@ -8,6 +8,16 @@
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
+
 # the script runs its code too few times for tiered execution to compile it, so native code is only required with JIT
 # execution
 ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
@@ -94,7 +104,7 @@ string sub runAot(string script_path) {
         printf("AOT compile failed:\n%s", compile_out);
         exit(2);
     }
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+    return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
 
 sub checkOutput(string label, string expected, string actual) {

@@ -29,6 +29,7 @@
 %requires tokenizer
 
 %requires RestClientIo
+%requires Util
 
 %requires json
 

@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - each case runs in a child process that sets its own --exec-mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# part 6 of the cases of PipelineLifecycle.qc: records submitted while the run of a buffering pipeline ends
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%include PipelineLifecycle.qc
+
+%exec-class PipelineLifecyclePart6
+
+#! runs part 6 of 6 of the cases of PipelineLifecycleBase
+class PipelineLifecyclePart6 inherits PipelineLifecycleBase {
+    constructor() : PipelineLifecycleBase("PipelineLifecyclePart6", 6) {
+    }
+}

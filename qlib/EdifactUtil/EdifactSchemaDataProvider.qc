@@ -114,6 +114,10 @@ public namespace EdifactUtil {
 
         #! Creates the data provider
         constructor(*hash<auto> opts) {
+            if (opts.cache_dir || opts.dir) {
+                # the directories are the creator's input (qore#7806)
+                check_creator_file_access("the 'dir' and 'cache_dir' options of the EDIFACT schema data provider");
+            }
             hash<auto> load_opts = {};
             if (opts.cache_dir) {
                 load_opts.cache_dir = opts.cache_dir;

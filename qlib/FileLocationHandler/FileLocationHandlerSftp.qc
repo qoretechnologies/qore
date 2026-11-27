@@ -63,7 +63,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
     #! The network for the code that calls it (qore#6959)
     private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
         # the key files are local files that the handler reads for the caller (qore#6959)
-        return DOM_NETWORK | ((opts.ssh2_private_key || opts.ssh2_public_key) ? DOM_FILESYSTEM : 0);
+        return DOM_NETWORK | AbstractFileLocationHandler::getOptionCallerDomains(opts);
     }
 
     #! Retrieves a text file from the given location

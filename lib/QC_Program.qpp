@@ -2673,7 +2673,8 @@ pgm.importClass("MyNamespace::MyClass");
     @endcode
 
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
+    @throw CLASS-IMPORT-ERROR injection relates classes that the calling %Program did not both declare, and the calling code is restricted: a sandbox that refuses uncontrolled APIs governs it (a sandbox that allows them does not restrict it; see @ref sandbox_manager_classes) or it has parse options that restrict a functional domain; a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The methods of the imported class run in the Program that it is imported from, with that Program's options
@@ -2720,10 +2721,10 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
     // a class re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class '%s' for re-export: code that a "
-            "sandbox governs or whose functional domains are restricted cannot re-export classes to the modules "
-            "that a Program loads", tmp->c_str());
+            "restricting sandbox governs or whose functional domains are restricted cannot re-export classes to the "
+            "modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
         import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
@@ -2741,7 +2742,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
-    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init)
+    @throw HASHDECL-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a restricting sandbox (see @ref sandbox_manager_classes) or has parse options that restrict a functional domain; such code cannot re-export hashdecls to the modules that a Program loads (see @ref sandbox_module_init); a policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()", @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a restricted caller, a trusted build (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") does
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2781,10 +2782,10 @@ nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool re
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
     }
     // a hashdecl re-exported to the modules that the Program loads is used by library code
-    if (reexport && qore_caller_is_untrusted()) {
+    if (reexport && qore_caller_is_restricted_or_untrusted()) {
         return xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl '%s' for re-export: code that "
-            "a sandbox governs or whose functional domains are restricted cannot re-export hashdecls to the modules "
-            "that a Program loads", tmp->c_str());
+            "a restricting sandbox governs or whose functional domains are restricted cannot re-export hashdecls to "
+            "the modules that a Program loads", tmp->c_str());
     }
     qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
         tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
@@ -3149,6 +3150,10 @@ auto val = pgm.getGlobalVariable("error_count", \existsv);
 
     @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
     returns \c EINVAL
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself, whatever name
+    it uses for them (since %Qore 3.0); see @ref sandbox_program_process_information
  */
 auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
@@ -4562,6 +4567,11 @@ hash<auto> h = pgm.getGlobalVars();
 
     @return a hash of global variables and their values
 
+    @note the process-information variables \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external
+    information: code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" gets them empty, as they
+    are in its own %Program, from a %Program that is not restricted from external information itself (since
+    %Qore 3.0); see @ref sandbox_program_process_information
+
     @see @ref Qore::get_global_vars()
 
     @since %Qore 0.8.13
@@ -4774,8 +4784,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
@@ -5007,8 +5019,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details

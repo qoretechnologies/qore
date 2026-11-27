@@ -274,6 +274,8 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
     */
     constructor(string path, *hash<auto> opts) {
         object_name = path;
+        # the path is the creator's input (qore#7806)
+        check_creator_file_access("the path of a CSV write data provider");
         writer = new CsvFileWriter(path, opts);
     }
 

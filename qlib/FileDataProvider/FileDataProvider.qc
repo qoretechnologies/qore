@@ -92,7 +92,8 @@ public class FileDataProvider inherits FileDataProviderBase {
         if (!cls) {
             return;
         }
-        return cls.newObject(root, lock, readonly);
+        # a child is confined to the root that the parent's creator chose, as the parent is (qore#7806)
+        return createChildProvider(cls);
     }
 
     #! Returns data provider static info

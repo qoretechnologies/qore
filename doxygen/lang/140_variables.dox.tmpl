@@ -15,6 +15,11 @@
     |\c Qore::QORE_ARGV|Global|@ref list_type "list"|complete qore command-line arguments
     |\c Qore::ENV|Global|@ref hash_type "hash"|UNIX program environment
 
+    @note \c Qore::ARGV, \c Qore::QORE_ARGV and \c Qore::ENV are external information: they are empty in a
+    @ref Qore::Program "Program" restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", and code with
+    this restriction reads them empty from other %Programs as well (since %Qore 3.0); see
+    @ref sandbox_program_process_information
+
     @note global variables are namespace members; if a namespace path is not declared for the global variable, then the global variable will reside in the root namespace
 
     @section variable_declarations Variable Declarations and Lexical Scope
