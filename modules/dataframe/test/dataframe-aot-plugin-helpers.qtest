@@ -14,6 +14,7 @@
 
 %requires QUnit
 %requires ../../../examples/test/TestInterpreter.qm
+%requires ../../../examples/test/ExecModeHarness.qm
 %requires FsUtil
 
 %requires dataframe
@@ -95,8 +96,10 @@ for (int i = 0; i < 3; ++i) {
         set_return_value(main());
     }
 
-    private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+    #! runs a command in its default environment: its output on stdout and stderr apart from the warnings of the
+    #! module loader, which are not output of the command
+    private static hash<ExecModeHarness::ModeRunResult> run(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private static write(string path, string body) {
@@ -112,12 +115,15 @@ for (int i = 0; i < 3; ++i) {
 
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
-        string expected = run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, src));
+        hash<ExecModeHarness::ModeRunResult> ast = run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, src));
+        assertEq(0, ast.rc, "AST baseline: exit status: " + ast.out);
+        assertEq("", ast.stderr, "AST baseline: stderr");
+        string expected = ast.stdout;
         assertEq("[1, 2, 3, 4]", expected.split("\n")[0], "AST baseline");
 
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s",
-                env, qore_bin, mode, src)), mode + " matches AST");
+                env, qore_bin, mode, src)).out, mode + " matches AST");
         }
 
         # the functions in a module compiled with qcc, called from a script
@@ -130,10 +136,13 @@ for (int i = 0; i < 3; ++i) {
 
         foreach string opt in (("-O0", "-O3")) {
             string exe = tmp.path + "/plugin-helpers" + opt;
-            string compile_out = run(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, src));
+            string compile_out = run(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, src)).out;
             assertTrue(is_file(exe), sprintf("qcc %s links the executable: %s", opt, compile_out));
             if (is_file(exe)) {
-                assertEq(expected, run(sprintf("%s %s", env, exe)), sprintf("qcc %s executable matches AST", opt));
+                hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s %s", env, exe));
+                assertEq(0, r.rc, sprintf("qcc %s executable: exit status: %s", opt, r.out));
+                assertEq(expected, r.stdout, sprintf("qcc %s executable matches AST", opt));
+                assertEq("", r.stderr, sprintf("qcc %s executable: stderr", opt));
             }
 
             string mod_dir = tmp.path + "/mods";
@@ -144,10 +153,10 @@ for (int i = 0; i < 3; ++i) {
             if (is_file(qmod)) {
                 unlink(qmod);
             }
-            compile_out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src));
+            compile_out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src)).out;
             assertTrue(is_file(qmod), sprintf("qcc %s compiles the module: %s", opt, compile_out));
             if (is_file(qmod)) {
-                assertEq(expected, run(sprintf("%s %s --exec-mode=ir %s", env, qore_bin, probe)),
+                assertEq(expected, run(sprintf("%s %s --exec-mode=ir %s", env, qore_bin, probe)).out,
                     sprintf("qcc %s module matches AST", opt));
             }
         }

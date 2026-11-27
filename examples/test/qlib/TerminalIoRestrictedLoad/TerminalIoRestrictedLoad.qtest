@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class TerminalIoRestrictedLoadTest
 
@@ -121,9 +122,11 @@ try {
         }
     }
 
-    #! runs the commands in four threads at a time; returns their outputs in the same order
-    list<string> runAll(list<string> cmds) {
-        list<string> out = map "", cmds;
+    #! runs the commands in four threads at a time in their default environment; returns their results in the same
+    #! order: their output on stdout and stderr apart from the warnings of the module loader, which are not output of
+    #! the commands
+    list<hash<ExecModeHarness::ModeRunResult>> runAll(list<string> cmds) {
+        list<hash<ExecModeHarness::ModeRunResult>> out = map <ExecModeHarness::ModeRunResult>{}, cmds;
         Counter c();
         Queue q();
         map q.push($#), cmds;
@@ -138,12 +141,19 @@ try {
                     if (i < 0) {
                         break;
                     }
-                    out[i] = backquote(cmds[i] + " 2>&1");
+                    out[i] = ExecModeHarness::run_command(cmds[i], NOTHING, "QORE_JIT_TIMING=1");
                 }
             }();
         }
         c.waitForZero();
         return out;
+    }
+
+    #! checks that a child succeeded with the expected output and wrote nothing else
+    checkRun(string expected, hash<ExecModeHarness::ModeRunResult> r, string label) {
+        assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     testRestricted() {
@@ -170,9 +180,9 @@ try {
             labels += sprintf("%s qcc", mod);
         }
 
-        list<string> outs = runAll(cmds);
+        list<hash<ExecModeHarness::ModeRunResult>> outs = runAll(cmds);
         foreach string label in (labels) {
-            assertEq(expected(label.split(" ")[0]), outs[$#], label);
+            checkRun(expected(label.split(" ")[0]), outs[$#], label);
         }
     }
 
@@ -186,9 +196,9 @@ try {
 
         list<string> cmds = map sprintf("%s %s --enable-debug %s %s %s", env, qore_bin, child, $1,
             Code{$1} ? sprintf("'%s'", Code{$1}) : "''"), Modules;
-        list<string> outs = runAll(cmds);
+        list<hash<ExecModeHarness::ModeRunResult>> outs = runAll(cmds);
         foreach string mod in (Modules) {
-            assertEq(expected(mod), outs[$#], mod + " source");
+            checkRun(expected(mod), outs[$#], mod + " source");
         }
     }
 

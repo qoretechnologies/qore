@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its comparisons run in its own process, and its probe in a child process and qcc executables
 # test-platform: macos - the plugin operations of the dataframe module's native library, and qcc code generation and linking
 
 /*  dataframe-plugin-ornothing-dispatch.qtest Copyright 2026 Qore Technologies, s.r.o.
@@ -12,6 +13,7 @@
 
 %requires QUnit
 %requires ../../../examples/test/TestInterpreter.qm
+%requires ../../../examples/test/ExecModeHarness.qm
 %requires FsUtil
 
 %requires dataframe
@@ -76,7 +78,10 @@ class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
         if (!is_executable(qcc_bin)) {
             testSkip("qcc is not available");
         }
-        string expected = run(sprintf("%s -b --exec-mode=ast %s", quote(qore_bin), quote(probe)));
+        hash<ExecModeHarness::ModeRunResult> ast = run(sprintf("%s -b --exec-mode=ast %s", quote(qore_bin),
+            quote(probe)));
+        assertEq("", ast.stderr, "AST: stderr");
+        string expected = ast.stdout;
         assertRegex("(?m)^\\*ColumnRef >: RowMask$", expected, expected);
         assertRegex("(?m)^closure \\*ColumnRef: RowMask$", expected, expected);
         # a case with an operator matches as "if (value OP x)" does (qore#6252): the plugin's RowMask is true
@@ -85,10 +90,13 @@ class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
             TmpDir dir("qore-dataframe-plugin-dispatch-");
             string exe = dir.path + "/probe";
             run(sprintf("%s %s -o %s %s", quote(qcc_bin), level, quote(exe), quote(probe)));
-            assertEq(expected, run(sprintf("%s -b", quote(exe))), "qcc " + level);
+            hash<ExecModeHarness::ModeRunResult> r = run(sprintf("%s -b", quote(exe)));
+            assertEq(expected, r.stdout, "qcc " + level);
+            assertEq("", r.stderr, "qcc " + level + ": stderr");
             # closures run as their IR read from the executable
-            assertEq(expected, run(sprintf("env QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -b", quote(exe))),
-                "qcc " + level + " interpreted closures");
+            r = run(sprintf("env QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -b", quote(exe)));
+            assertEq(expected, r.stdout, "qcc " + level + " interpreted closures");
+            assertEq("", r.stderr, "qcc " + level + " interpreted closures: stderr");
         }
     }
 
@@ -166,13 +174,13 @@ class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
         return "false";
     }
 
-    private string run(string command) {
-        string full = sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", quote(lib_dir), quote(lib_dir),
-            command);
-        int rc;
-        string out = backquote(full, \rc);
-        assertEq(0, rc, full + ": " + out);
-        return out;
+    #! runs a command in its default environment and checks that it succeeds: its output on stdout and stderr apart
+    #! from the warnings of the module loader, which are not output of the command
+    private hash<ExecModeHarness::ModeRunResult> run(string command) {
+        string full = sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", quote(lib_dir), quote(lib_dir), command);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(full, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, full + ": " + r.out);
+        return r;
     }
 
     private static string quote(string value) {
