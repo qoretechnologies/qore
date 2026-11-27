@@ -2362,6 +2362,12 @@ private:
     DLLLOCAL void addBoundBody(int64_t stream_id, uint64_t buffered_size);
     //! Removes a body from the bounds (qore#7653)
     DLLLOCAL void eraseBoundBody(int64_t stream_id);
+
+    //! Records the end of the connection's wait for its client if no body or send waits any more (qorus#1335)
+    /** The send rate of the connection is told that the wait has ended, so that the time until the next wait is not
+        charged; called with the session's mutex held
+    */
+    DLLLOCAL void endSendRateWaitIfIdleUnlocked();
     //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under mtx_
     DLLLOCAL void updateActiveInputStreams();
     //! Returns the bytes of a bounded body that its client has acknowledged
