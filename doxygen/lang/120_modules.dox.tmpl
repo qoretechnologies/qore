@@ -1480,7 +1480,9 @@ different Qore library and cannot be run with this one; rebuild it with the qcc 
     @subsection aot_module_source_fallback Loading the Source of an AOT Module That Cannot Be Loaded
 
     When an AOT-compiled module (\c "*.qmod") cannot be loaded, because it was compiled for another AOT runtime
-    identity, is out of date with its sources, or uses functionality that the restrictions of the
+    identity, is out of date with its sources, is damaged (on Linux, a file that is shorter than the loadable
+    segments of its ELF headers, from a partial write or a bad copy, is refused with \c LOAD-MODULE-ERROR before it
+    is mapped, as mapping it would end the process with \c SIGBUS), or uses functionality that the restrictions of the
     @ref Qore::Program "Program" loading it do not allow (see @ref module_parse_option_masks), and the module's
     source is found (beside a compiled module loaded by its path, or in the module path for a module loaded by its
     name), the source module is loaded instead, as if there were no compiled module.  The loader reports why the
