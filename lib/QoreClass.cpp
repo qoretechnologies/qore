@@ -1997,6 +1997,13 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
+    // the copy of a class that holds a dependency reference on its source Program holds one of its own (qore#7797)
+    if (old.dep_source_program && !deref_source_program) {
+        if (QoreProgram* p = spgm.load()) {
+            p->depRef();
+            dep_source_program = true;
+        }
+    }
     // the bare references option of the declaration (issue #3286)
     parse_abr = old.parse_abr;
     hierarchy_initialized = old.hierarchy_initialized;
@@ -2148,6 +2155,13 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
+    // the copy of a class that holds a dependency reference on its source Program holds one of its own (qore#7797)
+    if (old.dep_source_program && !deref_source_program) {
+        if (QoreProgram* p = this->spgm.load()) {
+            p->depRef();
+            dep_source_program = true;
+        }
+    }
     // the import copy of a builtin class is owned by the importing Program's namespace and freed with it: it is mortal
     // (qore#7540)
     if (old.sys) {
@@ -16628,6 +16642,12 @@ QoreBuiltinClass::QoreBuiltinClass(QoreProgram* pgm, const char* name, const cha
     priv->openBuiltinAncestry();
     priv->spgm = pgm;
     priv->deref_source_program = false;
+    // the class can be held only by its objects, which outlive the Program that it was created for if the module does
+    // not add the class to a namespace of the Program (qore#7797)
+    if (pgm) {
+        pgm->depRef();
+        priv->dep_source_program = true;
+    }
 }
 
 QoreBuiltinClass::QoreBuiltinClass(const char* name, const char* path, int64 n_domain)
