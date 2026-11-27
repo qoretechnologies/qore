@@ -454,6 +454,8 @@ sub submit(ThreadPool tp, Queue started, Queue gate, Queue result, int i) {
         # loader's sandbox
         SandboxManager sm();
         sm.setMaxThreads(2);
+        # the module is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(get_script_dir() + "/SandboxPoolFixture.qm", QSEC_READ);
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
         p.parse("%requires SandboxPoolFixture

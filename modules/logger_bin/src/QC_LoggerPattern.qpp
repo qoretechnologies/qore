@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -86,9 +86,20 @@ LoggerPattern::constructor(string pattern) {
     @param pattern the logger pattern
 
     @throw LOGGER-ERROR when pattern is invalid
+
+    @note the \c %%h, \c %%P and \c %%E fields of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern"
+    whose pattern code restricted from external information sets are empty (see @ref sandbox_ambient_host_data)
 */
 LoggerPattern::setPattern(string pattern) {
-    pat->setPattern(pattern, xsink);
+    if (pat->setPattern(pattern, xsink)) {
+        return QoreValue();
+    }
+    // the fields of the host formatted by a layout follow the code that sets its pattern (qore#7586)
+    QoreLoggerLayoutPattern* llp = dynamic_cast<QoreLoggerLayoutPattern*>(pat);
+    if (llp) {
+        llp->patternSetByCaller();
+    }
+    return QoreValue();
 }
 
 //! Returns the current pattern
@@ -124,6 +135,8 @@ string LoggerPattern::format(auto data) {
             }
         }
     }
+    // a direct call by code restricted from external information formats no values of the host (qore#7586)
+    QoreLoggerHostInfoHelper host_info_helper;
     return pat->format(data, *llp, xsink);
 }
 

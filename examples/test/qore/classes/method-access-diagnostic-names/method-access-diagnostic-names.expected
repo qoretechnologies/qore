@@ -1,0 +1,6 @@
+private method: METHOD-IS-PRIVATE: ::Shape::helper() is private and cannot be accessed externally
+private method of a unique class: METHOD-IS-PRIVATE: Unique::helper() is private and cannot be accessed externally
+private copy: METHOD-IS-PRIVATE: ::Shape::copy() is private and cannot be accessed externally
+privately inherited method: BASE-CLASS-IS-PRIVATE: pub() is a method of a privately-inherited class Fake::Holder
+call reference to a private method: ILLEGAL-CALL-REFERENCE: cannot create a call reference to private ::Shape::helper() from outside the class
+call reference to a privately inherited method: ILLEGAL-CALL-REFERENCE: cannot create a call reference to Fake::Holder::pub() because the parent class that implements the method (::Shape::pub()) is privately inherited

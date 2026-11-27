@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,8 +31,6 @@
 #include <qore/Qore.h>
 #include <qore/AutoVLock.h>
 #include <qore/intern/QoreLibIntern.h>
-#include "qore/intern/QoreObjectIntern.h"
-#include "qore/intern/qore_var_rwlock_priv.h"
 #ifdef DEBUG
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
@@ -198,20 +196,17 @@ void qore_auto_vlock_ops::addMemberNotificationImpl(AutoVLock* b, QoreObject* ob
         return;
     }
 
-    // a member notification is Qore code, which cannot run under the lock of the assignment being checked (qore#7380,
-    // qore#7391)
-    QoreVarRWLock& obj_lock = qore_object_private::get(*obj)->rml;
-    // a lock that this helper took itself is released before its notifications run
-    if (qore_auto_vlock_ops(b).getRWL() != &obj_lock && qore_var_rwlock_ops(obj_lock).heldForBind(b)) {
-        qore_raise_reference_bind_user_code(obj, member, b->xsink);
-        return;
-    }
-
     if (!b->priv) {
         b->priv = new qore_avl_private;
     }
 
     b->priv->add(obj, member);
+}
+
+void qore_auto_vlock_ops::dropMemberNotificationsImpl(AutoVLock* b) {
+    if (b->priv && b->priv->notify_list && !b->priv->pinned) {
+        b->priv->notify_list->clear();
+    }
 }
 
 VLock::VLock(int tid) : waiting_on(nullptr), tid(tid) {

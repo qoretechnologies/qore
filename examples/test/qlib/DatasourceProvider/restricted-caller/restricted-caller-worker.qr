@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# The worker of DatasourceProviderRestrictedCaller.qtest: looks datasources up by name, as trusted code, as the code
+# of two sandboxes and as code restricted from external information, and prints one "<caller>.<probe>=<result>" line
+# for each lookup.  It is run in an environment whose QORE_DATASOURCE_PROVIDERS names a datasource provider module of
+# the host (RcHostDatasourceProvider) and one that resolves names for the calling code (RcScopedDatasourceProvider)
+
+%no-child-restrictions
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires DatasourceProvider
+# the provider modules are loaded by trusted code first, as a host loads them
+%requires RcHostDatasourceProvider
+%requires RcScopedDatasourceProvider
+
+#! the lookups that each caller makes
+const Probes = (
+    "ds-host", "ds-scoped", "ds-unknown", "ds-literal", "hash", "hash-scoped", "oracle", "leak",
+);
+
+#! the lookups, as the code of each caller runs them
+const ProbeSource = "
+# the description of the error of the lookup of a datasource, with the name taken out
+string sub lookup_error(string name) {
+    try {
+        get_ds_string(name);
+        return \"no error\";
+    } catch (hash<ExceptionInfo> ex) {
+        return replace(ex.desc, name, \"<name>\");
+    }
+}
+
+string sub probe(string what) {
+    try {
+        switch (what) {
+            case \"ds-host\": return get_ds_string(\"rc-host-ds\");
+            case \"ds-scoped\": return get_ds_string(\"rc-scoped-ds\");
+            case \"ds-unknown\": return get_ds_string(\"rc-none\");
+            case \"ds-literal\": return get_ds_string(\"pgsql:u/p@db\");
+            case \"hash\": return sort(keys (get_ds_hash() ?? {})).join(\",\");
+            case \"hash-scoped\": return get_ds_hash(){\"rc-scoped-ds\"} ?? \"none\";
+            # a datasource that the calling code may not use fails as an unknown one does
+            case \"oracle\": return lookup_error(\"rc-host-ds\") == lookup_error(\"rc-none\") ? \"same\" : \"differs\";
+            # the error names no provider module of the host
+            case \"leak\": return lookup_error(\"rc-host-ds\") =~ /RcHost/ ? \"leaks\" : \"none\";
+        }
+        return \"unknown probe\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# runs a capability of trusted code
+string sub run_cap(code cap) {
+    try {
+        return cap();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# runs a capability of trusted code that calls back the calling code's own lookup of a host datasource
+string sub run_cap_callback(code cap) {
+    try {
+        return cap(string sub () { return get_ds_string(\"rc-host-ds\"); });
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! the trusted lookup of a host datasource that the capabilities run
+string sub host_ds() {
+    return get_ds_string("rc-host-ds");
+}
+
+#! a trusted operation that runs the code that it is given
+string sub run_callback(code cb) {
+    return cb();
+}
+
+#! the capabilities that trusted code creates before it serves any caller
+code HostDsCap = SandboxManager::createSystemPolicyCall(\host_ds());
+code CallbackCap = SandboxManager::createSystemPolicyCall(\run_callback());
+
+#! returns a Program for a caller: sandboxed with the given isolation domain, or with the given parse options
+Program sub get_caller(*string domain, int po = 0) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | po, True);
+    p.loadModule("DatasourceProvider");
+    p.parse(ProbeSource, "restricted-caller-probe");
+    if (domain) {
+        SandboxManager sm();
+        sm.setIsolationDomain(domain);
+        p.setSandboxManager(sm);
+    }
+    return p;
+}
+
+hash<string, Program> callers = {
+    # trusted code
+    "trusted": get_caller(),
+    "sbx-a": get_caller("tenant-a"),
+    "sbx-b": get_caller("tenant-b"),
+    "noext": get_caller(NOTHING, PO_NO_EXTERNAL_INFO),
+};
+foreach hash<auto> i in (callers.pairIterator()) {
+    Program p = i.value;
+    foreach string what in (Probes) {
+        printf("%s.%s=%s\n", i.key, what, p.callFunction("probe", what));
+    }
+    printf("%s.grant-cap=%s\n", i.key, p.callFunction("run_cap", HostDsCap));
+    printf("%s.grant-callback=%s\n", i.key, p.callFunction("run_cap_callback", CallbackCap));
+}

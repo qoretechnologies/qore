@@ -10,3 +10,8 @@ list<string>
 list<int>
 list<float>
 list<int> list<string> list<int>
+list<int> list<float>
+list<string> list<int>
+list<int> list<string>
+list<int> list<string>
+list<int> list<string>

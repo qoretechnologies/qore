@@ -211,3 +211,40 @@ for (int i = 0; i < 3; ++i) {
         string sub () { CD c(); return c.callU(22); });
     check("implemented variant, self call resolved at run time", string sub () { CD c(); return c.callU("d"); });
 }
+
+# The implementation accepts all calls promised by either abstract declaration (#7404).
+class FixedSum { abstract int total(int x); }
+class VariableSum { abstract int total(int x, ...); }
+class SumBoth inherits FixedSum, VariableSum { int total(int x, ...) { return x + (argv[0] ?? 0); } }
+class SumReversed inherits VariableSum, FixedSum { int total(int x, ...) { return x + (argv[0] ?? 0); } }
+class RequiredSum { abstract int total(int x, int y); }
+class DefaultSum { abstract int total(int x, int y = 2); }
+class WithDefault inherits RequiredSum, DefaultSum { int total(int x, int y = 2) { return x + y; } }
+class WithDefaultReversed inherits DefaultSum, RequiredSum { int total(int x, int y = 2) { return x + y; } }
+
+foreach string cls in (("SumBoth", "SumReversed")) {
+    object obj = create_object(cls);
+    FixedSum f = cast<FixedSum>(obj);
+    VariableSum v = cast<VariableSum>(obj);
+    printf("%s: %d %d\n", cls, f.total(5), v.total(5, 7));
+}
+foreach string cls in (("WithDefault", "WithDefaultReversed")) {
+    object obj = create_object(cls);
+    RequiredSum r = cast<RequiredSum>(obj);
+    DefaultSum d = cast<DefaultSum>(obj);
+    printf("%s: %d %d\n", cls, r.total(5, 7), d.total(5));
+}
+
+class SumInterface inherits FixedSum, VariableSum {}
+class OptionalInterface inherits RequiredSum, DefaultSum {}
+class DropsVarargs inherits SumInterface { int total(int x) { return x; } }
+class DropsDefault inherits OptionalInterface { int total(int x, int y) { return x + y; } }
+class WrongDefault inherits DefaultSum { int total(int x = 3, int y) { return x + y; } }
+foreach string cls in (("DropsVarargs", "DropsDefault", "WrongDefault")) {
+    try {
+        create_object(cls);
+        printf("%s: instantiated\n", cls);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", cls, ex.err);
+    }
+}

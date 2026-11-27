@@ -215,14 +215,13 @@ sub hashes() {
 sub object_counts() {
     {
         Tracked c("holder");
-        # the entry of the list is a weak reference to the list itself, which the object's member then holds alone
+        # the entry of the list is a weak reference to the list itself, which the object's member holds alone
+        # the member is given the list before a weak reference designates it, as a container that a weak reference
+        # designates is a value of its own that the member takes a copy of (qore#7342)
         list<auto!> inner = (NOTHING,);
-        auto w;
-        w := inner;
-        w[0] := inner;
-        remove w;
         c.holder = {"inner": inner};
         remove inner;
+        c.holder.inner[0] := c.holder.inner;
         c.holder.inner[0] += new Tracked("added");
         printf("added through the entry: %d elements\n", c.holder.inner.size());
         remove c.holder.inner;
@@ -231,13 +230,12 @@ sub object_counts() {
     # a cycle made by adding the object to the list that its member holds: it is collected
     {
         Tracked c("cycle");
+        # the member is given the list before a weak reference designates it, as a container that a weak reference
+        # designates is a value of its own that the member takes a copy of (qore#7342)
         list<auto!> inner = (NOTHING,);
-        auto w;
-        w := inner;
-        w[0] := inner;
-        remove w;
         c.holder = {"inner": inner};
         remove inner;
+        c.holder.inner[0] := c.holder.inner;
         c.holder.inner[0] += c;
     }
     printf("cycle destroyed: %y\n", destroyed);

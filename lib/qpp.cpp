@@ -3217,8 +3217,9 @@ static std::unique_ptr<OutputFile> get_java_file(const std::string& ns, const st
 #define T_QORE       8
 #define T_OTHER      9
 #define T_CSTRING   10
-// a builtin constant whose value depends on the running library: qore_runtime(<C++ expression>)
+// Builtins resolved in the running library: qore_runtime(value, compiled_define) or qore_domain(value, domain).
 #define T_QORE_RUNTIME 11
+#define T_QORE_DOMAIN  12
 
 static int get_val_type(const std::string& str) {
     if (!str.empty()) {
@@ -3245,6 +3246,8 @@ static int get_val_type(const std::string& str) {
             return T_QORE;
         if (!str.compare(0, 13, "qore_runtime(") && str[lc] == ')')
             return T_QORE_RUNTIME;
+        if (!str.compare(0, 12, "qore_domain(") && str[lc] == ')')
+            return T_QORE_DOMAIN;
         if (!str.compare(0, 2, "0x"))
             return T_INT;
     }
@@ -3435,12 +3438,13 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             return 0;
         }
 
+        case T_QORE_DOMAIN:
         case T_QORE_RUNTIME: {
             if (force_node || !cname) {
-                error("qore_runtime() can only be used for the value of a constant\n");
+                error("a runtime or domain-qualified constant can only be declared as a constant\n");
                 return -1;
             }
-            v.assign(qv, 12, qv.size() - 12);
+            v.assign(qv, qv.find('('), std::string::npos);
             return 0;
         }
 
@@ -4148,6 +4152,12 @@ public:
         return 0;
     }
 
+    //! returns true if the binding of the constant calls qore_ns_add_runtime_constant()
+    bool isRuntimeConstant() const {
+        int value_type = get_val_type(value);
+        return value_type == T_QORE_RUNTIME || value_type == T_QORE_DOMAIN;
+    }
+
     int serializeCppBinding(FILE* fp, const std::string& ns) const {
         std::string qv;
         const char* prefix = 0;
@@ -4156,9 +4166,9 @@ public:
         // the binding has the location of the constant's definition, so the compiler's errors for its value name it
         // (issue #2290)
         fprintf(fp, "# %u \"%s\"\n", line, fileName.c_str());
-        if (get_val_type(value) == T_QORE_RUNTIME) {
-            // qv is "(<value>, <value in compiled code>)"; code referencing the constant reads it from the process
-            // it runs in; see ConstantEntry::setRuntimeDependent()
+        int value_type = get_val_type(value);
+        if (value_type == T_QORE_RUNTIME || value_type == T_QORE_DOMAIN) {
+            // Split the two arguments outside of nested C++ expressions.
             std::string args(qv, 1, qv.size() - 2);
             size_t comma = std::string::npos;
             int depth = 0;
@@ -4177,16 +4187,19 @@ public:
                 }
             }
             if (comma == std::string::npos) {
-                error("constant '%s': qore_runtime() takes exactly two arguments: the value and the value of the "
-                    "parse define in code compiled ahead of time\n", name.c_str());
+                error("constant '%s': %s takes a value and %s\n", name.c_str(),
+                    value_type == T_QORE_DOMAIN ? "qore_domain()" : "qore_runtime()",
+                    value_type == T_QORE_DOMAIN ? "a functional domain" : "the parse define in compiled code");
                 return -1;
             }
             std::string rt_val(args, 0, comma);
-            std::string compiled_val(args, comma + 1);
+            std::string option(args, comma + 1);
             trim(rt_val);
-            trim(compiled_val);
-            fprintf(fp, "    qore_ns_add_runtime_constant(ns, \"%s\", \"%s\", %s, %s);\n",
-                ns.empty() ? "Qore" : ns.c_str(), name.c_str(), rt_val.c_str(), compiled_val.c_str());
+            trim(option);
+            // Domain-qualified constants resolve in the running Program and have no AOT parse define.
+            fprintf(fp, "    qore_ns_add_runtime_constant(ns, \"%s\", \"%s\", %s, %s%s);\n",
+                ns.empty() ? "Qore" : ns.c_str(), name.c_str(), rt_val.c_str(),
+                value_type == T_QORE_DOMAIN ? "QoreValue(), " : "", option.c_str());
             return 0;
         }
         if (prefix)
@@ -5675,6 +5688,16 @@ public:
 
         return 0;
     }
+    //! returns true if the binding of a constant of the group calls qore_ns_add_runtime_constant()
+    bool hasRuntimeConstants() const {
+        for (cmap_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
+            if (i->second->isRuntimeConstant()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     int serializeCppConstantBindings(FILE* fp) const {
         // first serialize text
         for (unsigned i = 0; i < tlist.size(); ++i)
@@ -5812,9 +5835,11 @@ class Groups {
 protected:
     grouplist_t grouplist;
     bool has_funcs, has_constants, cccp_done, cdox_done;
+    //! true once the include of serializeRuntimeConstantInclude() has been written
+    bool rci_done;
 
 public:
-    Groups() : has_funcs(false), has_constants(false), cccp_done(false), cdox_done(false) {
+    Groups() : has_funcs(false), has_constants(false), cccp_done(false), cdox_done(false), rci_done(false) {
     }
 
     ~Groups() {
@@ -5891,6 +5916,8 @@ public:
         if (!has_constants || cccp_done || !has_constants)
             return 0;
 
+        serializeRuntimeConstantInclude(fp);
+
         // now serialize constant bindings
         fprintf(fp, "\nDLLLOCAL void init_%s_constants(QoreNamespace& ns) {\n", rootName);
 
@@ -5903,6 +5930,26 @@ public:
         fputs("\n}\n", fp);
 
         return 0;
+    }
+
+    //! writes the include of the declaration that the bindings of runtime and domain-qualified constants call, once
+    /** Such a binding calls qore_ns_add_runtime_constant(), which is declared in an internal header: the generated file
+        includes it itself, so that it also compiles as a unit of its own (a build without -DSINGLE_COMPILATION_UNIT,
+        where no other file of the library has included it).  Called at file scope before the function that the
+        bindings are written in: init_<root>_constants() (serializeConstantCpp()), or the init function of a class,
+        which the bindings are written in when the file has one (ClassElement::serializeCpp())
+    */
+    void serializeRuntimeConstantInclude(FILE* fp) {
+        if (rci_done || cccp_done || !has_constants) {
+            return;
+        }
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            if (grouplist[i]->hasRuntimeConstants()) {
+                fputs("\n#include \"qore/intern/QoreNamespaceIntern.h\"\n", fp);
+                rci_done = true;
+                return;
+            }
+        }
     }
 
     int serializeCppConstantBindings(FILE* fp) {
@@ -8351,10 +8398,13 @@ public:
         }
         fprintf(fp, "}\n\n");
 
-        if (is_pseudo)
+        if (is_pseudo) {
             fprintf(fp, "DLLLOCAL QoreClass* init%sClass() {\n", lname.c_str());
-        else
+        } else {
+            // the file's constant bindings are written in this function (see below)
+            groups.serializeRuntimeConstantInclude(fp);
             fprintf(fp, "DLLLOCAL QoreClass* init%sClass(QoreNamespace& ns) {\n", lname.c_str());
+        }
         fprintf(fp, "    if (!QC_%s)\n        preinit%sClass();\n", UC.c_str(), lname.c_str());
 
         if (!defbase.empty()) {

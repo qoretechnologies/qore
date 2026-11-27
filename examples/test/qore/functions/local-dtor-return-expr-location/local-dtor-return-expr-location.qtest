@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the release of a function's locals and the thread call stack of their destructors
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LocalDtorReturnExprLocationTest
+
+#! The destructor of a local released after a return expression that calls a method of it is located as in AST (qore#7481)
+/** A return statement whose expression calls a method of a local object (\c "return m.lockOwner();") holds a reference to
+    the object in a temporary of the statement while the call runs.  The AST interpreter releases the temporaries of the
+    statement before it releases the locals of the blocks that the return leaves, so the object is destroyed when its
+    local is released, in the location of the cleanup of the local's block: the statement of the caller for a local of a
+    function body (qore#6672).  The IR lowering released the temporaries after the locals, so the destructor ran when the
+    return completed, in the location of the return statement; the frame of the destructor and the location of an
+    exception that it raised (the LOCK-ERROR of a locked Mutex) were another line than in AST in the IR, JIT and tiered
+    modes and in compiled programs, and in a closure on the IR tier.
+
+    LocalDtorReturnExprLocation.q prints the line that the frame of the destructor of each local names, for a function,
+    a closure, a method, a nested block, two locals, a call of a method of the class and an exception of the
+    destructor; its output must be the one in LocalDtorReturnExprLocation.expected (the AST interpreter's) in every
+    execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class LocalDtorReturnExprLocationTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/LocalDtorReturnExprLocation.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/LocalDtorReturnExprLocation.expected");
+    }
+
+    constructor() : QUnit::Test("the destructor of a local released after a return expression is located as in AST", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                check(ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            check(ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! compares the output with the expected one
+    private check(string output) {
+        assertEq(expected, output);
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/local-dtor-return-expr-location";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        check(backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

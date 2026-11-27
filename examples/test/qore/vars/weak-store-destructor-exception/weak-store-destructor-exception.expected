@@ -1,0 +1,8 @@
+weak: DTOR: destructor 1; target: Value 1
+opaque: DTOR: destructor 2; target: Value 2
+plain: DTOR: destructor 3; target: Value 3
+weak result: DTOR: destructor 4; result: null; target: Value 4
+closure: DTOR: destructor 5; target: Value 5
+loop 0: DTOR: destructor 10; target: Value 10
+loop 1: DTOR: destructor 11; target: Value 11
+loop 2: DTOR: destructor 12; target: Value 12

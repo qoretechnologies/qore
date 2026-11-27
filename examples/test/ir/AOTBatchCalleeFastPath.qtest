@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc links native method calls that save and restore the receiver in generated stack storage
 
 %modern
 %no-child-restrictions
@@ -187,6 +188,13 @@ final class ObjectLeaf {
 }
 
 class SpeculativeObjectLeaf {
+    private int divide(int value) { return 20 / value; }
+    int quotient(int value) { return divide(value); }
+
+    int wrapper(int value) {
+        return affine(value);
+    }
+
     int affine(int value) {
         return value * 3 + 1;
     }
@@ -195,6 +203,22 @@ class SpeculativeObjectLeaf {
 class SpeculativeObjectOverride inherits SpeculativeObjectLeaf {
     int affine(int value) {
         return value * 5 + 100;
+    }
+}
+
+class OtherReceiver {
+    int recover(SpeculativeObjectLeaf receiver) {
+        try {
+            return receiver.quotient(0);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == \"DIVISION-BY-ZERO\" ? affine(-97) + receiver.quotient(4) : -1;
+        }
+    }
+
+    int affine(int value) { return -value; }
+
+    int callWrapper(SpeculativeObjectLeaf receiver, int value) {
+        return receiver.wrapper(value) + affine(value);
     }
 }
 
@@ -311,6 +335,7 @@ string sub object_leaf_checks() {
     ObjectLeaf leaf();
     SpeculativeObjectLeaf exact();
     SpeculativeObjectLeaf overridden = new SpeculativeObjectOverride();
+    OtherReceiver other();
     int caught;
     try {
         caught = leaf.affine(3);
@@ -319,7 +344,9 @@ string sub object_leaf_checks() {
     }
     return string(leaf.pair(1, 2)) + \":\" + string(caught)
         + \":\" + string(int(leaf.scale(4.0) * 10.0))
-        + \":\" + string(exact.affine(4)) + \":\" + string(overridden.affine(4));
+        + \":\" + string(exact.affine(4)) + \":\" + string(overridden.affine(4))
+        + \":\" + string(other.callWrapper(exact, 4)) + \":\" + string(other.callWrapper(overridden, 4))
+        + \":\" + string(other.recover(exact));
 }
 
 int sub default_helper(int x = 7) {
@@ -737,10 +764,14 @@ string sub runScript(string script_path) {
         libqore_dir, qore_bin, script_path));
 }
 
-string sub runAot(string script_path) {
+string sub runAot(string script_path, bool check_self_entry = False) {
     string exe = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid());
-    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
-        libqore_dir, qcc_bin, exe, script_path));
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -O3 -o %s %s 2>&1",
+        libqore_dir, check_self_entry ? "QORE_AOT_DEBUG=1" : "", qcc_bin, exe, script_path));
+    if (check_self_entry && compile_out !~ /method fast entry 'SpeculativeObjectLeaf__wrapper_/) {
+        printf("missing fast entry for wrapper calling affine():\n%s", compile_out);
+        exit(2);
+    }
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
         exit(2);
@@ -755,8 +786,8 @@ script.write(scriptCode());
 script.close();
 
 string ast = runScript(script_path);
-string aot = runAot(script_path);
-if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60:13:120\n"
+string aot = runAot(script_path, True);
+if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60:13:120:9:116:102\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);

@@ -67,7 +67,13 @@ static void qore_try_release_interrupted_return(ValueHolder& trv, ExceptionSink*
     return value, and the replaced value is released when the try statement ends (#5992)
 */
 static void qore_try_give_return(int rc, ValueHolder& trv, QoreValue& return_value, ExceptionSink* xsink) {
-    if (rc == RC_RETURN && !*xsink) {
+    // a debugger's break or continue that leaves the statement with the value of a return in it is a request that
+    // ends the function: its return goes on with its value, as compiled code returns it (#6949); the value of a return
+    // whose request the function takes was released where the request left its block (#7022); outside a debugger,
+    // only code with %broken-loop-statement can leave a try statement with a break or a continue after a return in
+    // it (in a handler), which the same rule applies to
+    if ((rc == RC_RETURN || ((rc == RC_BREAK || rc == RC_CONTINUE) && !trv->isNothing())) && !*xsink) {
+        qore_replacing_return(return_value);
         ValueHolder replaced(return_value, xsink);
         return_value = trv.release();
         return;
@@ -91,6 +97,8 @@ bool qore_catch_thread_exit(ExceptionSink* xsink) {
 
 int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueHolder trv(xsink);
+    // in the body of a handler, a request in the try or catch block passes the statement (#7022)
+    QoreTryReturnSlotHelper slot_helper(*trv, return_value);
 
     QORE_TRACE("TryStatement::execImpl()");
     int rc = 0;
@@ -132,6 +140,8 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
 int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     ValueHolder trv(xsink);
+    // in the body of a handler, a request in the try or catch block passes the statement (#7022)
+    QoreTryReturnSlotHelper slot_helper(*trv, return_value);
 
     QORE_TRACE("TryStatement::execImpl()");
     int rc_state = 0;
