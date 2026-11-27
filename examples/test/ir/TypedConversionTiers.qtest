@@ -71,9 +71,11 @@ class TypedConversionTiersTest inherits QUnit::Test {
             dir + "/" + scenario + ".qr"));
         assertTrue(is_file(exe), sprintf("%s compiled: %s", scenario, compile_out));
         # standard error is included, since an error left pending by a type resolution is reported when the program
-        # exits
-        assertEq(getExpected(scenario), run(sprintf("%s %s -b 2>&1", getLibEnv(), exe)),
-            scenario + " as AOT executable");
+        # exits: the output on stdout followed by the output on stderr, apart from the module loader's warnings and the
+        # native compilation trace, which are not output of the program
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s %s -b", getLibEnv(), exe));
+        assertEq(0, res.rc, sprintf("%s as AOT executable: exit status (output: %y)", scenario, res.out));
+        assertEq(getExpected(scenario), res.out, scenario + " as AOT executable");
     }
 
     testAotModule() {

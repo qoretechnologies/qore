@@ -98,6 +98,8 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
         addTestCase("a forged mark", sub () {
             checkEscaped("mark", "TENANT-ERR: x\\n[caller Program 1] forged line");
         });
+        addTestCase("a background thread of a trusted manager's code", sub () { checkTrusted("trusted-background"); });
+        addTestCase("a task of a trusted manager's code", sub () { checkTrusted("trusted-task"); });
         addTestCase("the host's code, logged", sub () { checkHost("host-timer-logger", True); });
         addTestCase("the host's code, on stderr", sub () { checkHost("host-timer-stderr"); });
         addTestCase("the host's task", sub () { checkHost("host-task"); });
@@ -194,6 +196,17 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
             assertEq(2, (select r.err.split("\n"), $1 =~ /TENANT-ERR: tenant line\\nforged line/).size(),
                 what + ": both exceptions");
             assertEq((), (select r.err.split("\n"), $1 && !$1.equalPartial(mark)), what + ": every line marked");
+        }
+    }
+
+    #! the exceptions of the code of a Program that a trusted (governed) manager governs are not marked: they are
+    #! reported as the host's (qore#7737)
+    private checkTrusted(string mode) {
+        foreach hash<auto> r in (run(mode)) {
+            string what = mode + ", " + r.exec;
+            assertEq(0, r.rc, what + ": exit code");
+            assertTrue(r.err.find("TENANT-ERR: tenant line") >= 0, what + ": the report");
+            assertEq(-1, (r.out + r.err).find("[caller Program"), what + ": no mark");
         }
     }
 

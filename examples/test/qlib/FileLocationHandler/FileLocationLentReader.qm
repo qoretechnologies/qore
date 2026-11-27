@@ -1,0 +1,77 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FileLocationLentReader.qm library code that reads locations for the code that the host lends it to
+
+/*  FileLocationLentReader.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires FileLocationHandler
+
+module FileLocationLentReader {
+    version = "1.0";
+    desc = "library code that reads locations for the code that the host lends it to";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! the classes of the module
+public namespace FileLocationLentReader {
+#! Reads the locations that its caller gives, as the data providers of library modules do (qore#7806)
+/** An object that the host creates is lent to the restricted code that it gives it to: its methods lend the file
+    system and the network to the code that they call, so FileLocationHandler's read methods do not refuse the
+    borrower, and the object checks a location that the borrower gives with checkCallerLocation()
+*/
+public class LentReader {
+    private {
+        #! the location that the object was created with
+        *string own;
+    }
+
+    constructor(*string own) {
+        self.own = own;
+    }
+
+    #! reads a location that the caller gives, which is checked first
+    string read(string location) {
+        FileLocationHandler::checkCallerLocation(location);
+        return FileLocationHandler::getTextFileFromLocation(location);
+    }
+
+    #! reads a resource from a location with read options that the caller gives, which are checked first
+    data readResource(string location, hash<auto> read_options) {
+        FileLocationHandler::checkCallerLocation(location, True, read_options);
+        return FileLocationHandler::getResourceFromLocation(location, read_options).data;
+    }
+
+    #! writes a location that the caller gives, which is checked first
+    write(string location, string data) {
+        FileLocationHandler::checkCallerLocation(location, False);
+        FileLocationHandler::writeFileToLocation(location, data);
+    }
+
+    #! reads the location that the object was created with
+    string readOwn() {
+        return FileLocationHandler::getTextFileFromLocation(own);
+    }
+}
+}

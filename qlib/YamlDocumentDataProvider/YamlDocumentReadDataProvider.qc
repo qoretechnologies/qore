@@ -233,6 +233,8 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
         if (exists opts.stream) {
             stream = opts.stream;
         } else {
+            # the path is the creator's input (qore#7806)
+            check_creator_file_access("the 'path' option");
             stream = new FileInputStream(opts.path);
         }
         return new YAML::YamlDocumentIterator(stream, iter_opts);

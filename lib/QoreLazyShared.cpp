@@ -200,23 +200,24 @@ QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, bool 
         return;
     }
     // the mode is fixed here: process-shared if the creating code may create a trusted build of the builder (the
-    // checks of SandboxManager::createTrustedBuildCall()), private otherwise
-    bool shared = !qore_caller_is_sandboxed();
+    // checks of SandboxManager::createTrustedBuildCall()), private otherwise: code that a trusted (governed) sandbox
+    // governs creates a process-shared value (qore#7737)
+    bool shared = !qore_caller_is_restricted();
     if (shared) {
         QoreSandboxContext* creation = qore_get_call_reference_provenance(b);
         if (creation) {
+            shared = !qore_sandbox_context_is_restricted(creation);
             creation->deref();
-            shared = false;
         }
     }
     if (shared) {
         QoreParseOptions po;
-        bool code_sandboxed = false;
-        int rc = qore_call_reference_code_parse_options(b, po, xsink, &code_sandboxed);
+        bool code_restricted = false;
+        int rc = qore_call_reference_code_parse_options(b, po, xsink, &code_restricted);
         if (*xsink) {
             return;
         }
-        if (rc > 0 && code_sandboxed) {
+        if (rc > 0 && code_restricted) {
             shared = false;
         }
     }
@@ -227,8 +228,8 @@ QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, bool 
         }
     } else if (require_shared) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a process-shared lazy value is required, but the creating "
-            "code is sandboxed or acts for sandboxed code, or the builder has sandbox provenance or belongs to a "
-            "sandboxed Program");
+            "code is restricted or acts for restricted code, or the builder has restricted sandbox provenance or "
+            "belongs to a restricted Program");
         return;
     }
     builder = b->refRefSelf();
