@@ -12463,14 +12463,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
     assert(!xsink || !*xsink);
     QoreValue first = fromBits(first_bits);
     QoreValue value = fromBits(value_bits);
-    // a step of the join with a value of the map, the usual case
-    if (first.hasNode() && !value.isNothing()) [[likely]] {
+    // a step of the join with a value of the map, the usual case, or its finish
+    if (first.hasNode()) [[likely]] {
         AbstractQoreNode* node = first.getInternalNode();
         if (node->getType() == NT_STRING) [[likely]] {
-            // note: safe; the node of the value (an inline short string has none), which is the join that the start
-            // made
-            return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
-                fromBits(separator_bits), value, xsink);
+            if (!value.isNothing()) [[likely]] {
+                // note: safe; the node of the value (an inline short string has none), which is the join that the
+                // start made
+                return qore_rt_string_method_join_step(static_cast<QoreStringNode*>(node), first_bits,
+                    fromBits(separator_bits), value, xsink);
+            }
+            // the finish of the join
+            node->ref();
+            return first_bits;
         }
     }
     return qore_rt_string_method_join_other(first, fromBits(separator_bits), value, xsink);
