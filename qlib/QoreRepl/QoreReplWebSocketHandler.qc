@@ -258,6 +258,8 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         state; it gets the \c Authorization field only when the handler has no authenticator of the platform and
         trusted code opts in to it with
         @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"
+        (the opt-in is the handler's: it gives the field to every code of a restricted %Program that the handler calls
+        with the request, not only to this callback)
 
         @par Example
         @code{.py}

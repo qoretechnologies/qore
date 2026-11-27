@@ -202,9 +202,10 @@ module OneRecordServerHandler {
     @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"
     (\c "authorization") and the handler has no authenticator of the platform (the default
     @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator"), as the authorizer then consumes the
-    credential itself.  A handler that restricted code constructs gets the request from the HTTP server without its
-    credentials as well, so its authorizer gets no \c Authorization field either unless trusted code opts in to it:
-    restricted code cannot opt in.
+    credential itself.  The opt-in is the handler's, not that of one consumer: it gives the \c Authorization field to
+    every code of a restricted %Program that the handler calls with the request, not only to the authorizer.
+    A handler that restricted code constructs gets the request from the HTTP server without its credentials as
+    well, and no code can opt in to the \c Authorization field for it, so its authorizer does not get the field.
 
     @section onerecordserverhandlerrelnotes OneRecordServerHandler Release Notes
 

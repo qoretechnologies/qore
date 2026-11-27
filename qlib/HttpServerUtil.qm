@@ -6438,6 +6438,11 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @ref httpserverutil_request_credentials).  Only trusted code can set it, also trusted code that a sandbox
         governs only to interrupt or limit it.
 
+        @note The opt-in is the handler's, not that of one consumer: without an authenticator of the platform (or with
+        a @ref PermissiveAuthenticator), it gives the \c Authorization field to every code of a restricted %Program
+        that the handler calls with the request (see getContextForCode()), such as all of its authorizers,
+        callbacks, resolvers and methods, not only to the code that consumes the credential.
+
         @param names the credential header fields that the code serving the requests of this handler gets
 
         @throw REQUEST-ERROR the calling code is restricted

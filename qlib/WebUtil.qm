@@ -87,8 +87,9 @@ module WebUtil {
     \c Proxy-Authorization, \c Cookie and \c Set-Cookie fields, the raw \c Authorization value (\c auth), the
     objects of the server or the handler's state; the \c Authorization field only when the handler has no
     authenticator of the platform and trusted code opts in to it with
-    @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()".  A
-    template without setup code runs only the code of its file, which the handler trusts.
+    @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()";
+    the opt-in is the handler's, so every restricted code that the handler calls with the request gets the field,
+    not only one template.  A template without setup code runs only the code of its file, which the handler trusts.
 
     @section webutil_relnotes Release Notes
 

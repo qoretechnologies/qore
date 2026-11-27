@@ -274,6 +274,8 @@ hash<auto> sub myTool(*hash<auto> args) {
     such as @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()", through it.  The \c Authorization field is given only when the handler has no authenticator of the platform (or a
     @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator") and trusted code opts in to it with
     @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()".
+    The opt-in is the handler's, not that of one consumer: it gives the \c Authorization field to every code of a
+    restricted %Program that the handler calls with the request.
 
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
