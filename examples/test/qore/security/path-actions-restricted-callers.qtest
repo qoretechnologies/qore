@@ -10,6 +10,8 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+# no ambient cloud credentials are looked up by the AWS, Azure and Google clients below
+%requires ../../LiveProviderTest.qm
 %requires DataProvider
 %requires ConnectionProvider
 %requires FileLocationHandler
