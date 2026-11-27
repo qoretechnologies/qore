@@ -551,10 +551,13 @@ authenticate();
     a trusted %Program outside a class) in a %Program that a sandbox does not restrict (a %Program that a sandbox
     governs, whose code is trusted, can call them), and not through a call reference that restricted code invokes;
     library code outside a class, which acts for its caller, cannot call them when restricted code is in the chain of
-    callers.  The calling code must never give their output to sandboxed code, and must never deserialize data that
+    callers (library code is the code of a module loaded from a directory of the process-wide module path; a module
+    that a script finds through its own module path, such as with \c %%prepend-module-path, is the application's own
+    code, which acts for itself).  The calling code must never give their output to sandboxed code, and must never deserialize data that
     sandboxed code can influence: with such data, it would set the non-public state of objects of trusted classes
     without their constructors as the sandboxed code chose.  The code of a class declared by trusted code, also of a
-    library module's class, acts for itself and so carries this whole responsibility: it applies the trusted forms
+    library module's class, and the functions of a trusted %Program and of the application's own modules act for
+    themselves and so carry this whole responsibility: it applies the trusted forms
     only to values of its own, never to a value or data that its caller passes in, and never returns or hands on the
     output; a public method or a closure that applies them to its parameters gives the capability to every caller.
     As the trusted forms give all state, they also give the non-public members of an object that has the provenance
