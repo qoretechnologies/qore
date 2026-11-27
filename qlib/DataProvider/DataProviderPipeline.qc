@@ -2083,13 +2083,6 @@ public class DataProviderPipeline {
         #! True when the current run has used synchronous processing and needs synchronous flush
         bool synchronous_processing = False;
 
-%ifdef QoreDebug
-        #! Called when the end of a run has stopped the queues, before it waits for their threads (debug builds only)
-        /** See setTestHooks()
-        */
-        static *code stop_test_hook;
-%endif
-
         #! True while a run is ending (see beginRunEndIntern())
         bool run_ending = False;
 
@@ -2099,6 +2092,15 @@ public class DataProviderPipeline {
         #! The number of threads waiting on run_end_cond
         int run_end_waiting = 0;
     }
+
+%ifdef QoreDebug
+    private:internal {
+        #! Called when the end of a run has stopped the queues, before it waits for their threads (debug builds only)
+        /** See setTestHooks()
+        */
+        static *code stop_test_hook;
+    }
+%endif
 
     #! Creates the object with the given options
     /** @param opts any options for the pipeline; see @ref PipelineOptionInfo for more information
