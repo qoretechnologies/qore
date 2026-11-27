@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "qore/intern/qore_keyed_hash.h"
+
 QoreTextFeatures::QoreTextFeatures(const std::string& mode, int max_features, int min_df,
     const std::string& tokenizer_mode, void* tokenizer_handle)
     : mode(mode), tokenizer_mode(tokenizer_mode), tokenizer_handle(tokenizer_handle),
@@ -73,8 +75,14 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
 
     int64_t num_docs = documents->size();
 
-    // Count document frequency for each term
-    std::unordered_map<std::string, int> df_counts;
+    // Count document frequency for each term: the number of documents with the term, and the last document that
+    // counted it, so that a document counts each of its terms once with one search per token
+    struct df_entry {
+        int count = 0;
+        int64_t last_doc = -1;
+    };
+    qore_keyed_string_map<df_entry> df_counts;
+    QORE_KEYED_HASH_SITE("ml-1", df_counts);
 
     for (int64_t i = 0; i < num_docs; ++i) {
         QoreValue v = documents->retrieveEntry(i);
@@ -93,11 +101,11 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count unique terms in this document
-        std::unordered_map<std::string, bool> seen;
         for (const auto& tok : tokens) {
-            if (!seen[tok]) {
-                df_counts[tok]++;
-                seen[tok] = true;
+            df_entry& e = df_counts[tok];
+            if (e.last_doc != i) {
+                e.last_doc = i;
+                ++e.count;
             }
         }
     }
@@ -105,8 +113,8 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
     // Filter by min_df
     std::vector<std::pair<std::string, int>> filtered;
     for (const auto& entry : df_counts) {
-        if (entry.second >= min_df) {
-            filtered.push_back(entry);
+        if (entry.second.count >= min_df) {
+            filtered.emplace_back(entry.first, entry.second.count);
         }
     }
 
@@ -147,7 +155,7 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         idf_values.resize(n_features);
         for (const auto& entry : vocabulary) {
             // sklearn convention: idf = log((1 + n_docs) / (1 + df)) + 1
-            int df = df_counts[entry.first];
+            int df = df_counts[entry.first].count;
             idf_values[entry.second] = std::log((1.0 + n_docs) / (1.0 + df)) + 1.0;
         }
     }
@@ -190,7 +198,8 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count term frequencies
-        std::unordered_map<std::string, int> tf_counts;
+        qore_keyed_string_map<int> tf_counts;
+        QORE_KEYED_HASH_SITE("ml-2", tf_counts);
         for (const auto& tok : tokens) {
             tf_counts[tok]++;
         }

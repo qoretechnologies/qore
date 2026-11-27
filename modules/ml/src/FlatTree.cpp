@@ -15,7 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
-#include <unordered_map>
+#include <map>
 
 // --- Impurity computation ---
 
@@ -40,7 +40,8 @@ double FlatTree::computeImpurity(const Eigen::VectorXd& y,
     }
 
     // Classification: count per class
-    std::unordered_map<int, int> counts;
+    // an ordered map: the impurity sums do not depend on the order of a hash table
+    std::map<int, int> counts;
     for (int i : indices) {
         counts[(int)y(i)]++;
     }
@@ -197,7 +198,9 @@ int FlatTree::buildNode(const Eigen::MatrixXd& X, const Eigen::VectorXd& y,
     // Leaf node
     if (task == "classification") {
         // Majority class and class probabilities
-        std::unordered_map<int, int> counts;
+        // an ordered map: a tie for the majority class goes to the smallest class label, whatever the order of a hash
+        // table
+        std::map<int, int> counts;
         for (int i : indices) {
             counts[(int)y(i)]++;
         }

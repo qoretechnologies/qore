@@ -31,6 +31,8 @@
 #include <cstring>
 #include <unordered_set>
 
+#include "qore/intern/qore_keyed_hash.h"
+
 #include "AstParser.h"
 #include "CSTSearcher.h"
 #include "CSTWalk.h"
@@ -65,7 +67,7 @@ void forEachProbe(const std::string& str, uint32_t bits, F f) {
 }
 
 //! Adds the identifier and, for scoped identifiers, each "::"-separated component
-void addIdentifier(std::unordered_set<std::string>& names, const std::string& text) {
+void addIdentifier(qore_keyed_string_set& names, const std::string& text) {
     if (text.empty()) {
         return;
     }
@@ -89,7 +91,8 @@ void addIdentifier(std::unordered_set<std::string>& names, const std::string& te
 } // namespace identifier_filter
 
 bool IdentifierFilter::build(const AstParseResult* result, CSTCancelCheck& cancel, std::string& out) {
-    std::unordered_set<std::string> names;
+    qore_keyed_string_set names;
+    QORE_KEYED_HASH_SITE("astparser-1", names);
     if (result) {
         bool ok = cst_walk(result->getRootNode(), cancel, [&](const TSTreeCursor*, TSNode node, uint32_t) {
             if (CSTSearcher::isIdentifierLikeNode(ts_node_type(node))) {
