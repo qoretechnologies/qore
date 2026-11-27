@@ -64,12 +64,14 @@ auto sub reflection(Program h) {
 string sub eval_pgm(int id) {
     return t(auto sub () {
         Program e = ProgramControl::resolveProgramId(id).createEvalProgram(PO_NEW_STYLE);
+        # live-provider-optin: the size of a Program's environment variable, never a value
         e.parse(\"int sub f() { return ENV.size(); }\", \"e\");
         return sprintf(\"own:%d get:%s\", e.callFunction(\"f\"), shape(e.getGlobalVariable(\"ENV\")));
     });
 }
 hash<auto> sub child() {
     Program c(PO_NEW_STYLE);
+    # live-provider-optin: the size of a Program's environment variable, never a value
     c.parse(\"hash<auto> sub e() { return {\\\"ENV\\\": ENV.size(), \\\"QORE_ARGV\\\": QORE_ARGV.size(), \\\"ARGV\\\": ARGV.size()}; }\", \"c\");
     return {\"own\": c.callFunction(\"e\"), \"ENV\": shape(c.getGlobalVariable(\"ENV\"))};
 }
@@ -145,7 +147,7 @@ hash<auto> sub child() {
         Program r = getReader();
         hash<auto> v = r.callFunction("by_name", t);
         assertEq({"v": "hash:1", "found": True}, v.ENV);
-        assertEq({"v": "list:0", "found": True}, v.QORE_ARGV);
+        assertEq({"v": "list:0", "found": True}, v{"QORE_ARGV"});
     }
 
     childTest() {
@@ -156,6 +158,7 @@ hash<auto> sub child() {
     }
 
     addedRestrictionTest() {
+        # live-provider-optin: the size of a Program's environment variable, never a value
         string code = "hash<auto> sub e() { return {\"ENV\": ENV.size(), \"QORE_ARGV\": QORE_ARGV.size(), "
             "\"ARGV\": ARGV.size()}; }";
         hash<auto> empty = {"ENV": 0, "QORE_ARGV": 0, "ARGV": 0};
@@ -186,7 +189,7 @@ hash<auto> sub child() {
         assertEq(0, k.callFunction("f"));
         hash<auto> v = getReader().callFunction("by_name", k);
         assertEq({"v": "hash:0", "found": True}, v.ENV);
-        assertEq({"v": "list:0", "found": True}, v.QORE_ARGV);
+        assertEq({"v": "list:0", "found": True}, v{"QORE_ARGV"});
     }
 
     evalProgramTest() {
