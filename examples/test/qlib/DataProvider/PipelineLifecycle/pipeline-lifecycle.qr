@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# runs a DataProviderPipeline lifecycle case given as the first argument; run by PipelineLifecycle.qtest
+# runs a DataProviderPipeline lifecycle case given as the first argument; run by PipelineLifecycle-<n>.qtest
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires DataProvider
@@ -54,6 +54,100 @@ class SpinProc inherits DataProvider::AbstractDataProcessor {
 
     private bool supportsBulkApiImpl() {
         return False;
+    }
+}
+
+#! buffers the records that it gets and emits them when it is flushed
+class BufProc inherits DataProvider::AbstractDataProcessor {
+    private {
+        list<auto> buf = ();
+    }
+
+    string className() {
+        return "BufProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        push buf, _data;
+    }
+
+    private flushImpl(code enqueue) {
+        map enqueue($1), (remove buf);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! counts the records that it gets
+class CountProc inherits DataProvider::AbstractDataProcessor {
+    public {
+        Counter seen();
+    }
+
+    string className() {
+        return "CountProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        seen.inc();
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! raises an error for record 1
+class FailProc inherits DataProvider::AbstractDataProcessor {
+    string className() {
+        return "FailProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        if (_data == 1) {
+            throw "FAIL", "record 1";
+        }
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! a fan-out pipeline whose queue 0 flushes records to its child queues: queue 0 (SpinProc, BufProc) feeds queue 1
+#! (SpinProc, CountProc) and queue 2 (BufProc or nothing, CountProc)
+class FanOutPipeline {
+    public {
+        DataProviderPipeline p();
+        CountProc c1();
+        CountProc c2();
+    }
+
+    constructor(bool buf0, bool buf2) {
+        p.append(new SpinProc());
+        if (buf0) {
+            p.append(new BufProc());
+        }
+        int q1 = p.appendQueue(0);
+        int q2 = p.appendQueue(0);
+        p.append(q1, new SpinProc());
+        p.append(q1, c1);
+        if (buf2) {
+            p.append(q2, new BufProc());
+        }
+        p.append(q2, c2);
+    }
+
+    #! throws an exception if a record that the pipeline counted has not been processed in both child queues
+    check(int it, string what) {
+        int rc = p.getInfo().record_count;
+        if (c1.seen.getCount() != rc || c2.seen.getCount() != rc) {
+            throw "RACE-ERROR", sprintf("iteration %d: %s: record_count %d; the child queues processed %d and %d",
+                it, what, rc, c1.seen.getCount(), c2.seen.getCount());
+        }
     }
 }
 
@@ -135,6 +229,20 @@ sub submit_error(DataProviderPipeline p, auto rec) {
         printf("submit error: %s: %s\n", ex.err, ex.desc);
     }
     printf("processing: %y\n", p.isProcessing());
+}
+
+#! calls waitDone() on a pipeline that another thread may abort
+/** The submissions to a queue that the abort refuses are the errors of the run that waitDone() raises; no other
+    error is expected
+*/
+sub waitDoneAborted(DataProviderPipeline p) {
+    try {
+        p.waitDone();
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "PIPELINE-FAILED" || (select ex.arg, $1.err != "PIPELINE-SUBMISSION-ABORTED")) {
+            rethrow;
+        }
+    }
 }
 
 #! prints the error log messages about the callback's error
@@ -309,6 +417,106 @@ switch (c) {
             }
         }
         printf("%s: all waiters returned in %d iterations\n", c, iters);
+        break;
+    }
+
+    # a fan-out pipeline whose queue 0 emits records when it is flushed, ended by threads that call waitDone() and
+    # abort() at once: a queue thread that the end of the run stopped while its flush waited for a child queue
+    # waited for data forever, and the run never ended
+    case "race-flush": {
+        int iters = (shift ARGV ?? 1000).toInt();
+        for (int it = 0; it < iters; ++it) {
+            FanOutPipeline fp(True, True);
+            DataProviderPipeline p = fp.p;
+            for (int i = 0; i < 4; ++i) {
+                p.submit(i + it);
+            }
+            Counter waiting(RaceWaiters);
+            for (int w = 0; w < RaceWaiters; ++w) {
+                background sub (int w) {
+                    on_exit waiting.dec();
+                    if (w % 3 == 2) {
+                        p.abort(True);
+                    } else {
+                        waitDoneAborted(p);
+                    }
+                }(w);
+            }
+            waitDoneAborted(p);
+            waiting.waitForZero();
+            if (p.isProcessing()) {
+                throw "RACE-ERROR", sprintf("iteration %d: the pipeline is still processing", it);
+            }
+            # the pipeline can run again: the record of the next run is processed in both child queues, which also
+            # get the records that the buffers of the aborted run held
+            p.reset();
+            int s1 = fp.c1.seen.getCount();
+            int s2 = fp.c2.seen.getCount();
+            p.submit(-1);
+            p.waitDone();
+            hash<PipelineInfo> info = p.getInfo();
+            if (info.record_count != 1 || info.status != PS_IDLE || fp.c1.seen.getCount() - s1 < 1
+                    || fp.c2.seen.getCount() - s2 < 1) {
+                throw "RACE-ERROR", sprintf("iteration %d: the next run: %y; processed %d and %d", it,
+                    info{"record_count", "status"}, fp.c1.seen.getCount() - s1, fp.c2.seen.getCount() - s2);
+            }
+        }
+        printf("%s: every run ended in %d iterations\n", c, iters);
+        break;
+    }
+
+    # a submission while other threads end the run with waitDone(): a record accepted while the run ended was left in
+    # a queue that no thread processed; it is now processed in the next run, which the submission starts
+    case "late-submit":
+    case "late-submit-buf": {
+        int iters = (shift ARGV ?? 1000).toInt();
+        int accepted = 0;
+        for (int it = 0; it < iters; ++it) {
+            FanOutPipeline fp(c == "late-submit-buf", False);
+            DataProviderPipeline p = fp.p;
+            for (int i = 0; i < 4; ++i) {
+                p.submit(i + it);
+            }
+            Counter waiting(RaceWaiters / 2 + 1);
+            for (int w = 0; w < RaceWaiters / 2; ++w) {
+                background sub () {
+                    on_exit waiting.dec();
+                    p.waitDone();
+                }();
+            }
+            background sub () {
+                on_exit waiting.dec();
+                p.submit(100);
+            }();
+            p.waitDone();
+            waiting.waitForZero();
+            # the run that the submission may have started
+            p.waitDone();
+            fp.check(it, "after the late submission");
+            accepted += fp.c1.seen.getCount() == 5 ? 1 : 0;
+        }
+        printf("%s: every accepted record was processed in %d iterations (%s)\n", c, iters,
+            accepted == iters ? "all accepted" : "not all accepted");
+        break;
+    }
+
+    # a synchronous pipeline: a record that the queue refuses after the run has aborted is not counted
+    case "sync-count": {
+        DataProviderPipeline p(<PipelineOptionInfo>{"synchronous": True});
+        p.append(new FailProc());
+        p.submit(1);
+        try {
+            p.submit(2);
+            printf("submit(2) accepted\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("submit(2): %s\n", ex.err);
+        }
+        printf("record_count: %d\n", p.getInfo().record_count);
+        try {
+            p.waitDone();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("waitDone: %s\n", ex.err);
+        }
         break;
     }
 
