@@ -71,6 +71,8 @@ class PipelineLifecycleBase inherits QUnit::Test {
                 "processing: False\n"
                 "errors logged: 1 (callback error: True)\n",
             "flush-window": "run ended: processed 1 and 1\n",
+            "sync-iterator": "submitData(): records: [1, 2, 3] record_count: 3\n"
+                "submit(record iterator): records: [{a: 1}, {a: 2}] record_count: 2 threads: 1\n",
             "sync-count": "submit(2): PIPELINE-SUBMISSION-ABORTED\n"
                 "record_count: 1\n"
                 "waitDone: PIPELINE-FAILED\n",
@@ -93,6 +95,7 @@ class PipelineLifecycleBase inherits QUnit::Test {
         addPartCase(1, "pipelines in global variables end with the program", \testGlobal());
         addPartCase(1, "thread callback errors are raised", \testCallbackErrors());
         addPartCase(1, "records refused by a synchronous pipeline are not counted", \testSyncCount());
+        addPartCase(1, "a synchronous pipeline processes the records of an iterator", \testSyncIterator());
         addPartCase(2, "waiters return when another thread aborts the run", \testRace(), "race-abort");
         addPartCase(3, "waiters return when another thread ends the run", \testRace(), "race-waitdone");
         addPartCase(4, "runs of a fan-out pipeline that flushes end when several threads end them", \testRace(),
@@ -123,6 +126,11 @@ class PipelineLifecycleBase inherits QUnit::Test {
     #! the end of the run stops queue 0 while its thread has released the lock after its flush (debug-only hooks)
     testFlushWindow() {
         runCase("flush-window");
+    }
+
+    #! qore#7793: a synchronous pipeline given an iterator hung in waitDone()
+    testSyncIterator() {
+        runCase("sync-iterator");
     }
 
     testSyncCount() {

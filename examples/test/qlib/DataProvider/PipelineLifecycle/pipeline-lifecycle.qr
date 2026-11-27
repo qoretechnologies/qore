@@ -553,6 +553,24 @@ switch (c) {
         break;
     }
 
+    # a synchronous pipeline given an iterator processes its records on the caller's thread: they were queued for a
+    # queue thread that a synchronous pipeline does not start, and waitDone() never returned (qore#7793)
+    case "sync-iterator": {
+        DataProviderPipeline p(<PipelineOptionInfo>{"synchronous": True});
+        SinkProc sink();
+        p.append(sink);
+        p.submitData(new ListIterator((1, 2, 3)));
+        p.waitDone();
+        printf("submitData(): records: %y record_count: %d\n", sink.getSorted(), p.getInfo().record_count);
+        p.reset();
+        sink.recs = ();
+        p.submit(new DefaultRecordIterator(new ListIterator(({"a": 1}, {"a": 2}))));
+        p.waitDone();
+        printf("submit(record iterator): records: %y record_count: %d threads: %d\n", sink.recs,
+            p.getInfo().record_count, sink.tids.size());
+        break;
+    }
+
     # a synchronous pipeline: a record that the queue refuses after the run has aborted is not counted
     case "sync-count": {
         DataProviderPipeline p(<PipelineOptionInfo>{"synchronous": True});
