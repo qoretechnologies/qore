@@ -408,6 +408,9 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
             SandboxManager sm();
             if (trusting) {
                 sm.setUncontrolledApiPolicy(True);
+                # at the level of code safety, so that the owner rules of tenant isolation (qore#6842, qore#7033),
+                # which a governed tenant is subject to, do not decide here: only the classification of qore#7146
+                sm.setEnforcementLevel(QSEL_CODE_SAFETY);
             }
             Program g(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             g.setSandboxManager(sm);

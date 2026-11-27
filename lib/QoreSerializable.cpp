@@ -296,6 +296,10 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     return chainSandboxed();
 }
 
+void QoreSerializationCaller::decideReceiverCaller() {
+    receiver_caller_trusted = receiver && !qore_receiver_caller_is_sandboxed(receiver);
+}
+
 bool QoreSerializationCaller::chainSandboxed() {
     if (chain_sandboxed < 0) {
         chain_sandboxed = qore_receiver_caller_is_restricted(receiver) ? 1 : 0;
@@ -591,6 +595,7 @@ QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, 
     // call writes to) sees the frame unmarked for the rest of the call, so that it counts for that code, as for the
     // static form (qore#7146)
     context.caller.chainSandboxed();
+    context.caller.decideReceiverCaller();
     qore_clear_serializing_receiver_frame(&self);
     return serializeToDataIntern(&self, context, xsink);
 }
@@ -684,7 +689,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
 
     // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
     // created the object (qore#7033)
-    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
+    // the code that called a builtin method that serializes its receiver is judged without the receiver's provenance
+    // frame, as the caller of the static form is (qore#7146)
+    bool non_public = context.caller.receiverCallerTrusted()
+        || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);

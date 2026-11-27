@@ -2885,6 +2885,10 @@ class QoreFunction;
 */
 DLLLOCAL bool qore_receiver_caller_is_restricted(const QoreObject* receiver);
 
+//! As qore_receiver_caller_is_restricted(), for any sandboxed code (qore_caller_is_sandboxed()), as the owner rule of
+//! the non-public members of objects (qore#7033) decides; fails closed
+DLLLOCAL bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver);
+
 //! Marks the provenance frame that \a frame applied for the receiver of the call of a builtin method of Serializable
 //! that serializes it (see qore_receiver_caller_is_restricted()); nothing if it applied none
 DLLLOCAL void qore_mark_serializing_receiver_frame(const QoreSandboxProvenanceHelper& frame);

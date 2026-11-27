@@ -11219,6 +11219,18 @@ bool qore_clear_serializing_receiver_frame(const QoreObject* receiver) {
     return false;
 }
 
+bool qore_receiver_caller_is_sandboxed(const QoreObject* receiver) {
+    ThreadData* td = thread_data.get();
+    if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {
+        const ThreadData::ReceiverProvenance& rp = td->receiver_provenance.back();
+        // as qore_receiver_caller_is_restricted(), for any sandboxed code (the owner rule of qore#7033 decides by it)
+        if (rp.serializing && rp.frame == td->sandbox_provenance && rp.receiver == receiver) {
+            return qore_caller_sandbox_state_intern(nullptr, false, rp.frame) != 0;
+        }
+    }
+    return qore_caller_is_sandboxed();
+}
+
 bool qore_receiver_caller_is_restricted(const QoreObject* receiver) {
     ThreadData* td = thread_data.get();
     if (receiver && td && td->sandbox_provenance && !td->receiver_provenance.empty()) {

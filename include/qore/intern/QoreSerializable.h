@@ -221,6 +221,16 @@ public:
         return receiver;
     }
 
+    //! for a builtin method of Serializable that serializes its receiver: decides, once at the start of the call,
+    //! whether the code that called it is trusted code with the receiver's provenance frame left out, which reads the
+    //! non-public members of objects as the static form's caller does (the owner rule of qore#7033; qore#7146)
+    DLLLOCAL void decideReceiverCaller();
+
+    //! returns true if decideReceiverCaller() found that the calling code is trusted code
+    DLLLOCAL bool receiverCallerTrusted() const {
+        return receiver_caller_trusted;
+    }
+
     //! returns true if restricted code is in the chain of callers (qore_receiver_caller_is_restricted()), decided once
     //! for the serialization: also for a trusted API, for the rule of shared objects
     DLLLOCAL bool chainSandboxed();
@@ -236,6 +246,8 @@ private:
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
     bool unrestricted = false;
+    //! true if the code that called a builtin method that serializes its receiver is trusted code
+    bool receiver_caller_trusted = false;
 
 #ifdef DEBUG
     // The lazy reads of restricts() are correct only if the thread's frame is the one that this object was created in
