@@ -4558,6 +4558,21 @@ void Http2Session::addBoundBody(int32_t stream_id) {
 void Http2Session::eraseBoundBody(int32_t stream_id) {
     if (bound_bodies.erase(stream_id)) {
         updateActiveInputStreams();
+        endSendRateWaitIfIdleUnlocked();
+    }
+}
+
+void Http2Session::endSendRateWaitIfIdleUnlocked() {
+    // the last body or send that waited for the client has left: the session leaves the I/O thread's check of its
+    // bodies, so the end of the wait is recorded now; otherwise the window stayed waiting, and the next body was
+    // charged for the idle time before it (qorus#1335).  The measurement is kept across the waits, so that a client
+    // cannot reset it with each response; a verdict that no waiting body ends is not left for a later, unrelated wait
+    if (!pump_send_rate.enabled() || isConnectionWaitingUnlocked(-1)) {
+        return;
+    }
+    refreshClientTakenUnlocked();
+    if (pump_send_rate.update(static_cast<int64_t>(conn_client_taken), false, q_clock_getmicros_monotonic() / 1000)) {
+        pump_send_rate.restart();
     }
 }
 
@@ -4584,6 +4599,8 @@ void Http2Session::updateBoundBodiesWritten() {
     }
     if (erased) {
         updateActiveInputStreams();
+        // the normal end of a body: its last frame has been written (qorus#1335)
+        endSendRateWaitIfIdleUnlocked();
     }
 }
 

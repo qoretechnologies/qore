@@ -146,8 +146,8 @@ public class RawHttp2Client {
 
     #! Reads frames until the stream ends (END_STREAM or RST_STREAM) or the connection is closed
     /** SETTINGS and PING frames are acknowledged; the data of other streams is read and not counted; each DATA frame
-        of the stream is credited back (WINDOW_UPDATE for the stream and the connection), so that the whole body can
-        be read whatever the client's windows
+        of the stream is credited back (WINDOW_UPDATE for the stream and the connection; the connection only for the
+        frame that ends the stream), so that the whole body can be read whatever the client's windows
 
         @param stream_id the stream to read
         @param read_timeout the timeout of each read
@@ -192,9 +192,18 @@ public class RawHttp2Client {
                     if (f.stream_id == stream_id) {
                         rv.data_bytes += f.payload.size();
                     }
-                    if (f.payload.size() && !(f.flags & FlagEndStream)) {
-                        if (!sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
-                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())))) {
+                    # the data is credited back to the connection, also the data of the frame that ends its stream
+                    # (whose stream needs no more credit): otherwise each stream would use up part of the
+                    # connection's window for good
+                    if (f.payload.size()) {
+                        bool ends = (f.flags & FlagEndStream).toBool();
+                        binary credit = frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()));
+                        if (!ends) {
+                            credit += frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size()));
+                        }
+                        # the credit after the end of a stream is not needed for it: a connection that the server has
+                        # closed after the stream ended leaves the stream ended
+                        if (!sendOrClosed(credit) && !(ends && f.stream_id == stream_id)) {
                             rv.closed = True;
                             return rv;
                         }
