@@ -2881,9 +2881,12 @@ void AsyncIoControllerPriv::requestWorkerStartRetry() noexcept {
 static std::atomic<int> qore_dbg_fail_callback_worker_starts{0};
 //! true if only the starts made when work is queued fail, not those of the retries (qore#7834)
 static std::atomic<bool> qore_dbg_fail_callback_worker_starts_enqueue_only{false};
+//! the number of callback worker starts that succeed before the failures begin (qore#7834)
+static std::atomic<int> qore_dbg_callback_worker_starts_before_failures{0};
 
-void QoreCallDispatcher::dbgFailCallbackWorkerStarts(int count, bool enqueue_only) {
+void QoreCallDispatcher::dbgFailCallbackWorkerStarts(int count, bool enqueue_only, int after) {
     qore_dbg_fail_callback_worker_starts_enqueue_only.store(enqueue_only);
+    qore_dbg_callback_worker_starts_before_failures.store(after < 0 ? 0 : after);
     qore_dbg_fail_callback_worker_starts.store(count < 0 ? 0 : count);
 }
 
@@ -2891,6 +2894,15 @@ void QoreCallDispatcher::dbgFailCallbackWorkerStarts(int count, bool enqueue_onl
 static bool qore_dbg_take_callback_worker_start_failure(bool retry) {
     if (retry && qore_dbg_fail_callback_worker_starts_enqueue_only.load()) {
         return false;
+    }
+    if (!qore_dbg_fail_callback_worker_starts.load()) {
+        return false;
+    }
+    int before = qore_dbg_callback_worker_starts_before_failures.load();
+    while (before > 0) {
+        if (qore_dbg_callback_worker_starts_before_failures.compare_exchange_weak(before, before - 1)) {
+            return false;
+        }
     }
     int n = qore_dbg_fail_callback_worker_starts.load();
     while (n > 0) {

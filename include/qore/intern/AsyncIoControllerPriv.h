@@ -499,8 +499,8 @@ public:
 
 #ifdef DEBUG
     //! Debug-only: makes the next @p count starts of callback workers fail, only those made when work is queued if
-    //! @p enqueue_only (dbg_async_io_fail_callback_worker_starts(); qore#7834)
-    DLLLOCAL static void dbgFailCallbackWorkerStarts(int count, bool enqueue_only = false);
+    //! @p enqueue_only, after @p after starts that succeed (dbg_async_io_fail_callback_worker_starts(); qore#7834)
+    DLLLOCAL static void dbgFailCallbackWorkerStarts(int count, bool enqueue_only = false, int after = 0);
 #endif
 
     //! Starts a callback worker for the queued work if none runs for it; called on the controller's I/O thread when a
