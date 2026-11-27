@@ -311,6 +311,16 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     After it has sent the \c GOAWAY frame of a connection error, the server closes the connection (RFC 9113 section
     5.4.1), as it does when a \c GOAWAY frame has been sent or received and no stream of the connection has work left.
 
+    A client that opens a stream over the connection's \c SETTINGS_MAX_CONCURRENT_STREAMS, once it has acknowledged
+    the setting, ends the connection: the server answers the stream's \c HEADERS frame with
+    <tt>GOAWAY(PROTOCOL_ERROR)</tt> ("request HEADERS: max concurrent streams exceeded"), which ends the other requests
+    and WebSocket connections of the connection too.  RFC 9113 makes the stream a stream error (section 5.1.2), and
+    allows an endpoint to treat a stream error as a connection error (section 5.4.1); the HTTP/2 library (nghttp2)
+    does so for this case, and its maintainers have declined to send <tt>RST_STREAM(REFUSED_STREAM)</tt> instead
+    (nghttp2 issue 687), as only a client that exceeds the limit set by its peer, which RFC 9113 section 5.1.2
+    forbids, gets there.  Before the client has acknowledged the setting, such a stream is reset with
+    <tt>RST_STREAM(REFUSED_STREAM)</tt> and can be retried (RFC 9113 section 8.7).
+
     The server ends its half of the stream of an HTTP/2 WebSocket connection (RFC 8441) when the WebSocket connection
     has closed: after the closing handshake, after the close timeout, or at once after its close frame when the
     handler has no close timeout.  If the client has not ended its half then, the server resets the stream with
