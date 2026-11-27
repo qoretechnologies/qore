@@ -3287,6 +3287,11 @@ class HttpServerDispatchCapability {
 
     #! creates the object for the HttpServer module at the given canonical path, or for a host without a path
     /** Created by trusted code only (see AbstractHttpRequestHandler::claimServerDispatch() and claimHostDispatch())
+
+        The check of the capability of the HTTP server runs on the thread of the first request, which can be the
+        thread of a listener that sandboxed code added, whose filesystem policy is not this module's: the file of the
+        loaded HttpServer module is resolved with the system policy, with a call that is created here, in the trusted
+        initialization of the HttpServer module (see initResolve()).
     */
     constructor(*string path, code trailer_keep_for) {
         self.path = path;
@@ -3294,13 +3299,32 @@ class HttpServerDispatchCapability {
         # a host's capability is not checked against the HttpServer module
         checked = !path;
         if (path) {
-            # the check runs on the thread of the first request, which can be the thread of a listener that sandboxed
-            # code added, whose filesystem policy is not this module's: the file of the loaded module is resolved
-            # with the system policy, with a call made here, in the trusted initialization of the HttpServer module
-            resolve = SandboxManager::createSystemPolicyCall(*string sub () {
+            resolve = HttpServerDispatchCapability::initResolve();
+        }
+    }
+
+    #! Creates the system-policy call that resolves the file of the loaded HttpServer module for check()
+    /** Called when the capability of the HTTP server is created, in the trusted initialization of the HttpServer
+        module (see
+        @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()").  The call can
+        only be created by code that no sandbox governs and that may use the \c UNCONTROLLED_API domain (the module
+        calls the method by name, so that it can be loaded by any Program): when the module is loaded first by code
+        restricted with @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", there is no call, and the
+        capability of the HTTP server fails closed: check() refuses it, permanently, as if the file of the loaded
+        module could not be resolved, so that it makes no request current and the stream requests of its dispatch are
+        refused while its other requests are served.  The file is never resolved with the policy of the caller
+        instead, and the check is never skipped.
+
+        @return the call, or @ref NOTHING if it cannot be created
+    */
+    private:internal static *code initResolve() {
+        try {
+            return call_static_method("SandboxManager", "createSystemPolicyCall", *string sub () {
                 *string filename = get_module_hash().HttpServer.filename;
                 return filename ? realpath(filename) : NOTHING;
             });
+        } catch (hash<ExceptionInfo> ex) {
+            # no call: the capability of the HTTP server fails closed (see check())
         }
     }
 
@@ -3384,7 +3408,9 @@ class HttpServerDispatchCapability {
     /** A capability whose module is not the loaded HttpServer module is unusable: it makes no request current, so that
         the stream requests of its dispatch are refused (fails closed) while its other requests are served.  A check
         that cannot be made (the file of the module cannot be resolved now) makes no request current for the request
-        being dispatched, and is made again for the next one.  Each is reported once (see takeWarning()).
+        being dispatched, and is made again for the next one.  A capability without the system-policy call that
+        resolves the file (see initResolve()) is unusable: the check is never made with the policy of the caller
+        instead.  Each is reported once (see takeWarning()).
 
         @return @ref True if the capability makes the request current
     */
@@ -3392,6 +3418,15 @@ class HttpServerDispatchCapability {
         AutoLock al(lck);
         if (checked) {
             return !unusable;
+        }
+        if (!resolve) {
+            # no system-policy call (see initResolve()): fails closed, permanently
+            checked = True;
+            unusable = True;
+            warning = "the dispatch capability of the HTTP server cannot be checked against the loaded HttpServer "
+                "module, as the module was loaded first by code that may not use uncontrolled APIs: its stream "
+                "requests are refused";
+            return False;
         }
         # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
         # checked against the record of the HttpServer module loaded in the process, if any
