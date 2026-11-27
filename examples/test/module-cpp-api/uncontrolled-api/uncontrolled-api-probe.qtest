@@ -84,6 +84,9 @@ class ProbeHolder {
       arguments are evaluated, whether the variant was found when the call was parsed or when it is made
     - the user methods of a %Qore class that inherits a builtin class of the domain, and its destructor, run for code
       that a refusing sandbox governs, while the builtin methods that it inherits are refused
+    - the objects that sandboxed code deletes are its own (its sandbox owns them), or its sandbox is at the
+      enforcement level of code safety: the owner rule of tenant isolation refuses a tenant the deletion of an object
+      that its sandbox did not create (qore#6842), which ownerRuleTest() checks
 */
 public class UncontrolledApiProbeTest inherits QUnit::Test {
     public {
@@ -112,6 +115,8 @@ auto sub user_method(object o) { return run(sub () { return o.user(); }); }
 auto sub inherited_method(object o) { return run(sub () { return o.value(); }); }
 auto sub inherited_through_user(object o) { return run(sub () { return o.inherited(); }); }
 auto sub destroy(object o) { return run(sub () { delete o; return \"deleted\"; }); }
+# returns the object that a factory of trusted code creates for this code and hands over to it (qore#6842)
+object sub take(code factory) { return factory(); }
 
 # a subclass of the builtin class of the domain that the sandboxed code defines itself
 class SandboxedProbe inherits UncontrolledProbe::Probe {
@@ -208,16 +213,18 @@ allowed default arguments evaluated: 15
             \ownSubclassTest());
         addTestCase("a Program that sandboxed code created is governed inside a trusted policy barrier",
             \childBarrierTest());
+        addTestCase("a tenant cannot delete an object that trusted code created", \ownerRuleTest());
         addTestCase("the refusal in every execution mode", \execModeTest());
         addTestCase("the refusal in every execution mode with a compiled (AOT) module", \aotModuleTest());
         set_return_value(main());
     }
 
-    #! Returns a Program with Source and a sandbox with the given policy, or with no sandbox
-    private static Program getProgram(*bool allow) {
+    #! Returns a Program with Source and a sandbox with the given policy and enforcement level, or with no sandbox
+    private static Program getProgram(*bool allow, int level = QSEL_TENANT_ISOLATION) {
         Program p(PO_NEW_STYLE);
         if (exists allow) {
             SandboxManager sm();
+            sm.setEnforcementLevel(level);
             if (allow) {
                 sm.setUncontrolledApiPolicy(True);
             }
@@ -225,6 +232,18 @@ allowed default arguments evaluated: 15
         }
         p.parse(Source, "uncontrolled-api-probe");
         return p;
+    }
+
+    #! Returns the object that the factory creates for the sandboxed code of the Program, which then owns it
+    /** The factory is trusted code that the sandboxed code calls, which hands the object over with
+        SandboxManager::transferObjectToCaller() (qore#6842)
+    */
+    private static object getTenantObject(Program p, code factory) {
+        return p.callFunction("take", object sub () {
+            object o = factory();
+            SandboxManager::transferObjectToCaller(o);
+            return o;
+        });
     }
 
     defaultArgTest() {
@@ -274,8 +293,17 @@ allowed default arguments evaluated: 15
         int user_destructors = UserProbe::destructors;
         int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
         # the user destructor runs, and so does the destructor of the builtin class: it only releases what the object
-        # holds, and the object is destroyed whatever the sandbox decides, so it is not refused
-        assertEq("deleted", p.callFunction("destroy", o), "sandboxed code deletes the object");
+        # holds, and the object is destroyed whatever the sandbox decides, so it is not refused.  Code that a refusing
+        # sandbox at the enforcement level of tenant isolation governs owns no object of the domain: it cannot
+        # construct one (ownSubclassTest()), nor can trusted code construct one for it, as the builtin constructor is
+        # refused to code that acts for it; and the owner rule refuses it the deletion of an object that its sandbox
+        # did not create (qore#6842, see ownerRuleTest()).  The deletion is therefore made by code that a refusing
+        # sandbox at the level of code safety governs, which deletes objects as trusted code does and is refused the
+        # uncontrolled APIs all the same
+        Program cs = getProgram(False, QSEL_CODE_SAFETY);
+        assertEq(Refused, cs.callFunction("inherited_method", o),
+            "code safety: an inherited builtin method is refused");
+        assertEq("deleted", cs.callFunction("destroy", o), "sandboxed code deletes the object");
         assertEq(user_destructors + 1, UserProbe::destructors, "the user destructor ran");
         assertEq(builtin_destructors + 1, UncontrolledProbe::SideEffect::probeDestructors(),
             "the destructor of the builtin class ran");
@@ -288,7 +316,8 @@ allowed default arguments evaluated: 15
         foreach bool allow in ((False, True)) {
             Program p = getProgram(allow);
             string label = allow ? "a sandbox that allows them" : "a refusing sandbox";
-            ProbeHolder holder(other);
+            # the holder is the sandboxed code's own, which it may delete (qore#6842)
+            ProbeHolder holder = getTenantObject(p, object sub () { return new ProbeHolder(other); });
             int destructors = ProbeHolder::destructors;
             int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
             remove ProbeHolder::result;
@@ -372,7 +401,8 @@ allowed default arguments evaluated: 15
 
     userSubclassAllowedTest() {
         Program p = getProgram(True);
-        UserProbe o();
+        # the object is the sandboxed code's own, which it may delete (qore#6842)
+        UserProbe o = getTenantObject(p, object sub () { return new UserProbe(); });
         assertEq(7, p.callFunction("user_method", o));
         assertEq(42, p.callFunction("inherited_method", o));
         assertEq(42, p.callFunction("inherited_through_user", o));
@@ -382,6 +412,37 @@ allowed default arguments evaluated: 15
         assertEq(user_destructors + 1, UserProbe::destructors, "the user destructor ran");
         assertEq(builtin_destructors + 1, UncontrolledProbe::SideEffect::probeDestructors(),
             "the destructor of the builtin class ran");
+        assertThrows("OBJECT-ALREADY-DELETED", \o.user(), NOTHING, "the object was deleted");
+    }
+
+    #! the owner rule of tenant isolation: a tenant cannot delete an object that trusted code created (qore#6842)
+    /** The refusal comes before the object is destroyed: no destructor runs, and the object is intact
+    */
+    ownerRuleTest() {
+        UncontrolledProbe::Probe other();
+        foreach bool allow in ((False, True)) {
+            Program p = getProgram(allow);
+            string label = allow ? "a sandbox that allows them" : "a refusing sandbox";
+            UserProbe o();
+            int user_destructors = UserProbe::destructors;
+            int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
+            assertEq("SANDBOX-OBJECT-ACCESS-ERROR", p.callFunction("destroy", o),
+                label + ": sandboxed code cannot delete a subclass object of the host");
+            assertEq(user_destructors, UserProbe::destructors, label + ": the user destructor did not run");
+            assertEq(builtin_destructors, UncontrolledProbe::SideEffect::probeDestructors(),
+                label + ": the destructor of the builtin class did not run");
+            assertEq(7, o.user(), label + ": the subclass object is intact");
+            assertEq(42, o.value(), label + ": its builtin part is intact");
+
+            ProbeHolder holder(other);
+            int destructors = ProbeHolder::destructors;
+            remove ProbeHolder::result;
+            assertEq("SANDBOX-OBJECT-ACCESS-ERROR", p.callFunction("destroy", holder),
+                label + ": sandboxed code cannot delete an object of a class of the host");
+            assertEq(destructors, ProbeHolder::destructors, label + ": the destructor did not run");
+            assertNothing(ProbeHolder::result, label + ": the destructor made no call");
+            assertEq(1, holder.ok(), label + ": the object is intact");
+        }
     }
 
     #! the expected output of uncontrolled-api-modes.q in the given execution mode
