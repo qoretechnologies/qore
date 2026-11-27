@@ -2776,6 +2776,31 @@ static void ut_rsection_waiters_woken_on_release(UnitTestCounters& c) {
 }
 
 namespace {
+//! a lock that is taken while another registered lock is held has a higher rank than it (qore#7812)
+/** The fork handlers acquire the locks in increasing rank order, and handlers of one rank in an unspecified order;
+    a thread that holds one lock and takes another therefore deadlocks with a concurrent fork() unless the lock it
+    takes has the higher rank.  The class data locks are taken with the complex types lock held
+    (QoreTypeDeclRefs::addMortalDecls() refers to classes under it); at the same rank, a fork() took them first and
+    then waited for the complex types lock, held by a thread that waited for one of them.
+*/
+static void ut_fork_nested_lock_ranks(UnitTestCounters& c) {
+    static const char* nested[][3] = {
+        // outer lock, the lock taken while it is held, where
+        {"complex_types", "class_data_locks", "QoreTypeDeclRefs::addMortalDecls() -> qore_class_private::refClass()"},
+        {"complex_types", "generic_cache_registry", "the registry of the generic caches by the types their keys name"},
+        {nullptr, nullptr, nullptr},
+    };
+    for (size_t i = 0; nested[i][0]; ++i) {
+        QoreForkHandler* outer = qore_fork_find_handler(nested[i][0]);
+        QoreForkHandler* inner = qore_fork_find_handler(nested[i][1]);
+        UT_ASSERT(c, outer && inner, "both locks are registered with fork handlers");
+        if (outer && inner) {
+            UT_ASSERT(c, inner->getRank() > outer->getRank(),
+                "a lock taken while another is held has the higher rank, so fork() acquires it after the other");
+        }
+    }
+}
+
 //! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
 struct ForkHoldTest {
     std::mutex m;
@@ -32113,6 +32138,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);
     ut_fork_waits_for_lock_holders(c);
+    ut_fork_nested_lock_ranks(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
