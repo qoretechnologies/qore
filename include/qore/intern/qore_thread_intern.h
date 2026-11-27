@@ -581,6 +581,16 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
 DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
         const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Restores the statement, location and runtime parse options that enter_compiled_body_options() saved
+/** As swap_runtime_statement_location() with them, which it is, without returning the values that it replaces (a
+    caller that restores has no use for them): a fast call does not keep them in its frame, which is on each level of
+    the IR interpreter's recursion (recursion-frame-budget.qtest)
+
+    @param xsink if not null, the stack is checked, as swap_runtime_statement_location() checks it
+*/
+DLLLOCAL void restore_compiled_body_options(ExceptionSink* xsink, const AbstractStatement* stmt,
+        const QoreProgramLocation* loc, QoreParseOptions po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
@@ -4801,19 +4811,23 @@ protected:
     //! the Program that set() counted the thread in, or entered without its thread count (module_uncounted); set,
     //! and read, only if thread_count_incremented or module_uncounted
     QoreProgram* count_pgm;
-    //! the TID of the thread in \a count_pgm; set, and read, only if thread_count_incremented or module_uncounted
-    int count_tid;
     ThreadLocalProgramData* old_tlpd;
     ProgramThreadCountContextHelper* old_ctx;
     //! the innermost sandbox provenance frame of the thread when set() switched the Program; see getOldProvenance()
     const QoreSandboxProvenanceHelper* old_provenance;
-    // frame count of tlpd when context is started
-    int save_frameCount;
-    int old_frameCount;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink;
     //! the thread's entry into the Program, for its thread entry and exit handlers
-    ThreadEntryHandlerFrame entry_frame;
+    /** The members after it are placed in its tail padding (no_unique_address; the frame is not trivially copyable,
+        so the ABI reuses its padding): the helper is in the frame of every call that enters a Program, including the
+        frames of the IR interpreter's recursion (see the static_assert after the class; qore#7302, AOT3 fault d)
+    */
+    [[no_unique_address]] ThreadEntryHandlerFrame entry_frame;
+    //! the TID of the thread in \a count_pgm; set, and read, only if thread_count_incremented or module_uncounted
+    int count_tid;
+    // frame count of tlpd when context is started
+    int save_frameCount;
+    int old_frameCount;
     //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
     unsigned saved_defer;
     unsigned saved_dtor_defer;
@@ -4898,6 +4912,13 @@ private:
     */
     DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
 };
+
+// the helper is in the frame of every call that enters a Program, and of each level of the IR interpreter's recursion
+// (tryExecuteInterpreterInlineIRFunction(), try_dispatch_method_fast()): a member that makes it larger than 128 bytes
+// on a 64-bit target grows those frames by 16 bytes, which recursion-frame-budget.qtest fails (qore#7302 had made it
+// 136 bytes); put a new member in a hole, or make room for it
+static_assert(sizeof(void*) != 8 || sizeof(ProgramThreadCountContextHelper) <= 128,
+    "ProgramThreadCountContextHelper is larger than 128 bytes");
 
 //! The initialization of a module's Program that a runtime parse or commit runs (qore#7289)
 /** A module that is loaded at run time (Program::loadModule(), load_module()) is parsed and committed, and so
