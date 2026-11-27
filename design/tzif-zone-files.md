@@ -54,8 +54,10 @@ parsed from memory (`QoreZoneInfo::init()`):
   spelling), and `spelling_names` remembers the entry names of up to `MaxSpellingNames` (512) such spellings
   (emptied when full) for the lookup under the read lock. As for any load of a name, a spelling over the limit that
   reaches a file whose identity changed (a tzdata update) replaces the zone of the entry's name. Restricted code is
-  unchanged (no entry name is computed for it). Debug builds have `dbg_tz_region_cache()` and
-  `dbg_tz_set_spelling_limits()` for tests. On file systems other than macOS's, an entry's name is taken as given
+  unchanged (no entry name is computed for it). Debug builds have `dbg_tz_region_cache()`,
+  `dbg_tz_set_spelling_limits()` and `dbg_tz_set_zoneinfo_root()` for tests; the last changes `root` under the lock
+  (`loadRegion()` copies it under the read lock) and is refused for restricted code and for any code that a sandbox governs. On
+  file systems other than macOS's, an entry's name is taken as given
   (case variants on a case-insensitive file system there count as entries); Windows registry names are not covered.
   On Windows, restricted code can use only
   zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names

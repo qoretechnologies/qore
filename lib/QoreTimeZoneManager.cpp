@@ -2416,7 +2416,7 @@ static void get_entry_name(int dirfd, const std::string& comp, std::string& name
     outside of the directory, too many symbolic links, a path too long or an I/O error, which the caller does not
     distinguish
 */
-static int open_region_file(const QoreString& root, const char* region, std::string& rel, std::string* entry) {
+static int open_region_file(const std::string& root, const char* region, std::string& rel, std::string* entry) {
     assert(QoreTimeZoneManager::isRegionName(region, strlen(region)));
 #ifdef HAVE_REALPATH
     // the directory is resolved for each load, as the operating system can replace the zoneinfo directory that a
@@ -2426,7 +2426,7 @@ static int open_region_file(const QoreString& root, const char* region, std::str
         return -1;
     }
     std::string real_root_str = real_root.get();
-    std::string root_str = root.c_str();
+    const std::string& root_str = root;
 
     DirFdStack dirs;
     // the components of the directories reached, relative to the zoneinfo directory
@@ -2851,6 +2851,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
         raiseUnknownRegion(region, xsink);
         return nullptr;
     }
+    std::string zone_root;
     {
         // a cached zone needs no file access
         QoreAutoRWReadLocker al(rwl);
@@ -2868,12 +2869,14 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
                 return i->second.zone;
             }
         }
+        // the zoneinfo directory, which a test hook can change in debug builds (dbgSetZoneinfoRoot())
+        zone_root = root.c_str();
     }
 
     // the file is read without the lock; for code that is not restricted, with the name of the entry reached
     std::string rel;
     std::string entry;
-    int fd = open_region_file(root, region, rel, restricted ? nullptr : &entry);
+    int fd = open_region_file(zone_root, region, rel, restricted ? nullptr : &entry);
     if (fd < 0) {
         raiseUnknownRegion(region, xsink);
         return nullptr;
@@ -2894,7 +2897,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
 #ifdef F_GETPATH
     {
         char buf[MAXPATHLEN];
-        std::unique_ptr<char, decltype(&free)> real_root(realpath(root.c_str(), nullptr), &free);
+        std::unique_ptr<char, decltype(&free)> real_root(realpath(zone_root.c_str(), nullptr), &free);
         std::string rest;
         if (real_root && !fcntl(fd, F_GETPATH, buf) && strip_dir_prefix(buf, real_root.get(), rest)
                 && isRegionName(rest.c_str(), rest.size())) {
@@ -2982,6 +2985,30 @@ void QoreTimeZoneManager::dbgSetSpellingLimits(size_t zones, size_t names) {
     QoreAutoRWWriteLocker al(rwl);
     max_spelling_zones = zones ? zones : MaxSpellingZones;
     max_spelling_names = names ? names : MaxSpellingNames;
+}
+
+int QoreTimeZoneManager::dbgSetZoneinfoRoot(const char* dir, ExceptionSink* xsink) {
+    // restricted code (also any code that a sandbox governs) cannot make the runtime read regions from another
+    // directory
+    if (callerRestrictedForPaths()) {
+        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "restricted code cannot change the zoneinfo directory");
+        return -1;
+    }
+    try {
+        QoreString new_root(dir ? dir : ZONEINFO_LOCATION);
+        new_root.trim_trailing('/');
+        if (!q_absolute_path(new_root.c_str())) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the zoneinfo directory '%s' is not an absolute path",
+                new_root.c_str());
+            return -1;
+        }
+        QoreAutoRWWriteLocker al(rwl);
+        root = new_root;
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
 }
 #endif
 

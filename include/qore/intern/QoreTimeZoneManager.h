@@ -442,6 +442,7 @@ protected:
     // our utc offset in seconds east of UTC
     int our_utcoffset;
 
+    //! the zoneinfo directory; changed only by a test hook in debug builds, under rwl (dbgSetZoneinfoRoot())
     QoreString root;
     tzmap_t tzmap;
 
@@ -775,6 +776,16 @@ public:
 
     //! sets the limits of the region spelling caches; 0 restores the default (a test hook)
     DLLLOCAL void dbgSetSpellingLimits(size_t zones, size_t names);
+
+    //! sets the zoneinfo directory from which regions that are not cached are read (a test hook)
+    /** Zones that are cached already keep their data.  Refused for restricted code (callerRestrictedForPaths()).
+
+        @param dir an absolute path, or nullptr for the directory of the build (ZONEINFO_LOCATION)
+        @param xsink for the exception if the directory cannot be set
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int dbgSetZoneinfoRoot(const char* dir, ExceptionSink* xsink);
 #endif
 
     //! the maximum number of zones loaded from paths on Windows, where they are cached by the path
