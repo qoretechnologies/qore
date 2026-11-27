@@ -618,7 +618,20 @@ class AOTSmokeBase inherits QUnit::Test {
         };
     }
 
-    #! Run a script with the interpreter and return stdout
+    #! runs a qcc executable and checks its exit status (0) and its output
+    /** @param cmd the command that runs the executable; it must not redirect stderr
+        @param expected the output expected on stdout; stderr must be empty apart from the module loader's warnings and
+        the native compilation trace, which are not output of the program (see ExecModeHarness::run_command())
+        @param label the label of the assertions
+    */
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(cmd);
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", label, res.out));
+        assertEq(expected, res.stdout, label);
+        assertEq("", res.stderr, label + ": stderr");
+    }
+
+    #! runs a script with the interpreter and returns its output on stdout and stderr together
     private string runInterpreted(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -11443,8 +11456,7 @@ printf(\"%s %s %s %s %s\\n\", L[0].format(\"IF\"), L[1].format(\"IF\"), H.w.form
                 "echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, opt, paths.out, paths.src));
             assertRegex("EXIT=0\n$", compile_out, "qcc -O" + opt);
             # each run is a fresh process, which loads the zone from its file
-            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out)),
-                "qcc -O" + opt);
+            checkExecutable(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out), expected, "qcc -O" + opt);
             # without the zone file, the program fails; it does not run in UTC
             rename(path, path + ".moved");
             on_exit {
