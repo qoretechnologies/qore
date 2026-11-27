@@ -394,8 +394,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   started with a module directory of library code, as a module's initialization runs once in a process
         # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
         #   execution mode, under a small stack rlimit, as the checks are of the start of the process
+        # - AOTStringSplitTrim (#5578 theme F) and StringFastPathFrames (#7711): their checks run in child processes
+        #   that set their own execution modes and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
+                                 "examples/test/ir/AOTStringSplitTrim.qtest",
+                                 "examples/test/ir/StringFastPathFrames.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
