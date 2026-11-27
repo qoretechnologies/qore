@@ -231,7 +231,17 @@ printf(\"%d:%y:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
             libqore_dir, qcc_bin, exe, script_path));
         assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
-        assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)),
+        assertEq(Expected, run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)),
             "AOT output");
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }
