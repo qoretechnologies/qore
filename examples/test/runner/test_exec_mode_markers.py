@@ -379,17 +379,22 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   mode
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
+        # - HttpServerControllerCallbackError (#7698): each server whose controller callback raises runs in a child
+        #   process of the qore interpreter started without an execution mode, whose output the test checks
         # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
         #   modules loaded from source and compiled with qcc
         # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
         #   as the checks are of the exit of the process that holds the Program
+        # - AOTEmptyRegex (#7623): its checks run in child processes that set their own execution modes and in qcc
+        #   executables
         # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
         #   started with a module directory of library code, as a module's initialization runs once in a process
         # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
         #   execution mode, under a small stack rlimit, as the checks are of the start of the process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
@@ -463,6 +468,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
+                                 "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
@@ -513,6 +519,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
                                  "examples/test/qlib/HttpServer/HttpServerRecvGrowFailure.qtest",
+                                 "examples/test/qlib/HttpServer/HttpServerControllerCallbackError.qtest",
                                  "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",

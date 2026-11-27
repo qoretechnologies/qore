@@ -174,8 +174,10 @@ class FailedObjectGraphsTest inherits QUnit::Test {
     }
     private cancellation() {
         Program program();
+        # the class is parsed before the Program has a sandbox manager, so trusted code declared it: it opts in to be
+        # deserialized with its deserializeMembers() method by the Program's code once it is sandboxed (qore#7146)
         program.parse("%modern\n"
-            "class InterruptedGraph inherits Serializable {\n"
+            "class InterruptedGraph inherits SandboxSerializable {\n"
             "  public { static *SandboxManager manager; static bool cancel; *InterruptedGraph next; }\n"
             "  constructor() { next = self; }\n"
             "  private:internal deserializeMembers(hash<auto> members) {\n"

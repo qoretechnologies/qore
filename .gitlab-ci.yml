@@ -279,6 +279,13 @@ build-ubuntu-arm64:
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
+  variables:
+    # the AOT2 libqore single compilation unit alone is a ~15 GiB process (measured: the whole make -j6 peaks at 16.5 GiB,
+    # the other compiles add ~1.4 GiB, so fewer jobs would not lower it): at the runner's default 16Gi limit the arm64
+    # build jobs were OOM-killed (pipeline 71092); amd64 is unchanged.  The runner allows a request up to 16Gi and a
+    # limit up to 24Gi (memory_*_overwrite_max_allowed).
+    KUBERNETES_MEMORY_REQUEST: "16Gi"
+    KUBERNETES_MEMORY_LIMIT: "24Gi"
   services: []
   before_script: []
   script:
@@ -313,6 +320,13 @@ build-alpine-arm64:
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
+  variables:
+    # the AOT2 libqore single compilation unit alone is a ~15 GiB process (measured: the whole make -j6 peaks at 16.5 GiB,
+    # the other compiles add ~1.4 GiB, so fewer jobs would not lower it): at the runner's default 16Gi limit the arm64
+    # build jobs were OOM-killed (pipeline 71092); amd64 is unchanged.  The runner allows a request up to 16Gi and a
+    # limit up to 24Gi (memory_*_overwrite_max_allowed).
+    KUBERNETES_MEMORY_REQUEST: "16Gi"
+    KUBERNETES_MEMORY_LIMIT: "24Gi"
   services: []
   before_script: []
   script:

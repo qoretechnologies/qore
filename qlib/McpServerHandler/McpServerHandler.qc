@@ -576,6 +576,13 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         #! Task ID counter
         int taskIdCounter = 0;
 
+        #! If the task IDs may contain the PID: not if code restricted from external information created the handler,
+        #! nor for such code that calls it, as the PID is information about the host (qore#7586)
+        bool task_id_pid = SandboxManager::callerMayReadExternalInfo();
+
+        #! The part of the task IDs that makes them unique to the process when they do not contain the PID
+        string task_id_random = get_random_string(16);
+
         #! Default task TTL in milliseconds (5 minutes)
         int defaultTaskTtl = 300000;
 
@@ -1240,6 +1247,22 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 "supported versions: %y", getSupportedVersions()), {
                 "supported": getSupportedVersions(),
             });
+    }
+
+    #! Returns the keys of the request context that the handler adds for its methods, which the code of a restricted
+    #! %Program gets also when the request is filtered for it (qore#7724)
+    /** The protocol state of the call: the protocol (\c mcp_modern, \c mcp_version, \c mcp_method), what the client
+        declared (\c mcp_client_capabilities, \c mcp_client_info, \c mcp_log_level), the principal
+        (\c mcp_principal) and the session (\c mcp_session); a subclass that adds keys of its own returns them
+        with these
+
+        @return the keys of the request context that the handler adds for its methods
+
+        @see JsonRpcHandler::JsonRpcHandler::getRpcContextKeys()
+    */
+    private *list<string> getRpcContextKeys() {
+        return ("mcp_modern", "mcp_version", "mcp_method", "mcp_client_capabilities", "mcp_client_info",
+            "mcp_log_level", "mcp_principal", "mcp_session");
     }
 
     #! Returns the authenticated principal for a request, if any
@@ -3343,7 +3366,9 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Generates a unique task ID
     private string generateTaskId() {
         AutoWriteLock al(rwl);
-        return sprintf("task-%d-%d", getpid(), ++taskIdCounter);
+        return sprintf("task-%s-%d", task_id_pid && SandboxManager::callerMayReadExternalInfo()
+            ? getpid().toString()
+            : task_id_random, ++taskIdCounter);
     }
 
     #! Creates a new task for background execution

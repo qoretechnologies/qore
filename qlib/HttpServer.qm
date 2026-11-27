@@ -381,6 +381,8 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the HTML error pages of a server that code restricted from external information created do not show the
+      hostname (see @ref sandbox_ambient_host_data)
     - a listener can serve only its own handlers
       (@ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only"):
       it never serves the handlers, the dynamic handlers or the default handler of the server, and while it has no
@@ -960,12 +962,16 @@ public hashdecl HttpServerOptionInfo {
     date ttl = 0s;
 
     #! HTTP server logger
-    /** The process-wide async I/O controller (see @ref AsyncSocketIo::getGlobalAsyncIoController()) also logs through
-        this logger while the server runs (see
+    /** If given, the process-wide async I/O controller (see @ref AsyncSocketIo::getGlobalAsyncIoController()) also
+        logs through this logger while the server runs (see
         @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()"); when the server stops, the
         controller gets back the logger it had before, unless its logger has been replaced since.  The controller has
         one logger for the whole process: with more than one server running, it logs through the logger of the server
-        created last of them.
+        created last of those created with a logger.
+
+        Without a logger, the server logs through a logger that has no appender, which discards its messages, and the
+        controller's logger is left as it is, so that the controller's messages, such as the exception of a callback,
+        are not discarded: they go to the controller's logger otherwise, or else to the standard error output.
     */
     *LoggerInterface logger;
 
@@ -1390,6 +1396,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # for masking HTTP request log msgs
         *code<string(string)> maskfunc;
 
+        # if the hostname may be shown in the error pages: not if code restricted from external information created
+        # the server, nor for such code that calls the server's methods (qore#7586)
+        bool show_hostname = True;
+
         # quit server flag
         bool exit = False;
 
@@ -1695,24 +1705,25 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
             bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
-        logger = new Logger(name);
-        if (logfunc || errlogfunc) {
-            callback_appender = new HttpServerCallbackAppender(logfunc ?? errlogfunc);
-            logger.addAppender(callback_appender);
-            if (logfunc) {
-                logger.setLevel(LoggerLevel::INFO);
-            } else {
-                logger.setLevel(LoggerLevel::ERROR);
-            }
-        } else {
-            logger.setLevel(LoggerLevel::INFO);
-        }
-        init(<HttpServerOptionInfo>{
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "name": name,
             "debug": dbg,
             "hdr": hdr,
-            "logger": logger,
-        });
+        };
+        # without a log function, the server has no logger, as one created without the logger option: it is not set
+        # on the async I/O controller, whose messages would otherwise be discarded (qore#7698)
+        if (logfunc || errlogfunc) {
+            Logger cb_logger(name);
+            callback_appender = new HttpServerCallbackAppender(logfunc ?? errlogfunc);
+            cb_logger.addAppender(callback_appender);
+            if (logfunc) {
+                cb_logger.setLevel(LoggerLevel::INFO);
+            } else {
+                cb_logger.setLevel(LoggerLevel::ERROR);
+            }
+            opts.logger = cb_logger;
+        }
+        init(opts);
     }
 
     #! Creates the server with the given options
@@ -3659,11 +3670,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
+    #! Returns the HTML error page for the given status code and message
+    /** The page shows the server's name and the hostname, but not the hostname if code restricted from external
+        information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created the server or calls this method
+        (see @ref sandbox_ambient_host_data)
+    */
     string getHtmlErrorMessage(int status_code, string msg) {
-        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
-            "%s</address></body></html>",
+        string address = show_hostname && SandboxManager::callerMayReadExternalInfo()
+            ? sprintf("%s on %s", http_server_string, gethostname())
+            : http_server_string;
+        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s"
+            "</address></body></html>",
                 status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
-                html_encode(msg), http_server_string, gethostname());
+                html_encode(msg), address);
     }
 
     static bool acceptsHtml(hash<auto> cx) {
@@ -4102,6 +4121,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        # the hostname is external information: it is decided when the server is created (qore#7586)
+        show_hostname = SandboxManager::callerMayReadExternalInfo();
         drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         if ((opts.handler_socket_max_timeout ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("handler_socket_max_timeout (%d) must not be negative",
@@ -4156,8 +4177,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         http_fields_at_top_level = opts.http_fields_at_top_level ?? True;
         # Initialize async I/O
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        # the global controller logs through the server's logger while the server runs
-        setControllerLogger();
+        # the global controller logs through the server's logger while the server runs; a server created without a
+        # logger does not set its own, which has no appender, there: it would discard the controller's messages, such
+        # as the exception of a callback, which then go to the controller's logger otherwise or to stderr (qore#7698)
+        if (opts.logger) {
+            setControllerLogger();
+        }
+        # does nothing if the server did not set its logger on the controller
         on_error restoreControllerLogger();
         asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
         asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
@@ -9950,6 +9976,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
                 io_wake();
             } else {
+                # the bounds of the connection's response bodies: a buffered body is charged to its client until the
+                # client has taken it, as one that the I/O thread sends (qore#7653)
+                s.setHttp2InputStreamSendBound(header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+                    header_info.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow,
+                    StreamStallTimeout);
                 s.submitHttp2Response(stream_id, response.code, hdr, response.body);
                 io_wake();
             }

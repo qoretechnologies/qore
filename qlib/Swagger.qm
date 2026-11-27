@@ -144,6 +144,8 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - the external references of a schema expand no environment variables of the host for code restricted from
+      external information (see @ref sandbox_ambient_host_data)
     - the types of a document are built in type builds, as those of an OpenAPI 3 document are (see
       @ref Swagger::SchemaObject::getTypeBuildSchema() "SchemaObject::getTypeBuildSchema()";
       <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
@@ -1254,6 +1256,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         }
     }
 
+    #! Copies the document without its type caches, which a copy builds for itself
+    /** The type cache and the response copies of its types are what the document guards when it is shared (see
+        getType() and getResponseDataType()); code that is sandboxed or acts for sandboxed code can copy a shared
+        document because this class declares a copy method (qore#7667)
+
+        @since Swagger 2.6
+    */
+    copy() {
+        remove typemap;
+        response_types = {};
+    }
+
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
     private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         return definitions{rstr};
@@ -1952,7 +1966,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             content = call_function(try_import, ext_ref);
         else {
             # do environment variable substitution
-            map ext_ref = replace(ext_ref, "\$" + $1, ENV.$1), (ext_ref =~ x/\$(\w+)/g);
+            # the environment of the host only for a caller that could read it itself (qore#6844)
+            # (an empty value for each variable, as in the caller's own environment)
+            bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+            map ext_ref = replace(ext_ref, "\$" + $1, env_allowed ? ENV.$1 : ""), (ext_ref =~ x/\$(\w+)/g);
             # derive target file name if def_path is set and the reference is not an absolute path
             if (def_path && !absolute_path(ext_ref))
                 ext_ref = def_path + DirSep + ext_ref;
@@ -4695,6 +4712,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 "types that it has already built do not need it)", name);
         }
         return swagger.getType(path, typestr, format, arrayItems, required);
+    }
+
+    #! Copies the schema object
+    /** What the schema object guards when it is shared (the caches of its types, see getDataType()) is kept by its
+        base class, whose copy method resets it for a copy of a shared object that is not shared itself
+        (\c AbstractRestSchemaObject::copy()); code that is sandboxed or acts for sandboxed code can copy a shared
+        schema object because this class declares a copy method (qore#7667)
+
+        @param old the object copied
+
+        @since Swagger 2.6
+    */
+    copy(SchemaObject old) {
+        # no own guarded state: the caches that getDataType() guards are the base class's
     }
 
     #! Creates the type of an object, which records its read-only properties if it has any; see SwaggerHashDataType

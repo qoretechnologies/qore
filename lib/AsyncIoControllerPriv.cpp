@@ -1142,6 +1142,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     // taken before the context is released below
     refs.setModuleCleanup(sandbox_ctx);
     refs.caller_restrictions = async_io_caller_restrictions(sandbox_ctx);
+    refs.lent_to_restrictions = async_io_lent_to_restrictions(sandbox_ctx);
     sock_obj = nullptr;
     sock = nullptr;
     spop_obj = nullptr;
@@ -1193,6 +1194,10 @@ void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     // the release is work that the cleanup counts: its destructors can hand work over to another thread
     // (AsyncIoController::holdModuleCleanupWork(), qore#7239)
     QoreModuleCleanupCountedWorkScope counted_scope(static_cast<bool>(module_cleanup_delegate), nullptr);
+    // the release runs for the code that submitted the work, wherever it runs (the I/O thread's dispatcher, the thread
+    // of other code that drains or cancels it, the stop of the dispatcher, a release without a controller): its
+    // restrictions, and those that a lent object's method does not lend, are added to the thread's (qore#6844)
+    QoreSubmitterRestrictionsHelper submitter_restrictions(caller_restrictions, lent_to_restrictions);
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -2329,6 +2334,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.spop_base = cmd.submit_spop_base;
                 refs.setModuleCleanup(cmd.submit_sandbox_ctx);
                 refs.caller_restrictions = async_io_caller_restrictions(cmd.submit_sandbox_ctx);
+                refs.lent_to_restrictions = async_io_lent_to_restrictions(cmd.submit_sandbox_ctx);
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
                 cmd.submit_spop_obj = nullptr;
@@ -2484,7 +2490,7 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
     // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
     // capturing code alone, which the step runs with (qore#6844)
     if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
-            || ctx->caller_restrictions || ctx->origin_sandboxed) {
+            || ctx->caller_restrictions || ctx->lent_to_restrictions || ctx->origin_sandboxed) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -2542,7 +2548,8 @@ static void aio_release_item_args(QoreListNode*& args, const AsyncIoSandboxConte
     if (release_ctx->manager || release_ctx->policy_manager || release_ctx->isolation) {
         release_guard.emplace(*release_ctx);
     }
-    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions);
+    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions,
+        release_ctx->lent_to_restrictions);
     QoreWorkGenerationHelper release_gen(release_ctx->work_gen);
     a->deref(xsink);
 }
@@ -2670,7 +2677,9 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
     // (a deferred release of the controller's own references carries them with the references)
     QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
         ? item.sandbox_ctx->caller_restrictions
-        : (item.release ? item.release->caller_restrictions : QoreParseOptions()));
+        : (item.release ? item.release->caller_restrictions : QoreParseOptions()),
+        item.sandbox_ctx ? item.sandbox_ctx->lent_to_restrictions
+        : (item.release ? item.release->lent_to_restrictions : QoreParseOptions()));
     if (item.native_task) {
         // the task was never run
         item.native_task->discard(xsink);
@@ -2983,6 +2992,12 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         // (qore#7339)
         QoreModuleCleanupCountedWorkScope counted_scope(item.module_cleanup_work
             || (item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work), &item.owner);
+        // and it runs for the code that submitted it, as in releaseWorkItem() (qore#6844)
+        QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
+            ? item.sandbox_ctx->caller_restrictions
+            : (item.release ? item.release->caller_restrictions : QoreParseOptions()),
+            item.sandbox_ctx ? item.sandbox_ctx->lent_to_restrictions
+            : (item.release ? item.release->lent_to_restrictions : QoreParseOptions()));
 #ifdef DEBUG
         if (dbg_release_hook) {
             dbg_release_hook();
@@ -3660,10 +3675,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
         // a step runs for the code that submitted the operation: its caller restrictions replace those of the code
         // that started the worker (empty: workers are started without inheriting them) (qore#6844)
+        // (and as the checks that a lent object's method does not lend see them: the borrower's)
         const bool submitter_restrictions = async_item.sandbox_ctx
-            && async_item.sandbox_ctx->caller_restrictions;
+            && (async_item.sandbox_ctx->caller_restrictions || async_item.sandbox_ctx->lent_to_restrictions);
         if (submitter_restrictions) {
             item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
+            item_po.lent_to_domain_restrictions = async_item.sandbox_ctx->lent_to_restrictions;
         }
         // the item is work of the code that submitted the operation or added the timer, whose generation its context
         // carries, or else work of its own: a worker does not share one generation between the work of different
@@ -6168,7 +6185,9 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId(int sandboxed) {
     // the code of a callback of an operation runs for the application of the operation, unless it is the code of a
     // sandboxed application Program, which runs for its own application: the callback of an operation that other
     // code submitted with an object of sandboxed code does not act for the submitter
-    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))) {
+    // (code compiled in a sandboxed Program that runs in another Program is that Program's code, qore#7202)
+    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))
+            && !qore_program_is_sandboxed(qore_foreign_calling_code_program())) {
         return aio_callback_app_id;
     }
     // a module is no application: sandboxed module code that no call and no callback records an application for
@@ -9415,6 +9434,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         refs.spop_base = node->second.spop_base;
                         refs.setModuleCleanup(node->second.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(node->second.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(node->second.sandbox_ctx);
                     }
                     releaseOffIoThread(refs, xsink);
                 };
@@ -10262,6 +10282,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 cancel_refs.udata = it->second.cancel_cb;
                                 cancel_refs.setModuleCleanup(it->second.sandbox_ctx);
                                 cancel_refs.caller_restrictions = async_io_caller_restrictions(it->second.sandbox_ctx);
+                                cancel_refs.lent_to_restrictions = async_io_lent_to_restrictions(it->second.sandbox_ctx);
                                 it->second.cancel_cb = QoreValue();
                                 fired_cancel_refs.push_back(cancel_refs);
                             }
@@ -10500,6 +10521,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             refs.udata = tinfo.udata;
             refs.setModuleCleanup(tinfo.sandbox_ctx);
             refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
+            refs.lent_to_restrictions = async_io_lent_to_restrictions(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
             if (tinfo.cancel_cb.hasNode()) {
@@ -10508,6 +10530,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 cancel_refs.udata = tinfo.cancel_cb;
                 cancel_refs.setModuleCleanup(tinfo.sandbox_ctx);
                 cancel_refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
+                cancel_refs.lent_to_restrictions = async_io_lent_to_restrictions(tinfo.sandbox_ctx);
                 tinfo.cancel_cb = QoreValue();
                 exit_timer_refs.push_back(cancel_refs);
             }
@@ -11056,6 +11079,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -11094,6 +11118,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -11830,9 +11855,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         } else {
                             // Still pending — target socket-backed Qore ops for
                             // immediate re-poll only when there is work that the
-                            // OS readiness API may not deliver promptly: pending
-                            // writes/connect completion or application-level data
-                            // buffered in SSL/HTTP/2 layers (not the kernel buffer).
+                            // OS readiness API may not deliver: application-level
+                            // data buffered in SSL/HTTP/2 layers (not the kernel
+                            // buffer), and on macOS/BSD a wait for writability, as
+                            // for the I/O thread's own steps (see the re-queue of
+                            // POLLOUT results after Phase 2: kqueue reports a
+                            // non-blocking connect's completion only once).
+                            //
+                            // Elsewhere the event loop's level-triggered readiness
+                            // reports a writable descriptor whenever it is waited
+                            // for, so a wait for writability sleeps on the fd like
+                            // a read wait: re-polling it at once steps the op
+                            // continuously while its peer does not read (qore#7707).
                             //
                             // Plain read waits, including EventNotifier waits, must
                             // sleep on the fd. Re-queuing them here turns an event
@@ -11871,8 +11905,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                         pd_xsink.clear();
                                     }
                                 }
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+                                bool rewake_write_wait = (ev & SOCK_POLLOUT) != 0;
+#else
+                                bool rewake_write_wait = false;
+#endif
                                 if (!event_notifier && !sh.empty()
-                                        && ((ev & SOCK_POLLOUT) || has_pending_data)) {
+                                        && (rewake_write_wait || has_pending_data)) {
                                     t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {
@@ -12611,6 +12650,7 @@ void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete,
     refs.queue_obj = dd.queue_obj;
     refs.setModuleCleanup(dd.sandbox_ctx);
     refs.caller_restrictions = async_io_caller_restrictions(dd.sandbox_ctx);
+    refs.lent_to_restrictions = async_io_lent_to_restrictions(dd.sandbox_ctx);
     dd.spop_obj = nullptr;
     dd.result = nullptr;
     dd.queue = nullptr;
@@ -13913,52 +13953,10 @@ bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args, Ex
         lgr->ref();
     }
 
-    // an exception that the logger raises is the caller's to report
-    {
-        ExceptionSink enabled_xsink;
-        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
-        if (enabled_xsink) {
-            if (logger_xsink) {
-                logger_xsink->assimilate(enabled_xsink);
-            } else {
-                enabled_xsink.clear();
-            }
-        }
-        if (!enabled) {
-            lgr->derefLogged(logger_xsink != nullptr);
-            return true;
-        }
-    }
-
-    // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
-    // re-copy the va_list and retry until it fits, mirroring the established
-    // pattern in support.cpp printe()/print_debug().  Without the loop, large
-    // owner / key strings (e.g. socket-sync owners) silently render as empty
-    // log messages.
-    QoreStringNode* msg = new QoreStringNode();
-    while (true) {
-        va_list iter_args;
-        va_copy(iter_args, args);
-        int rc = msg->vsprintf(fmt, iter_args);
-        va_end(iter_args);
-        if (!rc) {
-            break;
-        }
-    }
-
-    ExceptionSink xsink;
-    lgr->logArgs(level, msg, nullptr, &xsink);
-    msg->deref();
-    if (xsink) {
-        // the caller reports the logger's exception, or it is discarded
-        if (logger_xsink) {
-            logger_xsink->assimilate(xsink);
-        } else {
-            xsink.clear();
-        }
-    }
-    lgr->derefLogged(logger_xsink != nullptr);
-    return true;
+    // an exception that the logger raises is the caller's to report; a logger that cannot take the message leaves it
+    // to the caller, which reports it otherwise (qore#7698)
+    QoreLoggerBridgeLoggedHolder holder(lgr, logger_xsink != nullptr);
+    return lgr->logV(level, fmt, args, logger_xsink);
 }
 
 bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {

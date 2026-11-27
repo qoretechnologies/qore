@@ -67,6 +67,7 @@ class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
 class QoreModuleContext;
+class BuiltinFunctionVariantBase;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -150,7 +151,7 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 //! Adds a builtin constant whose value depends on the state of the running library
 /** Code referencing the constant reads it from the process it runs in, including AOT-compiled code; see
     ConstantEntry::setRuntimeDependent().  qpp generates calls to this for constants declared with a
-    <tt>qore_runtime(<value>, <value in compiled code>)</tt> value.
+    <tt>qore_runtime(<value>, <value in compiled code>)</tt> or <tt>qore_domain(<value>, <domain>)</tt> value.
 
     @param ns the namespace to add the constant to
     @param ns_path the namespace's fully-qualified path without a leading "::" (ex: "Qore::Option")
@@ -158,9 +159,10 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
     @param value the constant's value in this process; ownership is taken
     @param compiled_define the value of the constant's parse define in code compiled ahead of time, where the
     compiler cannot know the state of the library the code will run with; ownership is taken
+    @param domain the functional domain required to read the constant
 */
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
-        QoreValue value, QoreValue compiled_define);
+        QoreValue value, QoreValue compiled_define, int64 domain = 0);
 
 //! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
 DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);
@@ -722,6 +724,11 @@ public:
         module or of the static system namespace, which share their private data, are not.
     */
     DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
+
+    //! Throws a QoreStandardException (\c RUNTIME-DECLARATION-ERROR) if the signature of a builtin variant that is
+    //! added to a namespace that no Program owns names a mortal declaration
+    //! (qore#7680)
+    DLLLOCAL void checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1556,6 +1563,14 @@ protected:
     //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
     //! every marking event then refreshes every variant
     bool unmarked_index_incomplete = false;
+    //! the number of declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be
+    //! taken (QoreTypeOwner::type_owner_refs_pending), which the completion of a marking event takes (qore#7680)
+    /** A count, not a list, so that recording a failure allocates nothing: the completion finds them in the namespace
+        tree and in the caches of its generic hashdecls (retryPendingRuntimeRefs()); one that is freed before (with a
+        namespace whose attach failed) is not found.  Atomic, as an instance of a generic hashdecl is recorded without
+        the runtime namespace lock (addPendingRuntimeRefs())
+    */
+    std::atomic<size_t> pending_runtime_refs{0};
     //! true from the start of a marking event until its upgrade of the derived types and its refresh of
     //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
     //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
@@ -1718,6 +1733,37 @@ protected:
 
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
+
+    //! a call whose method is bound once the abstract methods of the classes are resolved (qore#7411)
+    struct deferred_method_bind_t {
+        //! takes a reference to the call, which it keeps while the bind is pending
+        DLLLOCAL deferred_method_bind_t(AbstractQoreNode* node, std::function<int()>&& bind)
+                : node(node), bind(std::move(bind)) {
+            node->ref();
+        }
+
+        DLLLOCAL deferred_method_bind_t(deferred_method_bind_t&& old) noexcept
+                : node(old.node), bind(std::move(old.bind)) {
+            old.node = nullptr;
+        }
+
+        DLLLOCAL ~deferred_method_bind_t() {
+            if (node) {
+                node->deref(nullptr);
+            }
+        }
+
+        deferred_method_bind_t(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(deferred_method_bind_t&&) = delete;
+
+        //! the call, referenced while the bind is pending
+        AbstractQoreNode* node;
+        //! binds the method of the call; returns -1 if a parse exception was raised
+        std::function<int()> bind;
+    };
+    //! the calls whose methods are bound once the abstract methods of the classes are resolved (qore#7411)
+    std::vector<deferred_method_bind_t> deferred_method_bind_vec;
 
     DLLLOCAL int addPendingVariantIntern(qore_ns_private& ns, const char* name, AbstractQoreFunctionVariant* v) {
         // try to add function variant to given namespace
@@ -2763,6 +2809,8 @@ public:
     //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
     //! write lock
     DLLLOCAL bool beginRuntimeMarking() {
+        // before a declaration is marked (qore_runtime_mortal_decls_exist(), qore#7680)
+        qore_set_runtime_mortal_decls_exist();
         bool incomplete = runtime_refresh_pending;
         runtime_refresh_pending = true;
         return incomplete;
@@ -2778,6 +2826,26 @@ public:
         if (runtime_refresh_pending) {
             completeRuntimeMarking(type_vec_t(), 0, true);
         }
+    }
+
+    //! Gives declarations of the Program that became mortal the references of qore_type_owner_take_runtime_refs(), or,
+    //! if an allocation fails, records them for the next marking event (retryPendingRuntimeRefs(); qore#7680); does
+    //! not throw; called under the runtime namespace write lock
+    DLLLOCAL void takeRuntimeRefs(const std::vector<QoreTypeOwner*>& owners);
+
+    //! Takes the references that takeRuntimeRefs() could not take; throws std::bad_alloc if an allocation fails, in
+    //! which case they stay pending; called under the runtime namespace write lock
+    DLLLOCAL void retryPendingRuntimeRefs();
+
+    //! Records declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be taken,
+    //! for retryPendingRuntimeRefs(); does not allocate or throw, and needs no lock (qore#7680)
+    DLLLOCAL void addPendingRuntimeRefs(const std::vector<QoreTypeOwner*>& owners) {
+        pending_runtime_refs.fetch_add(qore_type_owner_set_refs_pending(owners), std::memory_order_release);
+    }
+
+    //! Returns the number of declarations whose references are pending (pending_runtime_refs; qore#7680)
+    DLLLOCAL size_t pendingRuntimeRefs() const {
+        return pending_runtime_refs.load(std::memory_order_acquire);
     }
 
     //! Returns true if a marking event did not complete (runtime_refresh_pending)
@@ -2832,6 +2900,38 @@ public:
 
     DLLLOCAL void deferParseCheckAbstractNew(const qore_class_private* qc, const QoreProgramLocation* loc) {
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
+    }
+
+    //! binds the method of the call \a node with \a bind once the abstract methods of the classes are resolved
+    /** For a call of a method of a class whose abstract methods, once resolved, can give it a method of the name
+        (qore_class_private::parseAbstractMethodPending()); \a bind is called by parseRunDeferredMethodBinds(), in the
+        parse context of the call (see QoreDeferredMethodBindContext) (qore#7411)
+    */
+    DLLLOCAL void parseDeferMethodBind(AbstractQoreNode* node, std::function<int()>&& bind) {
+        deferred_method_bind_vec.emplace_back(node, std::move(bind));
+    }
+
+    //! binds the methods of the calls deferred by parseDeferMethodBind(), after the abstract methods of the classes
+    //! are resolved, and clears them; returns -1 if a parse exception was raised
+    /** the calls are released when the binds are done, or when an exception leaves this function
+    */
+    DLLLOCAL int parseRunDeferredMethodBinds() {
+        int err = 0;
+        // a bind can defer no other: the abstract methods are resolved
+        std::vector<deferred_method_bind_t> binds;
+        binds.swap(deferred_method_bind_vec);
+        for (deferred_method_bind_t& i : binds) {
+            if (i.bind() && !err) {
+                err = -1;
+            }
+        }
+        assert(deferred_method_bind_vec.empty());
+        return err;
+    }
+
+    //! releases the calls deferred by parseDeferMethodBind() without binding them (a parse that is rolled back)
+    DLLLOCAL void parseClearDeferredMethodBinds() {
+        deferred_method_bind_vec.clear();
     }
 
     //! Runs the deferred checks for the instantiation of classes with abstract methods and clears them
@@ -2915,7 +3015,14 @@ public:
 
         for (unsigned j = 0; j < qmc.mcfl.size(); ++j) {
             ModuleContextFunctionCommit& mc = qmc.mcfl[j];
-            mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            // a variant that is refused (one that names a declaration that a namespace committed above marked) is
+            // freed and its exception raised in the module's sink; the others are committed, and the indexes rebuilt
+            // (qore#7680)
+            try {
+                mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            } catch (AbstractException& e) {
+                e.convert(&qmc.getXSink());
+            }
         }
 
         // issue #3461: must rebuild all indexes here or symbols will appear missing
@@ -2935,6 +3042,9 @@ public:
 
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
+
+        // release the calls whose methods were to be bound after the abstract methods are resolved (qore#7411)
+        parseClearDeferredMethodBinds();
 
         // With atomic_rollback (PO_ALLOW_REPARSE), preserve committed items and only remove pending items.
         // Without it, do a full destructive reset for backward compatibility.

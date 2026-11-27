@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT module code generation and loading in threads with small stacks
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotPendingMethodHierarchyStackTest
+
+#! An AOT module with a deep class hierarchy loads in a thread with a small stack (qore#7553)
+/** A closure in a member initializer is read from an AOT image before the methods of the classes are committed, and
+    the direct call of a final method of a base class in it is resolved by a search of the methods of the class and of
+    its base classes that are not committed yet; the search recursed once per level of the hierarchy without checking
+    the stack, so loading the module of a deep hierarchy in a thread with a small stack overran the thread's stack
+    (qore#7553).  The search now walks the hierarchy with a stack of its own.
+
+    The module (generated, Depth classes) is compiled to an AOT module; a child process loads it in a thread with each
+    of the stack sizes StackSizesKb: the load succeeds, and the code of the module then gives the same result in the
+    main thread, or raises \c STACK-LIMIT-EXCEEDED or \c PARSE-STACK-LIMIT-EXCEEDED from a check of the stack, and
+    never overruns the stack (the recursive search did at 160KB and 192KB in a debug build); the largest stack is
+    large enough.  The child runs in each execution mode and as a qcc-compiled executable.
+
+    The members of the base classes were imported in the order of the classes in the image, recursing through the
+    hierarchy from a class listed before its base classes; its stack check stopped the recursion with a parse
+    exception that nothing reported, so the load went on with members not imported (and a debug build failed an
+    assertion when the thread ended, at 160KB to 224KB with 3000 classes); the classes import them in topological
+    order now (qore#7553).
+*/
+class AotPendingMethodHierarchyStackTest inherits QUnit::Test {
+    public {
+        #! the number of classes in the hierarchy
+        const Depth = 4000;
+
+        #! the stack sizes of the threads that load the module, in KB
+        const StackSizesKb = (128, 160, 192, 224, 8192);
+
+        #! the name of the module
+        const ModuleName = "AotPendingMethodHierarchy";
+
+        #! the result of the module's probe
+        const Probe = "fm1:L";
+
+        #! the source of the child process: loads the module in a thread with the stack size of its argument
+        const Child = "%modern
+%no-child-restrictions
+
+int kb = int(ARGV[0]);
+set_default_thread_stack_size(kb * 1024);
+Queue q();
+background sub () {
+    try {
+        load_module(\"" + ModuleName + "\");
+        q.push(\"loaded\");
+    } catch (hash<ExceptionInfo> ex) {
+        q.push(ex.err);
+    }
+}();
+string result = q.get();
+if (result == \"loaded\") {
+    result += \": \" + call_function(\"" + ModuleName + "::probe\");
+}
+printf(\"%dK: %s\\n\", kb, result);
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string timeout_cmd;
+        TmpDir tmp("qore-aot-pending-method-hierarchy-");
+        string module_dir;
+        string child;
+        *string module_error;
+    }
+
+    constructor() : QUnit::Test("AotPendingMethodHierarchyStackTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        # the code of the AOT module runs at the tiers of its own, whatever the execution mode of the child, whose
+        # own code is only top-level code
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::None);
+
+        module_dir = tmp.path + DirSep + "modules";
+        mkdir(module_dir);
+        child = tmp.path + DirSep + "load-module.q";
+        File f();
+        f.open2(child, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Child);
+        f.close();
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("loading the module in %s mode", m), sub () { testMode(m); });
+        }
+        addTestCase("loading the module in an AOT executable", \testAot());
+
+        set_return_value(main());
+    }
+
+    #! returns the source of the module: a hierarchy of Depth classes, the most derived of which has a member initializer closure that calls a final and a static method of the root class
+    private static string getModuleSource() {
+        string code = sprintf("%%modern\n\nmodule %s {\n    version = \"1.0\";\n"
+            "    desc = \"a deep class hierarchy (qore#7553)\";\n    author = \"Qore Technologies\";\n"
+            "    license = \"MIT\";\n}\n\npublic namespace %s {\n", ModuleName, ModuleName);
+        code += "class C0 {\n    final string fm(int x) { return \"fm\" + x; }\n"
+            "    static string label() { return \"L\"; }\n}\n";
+        for (int i = 1; i < Depth - 1; ++i) {
+            code += sprintf("class C%d inherits C%d {}\n", i, i - 1);
+        }
+        code += sprintf("class C%d inherits C%d {\n    public {\n"
+            "        code c = string sub (int a) { return fm(a) + \":\" + label(); };\n    }\n}\n", Depth - 1,
+            Depth - 2);
+        code += sprintf("public string sub probe() {\n    C%d o();\n    return o.c(1);\n}\n}\n", Depth - 1);
+        return code;
+    }
+
+    #! compiles the module once; returns an error message if it could not be compiled
+    private *string compileModule() {
+        if (exists module_error) {
+            return module_error;
+        }
+        string src = tmp.path + DirSep + ModuleName + ".qm";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(getModuleSource());
+        f.close();
+        string qmod = module_dir + DirSep + ModuleName + ".qmod";
+        string out = backquote(sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --compile-module --output %s %s "
+            "2>&1; echo EXIT=$?", libqore_dir, libqore_dir, qore_bin, qmod, src));
+        module_error = (is_file(qmod) && out =~ /EXIT=0\n$/) ? "" : "compiling the module: " + out;
+        return module_error;
+    }
+
+    #! returns the expected output of the child for a stack size
+    private static string loaded(int kb) {
+        return sprintf("%dK: loaded: %s\n", kb, Probe);
+    }
+
+    #! runs the child with each stack size and checks its output
+    private checkRuns(string label, code run) {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        if (*string err = compileModule()) {
+            fail(err);
+        }
+        foreach int kb in (StackSizesKb) {
+            string out = run(kb);
+            string what = sprintf("%s, %dK: %s", label, kb, out);
+            # the child ran to its end; a crash gives no result and another exit status
+            assertRegex("\nEXIT=0\n$", "\n" + out, what);
+            out = out.substr(0, -7);
+            if (kb == StackSizesKb.last()) {
+                # the largest stack is large enough for the hierarchy
+                assertEq(loaded(kb), out, what);
+            } else if (out != loaded(kb)) {
+                assertRegex(sprintf("^%dK: (PARSE-)?STACK-LIMIT-EXCEEDED\n$", kb), out, what);
+            }
+        }
+    }
+
+    private string prefix() {
+        return timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "120") : "";
+    }
+
+    private testMode(string mode) {
+        checkRuns(mode, string sub (int kb) {
+            return ExecModeHarness::run(sprintf("%senv LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s --enable-debug "
+                "--exec-mode=%s %s %d; echo EXIT=$?", prefix(), libqore_dir, module_dir, qore_bin, mode, child,
+                kb));
+        });
+    }
+
+    private testAot() {
+        if (!is_file(qcc_bin) && !strlen(backquote("command -v qcc 2>/dev/null || true"))) {
+            testSkip("qcc is not available");
+        }
+        string exe = tmp.path + DirSep + "load-module-aot";
+        string compile_out = backquote(sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O3 -o %s %s 2>&1; "
+            "echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, exe, child));
+        assertRegex("EXIT=0", compile_out, "AOT compile: " + compile_out);
+        checkRuns("AOT", string sub (int kb) {
+            return ExecModeHarness::run_any(sprintf("%senv LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %d; echo EXIT=$?",
+                prefix(), libqore_dir, module_dir, exe, kb));
+        });
+    }
+}

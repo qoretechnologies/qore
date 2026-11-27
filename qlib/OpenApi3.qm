@@ -1894,7 +1894,10 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
             content = call_function(try_import, ext_ref);
         else {
             # do environment variable substitution
-            map ext_ref = replace(ext_ref, "\$" + $1, ENV.$1), (ext_ref =~ x/\$(\w+)/g);
+            # the environment of the host only for a caller that could read it itself (qore#6844)
+            # (an empty value for each variable, as in the caller's own environment)
+            bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+            map ext_ref = replace(ext_ref, "\$" + $1, env_allowed ? ENV.$1 : ""), (ext_ref =~ x/\$(\w+)/g);
             # derive target file name if def_path is set and the reference is not an absolute path
             if (def_path && !absolute_path(ext_ref))
                 ext_ref = def_path + DirSep + ext_ref;
@@ -2165,6 +2168,16 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         if (SandboxManager::createsSharedObjects()) {
             remove typemap;
         }
+    }
+
+    #! Copies the document without its type cache, which a copy builds for itself
+    /** The type cache is what the document guards when it is shared (see getType()); code that is sandboxed or acts
+        for sandboxed code can copy a shared document because this class declares a copy method (qore#7667)
+
+        @since OpenApi3 1.0
+    */
+    copy() {
+        remove typemap;
     }
 
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
@@ -6400,7 +6413,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Copies the schema object
+    /** A copy of a shared schema object that is not shared itself caches none of its types, as a shared object that
+        is deserialized restores none: the alternative type here, and the types and fields that its base class resets
+        (\c AbstractRestSchemaObject::copy()); code that is sandboxed or acts for sandboxed code can copy a shared
+        schema object because this class declares a copy method (qore#7667)
+    */
     copy(SchemaObject old) {
+        if (!SandboxManager::isSharedObject(self) && SandboxManager::isSharedObject(old)) {
+            remove alternativeDataType;
+        }
     }
 
     #! returns example Qore code for the object

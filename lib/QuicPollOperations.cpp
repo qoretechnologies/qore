@@ -2296,6 +2296,17 @@ void SocketQuicServerPollOperation::setMaxRequestBodySize(int64_t size) {
     }
 }
 
+void SocketQuicServerPollOperation::setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms,
+        int64_t stall_ms) {
+    send_bound_set_ = true;
+    send_bound_min_rate_ = min_rate;
+    send_bound_window_ms_ = window_ms;
+    send_bound_stall_ms_ = stall_ms;
+    for (auto& [id, session] : sessions_) {
+        session->setInputStreamSendBound(min_rate, window_ms, stall_ms, true);
+    }
+}
+
 QoreHashNode* SocketQuicServerPollOperation::checkHeadersOnlyDispatch(bool& handled,
         ExceptionSink* xsink) {
     handled = false;
@@ -2695,6 +2706,11 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Propagate max request body size to new sessions
         if (max_request_body_size_ > 0) {
             new_session->setMaxRequestBodySize(max_request_body_size_);
+        }
+        // the listener's default bounds of the response bodies (qore#7653)
+        if (send_bound_set_) {
+            new_session->setInputStreamSendBound(send_bound_min_rate_, send_bound_window_ms_, send_bound_stall_ms_,
+                true);
         }
 
         target_session = new_session.get();

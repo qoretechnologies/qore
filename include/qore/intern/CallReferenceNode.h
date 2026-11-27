@@ -415,6 +415,10 @@ public:
     DLLLOCAL virtual ~LocalMethodCallReferenceNode() {
     }
 
+    //! binds the method of a reference to the method \a mname of the class \a qc deferred when it was parsed once the
+    //! abstract methods are resolved (qore#7411)
+    DLLLOCAL int parseDeferredMethodBind(QoreParseContext& parse_context, const QoreClass* qc, const char* mname);
+
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return LocalMethodCallReferenceNode::is_equal_hard(v, xsink);
     }
@@ -548,7 +552,7 @@ public:
     //! takes the facts of a fast call if no thread has taken them and returns them, or nullptr if the reference is
     //! always called through the generic call path or another thread is taking them
     /** Reads the variant's signature: called only once the variant's Program cannot be deleted while it reads it (the
-        thread is in the Program, and it was not being deleted then: see UserVariantBase::pgm_deleted)
+        thread is in the Program, and it was not being deleted then: see UserVariantBase::pgmDeleted())
     */
     DLLLOCAL const FastCallInfo* takeFastCallInfo() const;
 

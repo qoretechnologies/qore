@@ -178,7 +178,8 @@
     arguments as a direct call does.\n\n
     @anchor call_reference_program
     A call reference to an object method runs as the direct call written where the reference was made: a method of a
-    user class runs in its class's @ref Qore::Program "Program" as always, and a builtin method (also one that a user
+    user class runs in its class's @ref Qore::Program "Program" as always (as a @ref closure_program "closure" that
+    the method creates does), and a builtin method (also one that a user
     class inherits) runs in the %Program that made the reference, with that %Program's parse options and sandbox,
     wherever the reference is called; a reference that the restricted code of one %Program makes and passes to
     another therefore gets no more access than its direct call has, also when the object was created by the code of a
@@ -218,7 +219,7 @@ c(2.5); # calls f(float)
 
     @par Description
     Closures encapsulate the state and value of local variables of the outer code block referenced from within the closure when the closure is created. Whenever local variables are bound within a closure, these variables are subject to concurrent thread access protection (locking) just as with global variables, in order to allow closures to be used in any context without restriction and to preseve thread-safety regarding bound local variables.\n\n
-    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and to object members from within closures created from objects), but the closure does not prolong the scope of the object: once the object has been destroyed (for example a temporary object as in <tt>new MyClass().getClosure()</tt>, which is destroyed at the end of the statement that created it, so a closure that the statement calls still sees it, but one that is called by a later statement does not), \c self evaluates to no value in the closure and member accesses and method calls raise \c OBJECT-ALREADY-DELETED exceptions; see @ref object_scope "object scope" and @ref temporary_lifetime "the lifetime of temporary values".\n\n
+    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and to object members from within closures created from objects), but the closure does not prolong the scope of the object: once the object has been destroyed (for example a temporary object as in <tt>new MyClass().getClosure()</tt>, which is destroyed at the end of the statement that created it, so a closure that the statement calls still sees it, but one that is called by a later statement does not), \c self evaluates to no value in the closure and member accesses and method calls raise \c OBJECT-ALREADY-DELETED exceptions; see @ref object_scope "object scope" and @ref temporary_lifetime "the lifetime of temporary values".  @anchor closure_deleted_object A call of such a closure runs whether or not its object has been deleted, also when another thread deletes the object as the call starts: only the closure's uses of the object raise the exception.\n\n
     @anchor closure_default_values
     The default values of a closure's parameters are evaluated when the closure is called, also after the code that
     created it has returned: the local variables of the outer code block that they refer to are bound to the closure
@@ -230,6 +231,17 @@ c(2.5); # calls f(float)
     closure's object unchanged.  A closure created outside a method has no object there, and is in the class context
     in which it was created (the class of a static method that created it) or in none, whatever the class context of
     the code that calls it (see @ref function_param_default_values).\n\n
+    @anchor closure_program
+    A closure runs in the @ref Qore::Program "Program" that compiled its code, as a method of its class does,
+    wherever it is called from, also in a thread or a callback: a closure created in a method of a class that a
+    %Program imported from another %Program (with @ref Qore::Program::importClass() "Program::importClass()", for
+    example) runs in the %Program that the class was imported from, also when its object was created in the importing
+    %Program.  The names that its code looks up when it runs, such as the functions of
+    @ref Qore::call_function() "call_function()", the classes of @ref Qore::create_object() "create_object()", the
+    call references of @ref Qore::get_call_reference() "get_call_reference()" and the global variables of
+    @ref Qore::get_global_vars() "get_global_vars()", are those of that %Program, and so are its parse options and its
+    sandbox; the sandbox of a sandboxed caller still governs it too, as it does a method of a class of that
+    %Program.  Once the deletion of that %Program has started, a call of the closure raises \c PROGRAM-ERROR.\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example

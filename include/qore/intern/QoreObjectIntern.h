@@ -50,8 +50,16 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+class QoreReferenceBindPairList;
+
 #define OS_OK            0
 #define OS_DELETED      -1
+//! the status of an object that the thread with TID 0 destroys
+/** q_gettid() is 0 in the signal handler thread (get_signal_thread_entry()) and in code that runs once its thread's
+    data is destroyed, which is OS_OK: such a deletion marks the object with this value instead, so that it is seen
+    being destroyed (qore_object_private::getDestroyingStatus())
+*/
+#define OS_DESTROYING_TID0 -2
 
 // object access constants
 #define QOA_OK           0
@@ -242,7 +250,7 @@ class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    //! OS_OK, the status of the thread running the destructor (getDestroyingStatus()), or OS_DELETED
     /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
         the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
         whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
@@ -349,7 +357,15 @@ public:
 
     //! Returns true if the calling thread is running the destructor of the object
     DLLLOCAL bool inDestructorOfThisThread() const {
-        return status.load(std::memory_order_acquire) == q_gettid();
+        return status.load(std::memory_order_acquire) == getDestroyingStatus();
+    }
+
+    //! Returns the status with which the calling thread marks an object that it destroys: its TID, or
+    //! OS_DESTROYING_TID0 for TID 0 (the signal handler thread), which would be OS_OK
+    DLLLOCAL static int getDestroyingStatus() {
+        int tid = q_gettid();
+        assert(tid >= 0);
+        return tid ? tid : OS_DESTROYING_TID0;
     }
 
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
@@ -392,6 +408,32 @@ public:
         @param xsink for the exception
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
+    //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)
+    /** Called only for an object marked as shared, before the copy is made.  It decides as checkSharedMethodChange()
+        does (code that is sandboxed or acts for sandboxed code; fails closed), with no update-scope exemption: such
+        code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
+        (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
+        of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
+        copy method is where a class resets them.  Such code is also refused a copy with the copy method of another
+        class than the object's (Reflection's CopyMethod of a base class), which would not run the copy methods of
+        the object's subclasses.  The copy is never marked as shared here.
+
+        @param copy_cls the class whose copy runs
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
+    //! (qore#7673)
+    /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
+
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
 
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
@@ -465,10 +507,36 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges \a h and \a new_internal_data with the object's lock held
+    /** @param bound the reference elements of the values of \a h bound before the lock was taken
+        (mergeBindReferences()), or nullptr: a value of a member whose type can bind a reference is checked with a
+        probe, and a reference element that is not in \a bound fails the merge closed with REFERENCE-BIND-ERROR, as it
+        is not bound under the lock (qore#7391)
+    */
     template <bool Lexical>
     DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound = nullptr);
+
+    //! binds the reference elements of the values of \a h that the members merged into the object bind (qore#7391)
+    /** Called before the object's lock is taken: each value of a member whose type can bind a reference is checked
+        as the merge checks it, with a probe that records the references instead of binding them, and they are bound
+        then, with no lvalue lock held, and added to \a bound.  If \a vl holds a lock, nothing is bound and the merge
+        fails closed with REFERENCE-BIND-ERROR (a merge whose lvalue holds a lock and that can bind a reference is
+        made by the += operator after it has released it; see mergeMayBindReference()).  An exception that the check
+        raises is not reported here: the merge raises it.
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int mergeBindReferences(const QoreHashNode* h, const qore_class_private* class_ctx, const AutoVLock& vl,
+            QoreReferenceBindPairList& bound, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    //! returns true if a merge of \a src (a hash or an object) into the object can bind a reference (qore#7391)
+    /** True if a member of the object that a key of \a src names has a type that can bind a reference; the += operator
+        then merges after the lvalue that holds the object has released its lock
+    */
+    DLLLOCAL bool mergeMayBindReference(const QoreValue& src) const;
 
     //! merges the members of the object that the current class context can use into \a hash
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
@@ -714,6 +782,13 @@ public:
     //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
     DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
 
+    //! returns true if evalMember() reads the member \a mem without running Qore code: the class has no
+    //! memberGate() or the member is accessible in the current class context and the object holds it, and the
+    //! member has no accessors (qore#7351)
+    /** As evalMember() decides; the object's data is read under its lock
+    */
+    DLLLOCAL bool memberReadRunsNoCode(const char* mem) const;
+
     //! Reads a unique container from an ordinary stored member under the object lock (qore#7301).
     DLLLOCAL bool tryReadUniqueWeakMember(const std::string& name, QoreValue& result);
 
@@ -898,10 +973,16 @@ public:
 
         rlck orders this with the releases of the locking path; increments take no lock, and are seen by the
         compare-and-swap.  The object's lock is held exclusively.
+
+        @param others_referenced true if another member or a node of the set has been referenced since the decision
+        (RSetDerefHelper::referencedSinceDecision(), qore#7556): the collection is abandoned as well
     */
-    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases) {
+    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases, bool others_referenced) {
         AutoLocker al(rlck);
         collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        if (others_referenced) {
+            return false;
+        }
         int since = static_cast<int>(locked_releases - releases);
         int refs = references.load(std::memory_order_acquire);
         do {
@@ -1206,6 +1287,17 @@ public:
     */
     DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
 
+    //! takes a reference to the object for a call that runs without one if the object has been deleted
+    /** For a call of a closure created in a method: the closure keeps its object through a weak reference, and a
+        call of it runs whether or not the object has been deleted (issue #1303); the closure's code raises
+        \c OBJECT-ALREADY-DELETED where it uses the object.  The test and the reference are one step, so that a
+        deletion made meanwhile in another thread never makes the call raise (qore#7555).
+
+        @return true if a reference was taken, which the call releases (endCall()); false if the object has been
+        deleted
+    */
+    DLLLOCAL bool tryStartCall(ExceptionSink* xsink);
+
     //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
     /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself
         checks it before them); the status changes to OS_DELETED only after the destructor has run, so the destructor's
@@ -1363,12 +1455,8 @@ public:
         // unlock previous lock and release from AutoVLock structure
         vl.del();
 
-        // lock current object, unless the assignment of this thread holds its lock while it binds a reference: the lock
-        // and the reference to the object stay with that assignment (qore#7380)
-        if (!qore_var_rwlock_ops(pobj->rml).wrlockUnlessHeldForBind(&vl)) {
-            pobj->obj->tDeref();
-            pobj = nullptr;
-        }
+        // lock current object
+        qore_var_rwlock_ops(pobj->rml).wrlock();
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {
@@ -1381,10 +1469,8 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        if (pobj) {
-            qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
-            pobj = nullptr;
-        }
+        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
+        pobj = nullptr;
     }
 };
 

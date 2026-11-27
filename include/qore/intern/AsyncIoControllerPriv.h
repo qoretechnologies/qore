@@ -183,6 +183,9 @@ struct AsyncIoDeferredRelease {
     //! the functional-domain restrictions of the code that submitted the work whose references these are, which the
     //! release runs with (see QoreSubmitterRestrictionsHelper, qore#6844)
     QoreParseOptions caller_restrictions;
+    //! the restrictions of that code as the checks that a lent object's method does not lend see them
+    //! (QoreSandboxContext::lent_to_restrictions)
+    QoreParseOptions lent_to_restrictions;
 
     //! Sets the module cleanup flags of the references from the context of the work that they belong to
     DLLLOCAL void setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx);
@@ -350,6 +353,12 @@ DLLLOCAL inline bool async_io_module_cleanup_cancel_match(const std::shared_ptr<
 //! Returns the functional-domain restrictions of the code that captured the context, or none (qore#6844)
 DLLLOCAL inline QoreParseOptions async_io_caller_restrictions(const std::shared_ptr<const QoreSandboxContext>& ctx) {
     return ctx ? ctx->caller_restrictions : QoreParseOptions();
+}
+
+//! Returns the lent-to restrictions of the code that captured the context, or none (qore#6844)
+DLLLOCAL inline QoreParseOptions async_io_lent_to_restrictions(
+        const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx ? ctx->lent_to_restrictions : QoreParseOptions();
 }
 
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
@@ -3773,7 +3782,8 @@ private:
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     /** @return false if there is no logger to take the message (neither the controller's own logger nor a global
-        one); a logger that is not enabled for the level counts as taking it
+        one), or if none of them can take it, because its Program is being torn down (qore#7698); a logger that is not
+        enabled for the level counts as taking it
     */
     DLLLOCAL bool log(int level, const char* fmt, ...) const;
 
@@ -3787,7 +3797,8 @@ private:
 
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
-    /** @return false if the controller has no logger; the message is then not logged
+    /** @return false if the controller has no logger, or if its logger cannot take the message, because its Program
+        is being torn down (qore#7698); the message is then not logged
     */
     DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr) const;
 

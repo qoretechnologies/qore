@@ -1,0 +1,229 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - acquire/release publication of class ancestor lists (arm64)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "ancestryprobe" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is
+# not installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires ancestryprobe
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BuiltinAncestryTest
+
+#! Tests the ancestry of builtin subclasses created while their parent classes get base classes (qore#7614)
+/** The ancestryprobe module creates builtin classes at run time with the C++ API as the jni module does: class A is
+    created; while its base classes are added, B is created with A as a parent class, initialized and registered;
+    then A gets more base classes and is initialized and registered.  B (and C, a subclass of B created in the gap)
+    must then have the ancestors that A got afterwards, in the order of a build from scratch: before qore#7614 was
+    fixed, B had only the ancestors that A had when B inherited it, so an object of B was not an instance of the later
+    ones, and setting the private data of a later ancestor failed an assertion of a debug build
+    (qore_object_private::addVirtualPrivateData()).
+*/
+class BuiltinAncestryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("builtin class ancestry", "1.0", \ARGV) {
+        addTestCase("virtual inheritance", \virtualTest());
+        addTestCase("non-virtual inheritance", \nonVirtualTest());
+        addTestCase("order of the ancestors, destructors and copy methods", \orderTest());
+        addTestCase("a class inheriting two classes that get base classes", \twoOpenParentsTest());
+        addTestCase("rescanning the parent classes", \rescanTest());
+        addTestCase("subclasses deleted before the parent class is complete", \deletedSubclassTest());
+        addTestCase("a parent class that is never complete", \neverClosedTest());
+        addTestCase("concurrent readers", \concurrentReadersTest());
+        addTestCase("rescanning the parent classes while another thread reads", \rescanReadersTest());
+        addTestCase("rescanning without the registry lock while another thread reads", \rescanPlainReadersTest());
+        addTestCase("rescanning that reaches a registered class through out-of-date lists", \rescanDeepTest());
+        addTestCase("import and subclass in another Program in the gap", \gapProgramTest());
+        set_return_value(main());
+    }
+
+    virtualTest() {
+        hash<auto> h = AncestryProbe::gap(True);
+        # B is used while A gets base classes: it has only the ones A had
+        assertFalse(h.b_late_before);
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+        assertTrue(h.b_late_parent);
+        assertTrue(h.b_plain);
+        assertTrue(h.c_a);
+        assertTrue(h.c_late);
+        assertTrue(h.c_late_parent);
+        assertTrue(h.c_plain);
+        assertEq(3, h.b_iterated_late);
+        assertTrue(h.obj_instanceof_late);
+        assertTrue(h.obj_instanceof_plain);
+        assertEq(42, h.obj_late_data);
+        assertEq(42, h.obj_late_parent_data);
+        assertEq(42, h.obj_late_value);
+    }
+
+    nonVirtualTest() {
+        hash<auto> h = AncestryProbe::gap(False);
+        assertFalse(h.b_late_before);
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+        assertTrue(h.b_late_parent);
+        assertTrue(h.b_plain);
+        assertTrue(h.c_late);
+        assertTrue(h.c_plain);
+        assertEq(3, h.b_iterated_late);
+        assertTrue(h.obj_instanceof_late);
+        assertEq(42, h.obj_late_data);
+        assertEq(42, h.obj_late_value);
+        # the destructor of the later ancestor runs for the object of B (BCSMList::execDestructors())
+        assertEq(1, h.late_destructors);
+    }
+
+    orderTest() {
+        # B created after A is complete: the reference
+        hash<auto> ref = AncestryProbe::order(False);
+        assertEq(("E0", "E1", "L0", "L1", "L2", "A", "B"), ref.ancestors);
+        assertEq(("A", "L2", "L1", "L0", "E1", "E0"), ref.destructors);
+        assertEq(("E0", "E1", "L0", "L1", "L2", "A"), ref.copies);
+        # B created in the gap has the same order
+        hash<auto> h = AncestryProbe::order(True);
+        assertEq(ref.ancestors, h.ancestors);
+        assertEq(ref.destructors, h.destructors);
+        assertEq(ref.copies, h.copies);
+    }
+
+    twoOpenParentsTest() {
+        hash<auto> h = AncestryProbe::twoOpenParents();
+        # A1 is complete: B has what A1 got; A2 is not complete yet
+        assertEq(("L1", "A1", "A2", "B"), h.after_a1);
+        assertEq(("L1", "A1", "L2", "A2", "B"), h.after_a2);
+    }
+
+    rescanTest() {
+        hash<auto> h = AncestryProbe::rescan();
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+    }
+
+    deletedSubclassTest() {
+        hash<auto> h = AncestryProbe::deletedSubclass();
+        assertTrue(h.a_late);
+        assertTrue(h.e_late);
+    }
+
+    neverClosedTest() {
+        hash<auto> h = AncestryProbe::neverClosed();
+        assertTrue(h.b_early);
+        assertTrue(h.c_early);
+        assertTrue(h.d_early);
+        # A is never complete: its later base class is never added to the subclasses made before it
+        assertFalse(h.b_late);
+        assertFalse(h.c_late);
+        # a subclass of B made afterwards walks the hierarchy of B through the current base classes of A (the list of
+        # B is not complete), so it has the later base class of A, which B does not have
+        assertTrue(h.d_late);
+        if (!h.hasKey("b_final")) {
+            testSkip("the libqore test query is only available in debug builds");
+        }
+        # releasing the reference to A does not destroy it (B references it): B stays registered with A and is not
+        # final, and so are its subclasses, also one made afterwards
+        assertFalse(h.b_final);
+        assertFalse(h.c_final);
+        assertFalse(h.d_final);
+        assertTrue(h.early_final);
+        assertTrue(h.b_linked_a);
+        assertTrue(h.c_linked_b);
+        assertTrue(h.d_linked_b);
+        assertFalse(h.b_linked_early);
+    }
+
+    concurrentReadersTest() {
+        # enough later ancestors for blocks that need more room
+        int n = 200;
+        hash<auto> h = AncestryProbe::concurrentReaders(n);
+        assertEq(n, h.found);
+        if (!h.hook) {
+            # a release build has no test hook: the reader is not made to read while the list is replaced
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        # the reader read the snapshot taken before A was complete (B and A) while the completion held the new list
+        # published, and the new list (B, A and the later ancestors)
+        assertEq(2, h.old_seen);
+        assertEq(n + 2, h.new_seen);
+        assertEq(n, h.found_in_hook);
+        # the completion holds the lock of the registry while the hook waits
+        assertEq(1, h.registry_locked);
+    }
+
+    rescanReadersTest() {
+        # enough added ancestors for blocks that need more room
+        int n = 20;
+        hash<auto> h = AncestryProbe::rescanReaders(n);
+        assertEq(0, h.before);
+        assertEq(n, h.found);
+        if (!h.hook) {
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        # the snapshot taken before the rescan (Early, A and B) was read after the list grew, and a new one has the
+        # added ancestors
+        assertEq(3, h.old_seen);
+        assertEq(n + 3, h.new_seen);
+        assertEq(n, h.found_in_hook);
+        # B is registered with A: the rescan holds the lock of the registry
+        assertEq(1, h.registry_locked);
+    }
+
+    rescanPlainReadersTest() {
+        int n = 20;
+        hash<auto> h = AncestryProbe::rescanPlainReaders(n);
+        assertEq(0, h.before);
+        assertEq(n, h.found);
+        if (!h.hook) {
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        # X is not registered with any class: the rescan does not lock the registry of ancestries
+        assertFalse(h.x_linked_e);
+        # the snapshot taken before the rescan (Early, E and X) was read after the list grew, and a new one has the
+        # added ancestors
+        assertEq(3, h.old_seen);
+        assertEq(n + 3, h.new_seen);
+        assertEq(n, h.found_in_hook);
+        # no class is registered: the rescan does not take the lock of the registry
+        assertEq(0, h.registry_locked);
+    }
+
+    rescanDeepTest() {
+        hash<auto> h = AncestryProbe::rescanDeep();
+        # the lists of C, A and X are out of date until they are rescanned
+        assertFalse(h.c_y_before);
+        assertTrue(h.c_y);
+        assertTrue(h.c_p);
+        assertTrue(h.y_p);
+        if (!h.hook) {
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        assertTrue(h.y_linked_p);
+        assertFalse(h.c_linked_a);
+        # Y, three levels down, is registered with P: the rescan of C holds the lock of the registry
+        assertEq(1, h.registry_locked);
+    }
+
+    gapProgramTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> h = AncestryProbe::gapProgram(sub (string path) {
+            # in the gap: B is imported into another Program, and a subclass of it is parsed there
+            p.importClass(path, "GapB");
+            p.parse("class GapSub inherits GapB {}
+object sub make_b() { return new GapB(); }
+object sub make_sub() { return new GapSub(); }", "gap-program");
+        });
+        assertTrue(h.b_late);
+        foreach string f in ("make_b", "make_sub") {
+            object o = p.callFunction(f);
+            hash<auto> c = AncestryProbe::checkObject(o);
+            assertTrue(c.class_late, f);
+            assertTrue(c.class_late_parent, f);
+            assertTrue(c.instanceof_late, f);
+            assertEq(42, c.late_data, f);
+            assertEq(42, c.late_parent_data, f);
+            assertEq(42, c.late_value, f);
+        }
+    }
+}

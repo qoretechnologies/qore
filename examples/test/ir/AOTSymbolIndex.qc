@@ -70,6 +70,7 @@ class AOTSymbolIndexBase inherits QUnit::Test {
         addPartCase(2, "standalone hashdecl implied constructor resolves at link time",
             \testStandaloneHashdeclImpliedConstructorImport());
         addPartCase(2, "standalone constructor import resolves at link time", \testStandaloneConstructorImport());
+        addPartCase(2, "per-file class signatures match a fresh parse", \testPerFileClassSignature());
         addPartCase(2, "standalone cast import resolves at link time", \testStandaloneCastImport());
         addPartCase(2, "standalone implied constructor import resolves at link time",
             \testStandaloneImpliedConstructorImport());
@@ -3045,6 +3046,33 @@ class AOTSymbolIndexBase inherits QUnit::Test {
 
         string out = run(sprintf("%s %s", env, app));
         assertEq("constructed\n", out, "linked executable resolves deferred constructor call: " + out);
+    }
+
+    #! The first file names a class that only the second file declares (qore#7473).
+    testPerFileClassSignature() {
+        TmpDir tmp = initDirs();
+        string src_a = "class First { public { *Later peer; list<Later> peers; "
+            "*NS::Peer other; *hash<NS::Info> data; } *Later typed(*Later p) { return p; } }\n";
+        string src_b = "namespace NS { class Peer {} hashdecl Info { int n; } }\n"
+            + "class Later { public { *First peer; } }\n";
+        write(tmp_dir + "/first.q", "%modern\n" + src_a);
+        write(tmp_dir + "/later.q", "%modern\n" + src_b);
+        string peer = src_a + src_b + "string sub accept(First f) { return \"accepted\"; }";
+        write(tmp_dir + "/main.q", "%modern\n%no-child-restrictions\nsub main() { "
+            + sprintf("Program p(PO_NEW_STYLE); p.parse(%y, \"runtime\"); ", peer)
+            + "printf(\"%s\\n\", p.callFunction(\"accept\", new First())); }\n");
+        string obj = tmp_dir + "/obj";
+        mkdir(obj);
+        foreach string stem in ("first", "later", "main") {
+            string path = obj + "/" + stem + ".qo";
+            string out = run(sprintf("%s %s -c -L %s -o %s %s/%s.q", env, qcc_bin, obj, path, tmp_dir, stem));
+            assertTrue(is_file(path), stem + " compiles: " + out);
+        }
+        string app = tmp_dir + "/linked";
+        string out = run(sprintf("%s %s -o %s %s/first.qo %s/later.qo %s/main.qo", env, qcc_bin, app,
+            obj, obj, obj));
+        assertTrue(is_file(app), "objects link: " + out);
+        assertEq("accepted\n", run(env + " " + app + " -b"));
     }
 
     testStandaloneCastImport() {

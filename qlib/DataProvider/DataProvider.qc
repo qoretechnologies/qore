@@ -495,14 +495,25 @@ public class DataProvider {
 
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
         tenants and for trusted code
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information
+        (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"): the logger receives the messages that the module and
+        the modules that log through it produce for every caller, which can name host information (ex: the modules of
+        \c QORE_DATA_PROVIDERS, the paths of the data provider index; see @ref sandbox_ambient_host_data)
 
         @note the messages that the module produces for any caller, also for sandboxed code, go to this logger
 
         @since DataProvider 3.0
+        @since DataProvider 3.12 code restricted from external information cannot set the logger
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
+        # the logger receives the messages of every caller, which can name host information (qore#7597)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", "DataProvider::setGlobalLogger(): the logger receives the messages of "
+                "every caller, which can name host information that the calling code may not read "
+                "(PO_NO_EXTERNAL_INFO)";
+        }
         DataProviderGlobalLogger::logger = logger;
     }
 
@@ -569,17 +580,21 @@ DataProvider::setModuleHostHooks("TypeScriptActionInterface", {
     /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
         get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
         directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
-        such code still go to the logger
+        such code still go to the logger.  Code restricted from external information
+        (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") does not get it either, as it receives the messages of
+        every caller, which can name host information (an appender that such code added to it would get them; see
+        @ref sandbox_ambient_host_data)
 
         @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
-        is sandboxed or acts for sandboxed code
+        is sandboxed or acts for sandboxed code, or that may not read external information
 
         @since DataProvider 3.0
-        @since DataProvider 3.12 sandboxed code does not get the logger
+        @since DataProvider 3.12 sandboxed code and code restricted from external information do not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
-        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
-        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746), nor to
+        # code that may not read the host information that the messages of other callers name (qore#7597)
+        if (!SandboxManager::isProcessWideRegistrationAllowed() || !SandboxManager::callerMayReadExternalInfo()) {
             return;
         }
         return DataProviderGlobalLogger::logger;
@@ -1098,8 +1113,12 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
 
         @throw PROVIDER-ERROR the given provider has already been registered
 
-        @note types are stored based on the path provided which may differ from their type names (which may be generic
-        and therefore not suitable for indexing)
+        @note
+        - types are stored based on the path provided which may differ from their type names (which may be generic
+          and therefore not suitable for indexing)
+        - every caller of the process-wide cache gets the type, so a type that code no sandbox governs registers is
+          frozen (see AbstractDataProviderType::freeze()): sandboxed code cannot change or delete it, or the types
+          and fields that it holds, also those added to it later (qore#7728)
     */
     static registerType(string path, AbstractDataProviderType type) [dom=PROCESS_CONTROL] {
         # a type path taken by sandboxed code would be denied to the module that owns it
@@ -1787,6 +1806,13 @@ if (errors) {
         @return every module loading failure in environment declaration order; an empty list means that all declared
             modules loaded successfully
 
+        For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+        modules of the \c QORE_DATA_PROVIDERS environment variable are loaded as for other code, but the failures
+        name no module of the environment: \c module is \c "QORE_DATA_PROVIDERS[<n>]" (the position of the module in
+        the variable, or \c "QORE_DATA_PROVIDERS (nested)" for a provider module that such a module names), \c description is a generic text and \c argument is not set, as the module names, their paths
+        and the texts of their errors are information about the host (see @ref sandbox_ambient_host_data)
+
         @since DataProvider 3.8
     */
     static list<hash<DataProviderEnvironmentLoadFailureInfo>> loadProvidersFromEnvironmentWithReport(
@@ -1797,6 +1823,30 @@ if (errors) {
             sub (hash<DataProviderEnvironmentLoadFailureInfo> failure) {
                 failures += failure;
             });
+        # the names of the environment's modules only for a caller that could read the environment itself
+        # (qore#7586)
+        if (failures && !SandboxManager::callerMayReadExternalInfo()) {
+            list<string> mods = (getenv("QORE_DATA_PROVIDERS") ?? "").split(PathSep);
+            list<hash<DataProviderEnvironmentLoadFailureInfo>> hidden
+                = new list<hash<DataProviderEnvironmentLoadFailureInfo>>();
+            foreach hash<DataProviderEnvironmentLoadFailureInfo> failure in (failures) {
+                int pos = -1;
+                foreach string mod in (mods) {
+                    if (mod == failure.module) {
+                        pos = $#;
+                        break;
+                    }
+                }
+                hidden += <DataProviderEnvironmentLoadFailureInfo>{
+                    "phase": failure.phase,
+                    # a module that a module of the environment names has no position in it
+                    "module": pos >= 0 ? sprintf("QORE_DATA_PROVIDERS[%d]", pos) : "QORE_DATA_PROVIDERS (nested)",
+                    "error": failure.error,
+                    "description": "a data provider module of the environment could not be loaded",
+                };
+            }
+            failures = hidden;
+        }
         return failures;
     }
 
@@ -1823,6 +1873,13 @@ if (errors) {
         connection other than \c NO-FUNCTION, \c DATASOURCE-ERROR and \c DATASOURCE-PARSE-ERROR, also from the lookup
         made after a \c QORE_DATA_PROVIDERS module is loaded (it was reported as an invalid module before %Qore 3.0;
         qore#7484)
+
+        @note the connection or datasource is resolved with the ConnectionProvider and DatasourceProvider modules, so
+        code that may not receive the host's secrets
+        (@ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()")
+        gets a data provider only for a connection or datasource of a provider module that declares that it resolves
+        names for the calling code (see the documentation of the provider modules in the ConnectionProvider and
+        DatasourceProvider modules); for any other name, @ref nothing is returned as for an unknown name
     */
     static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
             *LoggerInterface logger) {
@@ -2026,9 +2083,15 @@ if (action.data_provider_info) {
         allow_env_config = True;
     }
 
-    #! Returns the auto config flag
+    #! Returns the auto config flag for the calling code
+    /** @return @ref True if setAutoConfig() was called and the calling code may receive the host's secrets (see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"):
+        data providers take missing options (including client secrets and passwords) from the environment only then,
+        so code restricted from external information and sandboxed code give their own options, unless the host
+        grants them with a policy barrier or a system-policy capability (qore#6844)
+    */
     static bool getAutoConfig() {
-        return allow_env_config;
+        return allow_env_config && SandboxManager::callerMayReceiveHostSecrets();
     }
 
     #! Returns a list of strings in a path separated by "/" characters

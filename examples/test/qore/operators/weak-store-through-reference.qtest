@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of the compiled child program
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakStoreThroughReferenceTest
+
+#! Tests that a store to a local that holds a reference assigns the referenced lvalue with that lvalue's type
+/** A weak (:=) or opaque (@=) assignment, and a Normal (=) assignment to a local of type any, assigns the value
+    assigned to the referenced lvalue as the AST interpreter does: a container that the referenced lvalue's type
+    converts to a copy is refused with RUNTIME-TYPE-ERROR (issue #7572), a weak or opaque assignment into an auto lvalue
+    stores a reference to the value assigned, and a Normal assignment keeps the value's type in an auto lvalue (issue
+    #7617).  The cases (weak-store-through-reference/weak-store-through-reference.q) run in every execution mode and
+    compiled with AOT at optimization levels 0 and 3 against the same expected output
+    (weak-store-through-reference.expected).
+*/
+class WeakStoreThroughReferenceTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+        #! the output of the child script
+        string expected_output;
+
+        TmpDir tmp("qore-weak-store-through-reference-");
+    }
+
+    constructor() : QUnit::Test("WeakStoreThroughReference", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/weak-store-through-reference/weak-store-through-reference.q";
+        expected_output = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/weak-store-through-reference/weak-store-through-reference.expected");
+
+        addTestCase("stores through a reference, in every mode", \testModes());
+        addTestCase("stores through a reference, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(expected_output, r.out, mode);
+        }
+    }
+
+    testAot() {
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/weak-store-through-reference-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(expected_output, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

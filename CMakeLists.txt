@@ -250,6 +250,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
     lib/QC_Counter.qpp
+    lib/QC_LazySharedValue.qpp
+    lib/QC_LazySharedMap.qpp
     lib/QC_Channel.qpp
     lib/QC_ChannelIterator.qpp
     lib/QC_Future.qpp
@@ -353,6 +355,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_StdoutOutputStream.qpp
     lib/QC_StderrOutputStream.qpp
     lib/QC_Serializable.qpp
+    lib/QC_SandboxSerializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
     lib/QC_SendRateMonitor.qpp
@@ -1709,6 +1712,10 @@ option(QORE_DOX_TABLE_STRICT "treat malformed documentation tables as errors" ON
 # Allocation tracking adds ql_alloc_tracking.qpp when -DENABLE_ALLOC_TRACKING=ON.
 # (The corresponding AllocTracking.cpp and QORE_HAVE_ALLOC_TRACKING define are set
 # later — see the matching if-block in this file.)
+# The functional domains of the builtins of every configuration are covered by the AOT runtime identity (qore#7508); the
+# optional sources are left out of it, so that the identity does not depend on the configuration: a module that calls
+# their builtins records their domains itself, and a build without them cannot run it.
+set(_qore_builtin_domain_qpp_src ${LIBQORE_QPP_SRC} ${PSEUDO_QPP_SRC})
 if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
 endif ()
@@ -1899,6 +1906,7 @@ set(LIBQORE_CPP_SRC
     lib/SystemEnvironment.cpp
     lib/QoreForkHandlers.cpp
     lib/QoreCounter.cpp
+    lib/QoreLazyShared.cpp
     lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
@@ -1938,6 +1946,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreCastOperatorNode.cpp
     lib/QoreUnaryMinusOperatorNode.cpp
     lib/QoreUnaryPlusOperatorNode.cpp
+    lib/QoreReadReferenceOperatorNode.cpp
     lib/QoreLogicalNotOperatorNode.cpp
     lib/QoreDotEvalOperatorNode.cpp
     lib/QoreLogicalEqualsOperatorNode.cpp
@@ -2264,6 +2273,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreForkHandlers.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLazyShared.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
@@ -2279,6 +2289,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreKeysOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryMinusOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryPlusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreReadReferenceOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalNotOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDotEvalOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalEqualsOperatorNode.cpp\"
@@ -2453,6 +2464,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Channel.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedValue.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LazySharedMap.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FutureImpl.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
@@ -2499,6 +2512,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_StdoutOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StderrOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxSerializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"
@@ -3306,6 +3320,13 @@ set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 # .cpp files, but this custom command does not inherit compiler depfile
 # scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    # the values of the functional domains and parse restrictions (QDOM_*, PO_*, and the extended options above bit 63
+    # with the positive and free option masks in QoreParseOptions.cpp) and how the domains map to the restrictions: an
+    # AOT module records the domains that its code uses, the domains its header declares, the parse options of its
+    # header and of its module commands and the restrictions of its dependencies as these bits, which the loader
+    # compares with the restrictions of the Program loading it (qore#7526)
+    ${CMAKE_SOURCE_DIR}/include/qore/Restrictions.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp
     # Lexical compatibility semantics change AST/native runtime boundaries without changing the AOT layout.
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LexicalSemanticPolicy.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/ParseNode.h
@@ -3342,6 +3363,11 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
     ${CMAKE_SOURCE_DIR}/lib/Function.cpp
+    # the class signature hashes (qore_class_private::initializeIntern(), do_sig(), do_variant_sig(),
+    # SignatureHash) and class paths (QoreClass::getNamespacePath()) that CLASSES records and type paths store; a
+    # change in how they are computed would leave a module's classes incompatible with, or wrongly compatible with,
+    # those that the runtime computes (qore#7397)
+    ${CMAKE_SOURCE_DIR}/lib/QoreClass.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprHandlers.cpp
@@ -3488,6 +3514,21 @@ foreach(_qcc_format_source IN LISTS _qcc_format_sources)
     file(RELATIVE_PATH _qcc_format_source_label "${CMAKE_SOURCE_DIR}" "${_qcc_format_source}")
     string(APPEND _qcc_format_sources_labels_content "${_qcc_format_source_label}\n")
 endforeach()
+# The functional domains of the builtins (qore#7508): an AOT module records the domains that its code used when it was
+# compiled, and loading it into a restricted Program checks that record, so the identity covers the domains of the
+# builtins that the qpp-generated sources declare, and a module compiled before a builtin gained a domain is refused
+# (see cmake/QoreWriteBuiltinDomainTable.cmake).  The table is written by qcc-format-version, before the fingerprint.
+set(_qore_builtin_domain_sources ${CMAKE_BINARY_DIR}/qore-builtin-domain-sources.txt)
+set(_qore_builtin_domain_table ${CMAKE_BINARY_DIR}/qore-builtin-domains.txt)
+set(_qore_builtin_domain_sources_content "")
+foreach(_qore_builtin_domain_qpp IN LISTS _qore_builtin_domain_qpp_src)
+    # the source that qore_wrap_qpp_value() generates for it
+    get_filename_component(_qore_builtin_domain_name "${_qore_builtin_domain_qpp}" NAME_WE)
+    string(APPEND _qore_builtin_domain_sources_content "${CMAKE_BINARY_DIR}/${_qore_builtin_domain_name}.cpp\n")
+endforeach()
+QORE_WRITE_IF_CHANGED("${_qore_builtin_domain_sources}" "${_qore_builtin_domain_sources_content}")
+string(APPEND _qcc_format_sources_manifest_content "${_qore_builtin_domain_table}\n")
+string(APPEND _qcc_format_sources_labels_content "@builtin-domains\n")
 string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_config}\n")
 string(APPEND _qcc_format_sources_labels_content "@build-config\n")
 QORE_WRITE_IF_CHANGED("${_qcc_format_sources_labels}" "${_qcc_format_sources_labels_content}")
@@ -3518,7 +3559,11 @@ qore_aot_runtime_identity_targets(
     STAMP ${QCC_FORMAT_STAMP}
     INPUT_LIST ${_qcc_format_sources_manifest}
     INPUT_LABELS ${_qcc_format_sources_labels}
-    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER}
+    DOMAIN_SOURCES ${_qore_builtin_domain_sources}
+    DOMAIN_TABLE ${_qore_builtin_domain_table})
+# the table is read from the qpp-generated sources
+add_dependencies(qcc-format-version QPP_GENERATED_FILES)
 add_dependencies(qcc qcc-format-version)
 
 # The builtin API identity of libqore: a digest of the API metadata of its qpp files (qpp --api-metadata: the

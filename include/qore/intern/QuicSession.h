@@ -1542,10 +1542,6 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
-        //! the stream's acknowledged bytes when its body last made progress, and the time of it on the monotonic
-        //! clock in ms, for the no-progress bound of the body (qore#7280)
-        int64_t bound_acked = -1;
-        int64_t bound_progress_ms = 0;
         //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
         bool is_regular_file = false;
 
@@ -1591,9 +1587,14 @@ public:
         @param window_ms the window of the minimum rate in milliseconds
         @param stall_ms the time in milliseconds after which a body that the client acknowledges nothing of is ended
 
-        The bounds of a connection are set once, with its first such body; later calls are ignored.
+        @param listener_default true for the default of the listener that the session was accepted on: it applies
+        only until the bounds are set by a call without it (qore#7653)
+
+        The bounds of a connection are set once, with its first such body; later calls are ignored, except that a
+        call without \a listener_default replaces a listener's default.
     */
-    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms,
+        bool listener_default = false);
 
     //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
     DLLLOCAL int getInputStreamPollTimeoutMs() const;
@@ -2283,14 +2284,41 @@ private:
     SendRateWindow pump_send_rate_;
     //! the no-progress bound of a pumped body in milliseconds
     int64_t pump_stall_ms_ = 30 * 60 * 1000;
-    //! true once the bounds of the pumped bodies have been set
+    //! true once the bounds of the response bodies have been set
     bool pump_bound_set_ = false;
+    //! true if the bounds were set by a call that is not a listener's default (qore#7653)
+    bool pump_bound_explicit_ = false;
 
-    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
+    //! A response body that the bounds charge to its client until the client has acknowledged it (qore#7653)
+    struct BoundBody {
+        //! the size of a buffered body, whose acknowledged bytes are counted in acked; 0 for a pumped body, whose
+        //! acknowledged bytes are those of its streaming_body_data_ entry
+        uint64_t buffered_size = 0;
+        uint64_t acked = 0;
+        //! the body's acknowledged bytes when it last made progress, and the time of it on the monotonic clock in ms
+        //! (0: not seen waiting yet)
+        int64_t bound_acked = -1;
+        int64_t bound_progress_ms = 0;
+    };
+    //! the response bodies charged to their clients by stream ID, registered while the bounds are set; a body is
+    //! removed when its client has acknowledged all its data, when its stream is cancelled or closes, and when a bound
+    //! ends it (qore#7653)
+    std::unordered_map<int64_t, BoundBody> bound_bodies_;
+
+    //! Registers a response body for the bounds if they are set; \a buffered_size is 0 for a pumped body (qore#7653)
+    DLLLOCAL void addBoundBody(int64_t stream_id, uint64_t buffered_size);
+    //! Removes a body from the bounds (qore#7653)
+    DLLLOCAL void eraseBoundBody(int64_t stream_id);
+    //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under mtx_
+    DLLLOCAL void updateActiveInputStreams();
+    //! Returns the bytes of a bounded body that its client has acknowledged
+    DLLLOCAL uint64_t getBoundBodyAcked(int64_t stream_id, const BoundBody& b) const;
+
+    //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
     DLLLOCAL void checkInputStreamSendBound();
 
-    //! Returns true if a pumped body has data that its client has not acknowledged
-    DLLLOCAL bool isInputStreamWaiting(int64_t stream_id) const;
+    //! Returns true if a bounded body has data that its client has not acknowledged (qore#7653)
+    DLLLOCAL bool isBoundBodyWaiting(int64_t stream_id, const BoundBody& b) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
