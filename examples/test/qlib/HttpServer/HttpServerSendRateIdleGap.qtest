@@ -51,12 +51,23 @@ const Requests = 12;
 #! minimum rate (500 ms at 1 MiB/s: 512 KiB), so that each such charge left a debt
 const WaitingBodySize = 100 * 1024;
 
-#! The events of the body read from a pipe: their pauses, charged in full (11 x 500 ms), use up the credit (4 s)
-const SourceEvents = 12;
+#! The small events of the body read from a pipe: their pauses, charged in full (19 x 500 ms), count for more than a
+#! whole window (4 s) of waiting
+const SourceEvents = 20;
 
-#! The size of each event of the body read from a pipe: larger than the default flow-control window, so that the body
-#! really waits for its client after each event, and the drained credit ended it then
-const EventSize = WaitingBodySize;
+#! The size of each small event of the body read from a pipe
+const EventSize = 9;
+
+#! The flow-control window of the client of the body read from a pipe (its stream and its connection)
+const SourceWindow = 100 * 1024;
+
+#! The size of the last event of the body read from a pipe: larger than what the client's window has left, so that
+#! the body then waits for the client's credit
+const LastEventSize = 2 * SourceWindow;
+
+#! The time that the client withholds its credit at the end: a genuine wait for the client, with no progress, longer
+#! than one check interval (window / 16) and much shorter than a window
+const CreditDelay = 600ms;
 
 #! Responds with a body read from a named pipe, which the I/O thread pumps
 class PipeBodyHandler inherits AbstractHttpRequestHandler {
@@ -192,9 +203,9 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
         assertEq(Requests * 2, answered, "every response on the connection is completed");
     }
 
-    #! HTTP/2: a body read from a pipe whose writer sends small events with pauses between them
-    /** Each pause is longer than what one update charges, so that the pauses, charged as waits for the client, used
-        up the credit and the body was reset
+    #! HTTP/2: a body read from a pipe whose writer sends small events with pauses between them, then a large one
+    /** Each pause is longer than what one update charges; the pauses, charged as waits for the client, counted for a
+        whole window of waiting, so that the body was reset when it waited for its client's credit at the end
     */
     testSourceIdleH2() {
         TmpDir dir("send-rate-source-idle-");
@@ -231,8 +242,10 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
                         # the source has nothing to send: the body waits for it, not for its client
                         usleep(IdleGap);
                     }
-                    f.write(binary(strmul(chr(ord("a") + i), EventSize)));
+                    f.write(binary(strmul(chr(ord("a") + i % 26), EventSize)));
                 }
+                usleep(IdleGap);
+                f.write(binary(strmul("z", LastEventSize)));
             } catch (hash<ExceptionInfo> ex) {
                 writer_errors.push(get_exception_string(ex));
             }
@@ -246,14 +259,34 @@ class HttpServerSendRateIdleGapTest inherits QUnit::Test {
             }
         }
 
-        # the default flow-control window: each event waits for the client's WINDOW_UPDATE frames
-        RawHttp2Client c(port, True, DefaultWindow);
+        # the client sends nothing while it reads: no frame of its own makes the server's I/O thread look at the body
+        # again after its source has run dry
+        RawHttp2Client c(port, True, SourceWindow);
         on_exit c.close();
-        hash<RawHttp2StreamResult> r = c.readStream(c.get("/pipe"), HangGuard);
-        # without the fix the body was reset (RST_STREAM CANCEL) once the pauses had used up the credit
+        c.credit_data = False;
+        int stream_id = c.get("/pipe");
+        int received = 0;
+        # the small events, then the part of the last one that the window allows
+        *hash<auto> f = c.readUntil(bool sub (hash<auto> f) {
+            if (f.type == FrameRstStream && f.stream_id == stream_id) {
+                return True;
+            }
+            if (f.type == FrameData && f.stream_id == stream_id) {
+                received += f.payload.size();
+            }
+            return received >= SourceWindow;
+        }, HangGuard);
+        # without the fix the pauses, charged as waits for the client, filled the window of the rate, so that the body
+        # was reset (RST_STREAM CANCEL) as soon as it waited for the client with no progress
+        assertEq(FrameData, f.type, sprintf("the body was not reset: %y", c.resets));
+        # a genuine wait for the client: the body waits for its credit
+        usleep(CreditDelay);
+        c.credit(stream_id, SourceEvents * EventSize + LastEventSize);
+        c.credit_data = True;
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, HangGuard);
         assertNothing(r.reset_code, sprintf("the body was not reset: %y", r));
         assertTrue(r.ended, "the body ended");
-        assertEq(SourceEvents * EventSize, r.data_bytes, "the whole body arrived");
+        assertEq(SourceEvents * EventSize + LastEventSize, received + r.data_bytes, "the whole body arrived");
         assertEq(0, done.waitForZero(HangGuard), "the writer ended");
         assertEq(0, writer_errors.size(), writer_errors.size() ? writer_errors.get() : "");
     }
