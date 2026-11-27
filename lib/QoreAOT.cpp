@@ -1021,6 +1021,28 @@ static std::mutex aot_json_diag_lock;
 static std::vector<QoreDiagnostic> aot_json_diags;
 static bool aot_json_diags_flushed = false;
 
+//! Returns true if the definition context of the module being compiled could not be opened
+/** The context reserves the module's name while the module is parsed and raises \c LOAD-MODULE-ERROR if another
+    thread is loading a module of the name (QoreModuleManager::reserveCompiledModuleName(), #7808); nothing is parsed
+    then: the context is closed and \a error gives the exception, which is cleared
+
+    @param mod_ctx the context, opened just before
+    @param xsink the sink that the context raised its error into
+    @param error receives the description of the error
+*/
+static bool qoreAotModuleContextFailed(QoreUserModuleDefContextHelper& mod_ctx, ExceptionSink& xsink,
+        std::string& error) {
+    if (!xsink) {
+        return false;
+    }
+    QoreStringDataHelper err(xsink.getExceptionErr());
+    QoreStringDataHelper desc(xsink.getExceptionDesc());
+    error = std::string(err ? err.c_str() : "LOAD-MODULE-ERROR") + ": " + (desc ? desc.c_str() : "");
+    mod_ctx.close();
+    xsink.clear();
+    return true;
+}
+
 //! Reports the exceptions in \a sink, those of the parse of code being compiled, as diagnostics, and clears it
 /** In the form that QORE_DIAG_FORMAT / QORE_CODE_FRAMES select; by default each is one line on stderr, in the form of
     other compilers (issue #6555): <file>:<line>[:<col>]: error|warning: <code>: <message>; the column is 1-based.
@@ -28874,6 +28896,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink, QMRL_LOCK);
 
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
+
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
         // after all module types/functions have been parsed.
@@ -29360,6 +29386,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
+
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
 
         // Parse main .qm file with parsePending()
         // the files of the module are parsed and committed as the module loader parses and commits a separated
@@ -33428,6 +33458,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
+
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
         // raised as errors (qore#7314, qore#7324)
@@ -34024,6 +34058,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
+
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
         // raised as errors (qore#7314, qore#7324)
@@ -34614,6 +34652,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
+
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
 
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings

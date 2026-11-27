@@ -1197,6 +1197,23 @@ public:
         }
     }
 
+    //! Reserves the name of a module that is compiled in the module load map; the mutex must not be held
+    /** As the module loader reserves the name of a module that it loads (ModuleLoadMapHelper), but without counting
+        a nested module load, as the module is not loaded (#7808)
+
+        @param name the module's feature name
+        @param xsink receives an error if another thread is loading a module of the same name
+
+        @return true if the name was reserved and must be released with releaseCompiledModuleName(); false if this
+        thread is loading a module of that name already (its load keeps the name reserved) or if an error was raised
+    */
+    DLLLOCAL bool reserveCompiledModuleName(const char* name, ExceptionSink& xsink);
+
+    //! Releases the reservation of reserveCompiledModuleName(); the mutex must not be held
+    /** A load of the name in another thread that waits for it then loads the module, which was not registered
+    */
+    DLLLOCAL void releaseCompiledModuleName(const char* name);
+
     //! Records the dependency registration of \a name with the mutex locked; the mutex must not be held
     DLLLOCAL void getUserModuleRegistrationLocked(const char* name, QoreUserModuleRegistration& reg) {
         AutoLocker al(mutex);
@@ -1337,6 +1354,15 @@ public:
     //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
     //! that another thread runs; returns false on timeout (qore#7232)
     DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+
+    //! Test hook (dbg_module_load_hold()): reserves \a name in the module load map as a load in progress of this
+    //! thread, which stays reserved until dbgReleaseLoad() also after the thread has ended; returns false if the name
+    //! is in the map already (#7808)
+    DLLLOCAL bool dbgHoldLoad(const char* name);
+
+    //! Test hook (dbg_module_load_release()): releases the reservation of dbgHoldLoad(), from any thread, as a load
+    //! that registered no module; returns false if \a name is not reserved as a load in progress (#7808)
+    DLLLOCAL bool dbgReleaseLoad(const char* name);
 #endif
 
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
@@ -1929,9 +1955,13 @@ enum QoreModuleRecordLock : unsigned char {
     //! the module manager's mutex is held when the context is opened and when it is closed
     QMRL_HELD,
     //! the mutex is not held: the context locks it to record the registration and to roll it back; used by the AOT
-    //! compile functions, whose module is parsed but never registered.  The name is not reserved while it is parsed:
-    //! a compilation concurrent with a load of a module of the same name in another thread is not supported (qcc
-    //! and qore --compile-module compile in one thread, before any other code runs)
+    //! compile functions, whose module is parsed but never registered.  The name is reserved in the module load map
+    //! while the module is parsed, as the module loader reserves the name of a module that it loads: a request for
+    //! the module in its own source, or in the source of a module that it requires (a require cycle), is then
+    //! satisfied by the module being compiled instead of loading its source a second time, and a load of the name
+    //! in another thread waits for the compilation to end, as for a load in progress; a compilation of a name that
+    //! another thread is loading fails: the context raises \c LOAD-MODULE-ERROR, and the compile functions parse
+    //! nothing (#7808)
     QMRL_LOCK,
     //! the context of a binary module: the source of an AOT module initialized with the legacy entry point
     //! qore_aot_module_init(), which runs without the mutex, locked as with QMRL_LOCK.  No user module dependency is
@@ -1958,6 +1988,10 @@ public:
     DLLLOCAL ~QoreUserModuleDefContextHelper() {
         set_module_context_name(old_name);
         set_module_context_path(old_path);
+
+        if (name_reserved) {
+            QMM.releaseCompiledModuleName(mod_name);
+        }
 
         if (!registered && !dup) {
             if (rlock == QMRL_HELD) {
@@ -2023,6 +2057,9 @@ protected:
     QoreModuleRecordLock rlock;
     //! true if the module was registered and keeps the dependency registrations of its load
     bool registered = false;
+    //! true if the context reserved the module's name in the module load map (QMRL_LOCK), which it releases when it
+    //! closes
+    bool name_reserved = false;
     //! the registration of the module name when its load began: a module being reloaded is still registered
     QoreUserModuleRegistration saved_reg;
 };

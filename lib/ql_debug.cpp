@@ -1243,6 +1243,31 @@ static QoreValue f_dbg_module_load_waiters(const QoreListNode* params, RuntimeCo
 #endif
 }
 
+//! Reserves the name of a module as a load in progress of the calling thread until dbg_module_load_release() (#7808)
+/** The name stays reserved after the thread has ended: a load of the name in another thread waits until it is
+    released, and a compilation of the name fails; returns false if the name is being loaded already
+*/
+static QoreValue f_dbg_module_load_hold(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    return QMM.dbgHoldLoad(name->c_str());
+#else
+    return false;
+#endif
+}
+
+//! Releases the reservation of dbg_module_load_hold() as a load that registered no module (#7808)
+/** returns false if the name is not reserved as a load in progress
+*/
+static QoreValue f_dbg_module_load_release(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    return QMM.dbgReleaseLoad(name->c_str());
+#else
+    return false;
+#endif
+}
+
 //! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
 static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef DEBUG
@@ -39173,6 +39198,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_module_load_waiters", f_dbg_module_load_waiters, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_module_load_hold", f_dbg_module_load_hold, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_module_load_release", f_dbg_module_load_release, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
