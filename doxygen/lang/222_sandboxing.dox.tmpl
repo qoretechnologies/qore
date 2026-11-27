@@ -947,7 +947,8 @@ authenticate();
     @ref Qore::Program::loadUserModuleWithProgram() "Program::loadUserModuleWithProgram()" and
     @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()".  A value that goes out of
     scope or that the code removes (\c remove) is released as before, and code that only sandboxes at the enforcement
-    level of code safety govern deletes objects as trusted code does.
+    level of code safety govern deletes objects as trusted code does.  A shared object is refused by the shared-object
+    rule first, with \c SHARED-OBJECT-ERROR, whoever created it (see @ref sandbox_object_check_order).
 
     The code of such a class cannot read a non-public member of such an object either, with the same exemptions: a
     direct read (also a dynamic one, \c obj.(name), and a call through a member that holds code) is refused with
@@ -1055,7 +1056,8 @@ authenticate();
     sandbox governs creates and changes shared objects as trusted code) then cannot change the object's members, in any form of write (assignment, the other operators that change an
     lvalue, \c remove and \c delete of a member or a slice of members, a write through a reference to a member,
     the \c += operator with a hash on the object, a write to an element of a container that a member holds), nor
-    delete the object with the \c delete operator: each raises \c SHARED-OBJECT-ERROR before anything is changed.
+    delete the object with the \c delete operator or with the functions and methods that delete an object or take it
+    over for their caller: each raises \c SHARED-OBJECT-ERROR before anything is changed.
     Reading the members is not affected.
 
     This applies to every code that runs for sandboxed code: the methods of the object's own class, Reflection and
@@ -1167,6 +1169,24 @@ authenticate();
     it: trusted code that shares a deserialized object marks it with
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that
     serialized data provider types restore, which are not marked.
+
+    @anchor sandbox_object_check_order
+    The shared-object rule and the owner rules of tenant isolation (see @ref sandbox_object_ownership) both apply to
+    the code of a tenant, and the shared-object rule answers first: a change, a deletion or a serialization of a shared
+    object is refused with \c SHARED-OBJECT-ERROR, the more specific error, whoever created the object (also an object
+    that the tenant's sandbox created and trusted code then shared, and also at the enforcement level of code safety,
+    where the owner rules do not apply).  Only for an object that is not shared do the owner rules answer: a deletion
+    or a take-over of an object that the tenant's sandbox did not create, a write of a non-public member of such an
+    object by the code of a class that sandboxed code declared, and
+    @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()" (and so the
+    setters that use it, such as @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()") raise
+    \c SANDBOX-OBJECT-ACCESS-ERROR, and the serialization of its non-public members raises \c SERIALIZATION-ERROR.  The
+    shared-object rule refuses nothing for an object that is not shared: the tenant changes, deletes and serializes its
+    own objects as before, and the objects of other code as far as the owner rules allow.  The order is the same for
+    the \c delete operator in every execution mode, for the functions and methods that delete an object or take it
+    over for their caller (such as @ref Qore::delete_thread_data() "delete_thread_data()"), for a call of a destructor
+    with the reflection API (in C++: \c qore_check_caller_deletes_object()), for member writes and for every
+    serialization API; a system constant object is refused before both rules (\c SYSTEM-OBJECT-ERROR).
 
     @since %Qore 3.0
 

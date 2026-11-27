@@ -6286,10 +6286,8 @@ void LValueRemoveHelper::deleteLValue() {
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
                     continue;
                 }
-                // sandboxed code cannot delete a shared object (qore#6843)
-                if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-                    continue;
-                }
+                // refused for a shared object (qore#6843), then for one that the code's sandbox does not own
+                // (qore#6842), in qore_operator_delete_object()
                 qore_operator_delete_object(o, xsink);
             }
         }
@@ -6304,11 +6302,8 @@ void LValueRemoveHelper::deleteLValue() {
         xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
         return;
     }
-    // sandboxed code cannot delete a shared object (qore#6843)
-    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-        return;
-    }
-
+    // refused for a shared object (qore#6843), then for one that the code's sandbox does not own (qore#6842), in
+    // qore_operator_delete_object()
     qore_operator_delete_object(o, xsink);
 }
 

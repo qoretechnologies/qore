@@ -243,7 +243,9 @@ DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 /** A system constant object is never deleted, by any code: refused with \c SYSTEM-OBJECT-ERROR, as with the delete
     operator.  Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) at the
     enforcement level of tenant isolation may delete only an object that its sandbox owns; refused with
-    \c SANDBOX-OBJECT-ACCESS-ERROR.  A refused deletion leaves the object as it is.  Used by the builtin functions and
+    \c SANDBOX-OBJECT-ACCESS-ERROR.  A shared object is checked before the owner rule: code that is restricted or acts
+    for restricted code cannot delete it (\c SHARED-OBJECT-ERROR, qore#6843), whoever created it; the order is system
+    object, shared object, owner.  A refused deletion leaves the object as it is.  Used by the builtin functions and
     methods that delete an object or take it over for the calling code (also by the TAKE_HARD_QORE_VALUE_OBJ_DATA()
     macro), which make no check of their own: the class context of the code that called the builtin code counts as
     well as the current one (runtime_get_caller_class()).  Also declared in QoreHashNodeIntern.h
@@ -255,9 +257,11 @@ DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
 
 //! Deletes an object for the delete operator: refused for sandboxed code if its sandbox does not own it (qore#6842)
-/** Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) can delete only an
-    object that its sandbox owns (qore_sandbox_current_code_created()); otherwise raises
-    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is.  The caller has checked for a system object
+/** Code that is restricted or acts for restricted code cannot delete a shared object (\c SHARED-OBJECT-ERROR,
+    qore#6843), checked first; then sandboxed code (the code of a sandboxed Program or of a class that sandboxed code
+    declared) can delete only an object that its sandbox owns (qore_sandbox_current_code_created()); otherwise raises
+    \c SANDBOX-OBJECT-ACCESS-ERROR.  A refused deletion leaves the object as it is.  The caller has checked for a
+    system object, which comes first, as in qore_check_object_delete()
 */
 DLLLOCAL void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink);
 
@@ -459,6 +463,15 @@ public:
         @param xsink for the exception
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can change the object as its owner, or raises SHARED-OBJECT-ERROR and returns -1
+    /** For SandboxManager::checkObjectOwnedByCaller(), which checks it before the owner rule (qore#6842): decides as
+        checkSharedMethodChange() does, for a \a what phrased for an object (ex: \c "change the logger of")
+
+        @param what what the caller tried to do, for the exception
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkSharedOwnerChange(const char* what, ExceptionSink* xsink) const;
 
     //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
     //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)

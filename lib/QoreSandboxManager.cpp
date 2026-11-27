@@ -2978,6 +2978,20 @@ int qore_check_caller_owns_object(const QoreObject& obj, const char* what, Excep
     return -1;
 }
 
+int qore_check_caller_deletes_object(const QoreObject& obj, ExceptionSink* xsink) {
+    assert(xsink);
+    // the order of the delete operator: system object, shared object (qore#6843), owner (qore#6842)
+    if (obj.isSystemObject()) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
+            obj.getClassName());
+        return -1;
+    }
+    if (qore_object_private::get(obj)->checkSharedChange(nullptr, xsink, true)) {
+        return -1;
+    }
+    return qore_check_caller_owns_object(obj, "delete", xsink);
+}
+
 int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
     assert(xsink);
     // the code that transfers: never sandboxed code itself

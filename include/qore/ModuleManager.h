@@ -78,8 +78,8 @@
     HttpClientConnectionManagerBase::Options (#7248; a member added to a structure of the unreleased 2.3 API), the
     enforcement level of sandboxes (QoreSandboxEnforcementLevel, QoreSandboxManager::setEnforcementLevel(),
     getEnforcementLevel(), isEnforcementLevelFixed() and qore_caller_tenant_isolated()) with its feature macro
-    QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL (#6842), qore_caller_owns_object() and qore_check_caller_owns_object() with
-    their feature macro QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK (#7102), and qore_transfer_object_to_caller() with its
+    QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL (#6842), qore_caller_owns_object(), qore_check_caller_owns_object() and
+    qore_check_caller_deletes_object() with their feature macro QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK (#7102, #6842), and qore_transfer_object_to_caller() with its
     feature macro QORE_HAVE_SANDBOX_OBJECT_TRANSFER (#6842);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() have forms that copy the types to a type_vec_t that the caller gives and return a

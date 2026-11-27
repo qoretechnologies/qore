@@ -256,10 +256,19 @@ int qore_check_object_delete(const QoreObject& obj, const char* action, Exceptio
             obj.getClassName());
         return -1;
     }
+    // the order of the checks of a deletion (see qore_check_object_delete()): the shared-object rule (qore#6843) first,
+    // as the more specific refusal, then the owner rule (qore#6842)
+    if (qore_object_private::get(obj)->checkSharedChange(nullptr, xsink, true)) {
+        return -1;
+    }
     return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink, true) : 0;
 }
 
 void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink) {
+    // the same order as qore_check_object_delete(): the shared-object rule, then the owner rule
+    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+        return;
+    }
     if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, "delete", xsink, false)) {
         return;
     }
@@ -1222,6 +1231,16 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
         return 0;
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
+        "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
+    return -1;
+}
+
+int qore_object_private::checkSharedOwnerChange(const char* what, ExceptionSink* xsink) const {
+    // decides as checkSharedMethodChange(); only the phrasing of \a what differs ("change the logger of")
+    if (!isShared() || !qore_caller_is_restricted()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s an "
         "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
     return -1;
 }
@@ -2628,6 +2647,12 @@ int qore_object_private::checkSandboxedMemberWrite(const char* mem, const qore_c
     assert(class_ctx);
     if (!sandboxedWriterDeniedIntern(*class_ctx)) {
         return 0;
+    }
+    // a shared object: the shared-object rule (qore#6843) answers first, as for a deletion, then the owner rule
+    // (qore#6842); the write is refused either way.  The paths that decide the owner rule before they take the
+    // object's lock (SW_DENIED: merges and the removal of a slice) check the shared-object rule before it
+    if (checkSharedChange(mem, xsink)) {
+        return -1;
     }
     raiseSandboxedMemberWriteError(mem, class_ctx, xsink);
     return -1;
