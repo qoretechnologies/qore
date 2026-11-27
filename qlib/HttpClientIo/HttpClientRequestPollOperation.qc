@@ -609,7 +609,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     checkDeadline();
                     self_signaled = False;
                     string origin = rf.getOrigin();
-                    *EventNotifier notifier = mgr.acquireConnectionAsync(origin, \tracked);
+                    *EventNotifier notifier = HttpClientIoSocketAccess::acquireConnectionAsync(mgr, origin, \tracked);
                     if (!notifier && tracked && HttpClientRequestPollOperation::failed(tracked)
                         && !mgr.isUnresolvedRaceLeg(tracked)) {
                         # the connection closed synchronously; the next step counts the failure
