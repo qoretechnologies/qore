@@ -2498,18 +2498,29 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Returns the context of the tool call, resource read or prompt request that is current in this thread, if any
     /** Restricted code (see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"; it fails
         closed) gets the request context (\c cx) without the credentials of the request, as the code of a restricted
-        %Program that the handler calls gets it (see @ref mcpserverhandler_credentials); the other keys of the call
-        context, such as the session (\c sid) and the handler, are given as they are
+        %Program that the handler calls gets it (see @ref mcpserverhandler_credentials), and the call context without
+        the handler (\c handler): the handler is the server's object, whose public methods and members (such as its
+        authenticator) restricted code must not reach.  Its \c requestState and \c inputResponses are given only
+        when they hold no object or code.  The session (\c sid), the name and the arguments of the call are given as
+        they are.  Restricted code therefore cannot call
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()" through the call context; the static
+        methods that act on the current call, such as isCallCancelled(), work for it as for trusted code.
 
         @return the context of the current call, or @ref nothing if no call is current in this thread
     */
     static *hash<McpToolCallContext> getToolCallContext() {
         *hash<McpToolCallContext> ctx = McpCallContextHelper::get();
-        # restricted code gets the request without its credentials (qore#7303)
+        # restricted code gets the request without its credentials and not the handler (qore#7303)
         if (ctx && McpServerHandler::callerIsRestricted()) {
             ctx.cx = ctx.handler
                 ? ctx.handler.getRestrictedCallContext(ctx.cx)
                 : AbstractStreamRequest::filterRequest(ctx.cx, ctx.cx.hdr ?? {}).cx;
+            remove ctx.handler;
+            foreach string key in ("requestState", "inputResponses") {
+                if (AbstractHttpRequestHandler::holdsObjectOrCode(ctx{key})) {
+                    remove ctx{key};
+                }
+            }
         }
         return ctx;
     }

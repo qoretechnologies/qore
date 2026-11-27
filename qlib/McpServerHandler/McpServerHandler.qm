@@ -270,7 +270,8 @@ hash<auto> sub myTool(*hash<auto> args) {
     \c Authorization, \c Proxy-Authorization, \c Cookie and \c Set-Cookie fields, the raw \c Authorization value
     (\c auth), the objects of the server (such as its logger and listener), the handler's state (\c socket,
     \c uctx) or the \c Mcp-Session-Id field: the session is given by \c mcp_session and by the \c sid of the call
-    context.  The \c Authorization field is given only when the handler has no authenticator of the platform (or a
+    context.  Restricted code gets the call context without the handler, so it cannot call the handler's methods,
+    such as @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()", through it.  The \c Authorization field is given only when the handler has no authenticator of the platform (or a
     @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator") and trusted code opts in to it with
     @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()".
 
@@ -279,8 +280,8 @@ hash<auto> sub myTool(*hash<auto> args) {
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
     - the resource readers, prompt handlers and methods of a restricted %Program that the handler calls, and restricted
       code that calls @ref McpServerHandler::McpServerHandler::getToolCallContext() "getToolCallContext()", get the
-      request without its credentials and without the \c Mcp-Session-Id field (see
-      @ref mcpserverhandler_credentials; issue #7303)
+      request without its credentials and without the \c Mcp-Session-Id field, and restricted code gets the call
+      context without the handler (see @ref mcpserverhandler_credentials; issue #7303)
     - the no-argument @ref McpServerHandler::McpServerHandler::constructor() "constructor" initializes the
       JSON-RPC handler and registers its MCP methods (issue #7596)
     - added @ref McpServerHandler::McpServerHandler::addCallCancelHandler() "McpServerHandler::addCallCancelHandler()"
