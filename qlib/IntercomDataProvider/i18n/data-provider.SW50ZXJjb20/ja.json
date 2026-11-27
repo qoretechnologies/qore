@@ -204,8 +204,8 @@
           "message": "multipart/form-dataを使用してファイルをアップロード"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは`FileDataType`構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
@@ -644,8 +644,8 @@
           "message": "ワークスペース内の連絡先を一覧表示"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
-          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "連絡先を新しい順に一覧表示します。\n\n連絡先のドロップダウンが呼び出せるアクションを提供するためにエクスポートされています。連絡先を絞り込みたい場合は**連絡先の検索**を使用してください。\n\nIntercomの仕様では、ページ分割されたエンベロープを返すにもかかわらずこの操作にページネーション引数が宣言されていません。スキーマのインポート時に`per_page`と`starting_after`が追加されます。@ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"を参照してください。"
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "連絡先を新しい順に一覧表示します。\n\n連絡先のドロップダウンが呼び出せるアクションを提供するためにエクスポートされています。連絡先を絞り込みたい場合は**連絡先の検索**を使用してください。\n\nIntercomの仕様では、ページ分割されたエンベロープを返すにもかかわらずこの操作にページネーション引数が宣言されていません。スキーマのインポート時に`per_page`と`starting_after`が追加されます。`IntercomSchema`を参照してください。"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
@@ -1900,8 +1900,8 @@
           "message": "ヘルプセンターの記事一覧を取得"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
-          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "ワークスペースのヘルプセンター記事一覧を取得します。\n\nIntercomの説明文ではこの操作にページネーション引数が宣言されていませんが、ページ分割されたエンベロープが返されます。`per_page` および `starting_after` はスキーマのインポート時に追加されます。@ref IntercomDataProvider::IntercomSchema \"IntercomSchema\" を参照してください。"
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "ワークスペースのヘルプセンター記事一覧を取得します。\n\nIntercomの説明文ではこの操作にページネーション引数が宣言されていませんが、ページ分割されたエンベロープが返されます。`per_page` および `starting_after` はスキーマのインポート時に追加されます。`IntercomSchema` を参照してください。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",

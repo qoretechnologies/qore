@@ -158,7 +158,9 @@ class UnionExactMatchTest inherits QUnit::Test {
             string compile_out = backquote(sprintf("%s %s -O%d --strip-source -o %s %s 2>&1", env, qcc_bin, opt,
                 exe, getWorker()));
             assertTrue(is_file(exe), label + ": " + compile_out);
-            checkWorkerOutput(label, backquote(sprintf("%s %s 2>&1", env, exe)));
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            checkWorkerOutput(label, ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+                "QORE_JIT_TIMING=1").out);
         }
     }
 

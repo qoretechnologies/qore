@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 # test-platform: macos - qcc compiles and links the sources ahead of time
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -7,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 %requires json
 
@@ -105,15 +107,13 @@ class QccLoadModulesTest inherits QUnit::Test {
         # with -l, it compiles, and the executable runs with the module
         r = qcc(sprintf("-l QccGoodModule -o %s %s", exe, uses_module));
         assertEq(0, r.status, r.err);
-        int rc;
-        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s 2>&1", mod_dir
-            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""), exe), \rc);
-        assertEq(0, rc, out);
-        assertEq("42\n", out);
+        checkExecutable(sprintf("QORE_MODULE_DIR=%s %s", mod_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR
+            : ""), exe), "42\n", "the executable with the module");
         # the executable needs the module when it starts
-        out = backquote(sprintf("QORE_MODULE_DIR=%s %s 2>&1", ENV.QORE_MODULE_DIR ?? "", exe), \rc);
-        assertNeq(0, rc, out);
-        assertRegex("QccGoodModule", out);
+        hash<ExecModeHarness::ModeRunResult> er = ExecModeHarness::run_command(sprintf("QORE_MODULE_DIR=%s %s",
+            ENV.QORE_MODULE_DIR ?? "", exe), NOTHING, "QORE_JIT_TIMING=1");
+        assertNeq(0, er.rc, er.out);
+        assertRegex("QccGoodModule", er.out);
     }
 
     badModuleExecutableTest() {
@@ -152,5 +152,14 @@ class QccLoadModulesTest inherits QUnit::Test {
     #! escapes \a str for a regular expression
     private static string quote(string str) {
         return regex_subst(str, "([.+*?^$(){}\\[\\]|\\\\])", "\\\\$1", RE_Global);
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

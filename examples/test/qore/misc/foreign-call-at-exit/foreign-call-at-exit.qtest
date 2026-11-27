@@ -10,6 +10,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 
 %exec-class ForeignCallAtExitTest
 
@@ -86,12 +87,13 @@ class ForeignCallAtExitTest inherits QUnit::Test {
             testSkip("the test module 'staticpgmcode' cannot be loaded; build it with: cmake --build <build "
                 "directory> --target staticpgmcode");
         }
-        TmpDir tmp("foreign-call-at-exit-");
-        string out = tmp.path + "/out.txt";
-        int rc = system(sprintf("%s %s%s > %s 2>&1", env, timeout_cmd, cmd, out));
+        # the run is in the default environment; its output is the output on stdout followed by the output on
+        # stderr, apart from the warnings of the module loader, which are not output of the run
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s%s", env, timeout_cmd,
+            cmd), NOTHING, "QORE_JIT_TIMING=1");
         return {
-            "rc": rc,
-            "out": ReadOnlyFile::readTextFile(out),
+            "rc": r.rc,
+            "out": r.out,
         };
     }
 

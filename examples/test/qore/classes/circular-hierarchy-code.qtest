@@ -172,10 +172,12 @@ class CircularHierarchyCodeTest inherits QUnit::Test {
         string limit = (!ENV.ASAN_OPTIONS && !ENV.TSAN_OPTIONS && !ENV.MSAN_OPTIONS)
             ? "ulimit -v 4000000 2>/dev/null; "
             : "";
-        int rc;
-        string out = backquote(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %d %s 2>&1", limit, libqore_dir,
-            libqore_dir, timeout_cmd, Timeout, cmd), \rc);
-        return {"rc": rc, "out": out};
+        # the run is in the default environment; its output is the output on stdout followed by the output on
+        # stderr, apart from the warnings of the module loader, which are not output of the run
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%sLD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s %d %s", limit, libqore_dir, libqore_dir, timeout_cmd, Timeout, cmd), NOTHING,
+            "QORE_JIT_TIMING=1");
+        return {"rc": r.rc, "out": r.out};
     }
 
     #! runs a parse of a program with an invalid hierarchy, which must end with the parse error

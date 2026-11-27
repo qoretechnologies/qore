@@ -204,8 +204,8 @@
           "message": "使用 multipart/form-data 上傳檔案"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 `FileDataType` 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
@@ -644,8 +644,8 @@
           "message": "列出工作區中的聯絡人"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
-          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "列出聯絡人，最新的排在最前。\n\n此端點已匯出，以便聯絡人下拉式選單有動作可呼叫；若只需要部分聯絡人，請使用 **Search Contacts**。\n\n儘管 Intercom 的描述宣告此操作無分頁參數，但它仍會回應分頁封套；`per_page` 與 `starting_after` 會在匯入結構結構定義時新增。請參閱 @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"。"
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "列出聯絡人，最新的排在最前。\n\n此端點已匯出，以便聯絡人下拉式選單有動作可呼叫；若只需要部分聯絡人，請使用 **Search Contacts**。\n\n儘管 Intercom 的描述宣告此操作無分頁參數，但它仍會回應分頁封套；`per_page` 與 `starting_after` 會在匯入結構結構定義時新增。請參閱 `IntercomSchema`。"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
@@ -1900,8 +1900,8 @@
           "message": "列出說明中心文章"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
-          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "列出工作區的說明中心文章。\n\n即使 Intercom 的描述會回應分頁信封，該操作仍未宣告分頁參數；`per_page` 與 `starting_after` 會在匯入結構描述時加入。請參閱 @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"。"
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "列出工作區的說明中心文章。\n\n即使 Intercom 的描述會回應分頁信封，該操作仍未宣告分頁參數；`per_page` 與 `starting_after` 會在匯入結構描述時加入。請參閱 `IntercomSchema`。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",

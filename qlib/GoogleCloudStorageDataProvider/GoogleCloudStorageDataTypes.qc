@@ -444,7 +444,7 @@ public class GoogleCloudStorageDeleteResultDataType inherits HashDataType {
             "deleted": {
                 "display_name": "Deleted",
                 "short_desc": "If the object was deleted",
-                "desc": "Always @ref True; the call throws an exception if the object could not be "
+                "desc": "Always `True`; the call throws an exception if the object could not be "
                     "deleted",
                 "type": AbstractDataProviderTypeMap."bool",
             },
