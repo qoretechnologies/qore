@@ -40,6 +40,16 @@ public hashdecl TabularCellRange {
     int last_col;
 }
 
+#! A range of rows, 1-based and inclusive
+/** @since %DataProvider 3.13
+*/
+public hashdecl TabularRowRange {
+    #! The first row
+    int first;
+    #! The last row
+    int last;
+}
+
 #! The raw cells of one sheet of a spreadsheet or of a text file such as a CSV file
 /** @since %DataProvider 3.9
 */
@@ -116,6 +126,21 @@ public hashdecl TabularProfileOptions {
 
     #! The number of leading rows searched for the header row
     int header_search_rows = 20;
+
+    #! The 1-based row holding the column names, or 0 if the sheets have none
+    /** When not set, the header row of each sheet is found from its content: the first of the leading
+        @c header_search_rows rows that holds labels and has data under it (when every leading row holds labels, the
+        first label row as wide as the widest row); when set, it is used for every sheet,
+        as the user who knows the file says it: the rows with content above it are title rows, the data starts on
+        the next row, and the columns are named from it; a row below the last row with content gives no data region
+        and no column (the rows with content above it are still title rows); with 0, every row from the first row
+        with content is data, and no @c no_header_row finding is reported.  A header row that is set is one row:
+        no row of group names above it is found (see @ref tabular_profiler_header_rows "Headers of Two Rows"), and
+        the columns are named from its own cells only, so names merged down into it from the row above give no name
+
+        @since %DataProvider 3.13
+    */
+    *int header_row;
 }
 
 #! A finding about a sheet: a structural feature or a problem that affects how the data is read
@@ -172,6 +197,9 @@ public hashdecl TabularColumnProfile {
     string letter;
 
     #! The header label, if the sheet has a header row and the cell is not empty
+    /** For a header of two rows, the column's cells of both rows joined from the top with one space; see
+        @ref tabular_profiler_header_rows "Headers of Two Rows"
+    */
     *string header;
 
     #! The inferred type: \c "string", \c "int", \c "number", \c "date", \c "bool", or \c "empty"
@@ -251,8 +279,24 @@ public hashdecl TabularSheetProfile {
     #! The number of rows in the sheet
     int row_count = 0;
 
-    #! The 1-based header row, if one was found
+    #! The 1-based header row: the one given in the @c header_row profile option, else the one found; the row of the
+    #! column names, after which the data starts
+    /** A header of two rows (see @ref header_rows) ends with this row
+    */
     *int header_row;
+
+    #! The 1-based rows of a header of two rows: a row of group names over the row of the column names
+    /** Set only when the header has two rows; @ref header_row is then its \c last row.  A header row given in the
+        @c header_row profile option is one row.  See @ref tabular_profiler_header_rows "Headers of Two Rows".
+
+        @since %DataProvider 3.13
+    */
+    *hash<TabularRowRange> header_rows;
+
+    #! The merged cell ranges that cover the rows of the header, 1-based
+    /** @since %DataProvider 3.13
+    */
+    list<hash<TabularCellRange>> header_merged = ();
 
     #! The 1-based rows above the header that hold titles or banners
     list<int> title_rows = ();
@@ -327,6 +371,8 @@ public hashdecl TabularWorkbookProfile {
     - \c leading_zero_identifiers: a column holds digit strings with leading zeros
     - \c merged_cells_in_data: merged cells overlap the data region
     - \c mixed_types: a column's values do not all match its inferred type
+    - \c multi_row_header: the header has two rows, a row of group names over the row of the column names (see
+      @ref tabular_profiler_header_rows "Headers of Two Rows"); the detail is the \c first and \c last row
     - \c no_header_row: no header row was found
     - \c partial_profile: the sheet has more rows than were read
     - \c title_rows: rows above the header hold titles or banners
@@ -335,6 +381,40 @@ public hashdecl TabularWorkbookProfile {
       (@ref isTotalsFormula()); a formula across its own row, such as a line total, does not make a totals row
     - \c wide_period_columns: several columns are periods such as weeks, months, or dates, a layout that is usually
       unpivoted into rows
+
+    @anchor tabular_profiler_header_rows
+    @par Headers of Two Rows
+    A sheet often names its columns over two rows: a group name, often merged over several columns, over the
+    column's own name, for example \c "Menge" over \c "bestätigt" and \c "offen".  The header is reported as two
+    rows (@ref TabularSheetProfile::header_rows "TabularSheetProfile::header_rows", with the finding
+    \c multi_row_header) when the row directly above the row of the column names holds only labels within the
+    columns of the header (text or a whole number such as a year; no note or key/value label, which ends with
+    \c ":" or holds \c ": "), and:
+    - a merged range in it spans two or more columns of the header, but not all of them, or
+    - one of its cells is merged down into the row of the column names, or
+    - its labels are sparse: fewer than the column names, each over a column name, and at least one over the next
+      column name too, whose cell in the row is empty
+    .
+    A merged range over every column of the header is a title (\c title_rows), as is a row with a merge over
+    several columns from the first column of the header whose merges and labels leave a column of the header
+    without a group (such as a title merged over the first columns, also beside another merged label; so also a
+    group over the first columns beside a column without a group name), a row of labels without a merge that
+    starts in the first column (such as a key/value line), a row of a label for each column (such as column
+    numbers) and a label over the last column only (such as a report date).  A merged range without a value is
+    formatting only.  When the header row is found, the cells of a row with content of its own that are merged
+    down from a row above count as cells of the row, so that a row of column names under names merged down from
+    the group row is the header.  A row above the group row is a title row, also when a name merged down from it
+    into the row of the column names is part of a column's header.
+
+    Each column's header (@ref TabularColumnProfile::header "TabularColumnProfile::header") is then the cells of
+    the two rows in its column joined from the top with one space: the value of a merged cell counts for every column
+    that it spans, and a value merged down appears once, so \c "Menge" merged over two columns over
+    \c "bestätigt" and \c "offen" gives \c "Menge bestätigt" and \c "Menge offen".  A group label that is not
+    merged applies only to its own column, so that a reader that does not see merged ranges reproduces these headers
+    only by carrying a group name right over the empty cells of its row.  The merged ranges that cover the header
+    are reported in @ref TabularSheetProfile::header_merged "TabularSheetProfile::header_merged", so that a reader
+    can choose how group names apply.  A header row given in the
+    @ref TabularProfileOptions::header_row "header_row" option is one row.
 
     @anchor tabular_profiler_encoding
     @par Character Encoding
@@ -554,9 +634,15 @@ public class TabularProfiler {
         @param opts profile options
 
         @return the profile
+
+        @throw TABULAR-PROFILE-ERROR the @c header_row option is negative
     */
     static hash<TabularWorkbookProfile> profile(hash<TabularWorkbookGrid> grid, *hash<TabularProfileOptions> opts) {
         hash<TabularProfileOptions> options = opts ?? <TabularProfileOptions>{};
+        if (options.header_row < 0) {
+            throw "TABULAR-PROFILE-ERROR", sprintf("header_row must be a 1-based row number or 0 for none; got %d",
+                options.header_row);
+        }
         hash<TabularWorkbookProfile> rv({
             "format": grid.format,
             "named_ranges": grid.named_ranges,
@@ -956,12 +1042,49 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             return rv;
         }
 
-        *int header = findHeaderRow(types, last_row, options.header_search_rows);
+        # the header row the caller gave (0: none), else the one found
+        *int header;
+        if (exists options.header_row) {
+            if (options.header_row > 0) {
+                header = options.header_row - 1;
+            }
+        } else {
+            header = findHeaderRow(types, last_row, options.header_search_rows, sheet.merged);
+        }
+        # the 0-based row of group names over the row of the column names, if the header has two rows; a header row
+        # that the caller gave is one row
+        *int group;
         int first_data;
         if (exists header) {
             rv.header_row = header + 1;
             first_data = header + 1;
-            for (int r = 0; r < header; ++r) {
+            # a header of two rows, for a header row that was found
+            if (!exists options.header_row) {
+                group = findGroupRow(rows, types, header, sheet.merged);
+            }
+            int first_header = group ?? header;
+            if (exists group) {
+                rv.header_rows = <TabularRowRange>{"first": group + 1, "last": header + 1};
+                rv.findings += <TabularProfileFinding>{
+                    "code": "multi_row_header",
+                    "row": group + 1,
+                    "detail": {"first": group + 1, "last": header + 1},
+                };
+            }
+            foreach hash<TabularCellRange> range in (sheet.merged) {
+                if (range.last_row >= first_header && range.first_row <= header) {
+                    rv.header_merged += <TabularCellRange>{
+                        "first_row": range.first_row + 1,
+                        "last_row": range.last_row + 1,
+                        "first_col": range.first_col + 1,
+                        "last_col": range.last_col + 1,
+                    };
+                }
+            }
+            # the rows with content above the header; a header row the caller gave below every row with content
+            # has every row with content above it
+            int title_end = min(first_header, last_row + 1);
+            for (int r = 0; r < title_end; ++r) {
                 if (nonEmptyCount(types[r])) {
                     rv.title_rows += r + 1;
                 }
@@ -972,8 +1095,15 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     "detail": rv.title_rows,
                 };
             }
+            # below every row with content: no data and no column
+            if (header > last_row) {
+                return rv;
+            }
         } else {
-            rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            # the caller said the sheet has none
+            if (!exists options.header_row) {
+                rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            }
             first_data = 0;
             while (!nonEmptyCount(types[first_data])) {
                 ++first_data;
@@ -982,14 +1112,14 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
 
         # the columns: every column with a header or data
         int last_col = -1;
-        for (int r = header ?? first_data; r <= last_row; ++r) {
+        for (int r = group ?? header ?? first_data; r <= last_row; ++r) {
             int width = lastNonEmptyIndex(types[r]);
             if (width > last_col) {
                 last_col = width;
             }
         }
         int first_col = last_col;
-        for (int r = header ?? first_data; r <= last_row; ++r) {
+        for (int r = group ?? header ?? first_data; r <= last_row; ++r) {
             *int first = firstNonEmptyIndex(types[r]);
             if (exists first && first < first_col) {
                 first_col = first;
@@ -1053,6 +1183,7 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         for (int c = first_col; c <= last_col; ++c) {
             *string label;
             if (exists header) {
+                # a period is a column name, also under a group name
                 auto cell = rows[header][c];
                 string cell_type = types[header][c] ?? "empty";
                 if (cell_type != "empty") {
@@ -1060,6 +1191,9 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     if (cell_type == "date" || regex(label, PeriodHeaderRegex, RE_Caseless)) {
                         ++period_headers;
                     }
+                }
+                if (exists group) {
+                    label = joinHeader(rows, types, group, header, c, sheet.merged);
                 }
             }
             hash<TabularColumnProfile> column = profileColumn(rows, types, data_rows, c, label, options, utf8);
@@ -1117,11 +1251,12 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         real header is therefore not taken as the header.  When every leading row is labels, as in a sheet of text
         columns, the first label row as wide as the widest row is the header.
     */
-    private static *int findHeaderRow(list<list<string>> types, int last_row, int search_rows) {
+    private static *int findHeaderRow(list<list<string>> types, int last_row, int search_rows,
+            list<hash<TabularCellRange>> merged) {
         int limit = search_rows < last_row ? search_rows : last_row;
         int widest = 0;
         for (int r = 0; r <= limit; ++r) {
-            int width = nonEmptyCount(types[r]);
+            int width = headerWidth(types, r, merged);
             if (width > widest) {
                 widest = width;
             }
@@ -1129,7 +1264,7 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         int min_width = widest < 2 ? widest : 2;
         *int fallback;
         for (int r = 0; r < limit; ++r) {
-            int width = nonEmptyCount(types[r]);
+            int width = headerWidth(types, r, merged);
             if (width < min_width || width * 2 < widest || !isLabelRow(types[r])) {
                 continue;
             }
@@ -1146,6 +1281,193 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             }
         }
         return fallback;
+    }
+
+    #! Returns the number of cells of a row with content: its non-empty cells and, if it has any, its cells that a
+    #! merged cell of a row above covers, as a name merged down from a row of group names (qore#7751)
+    private static int headerWidth(list<list<string>> types, int r, list<hash<TabularCellRange>> merged) {
+        int width = nonEmptyCount(types[r]);
+        # a row without cells of its own, such as a row that a banner covers, is no header row
+        if (!width) {
+            return 0;
+        }
+        foreach hash<TabularCellRange> range in (merged) {
+            if (range.first_row < r && range.last_row >= r
+                && (types[range.first_row][range.first_col] ?? "empty") != "empty") {
+                for (int c = range.first_col; c <= range.last_col; ++c) {
+                    if ((types[r][c] ?? "empty") == "empty") {
+                        ++width;
+                    }
+                }
+            }
+        }
+        return width;
+    }
+
+    #! Returns the 0-based row of group names directly above the 0-based header row, if the header has two rows
+    /** See @ref tabular_profiler_header_rows "Headers of Two Rows"
+
+        @param rows the cell values by 0-based row
+        @param types the cell types by 0-based row
+        @param header the 0-based row of the column names
+        @param merged the merged ranges of the sheet, 0-based
+    */
+    private static *int findGroupRow(list<list<auto>> rows, list<list<string>> types, int header,
+            list<hash<TabularCellRange>> merged) {
+        int g = header - 1;
+        if (g < 0 || !nonEmptyCount(types[g]) || !isGroupLabelRow(rows, types[g], g)) {
+            return;
+        }
+        # the columns of the header: its column names, and the cells merged down into it from a row above
+        *int first = firstNonEmptyIndex(types[header]);
+        int last = lastNonEmptyIndex(types[header]);
+        bool merged_down = False;
+        # merged ranges without a value, such as the empty corner of a crosstab, are formatting only
+        list<hash<TabularCellRange>> valued = select merged,
+            (types[$1.first_row][$1.first_col] ?? "empty") != "empty";
+        foreach hash<TabularCellRange> range in (valued) {
+            if (range.first_row < header && range.last_row >= header) {
+                if (range.first_row == g) {
+                    merged_down = True;
+                }
+                if (!exists first || range.first_col < first) {
+                    first = range.first_col;
+                }
+                if (range.last_col > last) {
+                    last = range.last_col;
+                }
+            }
+        }
+        if (!exists first) {
+            return;
+        }
+        # every label of the group row is over the header
+        *int first_label = firstNonEmptyIndex(types[g]);
+        if (first_label < first || lastNonEmptyIndex(types[g]) > last) {
+            return;
+        }
+        # the merges of the group row over several columns of its row only
+        list<hash<TabularCellRange>> row_merges = select valued,
+            $1.first_row == g && $1.last_row == g && $1.last_col > $1.first_col;
+        # a label in the first column of the header that is merged over several columns, such as a title merged over
+        # the first columns, is a title, unless the row's merges and labels cover every column of the header, as
+        # group names over all of the columns do
+        foreach hash<TabularCellRange> range in (row_merges) {
+            if (range.first_col <= first && range.last_col >= first) {
+                for (int c = first; c <= last; ++c) {
+                    if ((types[g][c] ?? "empty") != "empty") {
+                        continue;
+                    }
+                    bool covered = False;
+                    foreach hash<TabularCellRange> cover in (valued) {
+                        if (cover.first_row == g && cover.first_col <= c
+                            && cover.last_col >= c) {
+                            covered = True;
+                            break;
+                        }
+                    }
+                    if (!covered) {
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+        int labels = nonEmptyCount(types[g]);
+        bool group_merge = False;
+        foreach hash<TabularCellRange> range in (row_merges) {
+            # a merge over every column of the header is a title
+            if (range.first_col <= first && range.last_col >= last) {
+                return;
+            }
+            if (range.first_col >= first && range.last_col <= last) {
+                group_merge = True;
+            }
+        }
+        if (group_merge || merged_down) {
+            return g;
+        }
+        # sparse labels after a first column without a group, each over a column name, and at least one over two
+        # columns: the cell right of it is empty, over a column name; a row of a label for each column, such as
+        # column numbers, or a single label over the last column, such as a report date, is a title row
+        if (labels >= nonEmptyCount(types[header]) || first_label == first) {
+            return;
+        }
+        bool spans = False;
+        for (int c = 0; c < types[g].size(); ++c) {
+            if (types[g][c] == "empty") {
+                continue;
+            }
+            if ((types[header][c] ?? "empty") == "empty") {
+                return;
+            }
+            if ((types[g][c + 1] ?? "empty") == "empty" && (types[header][c + 1] ?? "empty") != "empty") {
+                spans = True;
+            }
+        }
+        return spans ? g : NOTHING;
+    }
+
+    #! Returns the header of a column of a header of two rows: its cells joined from the top with one space
+    /** The value of a merged cell counts for every column that it spans, and a value merged down appears once
+
+        @param rows the cell values by 0-based row
+        @param types the cell types by 0-based row
+        @param group the 0-based row of group names
+        @param header the 0-based row of the column names
+        @param c the 0-based column
+        @param merged the merged ranges of the sheet, 0-based
+
+        @return the joined header, or nothing if the column's header cells are empty
+    */
+    private static *string joinHeader(list<list<auto>> rows, list<list<string>> types, int group, int header, int c,
+            list<hash<TabularCellRange>> merged) {
+        list<string> parts = ();
+        for (int r = group; r <= header; ++r) {
+            int vr = r;
+            int vc = c;
+            bool skip = False;
+            foreach hash<TabularCellRange> range in (merged) {
+                if (r >= range.first_row && r <= range.last_row && c >= range.first_col && c <= range.last_col) {
+                    # a value merged down from a row above appears once: in the first row of the header, and only if
+                    # it is merged down into the row of the column names, unlike a banner that ends in the group row
+                    if (range.first_row < r && (r > group || range.last_row < header)) {
+                        skip = True;
+                    } else {
+                        vr = range.first_row;
+                        vc = range.first_col;
+                    }
+                    break;
+                }
+            }
+            if (skip || (types[vr][vc] ?? "empty") == "empty") {
+                continue;
+            }
+            parts += trim(cellText(rows[vr][vc]));
+        }
+        return parts ? join(" ", parts) : NOTHING;
+    }
+
+    #! Returns True if every non-empty cell of a row can be a group name: text or a whole number such as a year, and
+    #! no text that is a note or a key/value label (it ends with \c ":" or holds \c ": ")
+    private static bool isGroupLabelRow(list<list<auto>> rows, list<string> row_types, int r) {
+        for (int c = 0; c < row_types.size(); ++c) {
+            switch (row_types[c]) {
+                case "empty":
+                case "int":
+                    break;
+                case "string": {
+                    string text = trim(cellText(rows[r][c]));
+                    if (text =~ /:$/ || text =~ /: /) {
+                        return False;
+                    }
+                    break;
+                }
+                default:
+                    return False;
+            }
+        }
+        return True;
     }
 
     #! Returns True if every non-empty cell in the row is a label

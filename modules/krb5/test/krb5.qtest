@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires Util
+%requires FsUtil
 %requires QUnit
 %requires krb5
 %requires Krb5Util
@@ -43,6 +44,10 @@ public class Krb5ModuleTest inherits QUnit::Test {
             behind, never use each other's files; the files are in /tmp, as the sandbox cases allow /tmp
         */
         string unique_name = sprintf("module-krb5-%d-%s", getpid(), get_random_string(8));
+
+        #! the temporary directory of the test (TMPDIR), where the replay caches of the sandboxed GSSAPI acceptors are
+        #! (qore#7756)
+        TmpDir tmp_dir("module-krb5-test-");
     }
 
     constructor() : Test("Krb5ModuleTest", "1.0") {
@@ -120,6 +125,29 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("empty credential cache reports no principal", \testEmptyCredentialCache());
         addTestCase("empty cache name rejected", \testEmptyCacheNameRejected());
         addTestCase("file cache sandbox deny", \testFileCacheSandboxDeny());
+        addTestCase("memory caches are kept per isolation domain", \testMemoryCacheIsolation());
+        addTestCase("the default cache of sandboxed code is its own", \testSandboxDefaultCache());
+        addTestCase("caches that cannot be kept apart are refused to sandboxed code",
+            \testSandboxSharedCacheTypesRefused());
+        addTestCase("keyring caches are kept per isolation domain", \testKeyringCacheIsolation());
+        addTestCase("sandboxed code does not use the default GSS credentials", \testSandboxGssDefaultCredentials());
+        addTestCase("memory keytabs are kept per isolation domain", \testMemoryKeytabIsolation());
+        addTestCase("sandboxed code does not accept with the default keytab", \testSandboxGssAcceptorDefaultKeytab());
+        addTestCase("a sandboxed acceptor uses the replay cache of its domain", \testSandboxGssAcceptorReplayCache());
+        addTestCase("the replay cache directory of sandboxed acceptors is the user's own",
+            \testSandboxGssAcceptorReplayCacheDir());
+        addTestCase("a sandbox that may change the path of its replay cache does not accept",
+            \testSandboxGssAcceptorReplayCachePolicy());
+        addTestCase("a sandboxed acceptor does not use the acceptor credential of another domain",
+            \testSandboxGssAcceptorOtherDomainCredential());
+        addTestCase("a sandboxed acceptor keeps the keys of its keytab file when the file is replaced",
+            \testSandboxGssAcceptorKeytabFileReplaced());
+        addTestCase("a sandboxed acceptor keeps the keys of its keytab file when another tenant replaces the file",
+            \testSandboxGssAcceptorKeytabFileReplacedByOther());
+        addTestCase("the keytab files of sandboxed code are used as the files that the module opened",
+            \testSandboxKeytabFilePinned());
+        addTestCase("a sandboxed initiator does not use the client keytab of the process",
+            \testSandboxGssClientKeytab());
         addTestCase("file cache sandbox allow", \testFileCacheSandboxAllow());
         addTestCase("memory keytab roundtrip", \testMemoryKeytabRoundtrip());
         addTestCase("memory keytab highest kvno", \testMemoryKeytabHighestKvno());
@@ -287,6 +315,7 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("keytab remove then has content", \testKeytabRemoveThenHasContent());
         addTestCase("strings with NUL characters are refused", \testNulCharacters());
 
+        setenv("TMPDIR", tmp_dir.path);
         set_return_value(main());
     }
 
@@ -1064,6 +1093,748 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         assertThrows("KRB5-CACHE-ERROR", sub() {
             ctx.createMemoryCredentialCache(p, "");
         });
+    }
+
+    #! a Program governed by a sandbox with the given isolation domain (or none), whose code uses credential caches;
+    #! with \a fs_root, its filesystem policy allows only that directory; \a fs_allow gives allowed paths and their
+    #! access modes
+    private Program cacheTenant(*string domain, bool network = False, *string fs_root, *hash<string, int> fs_allow) {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            *string sub principal_of(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openCredentialCache(name);
+                return cc.hasPrimaryPrincipal() ? cc.getPrimaryPrincipal().toString() : NOTHING;
+            }
+            string sub init_cache(string name, string principal) {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openCredentialCache(name);
+                cc.initialize(new Qore::Krb5::Krb5Principal(principal));
+                return cc.getFullName();
+            }
+            hash<auto> sub default_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openDefaultCredentialCache();
+                return {\"name\": ctx.getDefaultCredentialCacheName(), \"full_name\": cc.getFullName(),
+                    \"type\": cc.getType()};
+            }
+            *string sub cache_principal(Qore::Krb5::Krb5CredentialCache cc) {
+                return cc.getPrimaryPrincipal().toString();
+            }
+            list<auto> sub list_names() {
+                Qore::Krb5::Krb5Context ctx();
+                return map $1.full_name, ctx.listCredentialCaches();
+            }
+            Qore::Krb5::Krb5CredentialCache sub open_cache(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                return ctx.openCredentialCache(name);
+            }
+            bool sub keytab_has_content(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                return ctx.openKeytab(name).hasContent();
+            }
+            Qore::Krb5::Krb5Keytab sub keytab_add(string name, string principal, string key) {
+                Qore::Krb5::Krb5Context ctx();
+                auto kt = ctx.openKeytab(name);
+                kt.addEntry(new Qore::Krb5::Krb5Principal(principal), key,
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+                return kt;
+            }
+            hash<auto> sub default_keytab() {
+                Qore::Krb5::Krb5Context ctx();
+                return {\"name\": ctx.getDefaultKeytabName(), \"kt_name\": ctx.openDefaultKeytab().getName()};
+            }
+            bool sub keytab_obj_has_content(Qore::Krb5::Krb5Keytab kt) {
+                return kt.hasContent();
+            }
+            *string sub gss_cred_from_keytab(Qore::Krb5::Krb5Keytab kt) {
+                Qore::Krb5::GssCredential c = Qore::Krb5::GssCredential::fromKeytab(kt);
+                return exists c ? \"ok\" : NOTHING;
+            }
+            hash<auto> sub gss_cred_from_keytab_result(Qore::Krb5::Krb5Keytab kt) {
+                try {
+                    Qore::Krb5::GssCredential::fromKeytab(kt);
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+            Qore::Krb5::GssCredential sub gss_cred_obj_from_keytab(Qore::Krb5::Krb5Keytab kt) {
+                return Qore::Krb5::GssCredential::fromKeytab(kt);
+            }
+            hash<auto> sub gss_accept_with(Qore::Krb5::GssCredential cred) {
+                try {
+                    Qore::Krb5::GssAcceptorContext c(cred);
+                    c.step(\"00\");
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+            hash<auto> sub gss_accept_token(Qore::Krb5::GssCredential cred, string token) {
+                try {
+                    Qore::Krb5::GssAcceptorContext c(cred);
+                    c.step(token);
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+            Qore::Krb5::GssCredential sub gss_cred_obj_from_keytab_name(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                return Qore::Krb5::GssCredential::fromKeytab(ctx.openKeytab(name));
+            }
+            nothing sub replace_with_link(string path, string target) {
+                unlink(path);
+                symlink(target, path);
+            }
+            hash<auto> sub keytab_op(string name, string op) {
+                try {
+                    Qore::Krb5::Krb5Context ctx();
+                    auto kt = ctx.openKeytab(name);
+                    Qore::Krb5::Krb5Principal p(\"HTTP/a.example.com@EXAMPLE.COM\");
+                    switch (op) {
+                        case \"has\": return {\"rv\": kt.hasContent()};
+                        case \"list\": return {\"rv\": map $1.principal + \"/\" + $1.kvno, kt.listEntries()};
+                        case \"get\": return {\"rv\": kt.getEntry(p).kvno};
+                        case \"add\":
+                            kt.addEntry(p, \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 7);
+                            return {};
+                        case \"remove\":
+                            kt.removeEntry(p, 7);
+                            return {};
+                        case \"cred\":
+                            Qore::Krb5::GssCredential::fromKeytab(kt);
+                            return {};
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+            hash<auto> sub gss_cred_from_cache(string name) {
+                try {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::GssCredential c = Qore::Krb5::GssCredential::fromCredentialCache(
+                        ctx.openCredentialCache(name));
+                    return {\"ok\": exists c};
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+            }
+            hash<auto> sub gss_accept_default() {
+                try {
+                    Qore::Krb5::GssAcceptorContext c();
+                    c.step(\"00\");
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+            hash<auto> sub gss_default() {
+                try {
+                    Qore::Krb5::GssClientContext c(\"HTTP@host.example.com\");
+                    c.step();
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+        ", "krb5_cache_tenant");
+        SandboxManager sm();
+        if (domain) {
+            sm.setIsolationDomain(domain);
+        }
+        if (network) {
+            # an unrestricted network policy: the module's KDC operations are allowed
+            sm.setNetworkDefaultPolicy(True);
+        }
+        if (fs_root) {
+            sm.setFilesystemSandboxRoot(fs_root);
+        }
+        if (fs_allow) {
+            map sm.addFilesystemAllowedPath($1.key, $1.value), fs_allow.pairIterator();
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! a DER element in hex
+    private static string derTlv(int tag, string content) {
+        int len = content.size() / 2;
+        string l = len < 128 ? sprintf("%02x", len) : (len < 256 ? sprintf("81%02x", len) : sprintf("82%04x", len));
+        return sprintf("%02x", tag) + l + content;
+    }
+
+    #! a DER INTEGER in hex (0 - 127)
+    private static string derInt(int i) {
+        return derTlv(2, sprintf("%02x", i));
+    }
+
+    #! a Kerberos EncryptedData in hex
+    private static string derEncryptedData(int etype, int kvno, string cipher) {
+        return derTlv(0x30, derTlv(0xa0, derInt(etype)) + derTlv(0xa1, derInt(kvno))
+            + derTlv(0xa2, derTlv(4, cipher)));
+    }
+
+    #! a GSSAPI Kerberos token in hex with an AP-REQ for the service \a host with an aes256-cts ticket of key version
+    #! 1 that no key decrypts
+    /** the acceptor looks the ticket's server up in its keytab and tells whether it is there: "not found in keytab"
+        or "found in keytab but cannot decrypt ticket", which shows the keys that it used without a KDC
+    */
+    private static string forgedApReq(string host) {
+        string name = derTlv(0x30, derTlv(0xa0, derInt(1)) + derTlv(0xa1, derTlv(0x30,
+            derTlv(0x1b, make_hex_string(binary("HTTP"))) + derTlv(0x1b, make_hex_string(binary(host))))));
+        string cipher = make_hex_string(get_random_bytes(64));
+        string ticket = derTlv(0x61, derTlv(0x30, derTlv(0xa0, derInt(5))
+            + derTlv(0xa1, derTlv(0x1b, make_hex_string(binary("EXAMPLE.COM")))) + derTlv(0xa2, name)
+            + derTlv(0xa3, derEncryptedData(18, 1, cipher))));
+        string ap_req = derTlv(0x6e, derTlv(0x30, derTlv(0xa0, derInt(5)) + derTlv(0xa1, derInt(14))
+            + derTlv(0xa2, "03050000000000") + derTlv(0xa3, ticket) + derTlv(0xa4, derEncryptedData(18, 0, cipher))));
+        # the Kerberos mechanism OID and the AP-REQ token ID
+        return derTlv(0x60, "06092a864886f712010202" + "0100" + ap_req);
+    }
+
+    #! asserts the keytab that an acceptor used for a forged AP-REQ (forgedApReq()): \a found tells if the service
+    #! was in it
+    private assertAcceptorKeytab(hash<auto> r, string host, bool found, string msg) {
+        assertEq("KRB5-GSS-ERROR", r.err, msg + ": " + r.desc);
+        if (found) {
+            assertRegex("HTTP/" + host + "@EXAMPLE.COM .*found in keytab but cannot decrypt", r.desc, msg);
+        } else {
+            assertRegex("HTTP/" + host + "@EXAMPLE.COM not found in keytab", r.desc, msg);
+        }
+    }
+
+    #! the names in a directory
+    private static list<string> listDir(string path) {
+        Dir d();
+        d.chdir(path);
+        return d.list() ?? ();
+    }
+
+    #! the replay cache directory of the GSSAPI acceptors of sandboxed code (qore#7756): in the temporary directory
+    #! (TMPDIR, which the test sets; Util::tmp_location() uses ENV, which setenv() does not change)
+    private string replayCacheDir() {
+        return realpath(getenv("TMPDIR")) + "/qore-krb5-rcache-" + geteuid();
+    }
+
+    #! the replay cache file of the GSSAPI acceptors of an isolation domain (qore#7756)
+    private string domainReplayCachePath(string domain) {
+        return replayCacheDir() + "/qore-sandbox-d" + make_hex_string(binary(domain)) + "-krb5-rcache";
+    }
+
+    #! a memory cache of the host is not visible to sandboxed code, which has a cache of its own of the same name
+    #! (qore#7671)
+    private testMemoryCacheIsolation() {
+        string name = "MEMORY:module-krb5-isolation-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        auto host = ctx.openCredentialCache(name);
+        host.initialize(new Qore::Krb5::Krb5Principal("host/trusted.example.com@EXAMPLE.COM"));
+
+        Program a = cacheTenant("tenant-a");
+        Program b = cacheTenant("tenant-b");
+        Program b2 = cacheTenant("tenant-b");
+        Program none = cacheTenant();
+
+        # the tenants do not see the host's cache
+        assertNothing(a.callFunction("principal_of", name), "the host's cache is not visible to a tenant");
+        assertNothing(none.callFunction("principal_of", name), "nor to a sandbox without a domain");
+
+        # each tenant has a cache of its own of that name, under the name that it gave
+        assertEq(name, a.callFunction("init_cache", name, "a/tenant.example.com@EXAMPLE.COM"));
+        assertEq("a/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertNothing(b.callFunction("principal_of", name), "tenant b does not see tenant a's cache");
+        b.callFunction("init_cache", name, "b/tenant.example.com@EXAMPLE.COM");
+        assertEq("b/tenant.example.com@EXAMPLE.COM", b2.callFunction("principal_of", name),
+            "the Programs of one isolation domain share its caches");
+        assertEq("a/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertNothing(none.callFunction("principal_of", name), "a sandbox without a domain has caches of its own");
+
+        # two sandboxes without a domain do not share caches either
+        Program none2 = cacheTenant();
+        none.callFunction("init_cache", name, "n/tenant.example.com@EXAMPLE.COM");
+        assertNothing(none2.callFunction("principal_of", name), "each sandbox without a domain has caches of its own");
+
+        # the host's cache is unchanged
+        assertEq("host/trusted.example.com@EXAMPLE.COM", ctx.openCredentialCache(name).getPrimaryPrincipal().toString());
+
+        # a cache object of tenant a that is given to tenant b cannot be used by it
+        auto a_cache = a.callFunction("open_cache", name);
+        # tenant b's code that calls tenant a's object belongs to both domains, which have no caches in common
+        assertThrows("KRB5-SANDBOX-ERROR", "more than one isolation domain", \b.callFunction(),
+            ("cache_principal", a_cache));
+        # a call of a method of tenant a's cache object runs under tenant a's sandbox, also from the host: it gives the
+        # name that tenant a gave
+        assertEq(name, a_cache.getFullName());
+
+
+        # a cache object of the host that is given to sandboxed code cannot be used by it
+        assertThrows("KRB5-SANDBOX-ERROR", "belongs to other code", \a.callFunction(), ("cache_principal", host));
+
+        # (MIT Kerberos does not list memory caches in a cache collection, so the listing is not checked here)
+    }
+
+    #! the default cache of sandboxed code is a memory cache of its isolation domain, not the default of the process
+    private testSandboxDefaultCache() {
+        Program a = cacheTenant("tenant-default");
+        hash<auto> d = a.callFunction("default_cache");
+        assertEq("MEMORY:default", d.name);
+        assertEq("MEMORY:default", d.full_name);
+        assertEq("MEMORY", d.type);
+        a.callFunction("init_cache", "MEMORY:default", "d/tenant.example.com@EXAMPLE.COM");
+        assertEq("d/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", "MEMORY:default"));
+        # the process's own MEMORY:default cache is not the tenant's
+        Qore::Krb5::Krb5Context ctx();
+        assertFalse(ctx.openCredentialCache("MEMORY:default").hasPrimaryPrincipal());
+    }
+
+    #! the caches that the OS shares by user cannot be kept apart, and are refused to sandboxed code
+    private testSandboxSharedCacheTypesRefused() {
+        Program a = cacheTenant("tenant-refused");
+        foreach string name in (("KCM:", "API:", "KEYRING:persistent:0", "MSLSA:", "KEYRING:user:x", "KEYRING:session:x",
+                "KEYRING:legacy-name")) {
+            assertThrows("KRB5-SANDBOX-ERROR", \a.callFunction(), ("principal_of", name), name);
+        }
+    }
+
+    #! keyring caches are kept per isolation domain where the kernel has keyrings
+    private testKeyringCacheIsolation() {
+        string name = "KEYRING:process:module-krb5-isolation-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        try {
+            ctx.openCredentialCache(name).initialize(new Qore::Krb5::Krb5Principal("host/trusted.example.com@EXAMPLE.COM"));
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("keyring credential caches are not available: " + ex.desc);
+        }
+        Program a = cacheTenant("tenant-keyring");
+        assertNothing(a.callFunction("principal_of", name), "the host's keyring cache is not visible to a tenant");
+        # the full name of the tenant's cache is the one that MIT Kerberos gives for the name (kind:coll:coll), as
+        # for the host's
+        assertEq(ctx.openCredentialCache(name).getFullName(),
+            a.callFunction("init_cache", name, "k/tenant.example.com@EXAMPLE.COM"));
+        assertEq("k/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertEq("host/trusted.example.com@EXAMPLE.COM", ctx.openCredentialCache(name).getPrimaryPrincipal().toString());
+        # another tenant does not see it
+        Program b = cacheTenant("tenant-keyring-b");
+        assertNothing(b.callFunction("principal_of", name));
+        # a cache name in a collection, and the thread keyring: the full name given back opens the same cache
+        foreach string n in ((name + ":sub", "KEYRING:thread:module-krb5-isolation-" + getpid())) {
+            string full = a.callFunction("init_cache", n, "s/tenant.example.com@EXAMPLE.COM");
+            assertEq("s/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", full), n);
+            assertNothing(b.callFunction("principal_of", n), n);
+        }
+    }
+
+    #! a GSS initiator of sandboxed code without a credential would use the default cache of the process
+    private testSandboxGssDefaultCredentials() {
+        # with an unrestricted network policy, so that the network check of the module does not refuse it first
+        Program a = cacheTenant("tenant-gss", True);
+        hash<auto> r = a.callFunction("gss_default");
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("default credentials", r.desc);
+    }
+
+    #! a memory keytab of the host is not visible to sandboxed code, which has a keytab of its own of the same name
+    #! (qore#7736)
+    private testMemoryKeytabIsolation() {
+        string name = "MEMORY:module-krb5-kt-isolation-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        auto host = ctx.openKeytab(name);
+        host.addEntry(new Qore::Krb5::Krb5Principal("HTTP/trusted.example.com@EXAMPLE.COM"), getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 3);
+        Program a = cacheTenant("kt-tenant-a");
+        Program b = cacheTenant("kt-tenant-b");
+        assertFalse(a.callFunction("keytab_has_content", name), "the host's keytab is not visible to a tenant");
+        # a memory keytab lives while a handle of it is open: the test holds tenant a's
+        auto a_kt = a.callFunction("keytab_add", name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        assertEq(name, a_kt.getName(), "the name that tenant a gave");
+        assertTrue(a.callFunction("keytab_has_content", name));
+        assertFalse(b.callFunction("keytab_has_content", name), "tenant b does not see tenant a's keytab");
+        # the host's keytab is unchanged: one entry
+        assertEq(1, ctx.openKeytab(name).listEntries().size());
+        assertEq("HTTP/trusted.example.com@EXAMPLE.COM", ctx.openKeytab(name).listEntries()[0].principal);
+        # a keytab object of the host that is given to sandboxed code cannot be used by it
+        assertThrows("KRB5-SANDBOX-ERROR", "belongs to other code", \a.callFunction(), ("keytab_obj_has_content", host));
+        # a GSS acceptor credential: from tenant a's own keytab, not from the host's
+        assertEq("ok", a.callFunction("gss_cred_from_keytab", a_kt));
+        assertThrows("KRB5-SANDBOX-ERROR", "belongs to other code", \a.callFunction(), ("gss_cred_from_keytab", host));
+        # the default keytab of sandboxed code is its own, also with KRB5_KTNAME set
+        *string ktname = getenv("KRB5_KTNAME");
+        on_exit if (exists ktname) { setenv("KRB5_KTNAME", ktname); } else { unsetenv("KRB5_KTNAME"); }
+        setenv("KRB5_KTNAME", name);
+        hash<auto> d = a.callFunction("default_keytab");
+        assertEq("MEMORY:default", d.name);
+        assertEq("MEMORY:default", d.kt_name);
+        assertFalse(a.callFunction("keytab_has_content", "MEMORY:default"), "not the host's keytab of KRB5_KTNAME");
+    }
+
+    #! the library reads a file keytab by name at every context that an acceptor credential accepts: a credential
+    #! that sandboxed code acquired from a file keytab keeps the keys of the file that the module checked, also when
+    #! the file is replaced by a link to another keytab, by the sandboxed code itself or by another tenant
+    #! (qore#7767)
+    private testSandboxGssAcceptorKeytabFileReplaced() {
+        # the replay caches in a temporary directory that the policies do not allow
+        TmpDir tmp("module-krb5-kt-pin-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        TmpDir kt_dir("module-krb5-kt-pin-dir-");
+        TmpDir other_dir("module-krb5-kt-pin-other-");
+        string dir = realpath(kt_dir.path);
+        string other = realpath(other_dir.path);
+        string kt_a = dir + "/a.keytab";
+        string kt_b = other + "/b.keytab";
+        Qore::Krb5::Krb5Context ctx();
+        ctx.openKeytab("FILE:" + kt_a).addEntry(new Qore::Krb5::Krb5Principal("HTTP/a.example.com@EXAMPLE.COM"),
+            getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        ctx.openKeytab("FILE:" + kt_b).addEntry(new Qore::Krb5::Krb5Principal("HTTP/b.example.com@EXAMPLE.COM"),
+            getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+        # the sandboxed code itself may change the entries of the keytab's directory and read the other keytab
+        Program a = cacheTenant("kt-pin-a-" + getpid(), False, NOTHING,
+            {dir: QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE, other: QSEC_READ});
+        Qore::Krb5::GssCredential cred = a.callFunction("gss_cred_obj_from_keytab_name", "FILE:" + kt_a);
+        assertAcceptorKeytab(a.callFunction("gss_accept_token", cred, forgedApReq("a.example.com")), "a.example.com",
+            True, "before");
+        assertAcceptorKeytab(a.callFunction("gss_accept_token", cred, forgedApReq("b.example.com")), "b.example.com",
+            False, "before");
+        a.callFunction("replace_with_link", kt_a, kt_b);
+        assertTrue(is_link(kt_a));
+        assertAcceptorKeytab(a.callFunction("gss_accept_token", cred, forgedApReq("a.example.com")), "a.example.com",
+            True, "the keys of the file checked");
+        assertAcceptorKeytab(a.callFunction("gss_accept_token", cred, forgedApReq("b.example.com")), "b.example.com",
+            False, "not the keys of the keytab of the link");
+        # a credential acquired now is that of the file that the link names, which the policy allows to read
+        Qore::Krb5::GssCredential cred2 = a.callFunction("gss_cred_obj_from_keytab_name", "FILE:" + kt_a);
+        assertAcceptorKeytab(a.callFunction("gss_accept_token", cred2, forgedApReq("b.example.com")), "b.example.com",
+            True, "a new credential");
+
+    }
+
+    #! another tenant that may change the entries of the directory of a tenant's keytab file, which that tenant may
+    #! only read, replaces the file with a link to a keytab of its own: the tenant's acceptor credential keeps the
+    #! keys of its file (qore#7767)
+    private testSandboxGssAcceptorKeytabFileReplacedByOther() {
+        TmpDir tmp("module-krb5-kt-pin-x-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        TmpDir kt_dir("module-krb5-kt-pin-x-dir-");
+        TmpDir other_dir("module-krb5-kt-pin-x-other-");
+        string dir = realpath(kt_dir.path);
+        string other = realpath(other_dir.path);
+        string kt_a = dir + "/a.keytab";
+        string kt_b = other + "/b.keytab";
+        Qore::Krb5::Krb5Context ctx();
+        ctx.openKeytab("FILE:" + kt_b).addEntry(new Qore::Krb5::Krb5Principal("HTTP/b.example.com@EXAMPLE.COM"),
+            getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        ctx.openKeytab("FILE:" + kt_a).addEntry(new Qore::Krb5::Krb5Principal("HTTP/a.example.com@EXAMPLE.COM"),
+            getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        Program victim = cacheTenant("kt-pin-victim-" + getpid(), False, NOTHING, {dir: QSEC_READ});
+        Program attacker = cacheTenant("kt-pin-attacker-" + getpid(), False, NOTHING,
+            {dir: QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE, other: QSEC_READ});
+        Qore::Krb5::GssCredential victim_cred = victim.callFunction("gss_cred_obj_from_keytab_name", "FILE:" + kt_a);
+        attacker.callFunction("replace_with_link", kt_a, kt_b);
+        assertAcceptorKeytab(victim.callFunction("gss_accept_token", victim_cred, forgedApReq("b.example.com")),
+            "b.example.com", False, "not the attacker's keys");
+        assertAcceptorKeytab(victim.callFunction("gss_accept_token", victim_cred, forgedApReq("a.example.com")),
+            "a.example.com", True, "the victim's keys");
+
+        # the copies of the keytab files are not visible to sandboxed code, which has MEMORY keytabs of its own
+        # domain only: none of the names of the copies of the module has content for it
+        for (int i = 1; i <= 64; ++i) {
+            string name = "MEMORY:qore-krb5-file-keytab-" + i;
+            assertFalse(victim.callFunction("keytab_has_content", name), name);
+            assertFalse(attacker.callFunction("keytab_has_content", name), name);
+        }
+    }
+
+    #! the operations on a file keytab of sandboxed code use the file that the module opened and checked (qore#7767)
+    private testSandboxKeytabFilePinned() {
+        TmpDir kt_dir("module-krb5-kt-file-");
+        TmpDir other_dir("module-krb5-kt-file-other-");
+        string dir = realpath(kt_dir.path);
+        string other = realpath(other_dir.path);
+        string kt = dir + "/s.keytab";
+        Program a = cacheTenant("kt-file-" + getpid(), False, NOTHING,
+            {dir: QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE});
+        string name = "FILE:" + kt;
+
+        # a file that does not exist
+        assertEq({"rv": False}, a.callFunction("keytab_op", name, "has"));
+        hash<auto> r = a.callFunction("keytab_op", name, "list");
+        assertEq("KRB5-KEYTAB-ERROR", r.err, r.desc);
+        # created by addEntry(), with mode 0600
+        assertEq({}, a.callFunction("keytab_op", name, "add"));
+        assertEq(0600, hstat(kt).mode & 0777);
+        assertEq({"rv": True}, a.callFunction("keytab_op", name, "has"));
+        assertEq({"rv": 7}, a.callFunction("keytab_op", name, "get"));
+        assertEq({}, a.callFunction("keytab_op", name, "cred"));
+        # the entries in the order of the file
+        Qore::Krb5::Krb5Context ctx();
+        ctx.openKeytab(name).addEntry(new Qore::Krb5::Krb5Principal("HTTP/z.example.com@EXAMPLE.COM"),
+            getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+        list<string> host_list = map $1.principal + "/" + $1.kvno, ctx.openKeytab(name).listEntries();
+        assertEq(("HTTP/a.example.com@EXAMPLE.COM/7", "HTTP/z.example.com@EXAMPLE.COM/2"), host_list);
+        assertEq({"rv": host_list}, a.callFunction("keytab_op", name, "list"));
+        # removed from the file
+        assertEq({}, a.callFunction("keytab_op", name, "remove"));
+        assertEq(("HTTP/z.example.com@EXAMPLE.COM/2",), map $1.principal + "/" + $1.kvno,
+            ctx.openKeytab(name).listEntries());
+        assertEq({}, a.callFunction("keytab_op", name, "add"));
+
+        # a link at the last component to a file that the policy allows is followed
+        string link = dir + "/link.keytab";
+        symlink(kt, link);
+        assertEq({"rv": 7}, a.callFunction("keytab_op", "FILE:" + link, "get"));
+        # but not to a file that it does not allow
+        string denied = other + "/denied.keytab";
+        ctx.openKeytab("FILE:" + denied).addEntry(new Qore::Krb5::Krb5Principal("HTTP/a.example.com@EXAMPLE.COM"),
+            getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 7);
+        string denied_link = dir + "/denied-link.keytab";
+        symlink(denied, denied_link);
+        foreach string op in (("has", "list", "get", "add", "remove", "cred")) {
+            r = a.callFunction("keytab_op", "FILE:" + denied_link, op);
+            assertEq("FILESYSTEM-ACCESS-DENIED", r.err, op + ": " + r.desc);
+        }
+
+        # a file with another link, which could be in a directory that the policy does not allow
+        string hard = dir + "/hard.keytab";
+        if (system(sprintf("ln '%s' '%s'", denied, hard))) {
+            testSkip("cannot create a hard link");
+        }
+        foreach string op in (("has", "list", "get", "add", "remove", "cred")) {
+            r = a.callFunction("keytab_op", "FILE:" + hard, op);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, op + ": " + r.desc);
+            assertRegex("not a regular file with one link", r.desc, op);
+        }
+        assertEq(1, ctx.openKeytab("FILE:" + denied).listEntries().size(), "the other file is unchanged");
+
+        # a FIFO is not opened for reading (which would wait for a writer)
+        string fifo = dir + "/fifo.keytab";
+        mkfifo(fifo);
+        foreach string op in (("has", "list", "get", "add", "remove", "cred")) {
+            r = a.callFunction("keytab_op", "FILE:" + fifo, op);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, op + ": " + r.desc);
+        }
+    }
+
+    #! a GSS acceptor of sandboxed code without a credential would use the default keytab of the process (qore#7736)
+    private testSandboxGssAcceptorDefaultKeytab() {
+        Program a = cacheTenant("tenant-gss-accept", True);
+        hash<auto> r = a.callFunction("gss_accept_default");
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("default keytab", r.desc);
+    }
+
+    #! the acceptor credential of sandboxed code names the replay cache of its isolation domain, a file of the module
+    #! that needs no filesystem access, not the replay cache of the process (KRB5RCACHENAME) (qore#7756)
+    private testSandboxGssAcceptorReplayCache() {
+        # the replay caches of this test are in a temporary directory of its own
+        TmpDir tmp("module-krb5-rcache-");
+        *string tmpdir = getenv("TMPDIR");
+        *string rcname = getenv("KRB5RCACHENAME");
+        *string rcdir = getenv("KRB5RCACHEDIR");
+        on_exit {
+            if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+            if (exists rcname) { setenv("KRB5RCACHENAME", rcname); } else { unsetenv("KRB5RCACHENAME"); }
+            if (exists rcdir) { setenv("KRB5RCACHEDIR", rcdir); } else { unsetenv("KRB5RCACHEDIR"); }
+        }
+        setenv("TMPDIR", tmp.path);
+        string host_rcache = tmp.path + "/host-rcache";
+        setenv("KRB5RCACHENAME", "file2:" + host_rcache);
+        setenv("KRB5RCACHEDIR", tmp.path);
+
+        string kt_name = "MEMORY:module-krb5-rcache-" + getpid();
+        string dom_a = "rcache-tenant-a-" + getpid();
+        string dom_b = "rcache-tenant-b-" + getpid();
+        string a_rcache = domainReplayCachePath(dom_a);
+        string b_rcache = domainReplayCachePath(dom_b);
+        assertNeq(a_rcache, b_rcache);
+
+        # the replay cache needs no filesystem access: the policy of tenant a allows only another directory
+        TmpDir other("module-krb5-rcache-other-");
+        Program a = cacheTenant(dom_a, False, other.path);
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        assertEq({}, a.callFunction("gss_cred_from_keytab_result", a_kt));
+        # a directory that only the effective user can use, with the file of the domain
+        hash<StatInfo> dir_info = hlstat(replayCacheDir());
+        assertEq("DIRECTORY", dir_info.type);
+        assertEq(0, dir_info.mode & 077);
+        hash<StatInfo> info = hlstat(a_rcache);
+        assertEq("REGULAR", info.type);
+        assertEq(0, info.mode & 077);
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not created");
+
+        # another domain has a replay cache of its own
+        Program b = cacheTenant(dom_b);
+        auto b_kt = b.callFunction("keytab_add", kt_name, "HTTP/b.example.com@EXAMPLE.COM", getTestKeyHex1());
+        assertEq({}, b.callFunction("gss_cred_from_keytab_result", b_kt));
+        assertTrue(is_file(b_rcache));
+
+        # a sandbox without an isolation domain: the name has a token of the process, as Program IDs are unique
+        # only in the process
+        Program none = cacheTenant();
+        auto none_kt = none.callFunction("keytab_add", kt_name, "HTTP/n.example.com@EXAMPLE.COM", getTestKeyHex1());
+        assertEq({}, none.callFunction("gss_cred_from_keytab_result", none_kt));
+        list<string> by_program = select listDir(replayCacheDir()), $1 =~ /^qore-sandbox-p/;
+        assertEq(1, by_program.size(), sprintf("%y", by_program));
+        assertRegex("^qore-sandbox-p[0-9]+-" + getpid() + "-[0-9a-f]+-krb5-rcache$", by_program[0]);
+
+        # an acceptor of the domain with the credential gets to the token (a malformed one here)
+        Qore::Krb5::GssCredential a_cred = a.callFunction("gss_cred_obj_from_keytab", a_kt);
+        hash<auto> r = a.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not created");
+
+        # the replay cache replaced with a link after the credential was acquired: the acceptor refuses to step, and
+        # the file that the link names is not written
+        string target = tmp.path + "/read-only.dat";
+        File f();
+        f.open2(target, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write("unchanged");
+        f.close();
+        unlink(a_rcache);
+        symlink(target, a_rcache);
+        r = a.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("replay cache", r.desc);
+        assertEq("unchanged", ReadOnlyFile::readTextFile(target));
+        # also when a credential is acquired
+        r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertEq("unchanged", ReadOnlyFile::readTextFile(target));
+        unlink(a_rcache);
+        assertEq({}, a.callFunction("gss_cred_from_keytab_result", a_kt));
+    }
+
+    #! the replay cache directory must be a directory that only the effective user can use (qore#7756)
+    private testSandboxGssAcceptorReplayCacheDir() {
+        TmpDir tmp("module-krb5-rcache-dir-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        string kt_name = "MEMORY:module-krb5-rcache-dir-" + getpid();
+        Program a = cacheTenant("rcache-dir-tenant-" + getpid());
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+
+        # a directory that others can use
+        string dir = replayCacheDir();
+        mkdir(dir, 0755);
+        chmod(dir, 0755);
+        hash<auto> r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("replay cache directory", r.desc);
+        chmod(dir, 0700);
+        assertEq({}, a.callFunction("gss_cred_from_keytab_result", a_kt));
+
+        # a link to a directory
+        remove_tree(dir);
+        string other = tmp.path + "/other";
+        mkdir(other, 0700);
+        symlink(other, dir);
+        r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("replay cache directory", r.desc);
+        assertEq((), listDir(other), "nothing is created in the directory that the link names");
+        unlink(dir);
+
+        # a temporary directory that other users can change entries of
+        chmod(tmp.path, 0777);
+        r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("writable by other users", r.desc);
+        chmod(tmp.path, 01777);
+        assertEq({}, a.callFunction("gss_cred_from_keytab_result", a_kt));
+        chmod(tmp.path, 0700);
+    }
+
+    #! a sandbox whose filesystem policy allows it to change the entries on the path of the replay cache could replace
+    #! them between the module's check and the library's open: its acceptor credentials and steps are refused
+    #! (qore#7756)
+    private testSandboxGssAcceptorReplayCachePolicy() {
+        TmpDir tmp("module-krb5-rcache-policy-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        string kt_name = "MEMORY:module-krb5-rcache-policy-" + getpid();
+        string domain = "rcache-policy-tenant-" + getpid();
+        string tmp_real = realpath(tmp.path);
+        Program a = cacheTenant(domain);
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        Qore::Krb5::GssCredential a_cred = a.callFunction("gss_cred_obj_from_keytab", a_kt);
+
+        foreach hash<auto> i in ({"path": tmp_real, "mode": QSEC_READ | QSEC_WRITE | QSEC_CREATE},
+                {"path": tmp_real, "mode": QSEC_DELETE},
+                {"path": replayCacheDir(), "mode": QSEC_WRITE}) {
+            # the same domain, with a policy that allows the change
+            Program b = cacheTenant(domain, False, NOTHING, {i.path: i.mode});
+            auto b_kt = b.callFunction("keytab_add", kt_name, "HTTP/b.example.com@EXAMPLE.COM", getTestKeyHex1());
+            hash<auto> r = b.callFunction("gss_cred_from_keytab_result", b_kt);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, sprintf("%y: %s", i, r.desc));
+            assertRegex("filesystem policy of the sandbox allows changes", r.desc);
+            # a credential of the domain that code with another policy acquired
+            r = b.callFunction("gss_accept_with", a_cred);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, sprintf("%y: %s", i, r.desc));
+            assertRegex("filesystem policy of the sandbox allows changes", r.desc);
+        }
+        # read access is no change
+        Program c = cacheTenant(domain, False, NOTHING, {tmp_real: QSEC_READ});
+        hash<auto> r = c.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+    }
+
+    #! an acceptor credential that code of another isolation domain acquired names the replay cache of that domain:
+    #! an acceptor of sandboxed code does not use it; a credential that trusted code made is one that it was given
+    #! (qore#7756)
+    private testSandboxGssAcceptorOtherDomainCredential() {
+        string kt_name = "MEMORY:module-krb5-rcache-cred-" + getpid();
+        Program a = cacheTenant("rcache-cred-tenant-a-" + getpid());
+        Program b = cacheTenant("rcache-cred-tenant-b-" + getpid());
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        Qore::Krb5::GssCredential a_cred = a.callFunction("gss_cred_obj_from_keytab", a_kt);
+        # tenant a's own acceptor gets to the (malformed) token
+        hash<auto> r = a.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        # tenant b's does not use tenant a's credential
+        r = b.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("replay cache of another isolation domain", r.desc);
+
+        # a credential that trusted code made and gives to sandboxed code
+        Qore::Krb5::Krb5Context ctx();
+        auto host_kt = ctx.openKeytab(kt_name);
+        host_kt.addEntry(new Qore::Krb5::Krb5Principal("HTTP/host.example.com@EXAMPLE.COM"), getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        r = b.callFunction("gss_accept_with", Qore::Krb5::GssCredential::fromKeytab(host_kt));
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+    }
+
+    #! an initiator credential of a cache without a ticket gets one with the client keytab: the sandbox's own, not the
+    #! client keytab of the process (KRB5_CLIENT_KTNAME) (qore#7736)
+    private testSandboxGssClientKeytab() {
+        string kt = "MEMORY:module-krb5-client-kt-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        auto hkt = ctx.openKeytab(kt);
+        hkt.addEntry(new Qore::Krb5::Krb5Principal("user/x.example.com@EXAMPLE.COM"), getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        *string client_kt = getenv("KRB5_CLIENT_KTNAME");
+        on_exit if (exists client_kt) { setenv("KRB5_CLIENT_KTNAME", client_kt); } else { unsetenv("KRB5_CLIENT_KTNAME"); }
+        setenv("KRB5_CLIENT_KTNAME", kt);
+        # an unrestricted network policy: the module's network check does not refuse it first
+        Program a = cacheTenant("tenant-client-kt", True);
+        a.callFunction("init_cache", "MEMORY:client", "user/x.example.com@EXAMPLE.COM");
+        hash<auto> r = a.callFunction("gss_cred_from_cache", "MEMORY:client");
+        # the domain's client keytab has no key: the cache stays empty (with the host's client keytab, MIT Kerberos
+        # would request a ticket from the KDC with its key)
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        assertRegex("cache is empty", r.desc, "no ticket request with the client keytab of the process");
     }
 
     private testFileCacheSandboxDeny() {

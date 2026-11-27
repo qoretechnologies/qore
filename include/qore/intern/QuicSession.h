@@ -1591,10 +1591,27 @@ public:
         only until the bounds are set by a call without it (qore#7653)
 
         The bounds of a connection are set once, with its first such body; later calls are ignored, except that a
-        call without \a listener_default replaces a listener's default.
+        call without \a listener_default replaces a listener's default.  Without bounds, the minimum rate is set by
+        the first checkStreamSendRate() of a send of a handler thread.
     */
     DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms,
         bool listener_default = false);
+
+    //! Checks the connection's minimum rate for a send on a handler thread that waits for the client (qore#7280)
+    /** The connection's rate is measured across all its streams while one of them waits for the client, the bodies
+        that the I/O thread pumps and the sends of handler threads alike; called on the I/O thread
+
+        @param stream_id the stream of the send
+        @param waiting true while the send waits for the client; false once it is done, which ends its wait
+        @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet
+        @param window_ms the window of the minimum rate in milliseconds, if the connection's rate is not set yet
+        @param verdict set to true if this call found the connection below the rate, which ends the other waiting
+        bodies as well
+
+        @return true if the connection was found below the minimum rate while the send waited: the send must end
+    */
+    DLLLOCAL bool checkStreamSendRate(int64_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict);
 
     //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
     DLLLOCAL int getInputStreamPollTimeoutMs() const;
@@ -2183,6 +2200,7 @@ private:
     uint16_t port_ = 0;                             //!< server port
 
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>> streams_;
 
     //! The client-initiated bidirectional (request) streams that ngtcp2 has opened and not closed yet
@@ -2192,6 +2210,7 @@ private:
         closed streams grew by one entry with every request of a long-lived session; this one is bounded by the
         number of streams in progress.  Protected by mtx_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int64_t> open_bidi_streams_;
 
     //! The highest client-initiated bidirectional stream ID that ngtcp2 has opened, or -1; protected by mtx_
@@ -2201,6 +2220,7 @@ private:
     /** A reset by the peer can still arrive for them; their records are released when ngtcp2 closes them
         (streamCloseCallback()).  A subset of @ref open_bidi_streams_, so bounded the same way.  Protected by mtx_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int64_t> released_open_streams_;
 
     //! Peer-initiated stream reset info, persisted beyond streams_.erase()
@@ -2214,6 +2234,7 @@ private:
         cleanupStream(), removeClosedStream()), so a long-lived session does
         not keep one for every stream the peer reset.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, uint64_t> peer_reset_streams_;
 
     //! Stream IDs reset/stop-sent by the peer, awaiting one-shot reporting
@@ -2225,6 +2246,7 @@ private:
     std::vector<int64_t> pending_peer_reset_reports_;
 
     //! Streams whose response transmission result is reported; see watchResponseSend().  Protected by mtx_.
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int64_t> response_send_watches_;
 
     //! Response transmission results awaiting takeResponseSendResults().  Protected by mtx_.
@@ -2237,15 +2259,18 @@ private:
     std::queue<int64_t> completed_streams_;
 
     //! Body data for streams being sent (used by data reader callback)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, QuicBodyData> body_data_;
 
     //! Streaming body data for incremental sending (used by data reader callback)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
 
     //! server: the streams whose response has been submitted, with or without a body, until they close
     /** A second response on a stream would send a second HEADERS frame, a malformed message (RFC 9114 section 4.1),
         so every response submit refuses a stream in this set (qoretechnologies/qore#7212)
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int64_t> responded_streams_;
 
     //! server: the streams whose streamed response broke its declared length, to be reset after the HTTP/3 layer's
@@ -2272,11 +2297,13 @@ private:
     }
 
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, size_t> deferred_stream_credit_;
 
     //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
     /** @since %Qore 3.0
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, StreamInputStreamInfo> stream_input_streams_;
     //! the bytes that the client has acknowledged on all its streams, which never decreases (qore#7280)
     uint64_t conn_acked_total_ = 0;
@@ -2286,6 +2313,13 @@ private:
     int64_t pump_stall_ms_ = 30 * 60 * 1000;
     //! true once the bounds of the response bodies have been set
     bool pump_bound_set_ = false;
+    //! true once the minimum rate of the connection has been set by a send of a handler thread, without bounds
+    bool pump_rate_set_ = false;
+    //! the streams whose sends on handler threads wait for the client, which the connection's minimum rate covers
+    std::unordered_set<int64_t> send_rate_waiters_;
+    //! the streams whose sends on handler threads waited when the connection was found below its minimum rate, and
+    //! which have not been told yet
+    std::unordered_set<int64_t> send_rate_ended_;
     //! true if the bounds were set by a call that is not a listener's default (qore#7653)
     bool pump_bound_explicit_ = false;
 
@@ -2317,6 +2351,35 @@ private:
     //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
     DLLLOCAL void checkInputStreamSendBound();
 
+    //! Sets the minimum rate of the connection if it has no bounds; the caller holds the lock
+    DLLLOCAL void setSendRateUnlocked(int64_t min_rate, int64_t window_ms);
+
+    //! Returns true if a send of a handler thread other than @p except, or a bounded body, waits for the client
+    DLLLOCAL bool isConnectionWaitingUnlocked(int64_t except) const;
+
+    //! Updates the connection's minimum rate; the caller holds the lock
+    /** When the connection is below the rate while a body waits, every waiting bounded body is added to @p ended,
+        for the caller to end, every waiting send of a handler thread is recorded in send_rate_ended_, and a new
+        measurement starts
+
+        @param now_ms the time of the update
+        @param ended the bounded bodies that a verdict ends; bodies already in it are not added again
+        @param leaving a waiting send that ends its wait with this update, or -1: the time until now is charged as
+        waiting time for it, and the time from now on only if another body waits
+
+        @return true if the connection was found below the rate
+    */
+    DLLLOCAL bool updateSendRateUnlocked(int64_t now_ms, std::vector<int64_t>& ended, int64_t leaving = -1);
+
+    //! Ends the bounded bodies that a bound ended: their sources stop, and their streams are cancelled
+    DLLLOCAL void endBoundBodiesUnlocked(const std::vector<int64_t>& ended);
+
+    //! Ends the wait of a send of a handler thread whose stream closes; the caller holds the lock
+    /** The state of the connection's measurement is recorded without a verdict (which is not reached inside an
+        ngtcp2 callback): the low credit of a connection that was below the rate is found by the next check
+    */
+    DLLLOCAL void endSendRateWaitUnlocked(int64_t stream_id);
+
     //! Returns true if a bounded body has data that its client has not acknowledged (qore#7653)
     DLLLOCAL bool isBoundBodyWaiting(int64_t stream_id, const BoundBody& b) const;
 
@@ -2329,6 +2392,7 @@ private:
         this buffer and is pushed directly to the Queue.
         Protected by connect_data_mutex_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
 
     //! Appends received data to a stream's extended-CONNECT buffer; called with connect_data_mutex_ held
@@ -2347,6 +2411,7 @@ private:
         to the handler immediately when QUIC packets are processed.
         Protected by connect_data_mutex_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
 
     //! The records of the close frames of the WebSocket streams, created when their frame state is registered and
@@ -2358,7 +2423,8 @@ private:
         handler thread is delayed past that period; it then gets no record, and a send fails for the removed session
         (QUIC-ERROR) instead of with WEBSOCKET-CLOSING-ERROR.  The context's reference otherwise outlives the session.
     */
-    std::unordered_map<int64_t, WebSocketCloseRecordRef> ws_close_records_;
+    // an ordered map: it keeps a record of each WebSocket stream of the session (qore#7750)
+    std::map<int64_t, WebSocketCloseRecordRef> ws_close_records_;
 
     //! Per-stream WebSocket frame state for tunnels that want C++ frame parsing
     /** When registered, h3RecvDataCallback feeds the decoded stream bytes
@@ -2373,6 +2439,7 @@ private:
         If both a Queue (connect_stream_queues_) and a frame state are
         registered for the same stream, the frame state wins.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, std::shared_ptr<class WebSocketStreamFrameState>>
         connect_stream_frame_states_;
 
@@ -2383,6 +2450,7 @@ private:
         the quarter-stream-ID in the datagram payload.
         Protected by datagram_mutex_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, std::deque<std::vector<uint8_t>>> datagram_queues_;
 
     //! Per-stream handler-registered Qore Queue for async datagram delivery (RFC 9221/9297)
@@ -2394,6 +2462,7 @@ private:
 
         @since %Qore 3.0
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int64_t, Queue*> datagram_qqueues_;
 
     std::mutex datagram_mutex_;  //!< protects datagram_queues_ and datagram_qqueues_

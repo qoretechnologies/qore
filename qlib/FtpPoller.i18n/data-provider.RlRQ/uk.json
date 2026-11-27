@@ -16,7 +16,7 @@
           "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "Отримано файл FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

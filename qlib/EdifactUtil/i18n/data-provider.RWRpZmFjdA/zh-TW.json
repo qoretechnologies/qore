@@ -16,7 +16,7 @@
           "message": "讀取並寫入 UN/EDIFACT 電子資料交換訊息"
         },
         "app.RWRpZmFjdA.action.cmVhZA.display_name": {
-          "source": "Read EDIFACT File",
+          "source": "Read EDIFACT file",
           "message": "讀取 EDIFACT 檔案"
         },
         "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
@@ -124,7 +124,7 @@
           "message": "若為 `True`，在疊代時略過服務區段 (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`)，僅傳回業務資料區段。"
         },
         "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
-          "source": "Write EDIFACT Data",
+          "source": "Write EDIFACT data",
           "message": "寫入 EDIFACT 資料"
         },
         "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
@@ -300,7 +300,7 @@
           "message": "語法版本 4"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
-          "source": "Load EDIFACT Schema",
+          "source": "Load EDIFACT schema",
           "message": "載入 EDIFACT 結構描述"
         },
         "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
@@ -420,7 +420,7 @@
           "message": "若為 `True`，則以更嚴格的方式驗證 EDMD 檔案（區段表格標頭、縮排及結構完整性）。"
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "Schema Summary",
+          "source": "Schema summary",
           "message": "結構描述摘要"
         },
         "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

@@ -143,7 +143,9 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     */
     private:internal freezeShared(AbstractDataProviderType type) {
         if (shared && SandboxManager::createsSharedObjects()) {
-            type.freeze();
+            # every type and field that it holds must be marked: one that sandboxed code created cannot be, and its
+            # creator could delete it from the cache (qore#7740)
+            Priv::freeze_for_shared(type);
         }
     }
 

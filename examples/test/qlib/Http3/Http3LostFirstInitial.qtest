@@ -201,6 +201,10 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     #! Skips unless the build drops datagrams for QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS (DEBUG builds)
     private checkDropHook() {
+        # the hook and the debug functions that the cases call are in debug builds only
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS needs a DEBUG build");
+        }
         setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", (foldl $1 + "," + $2, (map string($1), xrange(64))));
         on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
         try {

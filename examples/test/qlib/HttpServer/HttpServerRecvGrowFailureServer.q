@@ -22,10 +22,9 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    The HTTP server of HttpServerRecvGrowFailure.qtest: it writes the port of its listener and the size of its address
-    space to its standard output, returns the error of a read of a request body whose memory could not grow that it
-    logged for "GET /error/<n>" once it has logged n such errors, and ends when it gets "GET /quit".  Its argument
-    "measure" makes it write the same line and end.
+    The HTTP server of HttpServerRecvGrowFailure.qtest: it writes the port of its listener to its standard output once
+    it is running, returns the error of a read of a request body whose memory could not grow that it logged for
+    "GET /error/<n>" once it has logged n such errors, and ends when it gets "GET /quit".
 */
 
 %modern
@@ -117,10 +116,9 @@ class GrowFailureHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! returns the size of the address space of the process in kilobytes
-int sub vm_size() {
-    return (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmSize:\s+([0-9]+)/)[0].toInt();
-}
+#! the handler threads of the server: one for a request whose read fails, one for a request that waits for its error,
+#! and spares
+const HandlerThreads = 4;
 
 BodyErrorCapture capture();
 GrowFailureHandler handler(capture);
@@ -128,6 +126,13 @@ Logger logger("test", LoggerLevel::getLevelError());
 logger.addAppender(capture);
 HttpServer server(<HttpServerOptionInfo>{
     "logger": logger,
+    # the handler threads of the server are all started now, before its address space is limited, and none ends: a
+    # handler thread that started later would map its stack in the room for the data of a request, and how many start,
+    # and when the earlier ones end, depends on the load of the host (qore#7775)
+    "idle_threads": HandlerThreads,
+    "max_handler_threads": HandlerThreads,
+    "min_idle_handler_threads": HandlerThreads,
+    "max_idle_handler_threads": HandlerThreads,
     # no limit, so that the buffer of a body read grows until no more memory can be allocated for it, and not only
     # up to the default limit of a body that the server reads into memory
     "max_request_body_size": 0,
@@ -135,9 +140,7 @@ HttpServer server(<HttpServerOptionInfo>{
 server.setDefaultHandler("grow", handler);
 int port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
 server.waitForAsyncIo();
-printf("port %d vm %d\n", port, vm_size());
+printf("port %d\n", port);
 flush();
-if (ARGV[0] != "measure") {
-    handler.quit.waitForZero();
-}
+handler.quit.waitForZero();
 delete server;

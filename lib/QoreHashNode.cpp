@@ -46,13 +46,29 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 
+#include "qore/intern/qore_siphash.h"
+#include "qore/intern/qore_keyed_hash.h"
+#include "qore/intern/QoreForkHandlers.h"
+
 #include <cassert>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <new>
+#include <stdexcept>
 #include <strings.h>
+
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
+#if defined(__linux__)
+#include <sys/random.h>
+#endif
 
 static const char* qore_hash_type_name = "hash";
 
@@ -153,6 +169,17 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
 void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
 }
+
+#ifdef DEBUG
+std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook{nullptr};
+
+void qore_hash_private::dbgReleaseStep() {
+    assert(releasing);
+    if (qore_dbg_hash_release_step_hook_t hook = qore_dbg_hash_release_step_hook.load()) {
+        hook(this);
+    }
+}
+#endif
 
 bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
     if (!v.hasNode()) {
@@ -264,14 +291,15 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
-HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
-    QORE_DBG_HASH_MEMBER_FAILS();
-    return addMemberKnownAbsent(new HashMember(old.key, old.hash));
-}
-
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
-    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size(), m->hash)));
+    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+#ifdef DEBUG
+    // a member stores the unseeded hash of its key (qore#7557), also when it is created with a hash computed before
+    // the run (JIT and AOT keys); only the test function dbg_hash_insert_with_hash_of() stores another
+    assert(m->hash == qore_hash_member_map::hashOf(m->key.data(), m->key.size())
+        || qore_dbg_hash_foreign_member_hash());
+#endif
     // only the key map can fail to take the member (when its buckets grow); the member is deleted then
     std::unique_ptr<HashMember> holder(m);
     hm.insert(m);
@@ -281,35 +309,391 @@ HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     return m;
 }
 
+// the insert limit, which also tells a hardened map, takes the half of the old 64-bit mask, so that a hash is as large
+// as before qore#7557: a larger private part of a hash takes another allocation size, which changes the cost of the
+// allocations of hashes
+static_assert(sizeof(void*) != 8 || sizeof(qore_hash_member_map) == 24, "the key map of a hash must stay 24 bytes");
+
 void qore_hash_member_map::reserve(size_t n) {
+    // a map has at most MaxBuckets buckets and members; tested first, so that bucketsFor() is never given more
+    if (n > MaxBuckets) {
+        throw std::bad_alloc();
+    }
     if (n > bucket_count()) {
-        rehash(bucketsFor(n));
+        size_t b = bucketsFor(n);
+        if (!buckets) {
+            // the first buckets of a map, which has no members and is not hardened: nothing to move
+            if (b > MaxBuckets) {
+                throw std::bad_alloc();
+            }
+            buckets = new HashMember*[b]();
+            setMaskLimit(static_cast<uint32_t>(b - 1), static_cast<uint32_t>(b));
+            return;
+        }
+        // rehash() refuses more than MaxBuckets
+        rehash(b);
+        return;
+    }
+    // a map that is not hardened and has no members has an insert limit of 0 (erase()); the members that follow may
+    // be linked by insertCopy(), which does not set it, so it is set here
+    if (buckets && !limit && !isHardened()) {
+        assert(!count);
+        limit = getMask() + 1;
     }
 }
 
+namespace {
+//! the secret key of the keyed hash of hardened key maps (qore#7557); created once, by the first hardening
+uint64_t qore_hash_process_key[2] = {0, 0};
+//! true once the key was created (qore_hash_ensure_process_key())
+std::atomic<bool> qore_hash_process_key_ready{false};
+//! serializes the creation of the key
+std::mutex qore_hash_process_key_lock;
+//! acquires the lock of the key before fork() and releases it after it (qore#7750), so that a child created while
+//! another thread stores the key does not wait for the lock forever; registered once, at library initialization.
+//! Its holder only stores the key, and it can be taken under any lock of the library (a hash insert can create the
+//! key), so it ranks after them
+QoreForkStdMutex qore_hash_process_key_fork_handler(qore_hash_process_key_lock, QFLR_HASH_PROCESS_KEY,
+    "hash_process_key");
+
+//! fills \a buf with \a len random bytes from the operating system, or from OpenSSL's generator if that fails or
+//! (Linux) the kernel's pool is not ready yet
+/** @throw std::runtime_error if no source of random bytes works; the key is then not created, and a later
+    hardening tries again
+*/
+void qore_hash_random_bytes(unsigned char* buf, size_t len) {
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) \
+        || defined(__DragonFly__)
+    arc4random_buf(buf, len);
+    return;
+#else
+#if defined(__linux__)
+    size_t done = 0;
+    while (done < len) {
+        // not blocking: before the kernel's pool is ready (early in a boot), OpenSSL's generator gives the bytes
+        ssize_t rc = getrandom(buf + done, len - done, GRND_NONBLOCK);
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        done += static_cast<size_t>(rc);
+    }
+    if (done == len) {
+        return;
+    }
+#endif
+    if (RAND_bytes(buf, static_cast<int>(len)) != 1) {
+        ERR_clear_error();
+        throw std::runtime_error("no random bytes for the key of the keyed hash of hash members");
+    }
+#endif
+}
+
+#ifdef DEBUG
+//! debug builds: reads the key from QORE_DBG_HASH_KEY (32 hexadecimal digits: the 16 bytes of the key), so that
+//! the layout of hardened key maps can be reproduced; returns false if the variable is not set
+bool qore_hash_dbg_key(unsigned char* key) {
+    const char* env = getenv("QORE_DBG_HASH_KEY");
+    if (!env) {
+        return false;
+    }
+    if (strlen(env) != 32) {
+        fprintf(stderr, "QORE_DBG_HASH_KEY must have 32 hexadecimal digits\n");
+        abort();
+    }
+    for (size_t i = 0; i < 16; ++i) {
+        unsigned v = 0;
+        for (size_t j = 0; j < 2; ++j) {
+            char c = env[i * 2 + j];
+            unsigned d;
+            if (c >= '0' && c <= '9') {
+                d = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                d = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                d = c - 'A' + 10;
+            } else {
+                fprintf(stderr, "QORE_DBG_HASH_KEY must have 32 hexadecimal digits\n");
+                abort();
+            }
+            v = (v << 4) | d;
+        }
+        key[i] = static_cast<unsigned char>(v);
+    }
+    return true;
+}
+#endif
+
+//! makes a candidate for the secret key in \a k, without a lock (qore#7750: the random source is not read with the
+//! lock of the key held)
+void qore_hash_make_process_key(uint64_t* k) {
+    unsigned char key[16];
+#ifdef DEBUG
+    if (!qore_hash_dbg_key(key))
+#endif
+    {
+        qore_hash_random_bytes(key, sizeof key);
+    }
+    k[0] = k[1] = 0;
+    for (size_t i = 0; i < 16; ++i) {
+        k[i / 8] |= static_cast<uint64_t>(key[i]) << (8 * (i % 8));
+    }
+}
+
+//! creates the secret key if it does not exist yet; thread-safe
+/** a failed creation throws and leaves no key, and a later call tries again (std::call_once is not used, as an
+    exception from it has hung later calls with some C++ runtimes).  The candidate key is made before the lock is
+    taken, so that the lock, which the fork handlers acquire, is only held to store the key; threads that make
+    candidates at the same time store the first one
+*/
+void qore_hash_ensure_process_key() {
+    if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+    uint64_t k[2];
+    try {
+        qore_hash_make_process_key(k);
+    } catch (...) {
+        // another thread may have stored a key while this one failed to make one
+        if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
+            return;
+        }
+        throw;
+    }
+    std::lock_guard<std::mutex> guard(qore_hash_process_key_lock);
+    if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
+        qore_hash_process_key[0] = k[0];
+        qore_hash_process_key[1] = k[1];
+        qore_hash_process_key_ready.store(true, std::memory_order_release);
+    }
+}
+
+#ifdef DEBUG
+//! the debug registry of the sites of keyed containers (QORE_KEYED_HASH_SITE()): site -> the hash of the probe
+std::map<std::string, uint64_t>* qore_dbg_keyed_hash_sites = nullptr;
+//! the lock of qore_dbg_keyed_hash_sites
+std::mutex qore_dbg_keyed_hash_sites_lock;
+QoreForkStdMutex qore_dbg_keyed_hash_sites_fork_handler(qore_dbg_keyed_hash_sites_lock, QFLR_KEYED_HASH_SITES,
+    "dbg_keyed_hash_sites");
+#endif
+}
+
+const uint64_t* qore_intern_hash_process_key() {
+    qore_hash_ensure_process_key();
+    return qore_hash_process_key;
+}
+
+int qore_intern_hash_process_key_check(ExceptionSink* xsink) {
+    try {
+        qore_hash_ensure_process_key();
+    } catch (const std::exception& e) {
+        xsink->raiseException("HASH-SECRET-KEY-ERROR", "cannot create the secret key of the keyed hashes: %s",
+            e.what());
+        return -1;
+    }
+    return 0;
+}
+
+#ifdef DEBUG
+void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    // called from constructors: an allocation failure only leaves the site unrecorded
+    try {
+        if (!qore_dbg_keyed_hash_sites) {
+            qore_dbg_keyed_hash_sites = new std::map<std::string, uint64_t>;
+        }
+        auto i = qore_dbg_keyed_hash_sites->insert({site, probe});
+        // every container of a site hashes with the same key
+        assert(i.first->second == probe);
+        (void)i;
+    } catch (const std::bad_alloc&) {
+    }
+}
+
+std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites() {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    return qore_dbg_keyed_hash_sites ? *qore_dbg_keyed_hash_sites : std::map<std::string, uint64_t>();
+}
+#endif
+
+size_t qore_hash_keyed_bytes(const char* str, size_t len) {
+    assert(qore_hash_process_key_ready.load(std::memory_order_relaxed));
+    // the key was created before the first map was hardened (harden()), and a thread reads a hardened map only
+    // after it was made visible to it, which orders the creation of the key before this read
+    return static_cast<size_t>(qore_siphash13(qore_hash_process_key[0], qore_hash_process_key[1], str, len));
+}
+
+HashMember* qore_hash_member_map::findSlow(const char* str, size_t len) const {
+    assert(!fastFind());
+    return count ? findKeyed(str, len) : nullptr;
+}
+
+HashMember* qore_hash_member_map::findSlow(const char* str) const {
+    assert(!fastFind());
+    return count ? findKeyed(str, strlen(str)) : nullptr;
+}
+
+HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
+    assert(isHardened() && count);
+    // the bucket is given by the keyed hash; the members keep their member hashes, so the keys are compared
+    for (HashMember* m = buckets[qore_hash_keyed_bytes(str, len) & getMask()]; m; m = m->bucket_next) {
+        if (qore_key_equal(m->key.data(), m->key.size(), str, len)) {
+            return m;
+        }
+    }
+    return nullptr;
+}
+
+size_t qore_hash_member_map::keyedBucket(const HashMember* m) const {
+    assert(isHardened());
+    return qore_hash_keyed_bytes(m->key.data(), m->key.size()) & getMask();
+}
+
+void qore_hash_member_map::eraseHardened(HashMember* m) {
+    assert(count && isHardened());
+    HashMember** p = &buckets[keyedBucket(m)];
+    while (*p != m) {
+        assert(*p);
+        p = &(*p)->bucket_next;
+    }
+    *p = m->bucket_next;
+    --count;
+}
+
+void qore_hash_member_map::insertSlow(HashMember* m) {
+    // a hardened map grows here (its limit is 0, so insert() does not grow it)
+    if (count >= bucket_count()) {
+        grow();
+    }
+    if (!isHardened()) {
+        HashMember* first = buckets[m->hash & getMask()];
+        if (!first || !chainFull(first) || !tryHarden()) {
+            // the map is not hardened: the member keeps its member hash
+            m->bucket_next = first;
+            buckets[m->hash & getMask()] = m;
+            ++count;
+            return;
+        }
+    }
+    // a hardened map: the member keeps the member hash of its key (a debug function can have given it another
+    // hash), and its bucket is given by the keyed hash
+    m->hash = qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size());
+    HashMember*& b = buckets[keyedBucket(m)];
+    m->bucket_next = b;
+    b = m;
+    ++count;
+}
+
+bool qore_hash_member_map::tryHarden() {
+    try {
+        harden();
+        return true;
+    } catch (const std::exception&) {
+        // nothing was changed: the map stays as it was, and the next insert that would make a chain too long tries
+        // again
+        return false;
+    }
+}
+
+void qore_hash_member_map::harden() {
+    assert(!isHardened() && buckets);
+    // the key is created once, by the first hardening of the process
+    qore_hash_ensure_process_key();
+#ifdef DEBUG
+    // test hook: the allocation of the new bucket array fails
+    if (qore_dbg_hash_harden_alloc_must_fail()) {
+        throw std::bad_alloc();
+    }
+#endif
+    size_t n = bucket_count();
+    HashMember** nb = new HashMember*[n]();
+    // nothing can fail from here on; the members keep the member hashes of their keys (a debug function can have
+    // given them other hashes), and their buckets are given by the keyed hashes
+    uint32_t bmask = getMask();
+    for (size_t b = 0; b < n; ++b) {
+        for (HashMember* m = buckets[b]; m;) {
+            HashMember* next = m->bucket_next;
+            m->hash = qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size());
+            HashMember*& nbucket = nb[qore_hash_keyed_bytes(m->key.data(), m->key.size()) & bmask];
+            m->bucket_next = nbucket;
+            nbucket = m;
+            m = next;
+        }
+    }
+    delete[] buckets;
+    buckets = nb;
+    // every insert into a hardened map takes the slow path, and its searches are made by findSlow()
+    mask |= HardenedBit;
+    limit = 0;
+}
+
+size_t qore_hash_member_map::maxChain() const {
+    size_t rv = 0;
+    for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+        size_t n = 0;
+        for (const HashMember* m = buckets[b]; m; m = m->bucket_next) {
+            ++n;
+        }
+        if (n > rv) {
+            rv = n;
+        }
+    }
+    return rv;
+}
+
 void qore_hash_member_map::grow() {
-    rehash(buckets ? (mask + 1) << 1 : MinBuckets);
+    if (!buckets) {
+        // the first buckets of a map, which has no members and is not hardened: nothing to move, and the number is
+        // below MaxBuckets
+        buckets = new HashMember*[MinBuckets]();
+        setMaskLimit(MinBuckets - 1, MinBuckets);
+        return;
+    }
+    rehash(bucket_count() << 1);
 }
 
 void qore_hash_member_map::rehash(size_t n) {
     assert(n && !(n & (n - 1)));
     assert(n >= count);
+    // the mask and the limit are 32 bits wide
+    if (n > MaxBuckets) {
+        throw std::bad_alloc();
+    }
     HashMember** nb = new HashMember*[n]();
-    size_t nmask = n - 1;
+    uint32_t nmask = static_cast<uint32_t>(n - 1);
+    // a hardened map keeps its hardened bit and its limit of 0
+    bool set_limit = !isHardened();
     if (buckets) {
-        for (size_t b = 0, e = mask + 1; b < e; ++b) {
-            for (HashMember* m = buckets[b]; m;) {
-                HashMember* next = m->bucket_next;
-                HashMember*& nbucket = nb[m->hash & nmask];
-                m->bucket_next = nbucket;
-                nbucket = m;
-                m = next;
+        if (set_limit) {
+            for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+                for (HashMember* m = buckets[b]; m;) {
+                    HashMember* next = m->bucket_next;
+                    HashMember*& nbucket = nb[m->hash & nmask];
+                    m->bucket_next = nbucket;
+                    nbucket = m;
+                    m = next;
+                }
+            }
+        } else {
+            // the bucket of a member of a hardened map is given by the keyed hash of its key
+            for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+                for (HashMember* m = buckets[b]; m;) {
+                    HashMember* next = m->bucket_next;
+                    HashMember*& nbucket = nb[qore_hash_keyed_bytes(m->key.data(), m->key.size()) & nmask];
+                    m->bucket_next = nbucket;
+                    nbucket = m;
+                    m = next;
+                }
             }
         }
         delete[] buckets;
     }
     buckets = nb;
-    mask = nmask;
+    // a map that is not hardened takes inserts on the fast path until it has as many members as buckets (n is at
+    // most MaxBuckets, so the limit is not 0); a hardened map keeps its limit of 0
+    setMaskLimit(set_limit ? nmask : (nmask | HardenedBit), set_limit ? static_cast<uint32_t>(n) : 0);
 }
 
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
@@ -358,6 +742,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
 }
 
 QoreListNode* qore_hash_private::getKeys() const {
+    assertNotReleasing();
     QoreListNode* list = new QoreListNode(stringTypeInfo);
     qore_list_private::get(*list)->reserve(size());
 
@@ -368,6 +753,7 @@ QoreListNode* qore_hash_private::getKeys() const {
 }
 
 QoreListNode* qore_hash_private::getValues() const {
+    assertNotReleasing();
     ReferenceHolder<QoreListNode> list(new QoreListNode(getValueTypeInfo()), nullptr);
     qore_list_private* l = qore_list_private::get(**list);
     l->reserve(size());
@@ -1221,13 +1607,14 @@ void qore_hash_private::discardUnstoredValue(QoreValue value, ExceptionSink* xsi
 }
 
 QoreHashNode* qore_hash_private::copyStripped() const {
+    assertNotReleasing();
     QoreHashNode* h = new QoreHashNode;
     qore_hash_private& hp = *h->priv;
     try {
-        hp.reserveForCopy(*this);
+        bool copy_layout = hp.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
-            HashMember* om = hp.createMemberKnownAbsent(*i);
+            HashMember* om = hp.createMemberKnownAbsent(*i, copy_layout);
             hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
         }
     } catch (...) {
@@ -1385,6 +1772,11 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
         }
 #endif
     }
+#ifdef DEBUG
+    // no code can access the members until the release ends in finishFreeMembers(), on both paths: freeMembers() or
+    // freeNextMember() from free_nested_containers(), which can run in the constructor of the helper (qore#7569)
+    priv->releasing = true;
+#endif
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         priv->freeMembers(xsink);
@@ -1618,10 +2010,20 @@ QoreStringNode* HashIterator::getKeyStringNode() const {
 }
 
 bool HashIterator::next() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool HashIterator::prev() {
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
     return h ? priv->prev(h->priv->member_list) : false;
 }
 
@@ -1780,11 +2182,21 @@ QoreStringNode* ConstHashIterator::getKeyStringNode() const {
 }
 
 bool ConstHashIterator::next() {
-   return h ? priv->next(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool ConstHashIterator::prev() {
-   return h ? priv->prev(h->priv->member_list) : false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
+    }
+#endif
+    return h ? priv->prev(h->priv->member_list) : false;
 }
 
 const char* ConstHashIterator::getKey() const {

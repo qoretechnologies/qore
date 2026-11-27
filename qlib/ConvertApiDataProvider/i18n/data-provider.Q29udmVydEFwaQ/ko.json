@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "파일 변환"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "변환 제한 시간(초)으로, `10`에서 `1200`까지입니다. 설정하지 않으면 변환기의 기본값이 적용됩니다. 예를 들어 Office 문서는 `900`, 웹 페이지는 `120`입니다."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "변환기 정보 가져오기"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "ConvertAPI 매개변수 이름과 값으로 이루어진 해시 형태의 기타 변환기 매개변수입니다.\n\n각 변환기의 매개변수는 [ConvertAPI 문서](https://docs.convertapi.com)에 나와 있으며 `get-converter-info` 작업으로도 확인할 수 있습니다.\n\n- 스칼라 값은 그대로 전송됩니다\n- 파일 해시(`name` 및 `content`)는 파일로 전송됩니다\n- 파일 해시 목록은 파일 목록으로 전송됩니다\n\n**예**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "PDF를 이미지로 변환"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "ConvertAPI 매개변수 이름과 값으로 이루어진 해시 형태의 기타 변환기 매개변수입니다.\n\n각 변환기의 매개변수는 [ConvertAPI 문서](https://docs.convertapi.com)에 나와 있으며 `get-converter-info` 작업으로도 확인할 수 있습니다.\n\n- 스칼라 값은 그대로 전송됩니다\n- 파일 해시(`name` 및 `content`)는 파일로 전송됩니다\n- 파일 해시 목록은 파일 목록으로 전송됩니다\n\n**예**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "PDF 파일 병합"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

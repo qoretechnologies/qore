@@ -116,6 +116,7 @@ sub check_same_source(string dir) {
         + "string sub take_derived(MTC::Derived d) { return \"accepted\"; } "
         + "string sub take_many(MTC::Many m) { return \"accepted \" + m.alpha(1); } "
         + "MTC::Full sub make() { MTC::Full f(); f.li = (1, 2); return f; } "
+        # debug-builtin-guard: only same_hash() calls sig_hash(), after its exists_function("dbg_class_signature") test
         + "*string sub sig_hash(string path) { return call_function(\"dbg_class_signature\", path).hash; }";
     Program p = parse_program(src, "classes.ql");
     foreach string path in (("MTC::Full", "MTC::Many", "MTC::Later", "MTC::Base", "MTC::Derived")) {

@@ -16,7 +16,7 @@
           "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Retrieve File With FTP",
+          "source": "Retrieve file with FTP",
           "message": "Отримати файл через FTP"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Кодування рядка для використання, якщо `text` = `True` (за замовчуванням: `UTF-8`)"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "Помилки кодування"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Що дає текст, недійсний у своєму кодуванні символів, якщо `text` = `True`: `raise` (за замовчуванням) викликає помилку `INVALID-ENCODING`, `latin1` повертає текст як `ISO-8859-1`, а `keep` повертає його в кодуванні без перевірки"
         },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
-          "source": "Send File With FTP",
+          "source": "Send file with FTP",
           "message": "Надіслати файл через FTP"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Кодування рядка для використання, якщо `text` = `True` (за замовчуванням: `UTF-8`)"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File With FTP",
+          "source": "Delete file with FTP",
           "message": "Видалити файл через FTP"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {

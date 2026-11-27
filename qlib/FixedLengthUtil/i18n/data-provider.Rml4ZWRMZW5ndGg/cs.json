@@ -16,7 +16,7 @@
           "message": "Čtení a zápis souborových dat s pevnou délkou"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "Číst data s pevnou délkou"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Region časového pásma použitý při parsování dat (např. `Europe/Prague`); platné hodnoty viz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "Zapsat data s pevnou délkou"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class WeakObjectSoftListTest
+
+#! Tests the conversion of references to deleted objects to soft list types (qore#7759)
+/** An object that has been deleted, held by a weak or a strong reference, reads as no value, and softlist and
+    softlist<T> convert it as they convert no value, to an empty list: in a variable, a parameter, a return value, a
+    hashdecl or object member, and a list element or hash value, also when the type is in a union with nothing.  The
+    conversion did not release the reference to the deleted object, which leaked.  The checks are in
+    weak-object-soft-list-worker.qr, which is run in each execution mode, on the IR tier and as a program compiled with
+    qcc at -O0 and -O3; every run must give the results below.  The leak is checked by running the worker under
+    valgrind in the AST interpreter and in IR execution, when valgrind is available.
+*/
+class WeakObjectSoftListTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes, with a weak (\c weak- prefix) and a strong (\c strong- prefix)
+        #! reference to the deleted object
+        const Expected = {
+            "local-softlist": "list:0",
+            "local-softlist-weak-assign": "list:0",
+            "local-softlist-int": "list<int>:0",
+            "local-softlist-class": "list<object<Obj>>:0",
+            "closure-softlist": "list:0",
+            "param-softlist": "list:0",
+            "param-softlist-int": "RUNTIME-OVERLOAD-ERROR",
+            "param-softlist-class": "list<object<Obj>>:0",
+            "return-softlist": "list:0",
+            "return-softlist-int": "list<int>:0",
+            "hashdecl-softlist": "list:0",
+            "member-softlist": "list:0",
+            "member-softlist-int": "list<int>:0",
+            "list-element-softlist": "list:0",
+            "hash-value-softlist": "list:0",
+            "union-softlist-nothing": "list:0",
+            "param-union-softlist-nothing": "list:0",
+            "return-union-softlist-nothing": "list:0",
+            "softlist-object": "RUNTIME-TYPE-ERROR",
+            "list": "RUNTIME-TYPE-ERROR",
+            "softint": "RUNTIME-TYPE-ERROR",
+            "top-level-softlist": "list:0",
+            "top-level-softlist-int": "list<int>:0",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("WeakObjectSoftListTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+        addTestCase("no leak under valgrind", \testValgrind());
+
+        set_return_value(main());
+    }
+
+    #! valgrind reports no definite leak and no error in the AST interpreter and in IR execution (qore#7759: each
+    #! deleted object converted to softlist was lost)
+    testValgrind() {
+        if (is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/) {
+            testSkip("the test runs under valgrind already");
+        }
+        *string valgrind = find_valgrind();
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        string supp = get_script_dir() + DirSep + "../../../valgrind.supp";
+        TmpDir tmp("qore-weak-object-soft-list-vg-");
+        foreach string mode in (("ast", "ir")) {
+            string label = "valgrind " + mode;
+            string log = tmp.path + DirSep + mode + ".log";
+            int rc;
+            string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=full "
+                "--errors-for-leak-kinds=definite --error-exitcode=99 --suppressions=%s --log-file=%s %s -b "
+                "--enable-debug --exec-mode=%s %s 2>&1", getEnv(), valgrind, supp, log, qore_bin, mode, getWorker()),
+                \rc);
+            string vglog = ReadOnlyFile::readTextFile(log);
+            assertEq(0, rc, sprintf("%s: valgrind reports no error: %s", label, vglog));
+            assertRegex("definitely lost: 0 bytes|no leaks are possible|All heap blocks were freed", vglog,
+                label + ": no memory is definitely lost");
+            checkWorkerOutput(label, out);
+        }
+    }
+
+    #! returns the path of valgrind, if it is in the PATH
+    private static *string find_valgrind() {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
+            if (dir && is_executable(dir + "/valgrind")) {
+                return dir + "/valgrind";
+            }
+        }
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s", getEnv(), qore_bin,
+                mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", getEnv(), qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-weak-object-soft-list-");
+        foreach int opt in (0, 3) {
+            string label = sprintf("aot -O%d", opt);
+            string exe = tmp.path + DirSep + sprintf("weak-object-soft-list-O%d", opt);
+            string compile_out = backquote(sprintf("%s %s -O%d --strip-source -o %s %s 2>&1", getEnv(), qcc_bin, opt,
+                exe, getWorker()));
+            assertTrue(is_file(exe), label + ": " + compile_out);
+            checkWorkerOutput(label, backquote(sprintf("%s %s 2>&1", getEnv(), exe)));
+        }
+    }
+
+    #! returns the environment of a run: the library path and the module path of the test run
+    private string getEnv() {
+        string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+        if (ENV.QORE_MODULE_DIR) {
+            env += sprintf(" QORE_MODULE_DIR=%s", ENV.QORE_MODULE_DIR);
+        }
+        return env;
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "weak-object-soft-list-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        hash<string, string> expected = {};
+        foreach string prefix in (("weak-", "strong-")) {
+            foreach hash<auto> i in (Expected.pairIterator()) {
+                expected{prefix + i.key} = i.value;
+            }
+        }
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

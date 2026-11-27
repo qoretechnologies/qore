@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 #include <qore/Qore.h>
+#include "qore/intern/qore_siphash.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -383,13 +384,64 @@ static void largeHash() {
     require(keyList(**copy) == keyList(**hash), "the copy of the large hash has another order");
 }
 
+//! the SipHash-1-3 outputs for the key 00 01 .. 0f and the inputs of 0 to 63 bytes 00 01 02 ..; the vectors of the
+//! SipHash-1-3 test of Rust's standard library (library/coretests/tests/hash/sip.rs, MIT/Apache-2.0)
+static const uint64_t siphash13_vectors[64] = {
+    0xabac0158050fc4dcull, 0xc9f49bf37d57ca93ull, 0x82cb9b024dc7d44dull,
+    0x8bf80ab8e7ddf7fbull, 0xcf75576088d38328ull, 0xdef9d52f49533b67ull,
+    0xc50d2b50c59f22a7ull, 0xd3927d989bb11140ull, 0x369095118d299a8eull,
+    0x25a48eb36c063de4ull, 0x79de85ee92ff097full, 0x70c118c1f94dc352ull,
+    0x78a384b157b4d9a2ull, 0x306f760c1229ffa7ull, 0x605aa111c0f95d34ull,
+    0xd320d86d2a519956ull, 0xcc4fdd1a7d908b66ull, 0x9cf2689063dbd80cull,
+    0x8ffc389cb473e63eull, 0xf21f9de58d297d1cull, 0xc0dc2f46a6cce040ull,
+    0xb992abfe2b45f844ull, 0x7ffe7b9ba320872eull, 0x525a0e7fdae6c123ull,
+    0xf464aeb267349c8cull, 0x45cd5928705b0979ull, 0x3a3e35e3ca9913a5ull,
+    0xa91dc74e4ade3b35ull, 0xfb0bed02ef6cd00dull, 0x88d93cb44ab1e1f4ull,
+    0x540f11d643c5e663ull, 0x2370dd1f8c21d1bcull, 0x81157b6c16a7b60dull,
+    0x4d54b9e57a8ff9bfull, 0x759f12781f2a753eull, 0xcea1a3bebf186b91ull,
+    0x2cf508d3ada26206ull, 0xb6101c2da3c33057ull, 0xb3f47496ae3a36a1ull,
+    0x626b57547b108392ull, 0xc1d2363299e41531ull, 0x667cc1923f1ad944ull,
+    0x65704ffec8138825ull, 0x24f280d1c28949a6ull, 0xc2ca1cedfaf8876bull,
+    0xc2164bfc9f042196ull, 0xa16e9c9368b1d623ull, 0x49fb169c8b5114fdull,
+    0x9f3143f8df074c46ull, 0xc6fdaf2412cc86b3ull, 0x7eaf49d10a52098full,
+    0x1cf313559d292f9aull, 0xc44a30dda2f41f12ull, 0x36fae98943a71ed0ull,
+    0x318fb34c73f0bce6ull, 0xa27abf3670a7e980ull, 0xb4bcc0db243c6d75ull,
+    0x23f8d852fdb71513ull, 0x8f035f4da67d8a08ull, 0xd89cd0e5b7e8f148ull,
+    0xf6f4e6bcf7a644eeull, 0xaec59ad80f1837f2ull, 0xc3b2f6154b6694e0ull,
+    0x9d199062b7bbb3a8ull,
+};
+
+//! known-answer test of the keyed hash of hardened key maps (qore#7557)
+static void siphash13() {
+    unsigned char input[64];
+    for (unsigned i = 0; i < 64; ++i) {
+        input[i] = static_cast<unsigned char>(i);
+    }
+    const uint64_t k0 = 0x0706050403020100ull;
+    const uint64_t k1 = 0x0f0e0d0c0b0a0908ull;
+    for (size_t len = 0; len < 64; ++len) {
+        require(qore_siphash13(k0, k1, input, len) == siphash13_vectors[len], "a SipHash-1-3 vector does not match");
+    }
+    // the input is read byte by byte: an unaligned input gives the same hash
+    unsigned char shifted[65];
+    std::memcpy(shifted + 1, input, 64);
+    for (size_t len = 0; len < 64; ++len) {
+        require(qore_siphash13(k0, k1, shifted + 1, len) == siphash13_vectors[len],
+            "SipHash-1-3 of an unaligned input differs");
+    }
+    // the key matters
+    require(qore_siphash13(k0 ^ 1, k1, input, 16) != siphash13_vectors[16], "SipHash-1-3 ignores the first key word");
+    require(qore_siphash13(k0, k1 ^ 1, input, 16) != siphash13_vectors[16], "SipHash-1-3 ignores the second key word");
+}
+
 int main(int argc, char** argv) {
     if (argc > 2 || (argc == 2 && std::strcmp(argv[1], "encoded")
             && std::strcmp(argv[1], "conversion") && std::strcmp(argv[1], "declaration")
             && std::strcmp(argv[1], "copy") && std::strcmp(argv[1], "iterator")
-            && std::strcmp(argv[1], "stability") && std::strcmp(argv[1], "large"))) {
+            && std::strcmp(argv[1], "stability") && std::strcmp(argv[1], "large")
+            && std::strcmp(argv[1], "siphash"))) {
         std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy|iterator|stability|"
-            "large]\n");
+            "large|siphash]\n");
         return 2;
     }
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -415,6 +467,9 @@ int main(int argc, char** argv) {
         }
         if (argc == 1 || !std::strcmp(argv[1], "large")) {
             largeHash();
+        }
+        if (argc == 1 || !std::strcmp(argv[1], "siphash")) {
+            siphash13();
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL after %u checks: %s\n", checks, error.what());

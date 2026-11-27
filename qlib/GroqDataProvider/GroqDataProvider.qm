@@ -74,7 +74,7 @@ module GroqDataProvider {
             "path": "/chat-completion",
             "action": "chat-completion",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
-            "display_name": "Chat Completion",
+            "display_name": "Chat completion",
             "short_desc": "Generate a chat completion from a Groq-hosted open-weight model",
             "desc": "Sends a list of chat messages to a Groq-hosted model using the "
                 "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated "
@@ -111,7 +111,7 @@ module GroqDataProvider {
             "path": "/list-models",
             "action": "list-models",
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "List Models",
+            "display_name": "List models",
             "short_desc": "List the models currently available on the Groq API",
             "desc": "Returns the list of models currently served by the Groq API using the "
                 "`/v1/models` endpoint, including context window sizes and active flags.  See "

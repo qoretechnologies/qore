@@ -16,7 +16,7 @@
           "message": "Server Sent Events empfangen"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
-          "source": "Server Sent Event (SSE) Message",
+          "source": "Server sent event (SSE) message",
           "message": "Server-Sent-Event-Nachricht (SSE)"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {

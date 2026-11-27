@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
-          "message": "Create Incident"
+          "source": "Create incident",
+          "message": "Create incident"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
           "source": "Create an incident in ServiceNow",
@@ -352,8 +352,8 @@
           "message": "Create an incident in ServiceNow by creating a record in the `incident` table using ServiceNow's REST API"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
-          "message": "Find Single Incident"
+          "source": "Find single incident",
+          "message": "Find single incident"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
           "source": "Find a specific incident in ServiceNow",
@@ -364,8 +364,8 @@
           "message": "Find a specific record in the `incident` table using ServiceNow's REST API"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
-          "message": "Find Matching Incidents"
+          "source": "Find matching incidents",
+          "message": "Find matching incidents"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
           "source": "Find incident records in ServiceNow",
@@ -376,8 +376,8 @@
           "message": "Find records in the `incident` table using ServiceNow's REST API"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
-          "message": "Update Incidents"
+          "source": "Update incidents",
+          "message": "Update incidents"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
           "source": "Update incident records in ServiceNow",
@@ -388,8 +388,8 @@
           "message": "Update records in the `incident` table using ServiceNow's REST API"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
-          "message": "Delete Incidents"
+          "source": "Delete incidents",
+          "message": "Delete incidents"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
           "source": "Delete incident records in ServiceNow",
@@ -400,8 +400,8 @@
           "message": "Delete records in the `incident` table using ServiceNow's REST API"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
-          "message": "Create Record"
+          "source": "Create record",
+          "message": "Create record"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
           "source": "Create a record in a ServiceNow table",
@@ -424,8 +424,8 @@
           "message": "The name of the ServiceNow table, ex: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
-          "message": "Find Single Record"
+          "source": "Find single record",
+          "message": "Find single record"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
           "source": "Find a specific record in ServiceNow",
@@ -448,8 +448,8 @@
           "message": "The name of the ServiceNow table, ex: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
-          "message": "Find Records"
+          "source": "Find records",
+          "message": "Find records"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
           "source": "Find records in ServiceNow",
@@ -472,8 +472,8 @@
           "message": "The name of the ServiceNow table, ex: `incident`"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
           "source": "Update records in ServiceNow",
@@ -496,8 +496,8 @@
           "message": "The name of the ServiceNow table, ex: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
           "source": "Delete records in ServiceNow",

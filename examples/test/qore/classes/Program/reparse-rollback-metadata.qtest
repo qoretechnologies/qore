@@ -46,6 +46,7 @@ public class ReparseRollbackMetadataTest inherits QUnit::Test {
             m0 = call_function("dbg_program_metadata", p);
         }
         assertThrows("PARSE-EXCEPTION", \p.parse(), ("int sub h( {", "bad-" + get_random_string(20)));
+        # debug-builtin-guard: m0 is set only with library debugging
         if (m0) {
             hash<auto> m1 = call_function("dbg_program_metadata", p);
             assertEq(m0.strings, m1.strings);
@@ -80,6 +81,7 @@ public class ReparseRollbackMetadataTest inherits QUnit::Test {
         assertThrows("PARSE-EXCEPTION", "cannot be declared in the code of an expression", sub () {
             Expression bad(p, "1); sub evil() {} #", "bad-" + get_random_string(20));
         });
+        # debug-builtin-guard: m0 is set only with library debugging
         if (m0) {
             hash<auto> m1 = call_function("dbg_program_metadata", p);
             assertGe(m0.strings, m1.strings);

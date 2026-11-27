@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/TestRunIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class DataSchemaIdentityTest
+
+#! A data schema column written with the \c type shorthand can be a portable identity column (issue #7747)
+/** SqlUtil creates an identity column with each database's own mechanism (issue #7633), but the shorthand form of a
+    data schema column refused its keys (\c identity, \c identity_start, \c identity_increment,
+    \c identity_generation), so a definition could not say that a column generates its own values.  The database
+    tests run on SQLite and on the PostgreSQL database given by \c QORE_DB_CONNSTR_PGSQL.
+*/
+class DataSchemaIdentityTest inherits QUnit::Test {
+    constructor() : Test("DataSchemaIdentityTest", "1.0", \ARGV) {
+        addTestCase("the shorthand carries the identity keys", \shorthandCarriesKeys());
+        addTestCase("invalid identity options are reported at their key", \invalidOptions());
+        addTestCase("SQLite creates and realigns an identity column with no change", \sqlite());
+        addTestCase("PostgreSQL creates and realigns an identity column with no change", \pgsql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! A definition with one table whose id column is given
+    private static hash<auto> definition(hash<auto> id, string version = "1.0") {
+        return {
+            "schema": {"name": "identity_test", "version": version},
+            "tables": {
+                "identity_items": {
+                    "columns": {
+                        "id": id,
+                        "name": {"type": "varchar", "size": 40},
+                    },
+                    "primary_key": {"name": "pk_identity_items", "columns": ("id",)},
+                },
+            },
+        };
+    }
+
+    shorthandCarriesKeys() {
+        hash<auto> col = DataSchemaLoader::loadHash(definition({"type": "int", "notnull": True, "identity": True,
+            "identity_start": 5, "identity_increment": 3, "identity_generation": "always"})).tables.identity_items
+            .columns.id;
+        assertEq(Type::Int, col.qore_type);
+        assertTrue(col.identity);
+        assertEq((5, 3, "always"), (col.identity_start, col.identity_increment, col.identity_generation));
+
+        # the defaults are left to SqlUtil
+        col = DataSchemaLoader::loadHash(definition({"type": "int", "identity": True})).tables.identity_items
+            .columns.id;
+        assertTrue(col.identity);
+        assertFalse(exists col.identity_start);
+        assertFalse(exists col.identity_generation);
+
+        # a number without a scale is integral too
+        col = DataSchemaLoader::loadHash(definition({"type": "number", "size": 18, "identity": True})).tables
+            .identity_items.columns.id;
+        assertTrue(col.identity);
+
+        # identity: false is no identity column
+        col = DataSchemaLoader::loadHash(definition({"type": "int", "identity": False})).tables.identity_items
+            .columns.id;
+        assertFalse(exists col.identity && col.identity, "not an identity column");
+
+        # the checked load reports no problem for a valid identity column
+        assertEq((), DataSchemaLoader::loadHashChecked(definition({"type": "int", "identity": True,
+            "identity_increment": -1})).issues);
+    }
+
+    invalidOptions() {
+        string path = "tables.identity_items.columns.id";
+        hash<string, list<auto>> cases = {
+            "a string column": ({"type": "varchar", "size": 10, "identity": True}, "IDENTITY-TYPE",
+                path + ".identity"),
+            "a number with a scale": ({"type": "number", "size": 10, "scale": 2, "identity": True}, "IDENTITY-TYPE",
+                path + ".identity"),
+            "a default value": ({"type": "int", "identity": True, "default_value": 1}, "IDENTITY-DEFAULT",
+                path + ".default_value"),
+            "a start without identity": ({"type": "int", "identity_start": 5}, "IDENTITY-OPTION",
+                path + ".identity_start"),
+            "a generation with identity false": ({"type": "int", "identity": False, "identity_generation": "always"},
+                "IDENTITY-OPTION", path + ".identity_generation"),
+            "a zero increment": ({"type": "int", "identity": True, "identity_increment": 0}, "IDENTITY-OPTION",
+                path + ".identity_increment", "DATA-SCHEMA-VALIDATION-ERROR"),
+            "a string start": ({"type": "int", "identity": True, "identity_start": "5"}, "IDENTITY-OPTION",
+                path + ".identity_start", "DATA-SCHEMA-VALIDATION-ERROR"),
+            "an unknown generation": ({"type": "int", "identity": True, "identity_generation": "sometimes"},
+                "IDENTITY-OPTION", path + ".identity_generation", "DATA-SCHEMA-VALIDATION-ERROR"),
+            "identity not a boolean": ({"type": "int", "identity": "yes"}, "IDENTITY-OPTION", path + ".identity",
+                "DATA-SCHEMA-VALIDATION-ERROR"),
+        };
+        # the 4th element: the error of an unchecked load when the JSON meta schema refuses the value first
+        foreach hash<auto> c in (cases.pairIterator()) {
+            hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(definition(c.value[0]));
+            list<auto> errors = select info.issues, $1.severity == "error";
+            assertEq(1, errors.size(), c.key + ": " + sprintf("%y", info.issues));
+            assertEq((c.value[1], c.value[2]), (errors[0].code, errors[0].path), c.key);
+            # the unchecked load raises the same error
+            assertThrows(c.value[3] ?? "DATA-SCHEMA-ERROR", \DataSchemaLoader::loadHash(), (definition(c.value[0]),),
+                c.key);
+        }
+    }
+
+    sqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        # SQLite supports only the default start and increment
+        checkDatabase("sqlite3:@:memory:", {"type": "int", "notnull": True, "identity": True}, 1, 2);
+    }
+
+    pgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        Datasource probe(ENV.QORE_DB_CONNSTR_PGSQL);
+        try {
+            probe.open();
+        } catch (hash<ExceptionInfo> ex) {
+            TestRun::failOrSkipConnect("no DB connection", ex);
+        }
+        probe.close();
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "DataSchemaIdentity");
+        checkDatabase(ENV.QORE_DB_CONNSTR_PGSQL, {"type": "int", "notnull": True, "identity": True,
+            "identity_start": 100, "identity_increment": 5}, 100, 105);
+    }
+
+    #! Creates the table from the shorthand, checks the generated values, and realigns it with no change
+    private checkDatabase(string connstr, hash<auto> id, int first, int second) {
+        Datasource ds(connstr);
+        Database db(ds);
+        on_exit {
+            db.dropTableIfExists("identity_items");
+            ds.commit();
+        }
+        db.dropTableIfExists("identity_items");
+        ds.commit();
+
+        (new DataSchema(ds, DataSchemaLoader::loadHash(definition(id)))).align(False, -1, False);
+        Table items(ds, "identity_items");
+        items.insert({"name": "a"});
+        items.insert({"name": "b"});
+        ds.commit();
+        assertEq((first, second), (map $1.id.toInt(), items.selectRows({"orderby": "id"})));
+
+        # the database reports the column as the identity column the shorthand declared
+        hash<auto> desc = (new Table(ds, "identity_items")).getDescriptionHash().columns.id;
+        assertTrue(desc.identity, "the table's column is an identity column");
+
+        # aligning the same definition again changes nothing
+        hash<auto> info = (new DataSchema(ds, DataSchemaLoader::loadHash(definition(id)))).alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, connstr.split(":")[0]);
+    }
+}

@@ -45,6 +45,24 @@ printf("%s %s\n", lmt.format("YYYY-MM-DD HH:mm:SS Z"), lmt.currentZoneName());
 2100-07-01 12:00:00 +02:00 CEST
 1800-01-01 12:00:00 +00:57:44 LMT@endverbatim
 
+    @subsection time_zone_region_spellings Region Name Spellings
+
+    A region name is normally the name of an entry in the zoneinfo directory (ex: \c "Europe/Prague", \c "UTC" or
+    a link such as \c "US/Eastern"), and @ref Qore::TimeZone::region() "TimeZone::region()" returns it as given.
+    Other names can reach the same entry: on a file system that does not distinguish the case of names (the default
+    on macOS) every case variant of a region (ex: \c "europe/prague"), and a name through a symbolic link to a
+    directory in the zoneinfo directory (ex: \c "posix/Europe/Prague" where \c "posix" is a link to the directory
+    itself).  Such a spelling also gets a time zone named as given, but only for the first 512 spellings in the
+    process: each one is kept for the life of the process, so names that come from data (deserialized dates, database
+    values) could otherwise make the process grow without bound.  After that, a new spelling gets the time zone of
+    the name of the entry that it reaches (ex: \c "Europe/Prague" for \c "EUROPE/prague"), the same time zone with
+    the same rules, and the names of the most recent spellings are remembered so that their files are not read again
+    for each use.  The names of entries always keep their names.  Restricted code always gets the canonical name of
+    the file (see @ref sandbox_fs_tz_regions).
+
+    @note Case variants are recognized as spellings only on macOS; on another system whose zoneinfo directory is on
+    a file system that does not distinguish case, each case variant is treated as the name of an entry.
+
     @section windows_time_zones Windows Time Zone Handling
 
     Time zone information is read in from binary time zone data in the Windows registry under:\n

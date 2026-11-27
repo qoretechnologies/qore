@@ -129,6 +129,13 @@ public class HttpClientStreamHandle {
         #! True if a pending stream reservation is held on the connection
         bool reservation_held = False;
 
+        #! True once the request of the stream ended and its response was delivered (qore#7570)
+        bool request_ended = False;
+
+        #! The Future of the response of the request that was submitted with a Future; it is done when the request
+        #! ended (qore#7570)
+        *Future ended_future;
+
         #! True while a thread submits a request on this stream
         /** Set under @ref lock when a submission starts and cleared when it ends, whatever its result; while it is
             set, @ref cancel() leaves the reservation and the request to the submitting thread (see
@@ -732,7 +739,65 @@ public class HttpClientStreamHandle {
     }
 
     #! Returns the underlying connection
+    /** Code that a sandbox restricts and whose %Program does not own the connection manager gets the connection of its
+        request only as a view (see getConnectionView()): the pool gives the connection to the manager's other requests,
+        which the code must not act on (qore#7570)
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the connection manager;
+        use getConnectionView()
+    */
     HttpClientConnection getConnection() {
+        if (HttpClientIoSocketAccess::callerIsRestrictedNonOwner(conn)) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the connection of a request of a "
+                "connection manager that it does not own; use getConnectionView()";
+        }
+        return conn;
+    }
+
+    #! Returns a view of the underlying connection that is valid while the request of this stream is active
+    /** For code that a sandbox restricts and whose %Program does not own the connection manager, the view refuses its
+        calls once the request has ended, because the pool then gives the connection to other requests; for other
+        code it is never ended (see @ref HttpClientConnectionView) (qore#7570)
+
+        @since HttpClientIo 1.0
+    */
+    HttpClientConnectionView getConnectionView() {
+        return HttpClientIoSocketAccess::newView(conn, self,
+            HttpClientIoSocketAccess::callerIsRestrictedNonOwner(conn), SandboxManager::getCallerProgramId());
+    }
+
+    #! Returns @ref True if the request of the stream has ended: it is done, or its response was delivered (qore#7570)
+    /** The state of the stream is updated by the calls that read it, so a request that returned its response through
+        its Future (@ref HttpClientRequestPollOperation) is marked ended by that operation
+
+        @param access the token of the module (see HttpClientIoSocketAccess)
+    */
+    final bool isEndedFor(object access) {
+        HttpClientIoSocketAccess::check(access);
+        *Future f;
+        {
+            AutoLock al(lock);
+            if (request_ended || state == HttpClientStreamState::Complete
+                    || state == HttpClientStreamState::Cancelled || state == HttpClientStreamState::Error) {
+                return True;
+            }
+            f = ended_future;
+        }
+        return f && f.isDone();
+    }
+
+    #! Records that the request of the stream has ended (qore#7570)
+    /** @param access the token of the module (see HttpClientIoSocketAccess)
+    */
+    final markEndedFor(object access) {
+        HttpClientIoSocketAccess::check(access);
+        AutoLock al(lock);
+        request_ended = True;
+    }
+
+    #! Returns the underlying connection for the code of this module, which acts for the stream itself (qore#7570)
+    final HttpClientConnection getConnectionFor(object access) {
+        HttpClientIoSocketAccess::check(access);
         return conn;
     }
 
@@ -1397,6 +1462,10 @@ public class HttpClientStreamHandle {
 
     #! Internal: returns the result of an async submission with a future that decodes the response
     private hash<auto> decodeResultFuture(hash<auto> result) {
+        if (result.future) {
+            AutoLock al(lock);
+            ended_future = result.future;
+        }
         if (result.future) {
             result.future = new DecodingResponseFuture(result.future, max_response_body_size, assumed_encoding,
                 decode_text, decode_content);

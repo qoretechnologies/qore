@@ -16,7 +16,7 @@
           "message": "Generovat konfigurovatelné proudy záznamů pro testování datových pipelines bez připojení k externím službám"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Generovat záznamy"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Pevná hodnota data/času použitá jako referenční bod pro generování polí s datem; při zadání se seedem zajistí úplnou reprodukovatelnost polí s datem napříč běhy; pokud není zadána, použije se aktuální datum/čas při spuštění generování"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Generovat ze šablony"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

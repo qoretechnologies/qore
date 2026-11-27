@@ -16,8 +16,8 @@
           "message": "Generic FTP server for exchanging files with FTP and FTPS"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Retrieve File With FTP",
-          "message": "Retrieve File With FTP"
+          "source": "Retrieve file with FTP",
+          "message": "Retrieve file with FTP"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file from an FTP server",
@@ -64,8 +64,8 @@
           "message": "The string encoding to use if `text` = `True` (default: `UTF-8`)"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
-          "message": "Encoding Errors"
+          "source": "Encoding errors",
+          "message": "Encoding errors"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
           "source": "What text that is not valid in its character encoding gives",
@@ -76,8 +76,8 @@
           "message": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check"
         },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
-          "source": "Send File With FTP",
-          "message": "Send File With FTP"
+          "source": "Send file with FTP",
+          "message": "Send file with FTP"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
           "source": "Sends a file to an FTP server",
@@ -124,8 +124,8 @@
           "message": "The string encoding to use if `text` = `True` (default: `UTF-8`)"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File With FTP",
-          "message": "Delete File With FTP"
+          "source": "Delete file with FTP",
+          "message": "Delete file with FTP"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Deletes a file on an FTP server",

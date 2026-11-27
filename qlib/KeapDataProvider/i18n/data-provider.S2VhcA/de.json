@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Kontakt erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Zeitzone des Kontakts"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Kontakt aktualisieren"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Zeitzone des Kontakts"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Kontakt löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Der zu löschende Kontakt"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
+          "source": "Merge contacts",
           "message": "Kontakte zusammenführen"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Der Kontakt, der zusammengeführt und gelöscht werden soll"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Einen Kontakt abrufen"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
+          "source": "Create a company",
           "message": "Ein Unternehmen erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Unternehmenswebsite"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
+          "source": "Update a company",
           "message": "Ein Unternehmen aktualisieren"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Unternehmenswebsite"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
+          "source": "Delete a company",
           "message": "Ein Unternehmen löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Das zu löschende Unternehmen"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Unternehmen auflisten"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
+          "source": "Get a company",
           "message": "Unternehmen abrufen"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Die Unternehmens-ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Opportunity erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Notizen zur Verkaufschance"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Eine Opportunity aktualisieren"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "Notizen zur Verkaufschance"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Eine Opportunity löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "Die zu löschende Opportunity"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Opportunities auflisten"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Opportunity abrufen"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "Die Opportunity-ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Bestellung erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Aktionscodes"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Bestellungen auflisten"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Bestellung abrufen"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Die Bestell-ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Tag erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Tag-Kategorie"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Ein Tag löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "Der zu löschende Tag"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Tag auf Kontakt anwenden"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Liste von ganzzahligen Tag-IDs"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Tag von Kontakt entfernen"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Der zu entfernende Tag"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Tags auflisten"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Tag abrufen"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Die Tag-ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Notiz erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Der Typ der Notiz"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Notiz aktualisieren"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Notizinhalt"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Notiz löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Die zu löschende Notiz"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Notizen auflisten"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Aufgabe erstellen"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Zugewiesener Benutzer"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Aufgabe aktualisieren"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Abschlussstatus der Aufgabe"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Eine Aufgabe löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Die zu löschende Aufgabe"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Tasks auflisten"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Aufgabe abrufen"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Die Aufgaben-ID"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "E-Mails auflisten"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "Eine Datei hochladen"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Dateisichtbarkeit"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
+          "source": "Get a file",
           "message": "Datei abrufen"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Die abzurufende Datei"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
+          "source": "Delete a file",
           "message": "Datei löschen"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Die zu löschende Datei"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Dateien auflisten"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Produkte auflisten"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Produkt abrufen"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Die Produkt-ID"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Kampagnen auflisten"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
+          "source": "List affiliates",
           "message": "Affiliates auflisten"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
@@ -2256,7 +2256,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
+          "source": "Contact added",
           "message": "Kontakt hinzugefügt"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Kontakt in Keap erstellt wird"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Kontakt aktualisiert"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Wird ausgelöst, wenn ein Kontakt in Keap aktualisiert wird"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
+          "source": "Tag applied",
           "message": "Tag angewendet"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
@@ -2292,7 +2292,7 @@
           "message": "Wird ausgelöst, wenn ein Tag auf einen Kontakt in Keap angewendet wird"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
+          "source": "Opportunity added",
           "message": "Verkaufschance hinzugefügt"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Wird ausgelöst, wenn eine neue Verkaufschance in Keap erstellt wird"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
+          "source": "Order added",
           "message": "Bestellung hinzugefügt"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Wird ausgelöst, wenn eine neue Bestellung in Keap erstellt wird"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
+          "source": "Task created",
           "message": "Aufgabe erstellt"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Wird ausgelöst, wenn eine neue Aufgabe in Keap erstellt wird"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
+          "source": "Note added",
           "message": "Notiz hinzugefügt"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {

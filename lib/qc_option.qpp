@@ -447,4 +447,17 @@ const HAVE_SANDBOX_CALL_GOVERNED = bool(true);
     @since %Qore 3.0
 */
 const HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION = bool(true);
+
+//! Indicates that the stop of an HttpServer listener drains its connections before it closes them (qore#7692)
+/** When this option is available, @ref HttpServer::HttpServer::stopListenerID() "stopping a listener":
+    - refuses new connections and sessions, then lets the requests and responses in progress on the listener (and on
+      its paired QUIC listener) complete, at most the server's \c drain_timeout option: an HTTP/1.1 response says
+      \c Connection: \c close and its connection is closed after it, an HTTP/2 or HTTP/3 client is sent a \c GOAWAY
+    - then closes every connection of the listener that is left; when the stop returns, the connections of the
+      listener are closed, except that of a request that runs the stop (see the stopListenerID() documentation)
+    - the connections of the other listeners of the server are not affected
+
+    @since %Qore 3.0
+*/
+const HAVE_HTTPSERVER_LISTENER_STOP_DRAIN = bool(true);
 ///@}

@@ -277,7 +277,9 @@ int QoreLazySharedBase::getIntern(SafeLocker& sl, const std::shared_ptr<QoreLazy
             return -1;
         }
         if (wrc) {
-            xsink->raiseException("SHARED-INIT-ERROR", "%s cannot be waited for: its builder waits, directly or "
+            // a distinct code: which thread closes the cycle depends on the order of the threads, so the caller can
+            // tell this error, which another order avoids, from the ones that repeat on every call (qore#7712)
+            xsink->raiseException("SHARED-INIT-CYCLE", "%s cannot be waited for: its builder waits, directly or "
                 "through other builders, for a value that this thread builds", what);
             return -1;
         }

@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Konvertovať súbor"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Časový limit konverzie v sekundách, od `10` do `1200`; ak nie je nastavený, použije sa predvolená hodnota konvertora, napríklad `900` pre dokumenty Office a `120` pre webové stránky."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Získať informácie o konvertore"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "Konvertovať PDF na obrázky"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Ďalšie parametre konvertora ako hash názvov parametrov ConvertAPI a ich hodnôt.\n\nParametre každého konvertora sú uvedené v [dokumentácii ConvertAPI](https://docs.convertapi.com) a vracia ich akcia `get-converter-info`.\n\n- Skalárne hodnoty sa odosielajú tak, ako sú\n- Hash súboru (`name` a `content`) sa odošle ako súbor\n- Zoznam hashov súborov sa odošle ako zoznam súborov\n\n**Príklad**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "Zlúčiť súbory PDF"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

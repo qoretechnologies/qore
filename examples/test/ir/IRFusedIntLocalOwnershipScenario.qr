@@ -148,6 +148,7 @@ int sub leakDirect() {
     return c();
 }
 
+# debug-builtin-guard: IRFusedIntLocalOwnership.qtest runs the "live" mode only with library debugging
 if (ARGV[0] == "live") {
     hash<string, code> cases = {
         "body": \leakBody(),

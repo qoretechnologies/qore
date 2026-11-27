@@ -1,0 +1,7 @@
+frozen by the tenant: type: False, field: False, field type: False
+registered: type: True, field: True, field type: True
+  delete field type: SHARED-OBJECT-ERROR
+  delete field: SHARED-OBJECT-ERROR
+  delete type: SHARED-OBJECT-ERROR
+afterwards: refrozen, field type "list<string>"
+frozen again by trusted code: type: True, field: True, field type: True

@@ -1,0 +1,380 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The async request operation and the polling ping of RestClientIo answer a Negotiate, Basic or Digest challenge
+    by sending the request again.  A server closes the connection after a 401 response that refuses the credentials
+    (HttpServer does so for every authentication error), so the request that answers the challenge has to wait for a
+    new connection; the operations sent it at once instead, and failed with HTTPCLIENT-NOT-READY when the new
+    connection was not ready yet (qoretechnologies/qore#7768).
+
+    The server here holds the TLS handshake of the second connection until the operation waits for it, so the new
+    connection is never ready when the challenge is answered; the operations are driven by the test, so every step is
+    a state that was reached, not a time measured.  The Negotiate tokens are made by the client subclass here, so no
+    Kerberos KDC is needed.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClient
+%requires RestClientIo
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class RestClientIoAuthRetryConnectTest
+
+#! The Negotiate token the fake client sends
+const FakeToken = "Negotiate ZmFrZS10b2tlbg==";
+
+#! A RestClientIo that answers a Negotiate challenge with a fixed token instead of a Kerberos one
+class FakeNegotiateRestClientIo inherits RestClientIo {
+    constructor(hash<auto> opts) : RestClientIo(opts) {
+    }
+
+    private *hash<auto> findNegotiateChallenge(hash<auto> response_headers) {
+        *string h = response_headers."www-authenticate";
+        if (h =~ /^Negotiate/) {
+            return {"header": h, "has_token": h != "Negotiate"};
+        }
+    }
+
+    private hash<auto> buildNegotiateClientAuthorization(*string www_authenticate_header, *auto gss_context) {
+        return {
+            "authorization_header": FakeToken,
+            "context": "fake-context",
+        };
+    }
+}
+
+#! A RestConnection whose pings use FakeNegotiateRestClientIo
+class FakeNegotiateRestConnection inherits RestConnection {
+    constructor(string name, string url, hash<auto> opts) : RestConnection(name, name, url, {}, opts) {
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new FakeNegotiateRestClientIo(getConnectionOptions(rtopts));
+    }
+}
+
+#! An HTTP/1.1 server over TLS that answers a request without the expected credentials with a 401 challenge and
+#! closes the connection, as HttpServer does for an authentication error
+/** Every response closes its connection, so the number of connections accepted is the number of requests.  The TLS
+    handshake of a connection can be held (see @ref hold()), so that the connection cannot become ready until
+    it is released.
+*/
+class ChallengeServer {
+    public {
+        #! The fail-safe bound of the waits of the server for an event that is due
+        const EventTimeout = 20s;
+    }
+
+    private {
+        #! The TLS listener
+        Socket listener();
+
+        #! The port of the listener
+        int port;
+
+        #! The challenge sent
+        string challenge;
+
+        #! Guards the members below
+        Mutex m();
+
+        #! The number of TCP connections accepted
+        int connection_count = 0;
+
+        #! The Authorization headers of the requests received, in order; @ref nothing for a request without one
+        list<auto> received = ();
+
+        #! True once the server is stopping
+        bool stopping = False;
+
+        #! Connection number -> the gate that its TLS handshake waits for
+        hash<string, Counter> holds = {};
+
+        #! The accept loop
+        Counter running(1);
+
+        #! The connection handlers in progress
+        Counter handlers();
+    }
+
+    constructor(string challenge) {
+        self.challenge = challenge;
+        listener.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        listener.bindINET("127.0.0.1", "0", True);
+        if (listener.listen()) {
+            throw "SOCKET-LISTEN-ERROR", strerror(errno());
+        }
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    string getUrl() {
+        return sprintf("https://127.0.0.1:%d", port);
+    }
+
+    #! Returns the number of TCP connections accepted
+    int getConnectionCount() {
+        AutoLock al(m);
+        return connection_count;
+    }
+
+    #! Returns the Authorization headers of the requests received, in order
+    list<auto> getReceived() {
+        AutoLock al(m);
+        return received;
+    }
+
+    #! Holds the TLS handshake of the given connection until @ref release() is called
+    /** @param n the number of the connection, counting from 1; it must not have been accepted yet
+    */
+    hold(int n) {
+        AutoLock al(m);
+        @assert(n > connection_count);
+        holds{n} = new Counter(1);
+    }
+
+    #! Releases a connection held with @ref hold()
+    release(int n) {
+        *Counter gate;
+        {
+            AutoLock al(m);
+            gate = remove holds{n};
+        }
+        if (gate) {
+            gate.dec();
+        }
+    }
+
+    #! Stops the server: releases held connections, ends the accept loop and waits for all connection handlers
+    stop() {
+        list<Counter> gates;
+        {
+            AutoLock al(m);
+            if (stopping) {
+                return;
+            }
+            stopping = True;
+            gates = holds.values() ?? ();
+            holds = {};
+        }
+        foreach Counter gate in (gates) {
+            gate.dec();
+        }
+        # the accept loop is unblocked with a throwaway connection
+        try {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port));
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the accept loop has already exited
+        }
+        running.waitForZero();
+        handlers.waitForZero();
+        try { listener.close(); } catch () {}
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket client;
+            try {
+                client = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            *Counter gate;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    try { client.close(); } catch () {}
+                    break;
+                }
+                gate = holds{++connection_count};
+            }
+            handlers.inc();
+            background handleConnection(client, gate);
+        }
+    }
+
+    private handleConnection(Socket client, *Counter gate) {
+        on_exit {
+            try { client.close(); } catch () {}
+            handlers.dec();
+        }
+        try {
+            if (gate) {
+                gate.waitForZero();
+            }
+            client.setAlpnProtocols(("http/1.1",));
+            client.upgradeServerToSSL(EventTimeout);
+            hash<auto> hdr = client.readHTTPHeader(EventTimeout);
+            *string auth = hdr.authorization;
+            {
+                AutoLock al(m);
+                push received, auth;
+            }
+            if (auth == FakeToken || auth =~ /^Digest /) {
+                string body = "ok";
+                client.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n"
+                    "Connection: close\r\n\r\n%s", body.size(), body));
+                return;
+            }
+            client.send(sprintf("HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: %s\r\nContent-Length: 0\r\n"
+                "Connection: close\r\n\r\n", challenge));
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }
+}
+
+public class RestClientIoAuthRetryConnectTest inherits QUnit::Test {
+    public {
+        #! The Digest challenge sent
+        const DigestChallenge = "Digest realm=\"test\", nonce=\"abc123\", qop=\"auth\", algorithm=SHA-256";
+    }
+
+    constructor() : Test("RestClientIoAuthRetryConnectTest", "1.0") {
+        addTestCase("async Negotiate retry waits for a new connection", \asyncNegotiateTest());
+        addTestCase("async Digest retry waits for a new connection", \asyncDigestTest());
+        addTestCase("ping Negotiate retry waits for a new connection", \pingNegotiateTest());
+        addTestCase("controller-driven Negotiate retries", \controllerNegotiateTest());
+        set_return_value(main());
+    }
+
+    private hash<auto> getNegotiateOptions(ChallengeServer srv) {
+        return {
+            "url": srv.getUrl(),
+            "data": "text",
+            "http_version": "1.1",
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/localhost@EXAMPLE.COM",
+            "connect_timeout": 20s,
+            "timeout": 20s,
+        };
+    }
+
+    #! Drives the operation to its goal; the second connection, which answers the challenge, is held before its TLS
+    #! handshake until the operation waits for it
+    private drive(AbstractPollOperation op, ChallengeServer srv) {
+        bool released;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            if (!released && srv.getReceived().size() == 1 && op.getState() == "connecting") {
+                # the challenge was answered while the new connection could not be ready
+                released = True;
+                srv.release(2);
+            }
+            Socket::poll((info,), 10s);
+        }
+        assertTrue(released, "the request that answers the challenge waited for its connection");
+        assertTrue(op.goalReached());
+        assertEq(2, srv.getConnectionCount());
+    }
+
+    asyncNegotiateTest() {
+        ChallengeServer srv("Negotiate");
+        on_exit srv.stop();
+        srv.hold(2);
+        RestClientIo rest = new FakeNegotiateRestClientIo(getNegotiateOptions(srv));
+        on_exit rest.close();
+
+        AbstractPollOperation op = rest.startPollRequest("GET", "/negotiate", NOTHING);
+        drive(op, srv);
+        hash<auto> resp = op.getOutput();
+        assertEq(200, resp.status_code);
+        assertEq("ok", resp.body);
+        assertEq((NOTHING, FakeToken), srv.getReceived());
+    }
+
+    asyncDigestTest() {
+        ChallengeServer srv(DigestChallenge);
+        on_exit srv.stop();
+        srv.hold(2);
+        RestClientIo rest({
+            "url": srv.getUrl(),
+            "data": "text",
+            "http_version": "1.1",
+            "username": "user",
+            "password": "pass",
+            "connect_timeout": 20s,
+            "timeout": 20s,
+        });
+        on_exit rest.close();
+
+        AbstractPollOperation op = rest.startPollRequest("GET", "/digest", NOTHING);
+        drive(op, srv);
+        hash<auto> resp = op.getOutput();
+        assertEq(200, resp.status_code);
+        list<auto> received = srv.getReceived();
+        assertEq(2, received.size());
+        assertRegex("^Basic ", received[0]);
+        assertRegex("^Digest ", received[1]);
+    }
+
+    pingNegotiateTest() {
+        ChallengeServer srv("Negotiate");
+        on_exit srv.stop();
+        srv.hold(2);
+        FakeNegotiateRestConnection rc("auth-retry-ping", srv.getUrl(), getNegotiateOptions(srv) - "url" + {
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        });
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+        drive(op, srv);
+        assertEq((NOTHING, FakeToken), srv.getReceived());
+    }
+
+    #! The APIs that the async I/O controller drives answer the challenge as well
+    controllerNegotiateTest() {
+        ChallengeServer srv("Negotiate");
+        on_exit srv.stop();
+        RestClientIo rest = new FakeNegotiateRestClientIo(getNegotiateOptions(srv));
+        on_exit rest.close();
+
+        hash<RestResponseInfo> resp = rest.restGetAsync("/async").get(20s);
+        assertEq(200, resp.status_code);
+        assertEq("ok", rest.restDoRequestCancellableAsync("GET", "/cancellable", NOTHING, NOTHING).get(20s).body
+            .toString());
+        code signer = string sub (hash<auto> info) {
+            return "signature:" + info.path;
+        };
+        resp = rest.doSignedRequestAsync("x-test-signature", signer, "GET", "/signed", NOTHING).get(20s);
+        assertEq(200, resp.status_code);
+        # each request is challenged and answered on a new connection
+        assertEq((NOTHING, FakeToken, NOTHING, FakeToken, NOTHING, FakeToken), srv.getReceived());
+    }
+}

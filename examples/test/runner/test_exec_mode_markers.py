@@ -400,8 +400,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   in child processes that set their own execution modes, as a module is loaded once in a process
         # - qcc-require-cycles (#7808): its checks compile modules with qcc and load them from source and AOT in child
         #   processes that set their own execution modes
-        # - ListJoinFastPathFrames (#7731): its checks run in child processes that set their own execution modes and
-        #   in qcc executables
         # - TruncatedQmod (#7804): its checks cut a module that it compiles with qcc and load it in child processes that
         #   set their own execution modes and from a qcc executable
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
@@ -463,6 +461,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",

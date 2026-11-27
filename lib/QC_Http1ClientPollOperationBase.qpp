@@ -1357,7 +1357,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // such as one that a TLS peer's close_notify closed) is reported by the check as closed, so that the request
         // is sent on a new connection and never on it.  Bytes that the socket has already read count as data: a
         // response ends the connection when data follows it (see dispatchResponse()), so none should be there.
-        int fd = sock_obj->getPollableDescriptor();
+        [[maybe_unused]] int fd = sock_obj->getPollableDescriptor();
         {
 #ifdef DEBUG
             if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {

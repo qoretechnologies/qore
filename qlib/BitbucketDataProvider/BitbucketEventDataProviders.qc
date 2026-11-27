@@ -285,7 +285,7 @@ public class BitbucketNewCommitDataProvider inherits BitbucketWatchDataProviderB
         const EventName = "new_commit";
 
         #! The event display name
-        const DisplayName = "New Commit";
+        const DisplayName = "New commit";
 
         #! The event short description
         const ShortDesc = "Fires when a commit is pushed to the watched repository";
@@ -360,7 +360,7 @@ public class BitbucketNewDeploymentDataProvider inherits BitbucketWatchDataProvi
         const EventName = "new_deployment";
 
         #! The event display name
-        const DisplayName = "New Deployment";
+        const DisplayName = "New deployment";
 
         #! The event short description
         const ShortDesc = "Fires when a deployment is created for the watched repository";
@@ -449,7 +449,7 @@ public class BitbucketNewPullRequestDataProvider inherits BitbucketWatchDataProv
         const EventName = "new_pull_request";
 
         #! The event display name
-        const DisplayName = "New Pull Request";
+        const DisplayName = "New pull request";
 
         #! The event short description
         const ShortDesc = "Fires when a pull request is opened in the watched repository";

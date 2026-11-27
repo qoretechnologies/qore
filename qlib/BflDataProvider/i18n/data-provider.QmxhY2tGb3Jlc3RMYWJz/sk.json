@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.display_name": {
-          "source": "Get Fine-Tune Details",
+          "source": "Get fine-tune details",
           "message": "Načítať podrobnosti doladeného modelu"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Vyberte vlastný model alebo zadajte `org-id/lora-name` pre zdieľanú LoRA. Základný model a presnosť sa musia zhodovať."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.display_name": {
-          "source": "List Fine-Tunes",
+          "source": "List fine-tunes",
           "message": "Zoznam Fine-Tunes"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Vypíše doladené modely vlastnené vybraným účtom.\n\n**Dostupnosť:** aktuálna schéma túto operáciu zachováva, ale staršie postupy doladenia boli vyradené. Je potrebné overiť podporu účtu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "Odstrániť Fine-Tune"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Vyberte vlastný model alebo zadajte `org-id/lora-name` pre zdieľanú LoRA. Základný model a presnosť sa musia zhodovať."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "Zistiť zostatok kreditov"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Pred generovaním médií skontrolujte dostupný zostatok."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.display_name": {
-          "source": "Get Result on This Region",
+          "source": "Get result on this region",
           "message": "Načítať výsledok v tejto oblasti"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.short_desc": {
@@ -436,7 +436,7 @@
           "message": "ID úlohy vrátené spúšťacou akciou."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.display_name": {
-          "source": "Start FLUX Pro 1.1 Image",
+          "source": "Start FLUX Pro 1.1 image",
           "message": "Spustiť tvorbu obrázka FLUX Pro 1.1"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.display_name": {
-          "source": "Start FLUX Dev Image",
+          "source": "Start FLUX Dev image",
           "message": "Spustiť tvorbu obrázka FLUX Dev"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.display_name": {
-          "source": "Start FLUX Pro 1.1 Ultra Image",
+          "source": "Start FLUX Pro 1.1 Ultra image",
           "message": "Spustiť tvorbu obrázka FLUX Pro 1.1 Ultra"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.display_name": {
-          "source": "Start Image Fill",
+          "source": "Start image fill",
           "message": "Spustiť doplnenie obrázka"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.display_name": {
-          "source": "Start Image Expansion",
+          "source": "Start image expansion",
           "message": "Spustiť rozšírenie obrázka"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.display_name": {
-          "source": "Start Legacy Fine-Tuned Fill",
+          "source": "Start legacy fine-tuned fill",
           "message": "Spustiť doplnenie starším doladeným modelom"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.display_name": {
-          "source": "Start Legacy Fine-Tuned Ultra",
+          "source": "Start legacy fine-tuned Ultra",
           "message": "Spustiť starší doladený model Ultra"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.display_name": {
-          "source": "Start FLUX.2 Flex Image",
+          "source": "Start FLUX.2 Flex image",
           "message": "Spustiť tvorbu obrázka FLUX.2 Flex"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.display_name": {
-          "source": "Start FLUX.2 Klein 9B Image",
+          "source": "Start FLUX.2 Klein 9B image",
           "message": "Spustiť tvorbu obrázka FLUX.2 Klein 9B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.display_name": {
-          "source": "Start FLUX.2 Klein 9B Preview",
+          "source": "Start FLUX.2 Klein 9B preview",
           "message": "Spustiť FLUX.2 Klein 9B Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.display_name": {
-          "source": "Start FLUX.2 Klein 4B Image",
+          "source": "Start FLUX.2 Klein 4B image",
           "message": "Spustiť tvorbu obrázka FLUX.2 Klein 4B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.display_name": {
-          "source": "Start FLUX.2 Max Image",
+          "source": "Start FLUX.2 Max image",
           "message": "Spustiť tvorbu obrázka FLUX.2 Max"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.short_desc": {
@@ -7168,7 +7168,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.display_name": {
-          "source": "Start FLUX.2 Pro Preview",
+          "source": "Start FLUX.2 Pro preview",
           "message": "Spustiť FLUX.2 Pro Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.short_desc": {
@@ -8368,7 +8368,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.display_name": {
-          "source": "Start FLUX.2 Pro Image",
+          "source": "Start FLUX.2 Pro image",
           "message": "Spustiť tvorbu obrázka FLUX.2 Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.short_desc": {
@@ -9568,7 +9568,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.display_name": {
-          "source": "Start FLUX 3 Video",
+          "source": "Start FLUX 3 video",
           "message": "Spustiť tvorbu videa FLUX 3"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "Názov súboru"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.display_name": {
-          "source": "Start Video Upscale",
+          "source": "Start video upscale",
           "message": "Spustiť zväčšenie videa"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.short_desc": {
@@ -10284,7 +10284,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.display_name": {
-          "source": "Start Video Edit",
+          "source": "Start video edit",
           "message": "Spustiť úpravu videa"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.short_desc": {
@@ -10464,7 +10464,7 @@
           "message": "Nižšie hodnoty znamenajú prísnejšie moderovanie obsahu. Služba môže uplatniť ďalšie obmedzenia."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.display_name": {
-          "source": "Start Image Outpainting",
+          "source": "Start image outpainting",
           "message": "Spustiť dokreslenie okrajov"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.short_desc": {
@@ -10760,7 +10760,7 @@
           "message": "Použite zadanie presne v zadanom znení bez automatického rozšírenia."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.display_name": {
-          "source": "Start Virtual Try-On v1",
+          "source": "Start virtual try-on v1",
           "message": "Spustiť virtuálne skúšanie v1"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.display_name": {
-          "source": "Start Virtual Try-On v2",
+          "source": "Start virtual try-on v2",
           "message": "Spustiť virtuálne skúšanie v2"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.short_desc": {
@@ -11504,7 +11504,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.display_name": {
-          "source": "Start Object Erasure",
+          "source": "Start object erasure",
           "message": "Spustiť odstránenie objektu"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.short_desc": {
@@ -11876,7 +11876,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.display_name": {
-          "source": "Start Image Deblurring",
+          "source": "Start image deblurring",
           "message": "Spustiť odstránenie rozmazania obrázka"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.short_desc": {
@@ -12104,7 +12104,7 @@
           "message": "Tajomstvo na overovanie podpisov spätných volaní. Vyžaduje URL webhooku."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.display_name": {
-          "source": "Start FLUX Kontext Max Image",
+          "source": "Start FLUX Kontext Max image",
           "message": "Spustiť tvorbu obrázka FLUX Kontext Max"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.short_desc": {
@@ -12764,7 +12764,7 @@
           "message": "Nižšie hodnoty znamenajú prísnejšie moderovanie obsahu. Služba môže uplatniť ďalšie obmedzenia."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.display_name": {
-          "source": "Start FLUX Kontext Pro Image",
+          "source": "Start FLUX Kontext Pro image",
           "message": "Spustiť tvorbu obrázka FLUX Kontext Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.short_desc": {
@@ -13424,7 +13424,7 @@
           "message": "Nižšie hodnoty znamenajú prísnejšie moderovanie obsahu. Služba môže uplatniť ďalšie obmedzenia."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.display_name": {
-          "source": "Report Licensed Model Usage",
+          "source": "Report licensed model usage",
           "message": "Nahlásiť využitie licencovaného modelu"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.short_desc": {
@@ -13460,7 +13460,7 @@
           "message": "Skutočný počet licencovaných generovaní na nahlásenie. Toto hlásenie ovplyvňuje účtovanie."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.display_name": {
-          "source": "Start FLUX Pro Image",
+          "source": "Start FLUX Pro image",
           "message": "Spustiť tvorbu obrázka FLUX Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.short_desc": {
@@ -13712,7 +13712,7 @@
           "message": "Názov súboru"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.display_name": {
-          "source": "Start Klein 4B LoRA Image",
+          "source": "Start Klein 4B LoRA image",
           "message": "Spustiť tvorbu obrázka Klein 4B LoRA"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.short_desc": {
@@ -14396,7 +14396,7 @@
           "message": "Určite vplyv vybraného modelu. Ak treba, vložte do zadania jeho spúšťaciu frázu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.display_name": {
-          "source": "Start Klein 9B LoRA Image",
+          "source": "Start Klein 9B LoRA image",
           "message": "Spustiť tvorbu obrázka Klein 9B LoRA"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.short_desc": {
@@ -15080,7 +15080,7 @@
           "message": "Určite vplyv vybraného modelu. Ak treba, vložte do zadania jeho spúšťaciu frázu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.display_name": {
-          "source": "Start Klein 9B KV LoRA Image",
+          "source": "Start Klein 9B KV LoRA image",
           "message": "Spustiť tvorbu obrázka Klein 9B KV LoRA"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.short_desc": {
@@ -16448,7 +16448,7 @@
           "message": "Určite vplyv vybraného modelu. Ak treba, vložte do zadania jeho spúšťaciu frázu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.display_name": {
-          "source": "Start Klein Base 4B LoRA Image",
+          "source": "Start Klein Base 4B LoRA image",
           "message": "Spustiť tvorbu obrázka Klein Base 4B LoRA"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.short_desc": {
@@ -17084,7 +17084,7 @@
           "message": "Určite vplyv vybraného modelu. Ak treba, vložte do zadania jeho spúšťaciu frázu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.display_name": {
-          "source": "Start Klein Base 9B LoRA Image",
+          "source": "Start Klein Base 9B LoRA image",
           "message": "Spustiť tvorbu obrázka Klein Base 9B LoRA"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.short_desc": {
@@ -17720,7 +17720,7 @@
           "message": "Určite vplyv vybraného modelu. Ak treba, vložte do zadania jeho spúšťaciu frázu."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.display_name": {
-          "source": "Get Routed Result",
+          "source": "Get routed result",
           "message": "Načítať výsledok z priradenej oblasti"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.short_desc": {
@@ -17792,7 +17792,7 @@
           "message": "Maximálny počet stiahnutých bajtov; predvolená hodnota je 100 MiB a limit 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.display_name": {
-          "source": "Wait for Result",
+          "source": "Wait for result",
           "message": "Počkať na výsledok"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.short_desc": {
@@ -17864,7 +17864,7 @@
           "message": "Maximálny počet stiahnutých bajtov; predvolená hodnota je 100 MiB a limit 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.display_name": {
-          "source": "Download Result",
+          "source": "Download result",
           "message": "Stiahnuť výsledok"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.short_desc": {
@@ -17956,7 +17956,7 @@
           "message": "Vyrovnávacia pamäť návrhu"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.display_name": {
-          "source": "Generate Video",
+          "source": "Generate video",
           "message": "Generovať video"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.short_desc": {
@@ -18472,7 +18472,7 @@
           "message": "Maximálny počet stiahnutých bajtov; predvolená hodnota je 100 MiB a limit 512 MiB."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "Generovať obrázok"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
@@ -18536,7 +18536,7 @@
           "message": "FLUX.2 Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1wcm8tcHJldmlldw.display_name": {
-          "source": "FLUX.2 Pro Preview",
+          "source": "FLUX.2 Pro preview",
           "message": "FLUX.2 Pro Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1tYXg.display_name": {
@@ -18556,7 +18556,7 @@
           "message": "FLUX.2 Klein 9B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1rbGVpbi05Yi1wcmV2aWV3.display_name": {
-          "source": "FLUX.2 Klein 9B Preview",
+          "source": "FLUX.2 Klein 9B preview",
           "message": "FLUX.2 Klein 9B Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {

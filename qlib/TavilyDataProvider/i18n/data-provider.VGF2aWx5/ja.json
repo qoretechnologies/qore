@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "ウェブを検索"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "_`news`_ 検索を直近N日間のものに制限します。\n\n`time_range` によって上書きされます。これはすべてのトピックに適用されるため、このオプションは既存のフローが動作し続けるように引き続き受け入れられます。"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "ページを読み取る"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "このリクエストで消費したクレジットを `usage` として返します。"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "サイトをクロール"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "このリクエストで消費したクレジットを `usage` として返します。"
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "サイトをマッピング"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "このリクエストで消費したクレジットを `usage` として返します。"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "リサーチを開始"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "コンテンツのエンコード方法。デフォルトは `base64` であり、Tavilyドキュメントでは唯一のエンコードです。"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "リサーチレポートを取得"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "読み取るリサーチタスク。**リサーチを開始** が `request_id` として返した値です。\n\nドロップダウンには、使用ログから取得した、このアカウントが開始したリサーチタスクが表示されます。ログはタスクの開始から数分後に書き込まれるため、開始直後のタスクはまだ含まれません。その場合は **リサーチを開始** が返した `request_id` を使用してください。"
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "クレジット消費を取得"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "アカウント全体ではなく、このプロジェクトの使用量のみを報告します。`X-Project-ID` ヘッダーとして送信されます。\n\nTavily はプロジェクトを一覧するエンドポイントを公開していないため、ドロップダウンとしては提供できません。値は Tavily のダッシュボードから取得してください。"
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "API 使用ログを一覧"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

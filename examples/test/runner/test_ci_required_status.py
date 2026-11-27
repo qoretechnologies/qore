@@ -24,6 +24,9 @@ CI = ROOT / ".gitlab-ci.yml"
 SCRIPT = ROOT / "examples/test/docker_test/ci-github-status.sh"
 PASSED = "pipeline-passed"
 FINAL = "github-status"
+# the jobs that report a warning, not a failure: each allows one exit code of its own and nothing else, and
+# pipeline-passed does not need it, so the pipeline passes with the warning (qore#7757)
+WARNING_JOBS = {"check-build-warnings": "3"}
 MARKER = "ci-pipeline-passed"
 # the top-level keys of .gitlab-ci.yml that are not jobs
 NOT_JOBS = {"stages", "default", "variables", "workflow", "include"}
@@ -138,11 +141,21 @@ class CiRequiredStatusConfigTest(unittest.TestCase):
                               if other != job and '\\"context\\": \\"${REPO_NAME}' + suffix + '\\"' in text]
                     self.assertEqual([], others, "the context is posted by one job only")
 
+    def test_warning_jobs_allow_only_their_exit_code(self):
+        for job, code in WARNING_JOBS.items():
+            with self.subTest(job=job):
+                self.assertIn(job, self.jobs)
+                self.assertNotIn(job, needs(self.blocks[PASSED]))
+                for text in self.job_texts(job):
+                    allowed = re.findall(r"(?m)^\s+allow_failure:(.*)$", text)
+                    self.assertEqual([""], allowed, "allow_failure takes exit codes, never true")
+                    self.assertRegex(text, rf"(?m)^\s+allow_failure:\n\s+exit_codes: \[{code}\]$")
+
     def test_pipeline_passed_needs_every_job(self):
         self.assertIn(PASSED, self.jobs)
         block = self.blocks[PASSED]
         needed = needs(block)
-        gating = self.jobs - {PASSED, FINAL}
+        gating = self.jobs - {PASSED, FINAL} - set(WARNING_JOBS)
         self.assertGreater(len(gating), 20)
         self.assertEqual(sorted(gating), sorted(needed), "pipeline-passed needs every other job of the pipeline")
         for job in sorted(gating):

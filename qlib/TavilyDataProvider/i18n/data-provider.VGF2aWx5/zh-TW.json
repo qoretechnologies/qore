@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "搜尋網頁"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "將 `news` 搜尋限制在最近 N 天。\n\n**已由 `time_range` 取代**，後者適用於所有主題；為了讓既有流程繼續運作，這個選項仍可使用。"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "讀取頁面"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "以 `usage` 返回這個請求花費的點數。"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "爬取網站"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "以 `usage` 返回這個請求花費的點數。"
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "繪製網站"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "以 `usage` 返回這個請求花費的點數。"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "啟動研究"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "內容的編碼方式。預設為 `base64`，這是 Tavily 文件唯一支援的編碼方式。"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "取得研究報告"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "要讀取的研究工作，也就是 **啟動研究** 在 `request_id` 中返回的值。\n\n下拉式清單會列出這個帳戶已啟動的研究工作，資料取自用量紀錄。紀錄會在工作啟動數分鐘後才寫入，因此剛啟動的工作尚未出現在其中：此時請使用 **啟動研究** 返回的 `request_id`。"
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "取得點數用量"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "僅回報這個專案的用量，而非整個帳戶的用量。以 `X-Project-ID` 標頭送出。\n\nTavily 未提供列出專案的端點，因此無法以下拉式清單呈現；請自 Tavily 儀表板取得該值。"
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "列出 API 用量紀錄"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

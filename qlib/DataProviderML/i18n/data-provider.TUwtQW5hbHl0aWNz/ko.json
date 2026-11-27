@@ -16,7 +16,7 @@
           "message": "외부 종속성 없이 데이터 파이프라인 내에서 부정 행위 감지, 매출 예측, 고객 세분화 및 복잡한 데이터 단순화를 모두 수행합니다. 이상 감지(비정상 트랜잭션 또는 센서 오류 플래그 지정), 클러스터링(고객 세그먼트 또는 지리적 핫스팟 발견), 예측(계절 패턴을 반영한 수익 예측), 회귀(특징 기반 가격 추정) 및 차원 축소(50개 필드를 3개의 핵심 값으로 압축)가 포함됩니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
+          "source": "Detect unusual data points",
           "message": "이상 데이터 포인트 감지"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "레코드가 이상으로 플래그 지정되는 기준을 결정하는 `0.0`과 `1.0` 사이의 값입니다. 이 임계값 이상의 점수를 받은 레코드는 이상으로 분류됩니다. 값이 낮을수록 더 많은 레코드가 이상으로 플래그 지정되고, 값이 높을수록 더 적은 레코드가 플래그 지정됩니다.\n\n**일반적인 값**: `0.5`(표준), `0.6`~`0.7`(보수적 — 명백한 이상치만); 기본값: `0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
+          "source": "Find natural groups in data",
           "message": "데이터에서 자연스러운 그룹 찾기"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
@@ -184,7 +184,7 @@
           "message": "크기보다는 데이터 포인트 간의 각도를 측정합니다. 값의 크기보다 방향이 더 중요할 때 가장 적합합니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
+          "source": "Divide data into groups",
           "message": "데이터를 그룹으로 나누기"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
@@ -288,7 +288,7 @@
           "message": "`output_mode`이(가) `dataframe`인 경우 각 클러스터 중심에 대한 `centroid_distance_<n>` 열을 포함합니다. 다운스트림 단계에 최종 `cluster` 및 가장 가까운 `distance` 값만 필요한 경우 이를 비활성화하십시오. 기본값: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
+          "source": "Simplify complex data",
           "message": "복잡한 데이터 단순화"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
@@ -380,7 +380,7 @@
           "message": "`output_mode`이(가) `dataframe`일 때 `component_<n>` 열과 함께 원본 입력 필드를 포함합니다. 다운스트림 단계에서 주성분만 필요할 때 이를 비활성화하면 출력 크기를 줄이고 처리량을 개선할 수 있습니다. 기본값: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
+          "source": "Forecast future values",
           "message": "미래 값 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
@@ -528,7 +528,7 @@
           "message": "장기 예측에서 추세가 얼마나 빠르게 평탄화되는지 제어하는 `0.0`과 `1.0` 사이의 값입니다. `1.0`에 가까운 값은 추세가 더 오래 지속되도록 허용하고, `0.0`에 가까운 값은 추세를 더 빠르게 평탄화합니다. 감쇠 추세가 활성화된 경우에만 사용됩니다.\n\n**일반적인 값**: `0.8`–`0.98`(일반적인 범위); 알고리즘이 자동으로 선택하도록 하려면 비워 두세요."
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
+          "source": "Predict values from input data",
           "message": "입력 데이터에서 값 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
@@ -600,7 +600,7 @@
           "message": "활성화하면 적합 전에 입력 필드가 유사한 범위를 갖도록 스케일링됩니다. 이는 입력 필드의 단위나 크기가 매우 다른 경우(예: 면적과 방 개수 혼합) 정확도를 향상시킬 수 있습니다. 기본값: `False`(비활성화됨)"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
+          "source": "Detect local outliers",
           "message": "로컬 이상치 감지"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
@@ -660,7 +660,7 @@
           "message": "이상치 점수 컷오프입니다. `1.0` 점수는 해당 포인트가 이웃과 동일한 밀도를 가짐(정상)을 의미합니다. `1.0`보다 크게 높은 점수는 포인트가 이웃보다 밀도가 낮은 영역에 있음(이상치)을 나타냅니다. 임계값이 낮을수록 더 많은 레코드가 플래그 지정됩니다.\n\n**일반적인 값**: `1.5`(표준 — 보통 이상치 감지), `2.0`(보수적 — 강한 이상치만 감지). 기본값: `1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
+          "source": "Group data with probabilities",
           "message": "확률을 사용하여 데이터 그룹화"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
@@ -736,7 +736,7 @@
           "message": "클러스터가 축에 정렬된 타원형입니다. 제한된 데이터에서 더 빠르고 안정적이지만 필드 간 상관관계를 포착할 수 없습니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
+          "source": "Run pre-trained model",
           "message": "사전 훈련된 모델 실행"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
@@ -968,7 +968,7 @@
           "message": "`output_mode`이 `columns` 또는 `dataframe`인 경우 ONNX 출력 열과 함께 원본 입력 피처 열을 포함합니다. 다운스트림 단계에서 모델 출력만 필요한 경우 이 옵션을 비활성화하면 출력 크기를 줄이고 처리량을 향상할 수 있습니다. 기본값: `False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
+          "source": "Run registered model",
           "message": "등록된 모델 실행"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "`causal-lm` 실행을 위해 모델 레지스트리에서 로드할 선택적 `tokenizer.json` 아티팩트 이름입니다. 패키지 매니페스트에서 토크나이저 아티팩트를 이미 식별한 경우 이 옵션을 생략하십시오."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
+          "source": "Separate trends and seasonal patterns",
           "message": "추세 및 계절적 패턴 분리"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "계절적 변동이 전반적인 수준에 비례하여 조정됩니다. 데이터 값이 증가함에 따라 계절적 패턴이 커질 때 가장 적합합니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
+          "source": "Put all fields on the same scale",
           "message": "모든 필드를 동일한 척도로 맞추기"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "`output_mode`이(가) `dataframe`인 경우 `scaled_<field>` 열과 함께 원본 입력 필드를 포함합니다. 다운스트림 단계에서 스케일링된 열만 필요로 하는 경우 출력 크기를 줄이고 처리량을 개선하기 위해 이 옵션을 비활성화하세요. 기본값: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
+          "source": "Normalize values to a range",
           "message": "값을 일정 범위로 정규화"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "`output_mode`이 `dataframe`일 때, `scaled_<field>` 열과 함께 원본 입력 필드를 포함합니다. 다운스트림 단계에서 정규화된 열만 필요할 때 이를 비활성화하여 출력 크기를 줄이고 처리량을 개선하십시오. 기본값: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
+          "source": "Fill in missing data",
           "message": "누락된 데이터 채우기"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "대체 방법이 \"고정값\"으로 설정된 경우 공백을 채우는 데 사용할 숫자입니다. 예를 들어 0으로 채우려면 `0`, 센티널 값으로는 `-1`을 사용합니다. 다른 대체 방법을 사용할 때는 무시됩니다. 기본값: `0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
+          "source": "Score your category predictions",
           "message": "범주 예측 점수 매기기"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "품질 점수를 계산하기 전에 수집할 레코드 수입니다. 배치의 모든 레코드는 함께 평가됩니다.\n\n**팁**: 유의미한 점수를 얻으려면 최소 `50`개 이상을 사용하십시오. 상세한 범주별 세부 분석을 원하면 `200`개 이상을 사용하십시오"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
+          "source": "Score your number predictions",
           "message": "숫자 예측 점수 평가"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "품질 점수를 계산하기 전에 수집할 레코드 수입니다. 배치의 모든 레코드가 함께 평가됩니다.\n\n**팁**: 유의미한 점수를 얻으려면 최소 `30`개를 사용하고, 안정적인 평가를 위해서는 `200`개 이상을 사용하십시오"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
+          "source": "Score your data groupings",
           "message": "데이터 그룹화 평가"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "품질 점수를 계산하기 전에 수집할 레코드 수입니다. 배치의 모든 레코드는 함께 평가됩니다. 배치에는 2개 이상의 서로 다른 그룹이 포함되어야 합니다.\n\n**팁**: 유의미한 점수를 얻으려면 최소 `50`개 이상을 사용하십시오"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
+          "source": "Categorize records",
           "message": "레코드 분류"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "기준 상수(절편)를 포함할지 여부입니다. 이는 거의 항상 활성화해야 합니다. 이를 통해 모델이 데이터의 전반적인 경향을 고려할 수 있습니다(예: 대부분의 신청이 승인되는 경우 기준선이 이를 반영함).\n\n기본값: 활성화됨"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
+          "source": "Classify by similarity",
           "message": "유사도 기반 분류"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "새 레코드와 더 유사한 이웃일수록 예측에 더 큰 영향을 미칩니다. 즉, 매우 유사한 레코드가 약간 유사한 레코드보다 더 많은 비중을 차지합니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
+          "source": "Predict numbers by similarity",
           "message": "유사도 기반 숫자 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "새 레코드와 더 유사한 레코드가 예측값에 더 큰 영향을 미칩니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
+          "source": "Classify with decision rules",
           "message": "의사결정 규칙으로 분류"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "각 분할로 얻은 정보 획득량을 측정합니다. 약간 더 균형 잡힌 트리를 생성할 수 있지만 계산 속도가 느립니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
+          "source": "Predict numbers with decision rules",
           "message": "의사결정 규칙으로 숫자 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "의사결정 트리의 최대 레벨 수입니다. 트리가 깊어질수록 더 복잡한 패턴을 캡처할 수 있지만 일반 규칙을 학습하는 대신 훈련 데이터를 암기할 수 있습니다.\n\n**팁**: `5`–`15`로 시작하십시오. 정확도가 너무 낮으면 늘리고, 모델이 과적합되면 줄이십시오.\n\n기본값: `10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
+          "source": "Classify with multiple decision trees",
           "message": "다중 의사결정 트리로 분류"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "각 트리는 분할마다 전체 필드 수의 log2만큼 고려합니다. 더 적은 수의 특성을 사용하여 트리 다양성을 높입니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
+          "source": "Predict numbers with multiple trees",
           "message": "다중 트리로 숫자 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "각 트리는 분할마다 전체 필드 수의 log2만큼 고려합니다. 더 적은 수의 특성을 사용하여 트리 다양성을 높입니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
+          "source": "Classify with gradient boosting",
           "message": "그래디언트 부스팅으로 분류"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "각 트리의 최대 깊이(레벨 수)입니다. 그래디언트 부스팅은 일반적으로 패턴의 한 측면을 캡처하는 얕은 트리(스텀프 또는 작은 트리)를 사용합니다.\n\n**팁**: 그래디언트 부스팅에는 `2`~`6`이(가) 가장 적합하며, 트리가 깊어지면 과적합 위험이 있습니다.\n\n기본값: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
+          "source": "Predict numbers with gradient boosting",
           "message": "그래디언트 부스팅으로 숫자 예측"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
@@ -2628,7 +2628,7 @@
           "message": "각 트리의 최대 레벨 수입니다. 그래디언트 부스팅은 일반적으로 패턴의 한 측면을 각각 포착하는 얕은 트리를 사용합니다.\n\n**팁**: 그래디언트 부스팅에는 `2`–`6`이 가장 적합하며, 트리가 더 깊어지면 과적합 위험이 있습니다.\n\n기본값: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
+          "source": "Compute rolling statistics",
           "message": "롤링 통계 계산"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "현재 윈도우에 있는 모든 값의 합계입니다. 롤링 수익 또는 총 이벤트와 같은 누적 지표를 추적하는 데 유용합니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
+          "source": "Smooth with moving average",
           "message": "이동 평균으로 평활화"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "평활화 거의 없음 — 원시 신호를 밀접하게 추적하며 갑작스러운 변화를 즉시 감지하는 데 가장 적합함"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
+          "source": "Profile data quality",
           "message": "데이터 품질 프로파일링"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "프로필 보고서를 계산하기 전에 수집할 레코드 수입니다. 배치의 모든 레코드가 함께 분석됩니다.\n\n**팁**: 의미 있는 통계를 얻으려면 최소 `50`개를 사용하고, 신뢰할 수 있는 이상치 감지를 위해서는 `200`개 이상을 사용하세요."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
+          "source": "Validate record schema",
           "message": "레코드 스키마 유효성 검사"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "레코드 유효성 검사 실패 시 VALIDATION-ERROR 예외를 발생시킵니다. 첫 번째 유효하지 않은 레코드에서 파이프라인이 즉시 중지됩니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
+          "source": "Clean up text",
           "message": "텍스트 정리"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "유니코드 NFKC 정규화 적용(플레이스홀더, 현재는 그대로 전달)"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
+          "source": "Count tokens in text",
           "message": "텍스트의 토큰 수 계산"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "토큰 수에 특수 토큰(`[CLS]` 및 `[SEP]` 등)을 포함할지 여부입니다. 모델이 실제로 보게 될 개수와 일치시키려면 `True`(으)로 설정하고, 원시 콘텐츠 토큰 수의 경우 `False`(으)로 설정하세요."
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
+          "source": "Split text into searchable chunks",
           "message": "텍스트를 검색 가능한 청크로 분할"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "청크 수와 스토리지 증가를 감수하고 컨텍스트를 최대한 보존하기 위한 넉넉한 중복"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
+          "source": "Convert text to search vectors",
           "message": "텍스트를 검색 벡터로 변환"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
@@ -3736,7 +3736,7 @@
           "message": "레지스트리 모델 아티팩트의 범위를 지정하기 위한 선택적 테넌트 식별자입니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
+          "source": "Extract structured data from text",
           "message": "텍스트에서 정형 데이터 추출"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "추출 출력이 스키마 유효성 검사에 실패할 때의 최대 재시도 횟수입니다. 기본값은 2입니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
+          "source": "Re-rank search results by relevance",
           "message": "관련성 기준 검색 결과 재순위화"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "레지스트리 모델 아티팩트의 범위를 지정하기 위한 선택적 테넌트 식별자입니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
+          "source": "Split text at semantic boundaries",
           "message": "의미론적 경계에서 텍스트 분할"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "레지스트리 모델 아티팩트의 범위를 지정하기 위한 선택적 테넌트 식별자입니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
+          "source": "Block unsafe records",
           "message": "안전하지 않은 레코드 차단"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "가드레일 규칙 구성 목록입니다. 각 규칙의 구성 요소는 다음과 같습니다:\n- `type` — 규칙 유형 (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` 또는 `critical`\n- `params` — 규칙별 매개변수\n\n규칙을 통과하지 못한 레코드는 파이프라인에서 삭제됩니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
+          "source": "Check and annotate text safety",
           "message": "텍스트 안전성 검사 및 주석 추가"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
@@ -4572,7 +4572,7 @@
           "message": "가드레일 규칙 구성 목록입니다. 각 규칙의 구성 요소는 다음과 같습니다:\n- `type` — 규칙 유형 (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` 또는 `critical`\n- `params` — 규칙별 매개변수\n\n각 레코드는 `_guardrail_passed`(bool) 및 `_guardrail_violations`(list)로 보강됩니다. PII 마스킹(redaction)이 구성된 경우 텍스트 필드가 마스킹된 버전으로 대체됩니다."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
+          "source": "Extract text from any document",
           "message": "모든 문서에서 텍스트 추출"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "PDF 페이지에 추출 가능한 텍스트가 이 글자 수보다 적으면 스캔된 페이지로 처리되어 OCR이 적용됩니다. 기본값: `50`."
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
+          "source": "Analyze images with vision AI",
           "message": "Vision AI로 이미지 분석"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {

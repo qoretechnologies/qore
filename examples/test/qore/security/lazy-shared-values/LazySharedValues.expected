@@ -26,5 +26,5 @@ a build that fails: BUILD-FAILED, new entries: 0; the next caller: "fail-once", 
 tenant asks for 50 unknown keys: errors: ["UNKNOWN-KEY"], new entries: 0
 a builder that needs its own value: SHARED-INIT-ERROR, built: False
 a builder that returns an object that the tenant created: SHARED-INIT-ERROR, built: False
-cycle: the second builder waited: True, results: ["cycA: SHARED-INIT-ERROR", "cycB: SHARED-INIT-ERROR"], new entries: 0
+cycle: the second builder waited: True, results: ["cycA: SHARED-INIT-CYCLE", "cycB: SHARED-INIT-ERROR"], new entries: 0
 a map limited to one entry: "trusted", then SHARED-INIT-ERROR, entries: 1
