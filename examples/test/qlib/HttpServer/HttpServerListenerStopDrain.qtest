@@ -127,6 +127,12 @@ class HoldTarget inherits HttpAsyncTarget {
         Queue held();
         #! held results are returned when this reaches zero
         Counter release(1);
+        #! if set, the next saveDispatchContext() raises an exception
+        bool fail_context = False;
+        #! receives "failed" when saveDispatchContext() has raised its exception
+        Queue context_failures();
+        #! receives the path of each request whose preparation was canceled
+        Queue prepared_cancels();
     }
 
     constructor(HttpAsyncTarget d) {
@@ -155,6 +161,16 @@ class HoldTarget inherits HttpAsyncTarget {
         return d.tryInlineRequest(info);
     }
 
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        return d.prepareHttpRequest(info);
+    }
+
+    #! records each cancel of a request's preparation (see contextFailureTest())
+    cancelPreparedHttpRequest(hash<HttpConnectionInfo> info) {
+        prepared_cancels.push(info.hdr.path);
+        d.cancelPreparedHttpRequest(info);
+    }
+
     onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         d.onIdleTimeout(sock, listener, cx);
     }
@@ -178,6 +194,12 @@ class HoldTarget inherits HttpAsyncTarget {
     }
 
     auto saveDispatchContext() {
+        # a target whose dispatch context cannot be saved for the next task (see contextFailureTest())
+        if (fail_context) {
+            fail_context = False;
+            context_failures.push("failed");
+            throw "CONTEXT-ERROR", "the dispatch context cannot be saved";
+        }
         return d.saveDispatchContext();
     }
 
@@ -361,6 +383,12 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
         addTestCase("h1: the connections are closed at the drain timeout", \drainTimeoutTest());
         addTestCase("h1: the connections of another listener are not drained", \isolationTest());
         addTestCase("h1: a stop of the server during the drain of a listener", \serverStopTest());
+        foreach bool post in (False, True) {
+            addTestCase(sprintf("h1: a request%s whose target cannot save its dispatch context does not hold a "
+                "listener's stop", post ? " with a body" : ""), \contextFailureTest(), post);
+        }
+        addTestCase("h1: a request queued in the handler pool at the stop of the server ends a listener's stop",
+            \queuedDispatchTest());
         addTestCase("h1: a request whose task the handler pool cancels ends the wait of a listener's stop",
             \canceledDispatchTest());
         foreach string proto in ("h1", "h3") {
@@ -809,6 +837,54 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
         assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
         assertEq(0, server_done.waitForZero(HangTimeout), "the stop of the server returns");
         assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the canceled request is closed");
+    }
+
+    queuedDispatchTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the stop hooks of HttpListener");
+        }
+        DrainTestHandler h();
+        # the request is queued in the handler pool until the server stops, so the length of the drain timeout does
+        # not matter
+        PoolServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("listener-stop-drain", LoggerLevel::getLevelError()),
+            "drain_timeout": 100ms,
+        });
+        on_exit srv.stop();
+        srv.setHandler("drain", "", NOTHING, h);
+        hash<auto> li = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        srv.waitForAsyncIo();
+        ThreadPool pool = srv.getPool();
+        if (!qore_test_thread_pool_hold_dispatch(pool, True)) {
+            testSkip("needs a debug build of the library to hold the dispatch of a thread pool");
+        }
+        on_exit qore_test_thread_pool_hold_dispatch(pool, False);
+        StopEvents ev(li.id);
+        ev.setHooks();
+        on_exit StopEvents::clearHooks();
+
+        # the request's task stays queued in the handler pool, whose dispatch is held
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + li.port, HangTimeout);
+        sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("submitted", cast<PoolController>(srv.getHttpAsyncIo()).submitted.get(HangTimeout),
+            "the request's task is queued in the handler pool");
+
+        # the stop of the listener (in the background, without the server's lock of its listeners, which the server's
+        # stop takes) waits for the queued request after it closed the connections
+        srv.stopListenerIDNoWait(li.id);
+        assertEq("connections-closed", ev.waitFor(("connections-closed", "stopped")),
+            "the stop closes the connections");
+        # the stop of the server stops the handler pool with stopWait(), which runs the queued task (it cancels none):
+        # the request ends, and so does the stop of the listener (qore#7769)
+        Counter server_done(1);
+        background sub () {
+            on_exit server_done.dec();
+            srv.stop();
+        }();
+        assertEq("stopped", ev.waitFor(("stopped",)), "the stop of the listener returns");
+        assertEq(0, server_done.waitForZero(HangTimeout), "the stop of the server returns");
     }
 
     handlerCallsServerTest(string proto) {
@@ -1273,5 +1349,42 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
             closed = True;
         }
         assertTrue(closed, "the WebSocket connection is closed");
+    }
+
+    contextFailureTest(bool post) {
+        DrainTestHandler h();
+        # the drain does not end while the failed request is counted, so the length of its timeout does not matter
+        hash<auto> s = startServer("h1", h, 100ms);
+        HoldServer srv = s.srv;
+        on_exit {
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        # the request's task cannot save the target's dispatch context: its handler does not run (qore#7769)
+        srv.hold.fail_context = True;
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        if (post) {
+            # a small body is read by the async I/O controller before the request is dispatched (handleBodyComplete())
+            sock.send("POST /quick HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n"
+                "\r\nbody");
+        } else {
+            sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        }
+        assertEq("failed", srv.hold.context_failures.get(HangTimeout), "the dispatch context could not be saved");
+        # the target's preparation of the request is canceled, which releases what it reserved
+        assertEq("/quick", srv.hold.prepared_cancels.get(HangTimeout), "the preparation of the request is canceled");
+        # the request is not answered: its connection is closed
+        assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the request is closed");
+
+        # the stop of the listener does not wait for the request whose handler never ran
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        assertFalse(ev.seen.contains("drain-timeout"), sprintf("the drain ended at once: %y", ev.seen));
+        assertEq(0, srv.hold.prepared_cancels.size(), "the preparation of the request is canceled once");
     }
 }
