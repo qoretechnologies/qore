@@ -3124,7 +3124,6 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
     // the references of a detached item were taken (and released) by the waiter that detached it
     releaseBgCompileWorkRefs(work);
 
-    bg_active_work.fetch_sub(1, std::memory_order_acq_rel);
     // a test stops the compile thread here (qore#7831)
     dbgBgHold(BgCompileHoldPoint::Finish);
     {
@@ -3132,6 +3131,11 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
         // blocked on bg_in_progress is released as soon as this compile finishes,
         // even when other Programs' work remains in the queue.
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        // the active work is released with the claim, under the same lock: waitForBgCompileQueue() waits for no
+        // active work, and a waiter that saw none while the claim of a detached compile was still set returned while
+        // this thread held the compile lock with bg_in_progress_detached set, which made the debug counts that it
+        // allows (dbgGetDebuggerEntryCount(), dbgGetCodeUnitCount()) skip the work of the compile lock (qore#7831)
+        bg_active_work.fetch_sub(1, std::memory_order_acq_rel);
         bg_in_progress = nullptr;
         bg_in_progress_pgms.clear();
         bg_in_progress_phase = BgCompilePhase::Lowering;
@@ -3827,6 +3831,10 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         releaseBgCompileWorkRefs(work);
         int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0) {
+            // notified under bg_queue_mutex, as cancelQueuedBgCompileWork() does: a waiter of waitForBgCompileQueue()
+            // that read the active work before the decrement holds the lock until it waits, so the notification
+            // cannot come between its check and its wait (qore#7831)
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
             bg_queue_empty_cv.notify_all();
         }
         return;
