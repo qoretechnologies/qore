@@ -12,8 +12,8 @@
           "message": "Open-source vektorová databáza Weaviate s hybridným vyhľadávaním"
         },
         "app.V2VhdmlhdGU.desc": {
-          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "Poskytuje prístup k [Weaviate](https://weaviate.io) — open-source vektorovej databáze podporujúcej hybridné vyhľadávanie (vektorové + kľúčové slová), multi-tenancy a širokú škálu modulov vectorizer.\n\nPoužite backend @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" v @ref qoreragutilsintro \"QoreRagUtils\" pre podporovanú cestu ingest/retrieve prostredníctvom @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the `WeaviateVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "Poskytuje prístup k [Weaviate](https://weaviate.io) — open-source vektorovej databáze podporujúcej hybridné vyhľadávanie (vektorové + kľúčové slová), multi-tenancy a širokú škálu modulov vectorizer.\n\nPoužite backend `WeaviateVectorStore` v `QoreRagUtils` pre podporovanú cestu ingest/retrieve prostredníctvom `RagPipeline`."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "Odoslať súbor pomocou multipart/form-data"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra `FileDataType` (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

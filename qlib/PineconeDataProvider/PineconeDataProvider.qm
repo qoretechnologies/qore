@@ -100,9 +100,9 @@ module PineconeDataProvider {
                 "here, so an action takes the index as an ordinary dropdown and nothing has to be "
                 "configured per index.\n\n"
                 "For an ingest/retrieve pipeline rather than individual calls, the "
-                "@ref QoreRagUtils::PineconeVectorStore \"PineconeVectorStore\" backend in "
-                "@ref qoreragutilsintro \"QoreRagUtils\" drives the same API through "
-                "@ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+                "`PineconeVectorStore` backend in "
+                "`QoreRagUtils` drives the same API through "
+                "`RagPipeline`.",
             "processing": <DataProviderProcessingInfo>{
                 "locality": "external",
                 "external_recipient": "pinecone.io",

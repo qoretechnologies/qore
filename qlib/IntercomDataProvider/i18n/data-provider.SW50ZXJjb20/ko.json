@@ -204,8 +204,8 @@
           "message": "multipart/form-data를 사용하여 파일 업로드"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 `FileDataType` 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
@@ -644,8 +644,8 @@
           "message": "워크스페이스의 연락처 목록 조회"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
-          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "연락처를 최신순으로 나열합니다.\n\n연락처 드롭다운에서 호출할 수 있는 액션으로 제공됩니다. 연락처의 하위 집합만 필요한 경우에는 **연락처 검색**을 사용하세요.\n\nIntercom 설명에는 페이징 응답을 반환함에도 페이징 인수가 선언되어 있지 않습니다. 스키마를 가져올 때 `per_page` 및 `starting_after`이(가) 추가됩니다. @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"를 참조하세요."
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "연락처를 최신순으로 나열합니다.\n\n연락처 드롭다운에서 호출할 수 있는 액션으로 제공됩니다. 연락처의 하위 집합만 필요한 경우에는 **연락처 검색**을 사용하세요.\n\nIntercom 설명에는 페이징 응답을 반환함에도 페이징 인수가 선언되어 있지 않습니다. 스키마를 가져올 때 `per_page` 및 `starting_after`이(가) 추가됩니다. `IntercomSchema`를 참조하세요."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
@@ -1900,8 +1900,8 @@
           "message": "고객센터 문서 목록 조회"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
-          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "워크스페이스의 고객센터 문서 목록을 조회합니다.\n\nIntercom의 설명에는 이 작업에 대한 페이징 인수가 선언되어 있지 않지만 페이징 봉투 형식으로 응답합니다. `per_page` 및 `starting_after`은 스키마 가져오기 시 추가됩니다. @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"를 참조하세요."
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "워크스페이스의 고객센터 문서 목록을 조회합니다.\n\nIntercom의 설명에는 이 작업에 대한 페이징 인수가 선언되어 있지 않지만 페이징 봉투 형식으로 응답합니다. `per_page` 및 `starting_after`은 스키마 가져오기 시 추가됩니다. `IntercomSchema`를 참조하세요."
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
