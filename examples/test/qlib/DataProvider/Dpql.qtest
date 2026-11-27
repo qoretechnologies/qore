@@ -11,6 +11,7 @@
 %requires Logger
 %requires Mime
 %requires DataProvider
+%requires json
 
 %requires reflection
 
@@ -9496,8 +9497,12 @@ public class DpqlTest inherits QUnit::Test {
             };
             string label = prepare ? "prepared" : "parsed";
             assertEq(True, eval('exists @type', {"type": "x"}), label);
-            assertEq(True, eval('exists @type', {"type": NOTHING}), label);
+            # a field with no value counts as missing, as with Qore's exists operator (qore#7718); an SQL NULL is a value
+            assertEq(False, eval('exists @type', {"type": NOTHING}), label);
             assertEq(True, eval('exists @type', {"type": NULL}), label);
+            # a JSON null has no value
+            assertEq(False, eval('exists @type', parse_json('{"type": null, "id": 1}')), label);
+            assertEq(True, eval('exists @id', parse_json('{"type": null, "id": 1}')), label);
             assertEq(False, eval('exists @type', {"id": 1}), label);
             assertEq(False, eval('exists @type', {}), label);
             assertEq(True, eval('!exists @type', {"id": 1}), label);
@@ -9513,7 +9518,8 @@ public class DpqlTest inherits QUnit::Test {
                 label);
 
             # names: the record has a, a hash with the key b
-            assertEq(True, eval('exists @a.b', {"a": {"b": NOTHING}}), label);
+            assertEq(False, eval('exists @a.b', {"a": {"b": NOTHING}}), label);
+            assertEq(True, eval('exists @a.b', {"a": {"b": NULL}}), label);
             assertEq(True, eval('exists @a.b.c', {"a": {"b": {"c": 1}}}), label);
             assertEq(False, eval('exists @a.b', {"a": {}}), label);
             assertEq(False, eval('exists @a.b', {"a": 1}), label);
@@ -9529,13 +9535,16 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(True, eval('exists @"a\\.b"', {"a.b": 1}), label);
             assertEq(False, eval('exists @"a\\.b"', {"a": {"b": 1}}), label);
             # one key
-            assertEq(True, eval('exists @a{b}', {"a": {"b": NOTHING}}), label);
+            assertEq(False, eval('exists @a{b}', {"a": {"b": NOTHING}}), label);
+            assertEq(True, eval('exists @a{b}', {"a": {"b": 0}}), label);
             assertEq(False, eval('exists @a{b}', {"a": {"c": 1}}), label);
-            assertEq(True, eval('exists @a{b}.c', {"a": {"b": {"c": NOTHING}}}), label);
+            assertEq(False, eval('exists @a{b}.c', {"a": {"b": {"c": NOTHING}}}), label);
+            assertEq(True, eval('exists @a{b}.c', {"a": {"b": {"c": ""}}}), label);
             assertEq(False, eval('exists @a{b}.c', {"a": {"b": "c"}}), label);
             # one position, negative from the end, in a list or a string
             assertEq(True, eval('exists @a[0]', {"a": (1,)}), label);
-            assertEq(True, eval('exists @a[0]', {"a": (NOTHING,)}), label);
+            assertEq(False, eval('exists @a[0]', {"a": (NOTHING,)}), label);
+            assertEq(True, eval('exists @a[0]', {"a": (False,)}), label);
             assertEq(False, eval('exists @a[0]', {"a": ()}), label);
             assertEq(True, eval('exists @a[-2]', {"a": (1, 2)}), label);
             assertEq(False, eval('exists @a[-3]', {"a": (1, 2)}), label);
@@ -9545,16 +9554,17 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(False, eval('exists @a[0]', {"a": {"0": 1}}), label);
             assertEq(False, eval('exists @a[0]', {"a": 1}), label);
             assertEq(False, eval('exists @a[0]', {}), label);
-            assertEq(True, eval('exists @a[1].b', {"a": ({}, {"b": NOTHING})}), label);
+            assertEq(False, eval('exists @a[1].b', {"a": ({}, {"b": NOTHING})}), label);
+            assertEq(True, eval('exists @a[1].b', {"a": ({}, {"b": 2})}), label);
             assertEq(False, eval('exists @a[1].b', {"a": ({"b": 1}, {})}), label);
             assertEq(False, eval('exists @a[1].b', {"a": ({"b": 1},)}), label);
 
             # each item tested with any, all and count
-            hash<auto> rec = {"orders": ({"id": 1}, {"other": 2}, {"id": NOTHING})};
+            hash<auto> rec = {"orders": ({"id": 1}, {"other": 2}, {"id": NOTHING}, {"id": 4})};
             assertEq(True, eval('any exists @id, @orders', rec), label);
             assertEq(False, eval('all exists @id, @orders', rec), label);
             assertEq(2, eval('count exists @id, @orders', rec), label);
-            assertEq(({"id": 1}, {"id": NOTHING}), eval('select @orders, exists @id', rec), label);
+            assertEq(({"id": 1}, {"id": 4}), eval('select @orders, exists @id', rec), label);
         }
     }
 
@@ -9633,12 +9643,15 @@ public class DpqlTest inherits QUnit::Test {
         # records of different shapes
         assertEq((2,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression(
             'exists @type && @type == "return"'))));
-        assertEq((3,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('!exists @type'))));
-        assertEq((1, 2, 4), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('exists @type'))));
+        # a type with no value counts as missing (qore#7718)
+        assertEq((3, 4), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('!exists @type'))));
+        assertEq((1, 2), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('exists @type'))));
         assertEq((2,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('exists @reason'))));
         # updates and deletes
         assertEq(1, prov.updateRecords({"checked": True}, DataProvider::parseDpqlExpression('exists @note')));
-        assertEq(1, prov.deleteRecords(DataProvider::parseDpqlExpression('exists @type && @type == null')));
+        # a type with no value is no type: "exists @type && @type == null" matches no record
+        assertEq(0, prov.deleteRecords(DataProvider::parseDpqlExpression('exists @type && @type == null')));
+        assertEq(1, prov.deleteRecords(DataProvider::parseDpqlExpression('!exists @type && !exists @note')));
         assertEq((1, 2, 3), (map $1.id, prov.searchRecords()));
 
         # a database cannot search with exists: the condition is split for evaluation on the records read
@@ -9677,7 +9690,8 @@ public class DpqlTest inherits QUnit::Test {
         assertEq(True, evalDpql('@"a\\.b" == 1', {"a.b": 1}));
         assertThrows("INVALID-OPERATION", "invalid key \"a\\.b\"", \evalDpql(), ('@"a\.b" == 1', {"a": {"b": 1}}));
         assertEq(True, evalDpql('@"x.a\.b" == 1', {"x": {"a.b": 1}}));
-        assertEq(True, evalDpql('exists @"a\.b"', {"a.b": NOTHING}));
+        assertEq(True, evalDpql('exists @"a\.b"', {"a.b": 1}));
+        assertEq(False, evalDpql('exists @"a\.b"', {"a": {"b": 1}}));
         # after an accessor, a quoted name is one key, also with an escaped dot
         assertEq(DataProvider::parseDpqlExpression('@r[0].@"a.b"'), DataProvider::parseDpqlExpression('@r[0].@"a\.b"'));
         assertEq(2, evalDpql('@r[0].@"a\.b"', {"r": ({"a.b": 2},)}));

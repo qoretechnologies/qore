@@ -47,6 +47,7 @@ class LocalVar;
 class FunctionEntry;
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IRBuilder.h>
@@ -98,6 +99,25 @@ DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const 
 //! The value of QoreIRToLLVM::deferred_element_restore when the exit on an exception restores no implicit element after
 //! the handlers: no element index, which is an int, has this value
 constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
+
+//! Returns the terminator of a block, or nullptr if it has none yet
+/** LLVM 23 changed getTerminator(): it no longer returns nullptr for a block whose last instruction is not a
+    terminator (it asserts the block is well formed, and returns its last instruction in a release build of LLVM), and
+    added getTerminatorOrNull() for that; the lowering tests blocks that it is still building, so it uses this.  A raw
+    getTerminator() is only for a block that has its terminator (examples/test/runner/test_llvm_terminator_queries.py
+    checks the code of the lowering)
+*/
+inline llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
+#if LLVM_VERSION_MAJOR >= 23
+    return block->getTerminatorOrNull();
+#else
+    return block->getTerminator();
+#endif
+}
+
+inline llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
+    return qoreGetTerminator(&block);
+}
 
 class QoreIRToLLVM {
 public:

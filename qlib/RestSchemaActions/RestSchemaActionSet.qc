@@ -296,7 +296,31 @@ public class RestSchemaActionSet {
         }
         checkReferenceData();
         checkHostSources();
+        # the output-type callbacks of the actions whose output types are built on first use are created here, by
+        # the code that builds the set, so that a callback that every caller uses carries no caller's sandbox
+        # (qore#7714)
+        foreach hash<auto> i in (opmap.pairIterator()) {
+            if (i.value.isResponseTypeDeferred()) {
+                output_type_callbacks{i.key} = RestSchemaActionSet::makeOutputTypeCallback(i.value);
+            }
+        }
         ++construction_count;
+        # a set that trusted code builds, such as the process-wide set that a module builds from its vendored
+        # schema, is shared by every Program of the process: sandboxed code cannot change or delete it, nor its
+        # operations, which are marked when they are built (qore#7714)
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! Copies the set with a lock of its own
+    /** The operations, the output-type callbacks, the schema and the peers of the copy are those of the set copied,
+        which the code that built the set created (qore#7714)
+
+        @since RestSchemaActions 1.0
+    */
+    copy() {
+        callback_lock = new Mutex();
     }
 
     #! Returns the number of action sets constructed in the process
@@ -463,8 +487,9 @@ DataProviderActionCatalog::getActions("Stripe");
         return rv;
     }
 
-    #! Returns the callback building an action's output type, creating it on first use
+    #! Returns the callback building an action's output type, which the set created when it was built
     private code getOutputTypeCallback(string action, RestSchemaActionOperation op) {
+        # created when the set was built (qore#7714)
         AutoLock al(callback_lock);
         return output_type_callbacks{action}
             ?? (output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op));

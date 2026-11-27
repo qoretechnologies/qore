@@ -76,6 +76,7 @@
 #include "qore/intern/QC_Gate.h"
 #include "qore/intern/QC_Sequence.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 #include "qore/intern/QC_Future.h"
@@ -103,6 +104,7 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -5599,6 +5601,21 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     rc.cls = c;
 }
 
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, bool keep_class)
+        : td(thread_data.get()) {
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    td->current_obj = obj;
+    td->current_class = keep_class ? old_class : c;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    if (!keep_class) {
+        rc.cls = c;
+    }
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
         QoreSetCallProgramContext, ExceptionSink* xsink) : td(thread_data.get()), call_pgm_xsink(xsink) {
     // as the constructor without the call Program context, in one call
@@ -8159,6 +8176,31 @@ QoreProgram* qore_builtin_caller_program() {
     return own->getProgram();
 }
 
+bool qore_innermost_frame_is_builtin() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    return own && own->getCallType() == CT_BUILTIN;
+}
+
+void qore_thread_program_stack(std::vector<QoreProgram*>& pgms) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    auto add = [&pgms] (QoreProgram* pgm) {
+        if (pgm && std::find(pgms.begin(), pgms.end(), pgm) == pgms.end()) {
+            pgms.push_back(pgm);
+        }
+    };
+    add(td->current_pgm);
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        add(ch->getOldProgram());
+    }
+}
+
 bool qore_caller_in_untrusted_module_init() {
     ThreadData* td = thread_data.get();
     if (!td || td->module_init_barriers.empty()) {
@@ -9987,6 +10029,31 @@ static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, 
         }
     }
     return td->call_program_context && !qore_program_is_module_inline(td->call_program_context);
+}
+
+bool qore_trusted_build_hides_nothing() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
+    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
+    // acts for (fails closed: also if it cannot be resolved), the restrictions of the calling code that what the code
+    // creates would record (see qore_get_creation_origin_restrictions()), also those that a lent method masks (see
+    // qore_get_lent_to_restrictions()), and the code that lends what it creates (see qore_creation_by_lending_code()):
+    // under the barrier nothing that the builder creates is a capability
+    if (td->sandboxed_caller) {
+        return false;
+    }
+    if (qore_caller_sandbox_state_intern(nullptr)) {
+        return false;
+    }
+    if (!qore_get_calling_code_restrictions(td).empty() || !qore_get_lent_to_restrictions(td).empty()) {
+        return false;
+    }
+    bool in_lent_method;
+    const QoreProgram* lent_pgm;
+    return !qore_creation_by_lending_code(td, in_lent_method, lent_pgm);
 }
 
 QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans, bool* capability) {
@@ -14100,6 +14167,8 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initGateClass(*Thread));
     Thread->addSystemClass(initSequenceClass(*Thread));
     Thread->addSystemClass(initCounterClass(*Thread));
+    Thread->addSystemClass(initLazySharedValueClass(*Thread));
+    Thread->addSystemClass(initLazySharedMapClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
     Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));

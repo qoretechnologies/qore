@@ -614,19 +614,6 @@ static std::string qore_store_helper_name(const char* name, bool foreach_assignm
     return name;
 }
 
-// LLVM 23 made getTerminator() assert that the block is already well formed;
-// getTerminatorOrNull() preserves the nullable contract used while lowering.
-static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
-#if LLVM_VERSION_MAJOR >= 23
-    return block->getTerminatorOrNull();
-#else
-    return block->getTerminator();
-#endif
-}
-
-static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
-    return qoreGetTerminator(&block);
-}
 
 static const llvm::Instruction* qoreGetTerminator(const llvm::BasicBlock* block) {
     return qoreGetTerminator(const_cast<llvm::BasicBlock*>(block));
@@ -16134,7 +16121,7 @@ void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_fun
                 continue;
             }
             // an unconditional branch to the block (every block has its terminator here)
-            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(pred->getTerminator());
+            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(qoreGetTerminator(pred));
             if (pred == &bb || !br || !br->isUnconditional() || br->getSuccessor(0) != &bb) {
                 ok = false;
                 break;
@@ -20151,7 +20138,9 @@ bool QoreIRToLLVM::lowerPairedAutoAddStore(const QoreIRInstruction* inst, llvm::
     if (!ok) {
         return false;
     }
-    if (!builder->GetInsertBlock()->getTerminator()) {
+    // the lowering of the store can end its block (a raised exception); LLVM 23's getTerminator() does not return
+    // null for a block that has no terminator yet (see qoreGetTerminator())
+    if (!qoreGetTerminator(builder->GetInsertBlock())) {
         builder->CreateBr(done_bb);
     }
     builder->SetInsertPoint(done_bb);
@@ -21570,9 +21559,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreIRValueFacts* unboxed_read_facts = !is_native_int && !is_native_float && !is_native_bool
                     && native_local_reads.count(inst->result.id)
                 ? current_ir_func->getValueFacts(inst->result) : nullptr;
-            // a value with a native representation is never read through a weak reference, nor by the borrowed load
-            // of a container that a store changes in place
-            assert(!unboxed_read_facts || (!weak_assigned_locals.count(key) && !borrowed_load));
+            // a value with a native representation is never read by the borrowed load of a container that a store
+            // changes in place; a weak-assigned local can have such a value, which is no weak reference (see below)
+            assert(!unboxed_read_facts || !borrowed_load);
             // gives the native value of a boxed value read from the local; an owned value is released, as the
             // native value does not need it
             auto emitUnboxedRead = [&](llvm::Value* boxed, bool owned) {
@@ -21728,6 +21717,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // would let a frame holding only a weak reference run the target's
             // destructor.
             if (linst->local && weak_assigned_locals.count(key)) {
+                // A weak or opaque assignment, or the element store of a foreach variable, makes a weak reference
+                // of an object, a hash or a list only: a value with native facts (an int or a float, assigned, never
+                // NOTHING) is held by the local as a normal assignment holds it, so there is no object whose
+                // destructor an owned load could run.  The read is unboxed where it is read, as on
+                // the other paths of a local whose storage is boxed: the borrow of the weak load would be a value
+                // of the local that a later write to it releases while the IR still forwards it (qore#7764, see
+                // qore#7372)
+                if (unboxed_read_facts) {
+                    llvm::Value* result;
+                    if (aot_mode) {
+                        auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        result = builder->CreateCall(load_fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    } else {
+                        auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local));
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                        result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                    }
+                    emitUnboxedRead(result, true);
+                    if (may_hold_reference) {
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
+                    return true;
+                }
                 llvm::Value* result;
                 llvm::AllocaInst* owned_flag = nullptr;
                 {

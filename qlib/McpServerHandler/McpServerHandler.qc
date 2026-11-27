@@ -1249,6 +1249,22 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             });
     }
 
+    #! Returns the keys of the request context that the handler adds for its methods, which the code of a restricted
+    #! %Program gets also when the request is filtered for it (qore#7724)
+    /** The protocol state of the call: the protocol (\c mcp_modern, \c mcp_version, \c mcp_method), what the client
+        declared (\c mcp_client_capabilities, \c mcp_client_info, \c mcp_log_level), the principal
+        (\c mcp_principal) and the session (\c mcp_session); a subclass that adds keys of its own returns them
+        with these
+
+        @return the keys of the request context that the handler adds for its methods
+
+        @see JsonRpcHandler::JsonRpcHandler::getRpcContextKeys()
+    */
+    private *list<string> getRpcContextKeys() {
+        return ("mcp_modern", "mcp_version", "mcp_method", "mcp_client_capabilities", "mcp_client_info",
+            "mcp_log_level", "mcp_principal", "mcp_session");
+    }
+
     #! Returns the authenticated principal for a request, if any
     /** Used to bind MRTR @ref McpRequestState "request state" to the principal it was issued
         for, so that state minted for one user cannot be presented by another.  The default

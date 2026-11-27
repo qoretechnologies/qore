@@ -138,6 +138,8 @@
 5320 QC_HttpWebSocketPollOperationBase.cpp
 3490 QC_InputStream.cpp
 4810 QC_InputStreamLineIterator.cpp
+3600 QC_LazySharedMap.cpp
+3600 QC_LazySharedValue.cpp
 3240 QC_ListHashIterator.cpp
 3120 QC_ListHashReverseIterator.cpp
 3250 QC_ListIterator.cpp
@@ -280,6 +282,7 @@
 4950 QoreIterateOperatorNode.cpp
 23440 QoreJIT.cpp
 4940 QoreKeysOperatorNode.cpp
+3700 QoreLazyShared.cpp
 9650 QoreLib.cpp
 5810 QoreListAssignmentOperatorNode.cpp
 6240 QoreListNode.cpp
