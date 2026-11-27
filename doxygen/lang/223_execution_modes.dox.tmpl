@@ -739,8 +739,16 @@ int result = pgm.callFunction("compute");
     @ref Qore::Program::setExecMode() "Program::setExecMode()" call on the parent does not change it.  Calling
     @ref Qore::Program::setExecMode() "Program::setExecMode()" on the child sets its own mode instead.
 
-    A Program whose parent's mode was not requested explicitly, and a Program created without a parent, select their
-    mode from their own parse options: tiered execution for \c %%modern code, AST otherwise.
+    The mode requested with the \c qore binary's <tt>--exec-mode</tt> option is the default of the process: a Program
+    created without a parent (an independent Program:
+    @ref Qore::Program::constructor() "Program::constructor()" with \c independent set), and the Program of a user module
+    loaded without a requesting Program (from C++ code, or from a thread with no current Program) take it, so that, for
+    example, no code of a script run with <tt>--exec-mode=ir</tt> is compiled to native code, but the functions of
+    @ref exec_mode_aot "AOT-compiled" modules that have no precompiled code, which run in JIT mode.  As for an inherited mode,
+    a Program whose parse options do not support it (one without \c %%modern for a mode other than AST) selects its
+    automatic mode until they do.  A Program whose parent's mode was not requested explicitly, and, without a mode
+    requested for the process, a Program without a parent, select their mode from their own parse options: tiered
+    execution for \c %%modern code, AST otherwise.
 
     @subsection exec_mode_enum ExecMode Enum
 

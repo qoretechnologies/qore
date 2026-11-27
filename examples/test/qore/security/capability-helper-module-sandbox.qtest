@@ -28,6 +28,9 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
         TmpDir tmp("capmodsb");
         string outside;
         string allowed;
+        #! the directory of the copies of the modules, which the tenants' sandboxes may read: sandboxed code reads the
+        #! source of a module that it loads by path as its policy allows (qore#7518)
+        string mods;
 
 
         #! the tenant's code: calls a capability, or creates a helper Program itself and loads the module into it
@@ -62,6 +65,8 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
         outside = tmp.path + "/outside.txt";
         allowed = tmp.path + "/allowed";
         mkdir(allowed);
+        mods = tmp.path + "/mods";
+        mkdir(mods);
         File f();
         f.open2(outside, O_CREAT | O_WRONLY | O_TRUNC);
         f.write("secret");
@@ -83,7 +88,7 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
 
     #! writes a copy of the module named \a name and returns its path
     private string module(string name) {
-        string path = sprintf("%s/%s.qm", tmp.path, name);
+        string path = sprintf("%s/%s.qm", mods, name);
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(replace(mod_src, "CapReadMod", name));
@@ -93,7 +98,7 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
 
     #! writes a copy of a module template of the test named \a name and returns its path
     private string templateModule(string template, string name) {
-        string path = sprintf("%s/%s.qm", tmp.path, name);
+        string path = sprintf("%s/%s.qm", mods, name);
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(replace(ReadOnlyFile::readTextFile(sprintf("%s/capability-helper-module-sandbox/%s.qm.in",
@@ -112,11 +117,12 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
             "object sub mod_object() { return call_function(\"%s::make\"); }\n", name, name, name);
     }
 
-    #! a sandbox that allows reading only \c allowed
+    #! a sandbox that allows reading only \c allowed, and the modules of the test (\c mods) to load them
     private SandboxManager denyOutside() {
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
         sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        sm.addFilesystemAllowedPath(mods, QSEC_READ);
         return sm;
     }
 
@@ -167,8 +173,12 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
     }
 
     otherTenantTest() {
-        # tenant A may read the file and creates a Program; tenant B, which may not, loads the module into it
+        # tenant A may read the file and creates a Program; tenant B, which may not, loads the module into it (the
+        # file system policy of a sandbox denies by default: tenant A's allows reading, so that only tenant B's policy
+        # can deny the module's read; the source of the module is read under the policy in force for the load, which
+        # tenant A's Program takes part in, qore#7518)
         SandboxManager a_sm();
+        a_sm.setFilesystemDefaultPolicy(True);
         Program a = tenant(a_sm);
         Program h = a.callFunction("make", helperCode("CapMod4"));
         Program b = tenant(denyOutside());
@@ -202,7 +212,7 @@ class CapabilityHelperModuleSandboxTest inherits QUnit::Test {
     #! (qore#6843), as before; the trusted base class is loaded by the test itself
     privateAccessTest() {
         load_module(realpath(get_script_dir() + "/capability-helper-module-sandbox/CapTrustedBase.qm"));
-        string path = sprintf("%s/CapSubMod1.qm", tmp.path);
+        string path = sprintf("%s/CapSubMod1.qm", mods);
         {
             File f();
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);

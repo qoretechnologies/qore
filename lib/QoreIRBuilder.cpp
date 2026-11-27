@@ -1169,6 +1169,17 @@ QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_eleme
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSetImplicitElement(QoreIRValue index, QoreIRValue saved,
+        const QoreProgramLocation* loc) {
+    assert(index.isValid() && saved.isValid());
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PopImplicitElement);
+    inst->loc = loc;
+    // sets the element as a pop sets the element that it restores; the second operand names the push that stays open
+    inst->operands.push_back(index);
+    inst->operands.push_back(saved);
+    return inst;
+}
+
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;
@@ -1801,6 +1812,13 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     return inst;
 }
 
+void QoreIRBuilder::createReleaseReplacedReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto* release = createReleaseOwnedTemp(value, loc);
+    if (getFunction()->emit_debug_statements) {
+        release->element_type = objectTypeInfo;
+    }
+}
+
 QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
     if (value.isValid()) {
@@ -2211,6 +2229,8 @@ QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const C
         ExceptionSink xsink;
         cloned_re = new QoreRegex(re->getPatternCStr(), re->getOptions(), &xsink);
         if (xsink) {
+            // the function is not lowered and runs in the AST interpreter, which reports any error itself
+            xsink.clear();
             delete cloned_re;
             return nullptr;
         }

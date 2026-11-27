@@ -47,7 +47,7 @@ int SummarizeStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) 
     if (code) {
         if (context->max_group_pos && !xsink->isEvent())
         do {
-            if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
+            if (((rc = code->execLoopBody(return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
                 rc = 0;
                 break;
             } else if (rc == RC_RETURN) {
@@ -76,7 +76,7 @@ int SummarizeStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exc
     if (code) {
         if (context->max_group_pos && !xsink->isEvent())
         do {
-            if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
+            if (((rc_state = code->execLoopBody(rc, return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
                 rc_state = 0;
                 break;
             } else if (rc_state == RC_RETURN) {

@@ -1,0 +1,12 @@
+direct subclass: accepted
+direct unrelated: RUNTIME-TYPE-ERROR
+upper nullable: accepted
+upper subclass: accepted
+upper exact: accepted
+upper unrelated: RUNTIME-TYPE-ERROR
+upper rebound: RUNTIME-TYPE-ERROR
+lower parent: accepted
+lower exact: accepted
+lower unrelated: RUNTIME-TYPE-ERROR
+nested exact: accepted
+nested unrelated: RUNTIME-TYPE-ERROR

@@ -57,6 +57,9 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/WeakReferenceNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -4319,6 +4322,27 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
     return QoreValue(copy);
 }
 
+QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        case NT_HASH: {
+            // the lvalue holds the container: releasing the reference read does not free it
+            ValueHolder strong(v, xsink);
+            return new WeakHashReferenceNode(v.get<QoreHashNode>());
+        }
+        case NT_LIST: {
+            ValueHolder strong(v, xsink);
+            return new WeakListReferenceNode(v.get<QoreListNode>());
+        }
+        case NT_WEAKREF: {
+            // a weak reference to an object that the source holds reads as its target, as in the other modes
+            ValueHolder weak(v, xsink);
+            return QoreValue(v.get<const WeakReferenceNode>()->get()).refSelf();
+        }
+        default:
+            return v;
+    }
+}
+
 QoreValue qore_value_copy_on_write(QoreValue& v) {
     // an enum value does not own its base value's node: its callers replace it with an owned copy instead
     assert(!v.isEnum());
@@ -5780,6 +5804,11 @@ QoreHashNode* get_source_location(const QoreProgramLocation* loc) {
     }
 
     ph->setKeyValueIntern("offset", loc->offset);
+
+    // the directories of the sources are external information: code restricted from it gets the file names (qore#7507)
+    if (runtime_no_external_info()) {
+        qore_restrict_location_paths(**h);
+    }
 
     return h.release();
 }

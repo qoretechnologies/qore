@@ -305,9 +305,12 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         @see hasDataProvider()
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the provider's client is created from the connection's members: for restricted code that was lent the
+        # connection, from a private copy with its creator's target (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         return new ServerSentEventClientDataProvider({
-            "url": url,
-        } + opts{"token", "token_type", "username", "password", "method", "body", "asyncapi",
+            "url": src.url,
+        } + src.opts{"token", "token_type", "username", "password", "method", "body", "asyncapi",
             "asyncapi_channel"});
     }
 
@@ -342,8 +345,11 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         @since ServerSentEventClient 1.1
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        # the ping is made from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (qore#7327)
+        AbstractConnection src = getLentTargetSource();
         # Build HTTP options from connection options
-        hash<auto> http_opts = {"url": url} + self.opts;
+        hash<auto> http_opts = {"url": src.url} + src.opts;
         # Replace SSE scheme with HTTP scheme
         hash<UrlInfo> uh = parse_url(http_opts.url);
         if (uh.protocol) {

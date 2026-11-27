@@ -122,6 +122,7 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreLogicalComparisonOperatorNode.h"
 #include "qore/intern/QoreListAssignmentOperatorNode.h"
@@ -1910,7 +1911,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
                 ctx.local_owner_pgm);
             std::string val_error;
-            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error, ctx.pgm);
             if (!val_error.empty() && default_error.empty()) {
                 // a closure without the default would run with another value
                 default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
@@ -2456,15 +2457,33 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
 
 // see QoreAOT.h
 const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static) {
-    const qore_class_private* qcp = qore_class_private::get(*qc);
-    const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
-    if (m) {
-        return m;
-    }
-    if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
-        for (const auto& i : *scl) {
-            if (i->sclass && (m = qore_aot_find_loading_method(i->sclass, name, is_static))) {
-                return m;
+    // the hierarchy is walked depth first, each class before its base classes and the base classes in their order,
+    // with a stack of its own instead of a recursion, as the depth of a hierarchy is not limited by the stack of the
+    // thread that loads it (qore#7553); a class reached through more than one path is searched once, as a second
+    // search could find nothing that the first one did not
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    std::vector<base_range_t> bases;
+    std::unordered_set<const QoreClass*> visited;
+    while (qc) {
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        if (const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name)
+                : qcp->parseFindLocalMethod(name)) {
+            return m;
+        }
+        if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
+            bases.emplace_back(scl->begin(), scl->end());
+        }
+        // the next class is the first base class not searched yet of the most recently searched class that has one
+        qc = nullptr;
+        while (!qc && !bases.empty()) {
+            base_range_t& range = bases.back();
+            if (range.first == range.second) {
+                bases.pop_back();
+                continue;
+            }
+            const BCNode* bcn = *range.first++;
+            if (bcn && bcn->sclass && visited.insert(bcn->sclass).second) {
+                qc = bcn->sclass;
             }
         }
     }
@@ -4087,7 +4106,7 @@ static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     QoreValue rv;
     {
         QoreProgramContextHelper value_pch(ctx.pgm);
-        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error, ctx.pgm);
     }
     if (!value_error.empty()) {
         ctx.error = value_error;
@@ -5248,6 +5267,35 @@ static bool write_expr_backquote(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_backquote(AOTExprReadCtx& ctx) {
     const char* cmd = ctx.reader.readStringRef(ctx.ptr);
     return QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : "")));
+}
+
+// ============================================================================
+// READ_REFERENCE (134)
+// ============================================================================
+
+//! Writes a read through a reference element (qore#6662)
+static bool write_expr_read_reference(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreReadReferenceOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::READ_REFERENCE));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+//! Reads a read through a reference element (qore#6662)
+static QoreValue read_expr_read_reference(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreReadReferenceOperatorNode(&loc_builtin, operand));
 }
 
 // ============================================================================

@@ -1,5 +1,6 @@
 %modern
 %allow-debugger
+%allow-opaque-references
 # a handler declared in the root block of a handler that runs inline at an exit of a loop (qore#6905): with no
 # debugger attached, ARGV[0] is a function to call; with a request, the debugger requests a flow at the hit-th step
 # event of the statement on a line in that function (the lines of the statements tagged "### <tag>"), and optionally
@@ -1039,6 +1040,376 @@ auto sub mixedInHandler(int n) {
     return n;
 }
 
+# A second debugger return sees the pending value of its own iteration (#7022).
+auto sub abandonedReturn(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "h";                          ### abandoned_step
+        }
+        if (i == 1) {
+            return n;
+        }
+    }
+    return -1;
+}
+
+class ReturnMarker {
+    destructor() {
+        push log, "released";
+    }
+}
+
+auto sub abandonedObject(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "inner";              ### abandoned_object
+                }
+                return new ReturnMarker();
+            }
+        }
+    }
+    push log, "after";
+    return n;
+}
+
+# Construct values at run time so the debug IR has to preserve the slot of the outer return.
+auto sub pendingData(string kind, int n) {
+    switch (kind) {
+        case "string": return sprintf("outer value %d", n);
+        case "list": return (n, n + 1);
+        case "hash": return {"outer": n};
+        case "number": return number(n) + 0.25n;
+        case "date": return date(1700000000 + n);
+        case "binary": return sprintf("outer value %d", n).toBinary();
+        case "object": return new ReturnMarker();
+        case "object-list": return (new ReturnMarker(), n);
+        case "object-opaque": {
+            hash<auto> holder;
+            ReturnMarker marker();
+            holder.marker @= marker;
+            return (holder, n);
+        }
+    }
+    throw "TEST-ERROR", "unknown pending data kind: " + kind;
+}
+
+auto sub outerPendingReturn(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### outer_pending
+            }
+            return -5;
+        }
+    }
+    list<string> parts = ARGV[0].split("/");
+    if (parts.size() == 2) {
+        return pendingData(parts[1], n);
+    }
+    return -7;
+}
+
+# No debugger request: an inner source return releases the former value before its exit handler (#5992).
+auto sub eagerOuter(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        while (True) {
+            on_exit { push log, "cleanup"; }
+            return n;
+        }
+    }
+    return (new ReturnMarker(), n);
+}
+
+# A loop inside a handler consumes a request and resumes the handler's pending return.
+auto sub innerLoopPending(int n) {
+    on_exit {
+        for (int i = 0; i < 1; ++i) {
+            on_exit {
+                push log, "inner";                  ### inner_loop_pending
+            }
+            return -5;
+        }
+        push log, "after";
+    }
+    return -7;
+}
+
+auto sub keepMarker() {
+    on_exit {
+        while (True) {
+            push log, "body";                       ### keep_marker
+            break;
+        }
+    }
+    return new ReturnMarker();
+}
+
+auto sub unchangedObject(int n) {
+    auto v = keepMarker();
+    return v instanceof ReturnMarker ? n : -1;
+}
+
+# A handler's own return, a request in a later handler, and a last handler that completes normally: the return
+# of the first handler resumes, also its request (the block does not end normally; #7022)
+auto sub nrcLost(int n) {
+    {
+        on_exit {
+            push log, "last";
+        }
+        on_exit {
+            push log, "mid";                        ### nrc_mid
+        }
+        on_exit {
+            return n;
+        }
+    }
+    push log, "after";
+    return -7;
+}
+
+class ThrowingMarker {
+    destructor() {
+        push log, "throw";
+        throw "MARKER-ERROR", "the destructor threw";
+    }
+}
+
+# The release of an abandoned return runs a destructor that throws: the next handler still runs (bug 380; #7022)
+auto sub dtorThrow(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### dtor_throw
+            }
+            return new ThrowingMarker();
+        }
+    }
+    return -7;
+}
+
+# A handler of an enclosing block in the handler runs after the request abandoned the return and before a later
+# handler of the function takes the request: the order of the abandoned object's release (#7022)
+auto sub abandonTiming(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "between";
+            }
+            {
+                on_exit {
+                    push log, "inner";              ### abandon_timing
+                }
+                return new ReturnMarker();
+            }
+        }
+    }
+    return -7;
+}
+
+# The issue's nested block handlers: a continue at the inner handler, then a return at the outer one (#7022)
+auto sub abandonedNested(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "outer";                      ### abandoned_nested_outer
+        }
+        {
+            on_exit {
+                push log, "inner";                  ### abandoned_nested_inner
+            }
+            if (i == 1) {
+                return n;
+            }
+        }
+    }
+    return -1;
+}
+
+# ... with a try statement in the inner handler
+auto sub abandonedNestedTry(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "outer";                      ### abandoned_try_outer
+        }
+        {
+            on_exit {
+                try {
+                    push log, "inner";              ### abandoned_try_inner
+                } catch (hash<ExceptionInfo> ex) {
+                    push log, ex.err;
+                }
+            }
+            if (i == 1) {
+                return n;
+            }
+        }
+    }
+    return -1;
+}
+
+# The second request in the same iteration (hit 1): the outer handler runs at the exit of the continue, after the
+# request abandoned the return, which it does not resume (#7022)
+auto sub abandonedNestedHit1(int n) {
+    return abandonedNested(n);
+}
+
+auto sub abandonedNestedTryHit1(int n) {
+    return abandonedNestedTry(n);
+}
+
+# The release of an abandoned object throws when a loop takes the request: the loop ends with the exception
+auto sub dtorThrowLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "inner";              ### dtor_throw_loop
+                }
+                return new ThrowingMarker();
+            }
+        }
+    }
+    push log, "after";
+    return n;
+}
+
+# A request in a handler that a return runs, which no loop or later handler takes, ends the function: the return goes
+# on with its value, also an object (#6949), which is not released when the request leaves the handler's block (#7022)
+auto sub endsFunctionObject(int n) {
+    on_exit {
+        on_exit {
+            push log, "inner";                      ### ends_function_object
+        }
+        push log, "outer";
+    }
+    return new ReturnMarker();
+}
+
+# An on_error handler after the on_exit handler does not run at a normal exit: the on_exit handler is the last that
+# runs, so a request in it ends the function, and the return goes on with its value (#6949, #7022)
+auto sub onErrorAfterExit(int n) {
+    on_error {
+        push log, "error";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### on_error_after_exit
+            }
+            return new ReturnMarker();
+        }
+    }
+    return -7;
+}
+
+# A try statement in the handler's body passes the request as it is: a later handler takes it, and the abandoned object
+# is released when the request leaves its block (#7022)
+auto sub tryInHandler(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        try {
+            {
+                on_exit {
+                    push log, "inner";              ### try_in_handler
+                }
+                return new ReturnMarker();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+        push log, "after try";
+    }
+    return -7;
+}
+
+# A try statement in the only handler, with no loop: the request ends the function, and the return goes on (#7022)
+auto sub tryLastHandler(int n) {
+    on_exit {
+        try {
+            {
+                on_exit {
+                    push log, "inner";              ### try_last_handler
+                }
+                return new ReturnMarker();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+        push log, "after try";
+    }
+    return -7;
+}
+
+# A function called in a handler: the request in it is one of the called function, which no loop or handler of it
+# takes, so its return goes on; the handlers of the caller do not take it (#7022)
+auto sub tryCallee() {
+    try {
+        {
+            on_exit {
+                push log, "callee";                 ### try_callee
+            }
+            return new ReturnMarker();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        push log, ex.err;
+    }
+    push log, "callee after";
+    return 1;
+}
+
+auto sub tryCalled(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        auto v = tryCallee();
+        push log, v instanceof ReturnMarker ? "callee returned the marker" : sprintf("callee returned %y", v);
+    }
+    return -7;
+}
+
+# The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
+auto sub outerPendingTry(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### outer_pending_try
+            }
+            try {
+                return -5;
+            } catch (hash<ExceptionInfo> ex) {
+                push log, ex.err;
+            }
+        }
+    }
+    list<string> parts = ARGV[0].split("/");
+    if (parts.size() == 2) {
+        return pendingData(parts[1], n);
+    }
+    return -7;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
@@ -1061,7 +1432,13 @@ background sub () {
         dbg.removeProgram(pc);
     }
     try {
-        result = sprintf("%y", call_function(ARGV[0], 3));
+        list<string> parts = ARGV[0].split("/");
+        auto v = call_function(parts[0], 3);
+        if (parts.size() == 2 && parts[1] !~ /^object/) {
+            result = v === pendingData(parts[1], 3) ? "restored" : sprintf("%y", v);
+        } else {
+            result = sprintf("%y", v);
+        }
     } catch (hash<ExceptionInfo> ex) {
         result = sprintf("%s: %s", ex.err, ex.desc);
     }

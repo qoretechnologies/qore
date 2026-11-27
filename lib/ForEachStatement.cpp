@@ -97,6 +97,18 @@ int ForEachStatement::assignLoopValue(LValueHelper& lvalue, QoreValue value, con
     }
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int ForEachStatement::assignLoopValueBindRetry(LValueHelper& lvalue,
+        RuntimeConfig* rc, const char* desc) const {
+    auto op = [this, desc](LValueHelper& h, QoreValue value) -> int {
+        return assignLoopValue<Lexical>(h, value, desc);
+    };
+    // the loop variable has no path keys: it is resolved again as for the first round
+    return rc
+        ? qore_ast_store_bind_retry(lvalue, var, *rc, nullptr, op)
+        : qore_ast_store_bind_retry(lvalue, var, nullptr, op);
+}
+
 ForEachStatement::ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd) : AbstractStatement(start_line, end_line), var(v), list(l), code(cd) {
 }
 
@@ -156,9 +168,14 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
             LValueHelper n(var, xsink);
             if (!n)
                 break;
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
             // assign variable to current value
-            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>"))
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>")
+                    && (!n.isBindPending()
+                        || assignLoopValueBindRetry<Lexical>(n, nullptr, "<foreach lvalue assignment>")))
                 break;
         }
 
@@ -166,7 +183,7 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
         ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
-        if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc = code->execLoopBody(return_value, xsink)) == RC_BREAK) || *xsink) {
             rc = 0;
             break;
         }
@@ -229,9 +246,14 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
             LValueHelper n(var, rc, xsink);
             if (!n)
                 break;
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
             // assign variable to current value
-            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>"))
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>")
+                    && (!n.isBindPending()
+                        || assignLoopValueBindRetry<Lexical>(n, &rc, "<foreach lvalue assignment>")))
                 break;
         }
 
@@ -239,7 +261,7 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
         ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
-        if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc_state = code->execLoopBody(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
             rc_state = 0;
             break;
         }
@@ -300,9 +322,13 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             if (!n) {
                 return 0;
             }
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
             // assign variable to current value in list
-            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release())) {
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release())
+                    && (!n.isBindPending() || assignLoopValueBindRetry<Lexical>(n, nullptr))) {
                 return 0;
             }
         }
@@ -311,7 +337,7 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
-        rc = code->execImpl(return_value, xsink);
+        rc = code->execLoopBody(return_value, xsink);
         if (*xsink) {
             return 0;
         }
@@ -359,17 +385,24 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         return 0;
     }
 
-    // write the value back to the lvalue
-    LValueHelper val(**vr, xsink);
-    if (!val) {
-        return 0;
-    }
+    // write the value back to the lvalue; a store whose check records reference elements is made again after they have
+    // been bound with no lvalue lock held, and the reference is resolved again for it (qore#7391)
+    QoreBindRetry retry;
+    do {
+        LValueHelper val(**vr, xsink);
+        if (!val) {
+            return 0;
+        }
+        val.setBindRetry(retry);
 
-    if (assignLoopValue<Lexical>(val, ln.release())) {
-        return 0;
-    }
+        QoreValue value = retry.hasValue() ? retry.takeValue() : ln.release();
+        if (assignLoopValue<Lexical>(val, value)) {
+            continue;
+        }
 
-    return rc;
+        return rc;
+    } while (retry.again());
+    return 0;
 }
 
 template <bool Lexical>
@@ -418,9 +451,13 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
             if (!n) {
                 return 0;
             }
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
             // assign variable to current value in list
-            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())) {
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())
+                    && (!n.isBindPending() || assignLoopValueBindRetry<Lexical>(n, &rc))) {
                 return 0;
             }
         }
@@ -429,7 +466,7 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
-        rc_state = code->execImpl(rc, return_value, xsink);
+        rc_state = code->execLoopBody(rc, return_value, xsink);
         if (*xsink) {
             return 0;
         }
@@ -487,17 +524,24 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         return 0;
     }
 
-    // write the value back to the lvalue
-    LValueHelper val(**vr, rc, xsink);
-    if (!val) {
-        return 0;
-    }
+    // write the value back to the lvalue; a store whose check records reference elements is made again after they have
+    // been bound with no lvalue lock held, and the reference is resolved again for it (qore#7391)
+    QoreBindRetry retry;
+    do {
+        LValueHelper val(**vr, rc, xsink);
+        if (!val) {
+            return 0;
+        }
+        val.setBindRetry(retry);
 
-    if (assignLoopValue<Lexical>(val, ln.release())) {
-        return 0;
-    }
+        QoreValue value = retry.hasValue() ? retry.takeValue() : ln.release();
+        if (assignLoopValue<Lexical>(val, value)) {
+            continue;
+        }
 
-    return rc_state;
+        return rc_state;
+    } while (retry.again());
+    return 0;
 }
 
 int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
