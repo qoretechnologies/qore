@@ -97,7 +97,7 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
         # no delivery: still within the stall timeout, then past it
         steps += {"delivered": delivered, "now": now + Stall - 1};
         steps += {"delivered": delivered, "now": now + Stall};
-        list<hash<auto>> r = dbg_http_send_bound_steps(Stall, 0, 300, steps);
+        list<hash<auto>> r = call_function("dbg_http_send_bound_steps", Stall, 0, 300, steps);
         assertEq(66, r.size());
         assertEq(64, (select r[0..63], $1.result == "ok" && $1.renewed).size(),
             "each delivery renews the bound, for many times the stall timeout");
@@ -106,7 +106,7 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
         assertEq("stalled", r[65].result, "no delivery for the stall timeout");
 
         # a fused operation waiting for the next request is not measured, and a new response starts a new bound
-        r = dbg_http_send_bound_steps(Stall, 0, 300, (
+        r = call_function("dbg_http_send_bound_steps", Stall, 0, 300, (
             {"delivered": 1000, "now": 0},
             {"delivered": -1, "now": 5000},
             {"delivered": 0, "now": 10000},
@@ -122,9 +122,11 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
             slow += {"delivered": i * 1024, "now": i * 100};
             fast += {"delivered": i * 1024 * 1024, "now": i * 100};
         }
-        list<string> slow_results = map $1.result, dbg_http_send_bound_steps(60000, 1024 * 1024, 300, slow);
+        list<hash<auto>> slow_steps = call_function("dbg_http_send_bound_steps", 60000, 1024 * 1024, 300, slow);
+        list<string> slow_results = map $1.result, slow_steps;
         assertTrue(slow_results.contains("below-rate"), sprintf("a slow client is below the rate: %y", slow_results));
-        assertEq(40, (select dbg_http_send_bound_steps(60000, 1024 * 1024, 300, fast), $1.result == "ok").size(),
+        list<hash<auto>> fast_steps = call_function("dbg_http_send_bound_steps", 60000, 1024 * 1024, 300, fast);
+        assertEq(40, (select fast_steps, $1.result == "ok").size(),
             "a fast client is not below the rate");
     }
 
