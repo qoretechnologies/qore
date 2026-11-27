@@ -91,12 +91,20 @@ ALLOWED = {
     ("examples/test/qore/security/module-public-var-readonly.qtest",
         'getModuleDir(tmp.path), tmp.path + DirSep + "writer")'):
         "aotWriterTest() reads the <name>=<value> lines of the output and ignores every other line",
+    ("examples/test/ir/AOTBatchMemoryCgroup.qtest",
+        'QORE_AOT_BATCH_JOBS=1 %s 2>&1", env, compileCommand(ref, groups[g]))'):
+        "the serial reference compiles of qcc (the command of compileCommand()): only their exit status is checked",
+    ("examples/test/ir/AOTBatchMemoryCgroup.qtest", '"sh %s 2>&1", MemoryMax, q(script))'):
+        "the cgroup script runs the compiles in the background with their output in logs; the test reads only its "
+        "key=<number> pairs",
+    ("examples/test/ir/AOTDataProviderExecutable.qtest", 'echo $? > %s", libqore_dir, exe_path, status_path)'):
+        "the executable runs a QUnit test: its exit status and a regex match of the QUnit summary line",
 }
 
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 11, "PENDING_AOT3": 14, "PENDING": 91}
+SIZES = {"ALLOWED": 14, "PENDING_AOT3": 14, "PENDING": 76}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -122,21 +130,6 @@ PENDING_AOT3 = {
 PENDING = {
     # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
     # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTAggregateMethodProjection.qtest": 1,
-    "examples/test/ir/AOTAggregateReturnProjection.qtest": 1,
-    "examples/test/ir/AOTAssignedHashGuard.qtest": 2,
-    "examples/test/ir/AOTAssignedStringConversionFacts.qtest": 3,
-    "examples/test/ir/AOTBatchMemoryCgroup.qtest": 2,
-    "examples/test/ir/AOTBoundedIntExpressionSummary.qtest": 2,
-    "examples/test/ir/AOTBoxedReturnParam.qtest": 1,
-    "examples/test/ir/AOTCallKindExpressionSummary.qtest": 2,
-    "examples/test/ir/AOTClosureSerializationFailure.qtest": 2,
-    "examples/test/ir/AOTCollectionPredicateFusion.qtest": 1,
-    "examples/test/ir/AOTComplexHashTypePathCache.qtest": 3,
-    "examples/test/ir/AOTConstantInitializerMemory.qtest": 1,
-    "examples/test/ir/AOTContextIndependentBodyLocals.qtest": 1,
-    "examples/test/ir/AOTCrossObjectAggregateProjection.qtest": 1,
-    "examples/test/ir/AOTDataProviderExecutable.qtest": 1,
     "examples/test/ir/AOTDebugCatchTables.qtest": 1,
     "examples/test/ir/AOTDebugIRFlow.qtest": 1,
     "examples/test/ir/AOTExecutableOptions.qtest": 1,
