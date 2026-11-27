@@ -13299,6 +13299,12 @@ QoreClass* parse_get_class() {
     return cls ? cls->cls : nullptr;
 }
 
+// the parse and commit class contexts that these set are not recorded for the update scopes of shared objects
+// (qore#7795): they are set by the parse and commit of code (QoreParseClassHelper, QoreDeferredMethodBindScope, the
+// parse of closures and the parse location of a Program), and the code that runs under them, the initializers of
+// constants and static variables, runs only while code is parsed or committed; in an update scope, that is only when
+// the scope's own trusted code parses or commits code, which the code that it calls in the scope cannot cause.  The
+// calls that such code makes switch the class context with the helpers, which record it
 void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns,
         const qore_class_private*& old_cls, qore_ns_private*& old_ns) {
     ThreadData* td = thread_data.get();
