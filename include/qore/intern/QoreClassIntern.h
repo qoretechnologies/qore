@@ -4069,6 +4069,16 @@ public:
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
+    //! true if the class holds a dependency reference (qore_program_private::depRef()) on its source Program
+    /** A builtin class that a module creates for a Program with QoreBuiltinClass(QoreProgram*, ...) and does not add to
+        a namespace of the Program is held only by its objects, so nothing clears its source Program when that Program
+        is deleted (qore#7797).  The dependency reference keeps the Program's memory allocated for as long as the class
+        exists: a call of a method of the class finds that the Program has been deleted and raises PROGRAM-ERROR (see
+        getSourceProgramForCallSlow()), and the address cannot be reused for another Program that would then be taken
+        for the class's source Program (see ownedByProgram()).  Mutually exclusive with deref_source_program.
+    */
+    bool dep_source_program = false;
+
     //! true if sandboxed code declared the class: when the class was committed, a sandbox that does not trust its code
     //! governed its Program (qore#6843, qore#7635)
     /** Its code has no private access to the members and methods that a class that trusted code declared declares
@@ -6243,6 +6253,9 @@ public:
         assert(p);
         if (deref_source_program) {
             p->deref(xsink);
+        } else if (dep_source_program) {
+            dep_source_program = false;
+            p->depDeref();
         }
     }
 

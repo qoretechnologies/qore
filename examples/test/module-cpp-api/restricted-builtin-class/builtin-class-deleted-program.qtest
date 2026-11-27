@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "restrictedbuiltinprobe" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt
+# and is not installed
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires restrictedbuiltinprobe
+%requires QUnit
+
+%exec-class BuiltinClassDeletedProgramTest
+
+#! A method call on an object of a builtin class created for a Program that was deleted fails closed (qore#7797)
+/** A builtin class that a module creates for a Program with QoreBuiltinClass(QoreProgram*, ...) and does not add to a
+    namespace is held only by its objects; it keeps the Program as its source Program.  Once the Program is deleted a
+    call of a method of the class must raise PROGRAM-ERROR, as it does for a class that a Program declared, and must
+    not read the Program's memory: the Program stays allocated as long as the class exists, so the address cannot be
+    taken for the source Program of the class by another Program that is created at it later.
+*/
+class BuiltinClassDeletedProgramTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+object sub make() {
+    return RestrictedBuiltinProbe::make();
+}
+";
+    }
+
+    constructor() : Test("Builtin class of a deleted Program", "1.0") {
+        addTestCase("method call after the Program is deleted", \methodCallTest());
+        addTestCase("every method", \everyMethodTest());
+        addTestCase("a Program created at the address of the deleted one", \reusedAddressTest());
+        addTestCase("call reference and thread", \callReferenceAndThreadTest());
+        addTestCase("live Program", \liveProgramTest());
+        addTestCase("objects of the same class outlive it in turn", \manyObjectsTest());
+        set_return_value(main());
+    }
+
+    #! creates a Program with the probe, returns an object of the class created for it, and deletes the Program
+    private object makeOrphan() {
+        object o;
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(Source, "p");
+            o = p.callFunction("make");
+        }
+        return o;
+    }
+
+    methodCallTest() {
+        object o = makeOrphan();
+        assertThrows("PROGRAM-ERROR", \o.touch());
+    }
+
+    everyMethodTest() {
+        object o = makeOrphan();
+        assertThrows("PROGRAM-ERROR", \o.touch());
+        assertThrows("PROGRAM-ERROR", \o.fsTouch());
+        assertThrows("PROGRAM-ERROR", \o.mixedTouch());
+    }
+
+    reusedAddressTest() {
+        object o = makeOrphan();
+        # Programs created and deleted after the first one: none of them can be taken for the class's Program, so the
+        # call is refused every time
+        for (int i = 0; i < 50; ++i) {
+            Program p(PO_NEW_STYLE);
+            p.parse(Source, "q" + i);
+            object other = p.callFunction("make");
+            assertEq(True, other.touch());
+            assertThrows("PROGRAM-ERROR", \o.touch());
+        }
+    }
+
+    callReferenceAndThreadTest() {
+        object o = makeOrphan();
+        code c = \o.touch();
+        assertThrows("PROGRAM-ERROR", c);
+        # from another thread
+        Counter cnt(1);
+        *hash<ExceptionInfo> err;
+        background sub () {
+            on_exit cnt.dec();
+            try {
+                o.touch();
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+        cnt.waitForZero();
+        assertEq("PROGRAM-ERROR", err.err);
+    }
+
+    liveProgramTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(Source, "p");
+        object o = p.callFunction("make");
+        # while the Program exists the class works as before
+        assertEq(True, o.touch());
+        assertEq(True, o.mixedTouch());
+    }
+
+    manyObjectsTest() {
+        list<object> l = ();
+        for (int i = 0; i < 20; ++i) {
+            l += makeOrphan();
+        }
+        foreach object o in (l) {
+            assertThrows("PROGRAM-ERROR", \o.touch());
+        }
+    }
+}
