@@ -1,0 +1,294 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pooled HTTP/1.1 and HTTP/2 client connections over TCP and TLS, closed and leased by other code
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestClient
+%requires ConnectionProvider
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpClientIoManagerConfigNonOwnerTest
+
+#! A sandboxed borrower of a connection manager that other code shares cannot change its options, logger and callback, or
+#! take its cookie jar and proxy credentials (qore#7830)
+/** The manager's methods that set its logger, its first connection callback and its timeouts, or that give its cookie
+    jar and its proxy authenticator, or that change the proxy authentication, are refused for code that a sandbox
+    restricts and that does not own the manager (PERMISSION-DENIED), as the methods that lease, pin, acquire or close
+    connections are (qore#7570, qore#7813, qore#7828): the host's requests use them, the logger would receive the host's
+    log messages, the callback would run on the host's connections, and the cookies and the proxy credentials are the
+    host's secrets.  The restricted code that owns its manager, the owner, and the connections that restricted code
+    that was lent them gets an object from with getAsync() work as before.
+*/
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! the code of the borrower
+const BorrowerCode = "%modern
+%requires HttpClientIo
+%requires ConnectionProvider
+#! the top-level code of a parsed Program is not run, so the global has no initial value
+our hash<auto> state;
+#! calls a state-changing or secret-giving method of the lent manager; returns what happened
+string sub change(HttpClientConnectionManager mgr, string what) {
+    try {
+        switch (what) {
+            case \"setLogger\": mgr.setLogger(); break;
+            case \"setFirstConnectionCallback\": mgr.setFirstConnectionCallback(sub () { ++state.called; }); break;
+            case \"setConnectTimeout\": mgr.setConnectTimeout(1ms); break;
+            case \"setRequestTimeout\": mgr.setRequestTimeout(1ms); break;
+            case \"getCookieJar\": mgr.getCookieJar(); break;
+            case \"getProxyAuthenticator\": mgr.getProxyAuthenticator(); break;
+            case \"processProxyConnectFailure\": mgr.processProxyConnectFailure(\"http://127.0.0.1\", {}); break;
+            default: throw \"UNKNOWN\", what;
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! the number of calls of the callback that the borrower set
+int sub getCalled() {
+    return state.called ?? 0;
+}
+#! gets an async connection object from a connection that the host lent; returns what happened
+string sub getAsyncOnly(AbstractConnection conn) {
+    try {
+        return conn.getAsync(False).className();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+#! a restricted borrower that owns its manager uses all of the methods; returns what happened
+string sub own(string url) {
+    try {
+        HttpClientConnectionManager m(<HttpClientConnectionManagerOptions>{\"protocol\": \"auto\", \"accept_all_certs\": True});
+        m.setLogger();
+        m.setFirstConnectionCallback(sub () { ++state.called; });
+        m.setConnectTimeout(5s);
+        m.setRequestTimeout(5s);
+        m.getCookieJar();
+        m.getProxyAuthenticator();
+        m.processProxyConnectFailure(url, {});
+        m.requestAsync(url, \"GET\", \"/ok\").get(20s);
+        m.closeAll();
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+#! gets an async connection object from a connection that the host lent, makes a request with it; returns what
+#! happened
+string sub getAsyncOf(AbstractConnection conn, string url) {
+    try {
+        object o = conn.getAsync(False);
+        if (o instanceof HttpClientConnectionManager) {
+            cast<HttpClientConnectionManager>(o).requestAsync(url, \"GET\", \"/ok\").get(20s);
+        } else {
+            call_object_method(o, \"restGetAsync\", \"/ok\").get(20s);
+        }
+        return o.className();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+#! answers each request with 200; a request for /hold waits until the test releases it
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue held();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.url.path == "hold") {
+            held.push(True);
+            release.get(HangGuard);
+        }
+        return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Type": "text/plain"}, "body": "ok " + cx.url.path};
+    }
+}
+class HttpClientIoManagerConfigNonOwnerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("lent manager: the borrower cannot change its options or take its secrets", "1.0",
+            \ARGV) {
+        addTestCase("the options, the logger, the callback and the secrets are refused", \refusedTest());
+        addTestCase("a restricted borrower that owns its manager uses them", \borrowerOwnerTest());
+        addTestCase("the code that owns the manager uses them", \ownerTest());
+        addTestCase("connections that the host lends give the borrower an async object", \connectionProviderTest());
+        set_return_value(main());
+    }
+
+    #! returns a server, its handler and its URL
+    private hash<auto> startServer() {
+        HoldHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("hold", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "handler": handler,
+            "port": port,
+            "url": sprintf("http://127.0.0.1:%d", port),
+        };
+    }
+
+    #! a manager that the host creates and lends
+    private HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "connect_timeout": 7s,
+            "request_timeout": HangGuard,
+        });
+    }
+
+    #! a sandboxed borrower that may reach the server
+    private Program getBorrower(int port) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        sm.addNetworkAllowedPort(port);
+        p.setSandboxManager(sm);
+        p.parse(BorrowerCode, "borrower");
+        return p;
+    }
+
+    #! a borrower that the parse options restrict from the NETWORK domain: a connection that the host lends to it makes
+    #! its client or manager with the proof of the host (qore#7262)
+    private Program getNoNetworkBorrower() {
+        Program p(PO_NO_NETWORK | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        p.parse(BorrowerCode, "borrower-nn");
+        return p;
+    }
+
+    refusedTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        foreach string what in ("setLogger", "setFirstConnectionCallback", "setConnectTimeout", "setRequestTimeout",
+                "getCookieJar", "getProxyAuthenticator", "processProxyConnectFailure") {
+            assertEq("PERMISSION-DENIED", p.callFunction("change", mgr, what), what);
+        }
+        # the options of the host are unchanged
+        assertEq(7000, mgr.getConnectTimeout(), "the connect timeout of the host");
+        assertEq(get_duration_milliseconds(HangGuard), mgr.getRequestTimeout(), "the request timeout of the host");
+        # the host's first connection does not run the borrower's callback
+        HttpClientStreamHandle sh = mgr.acquireStream(srv.url);
+        assertEq(200, sh.submitAsync("GET", "/ok").future.get(HangGuard).status_code, "the host's request");
+        assertEq(0, p.callFunction("getCalled"), "the callback of the borrower was not called");
+    }
+
+    borrowerOwnerTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        Program p = getBorrower(srv.port);
+        assertEq("done", p.callFunction("own", srv.url), "the borrower's own manager");
+    }
+
+    ownerTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+        mgr.setLogger();
+        int called = 0;
+        mgr.setFirstConnectionCallback(sub () { ++called; });
+        mgr.setConnectTimeout(9s);
+        mgr.setRequestTimeout(HangGuard);
+        assertEq(9000, mgr.getConnectTimeout(), "the owner's connect timeout");
+        mgr.getCookieJar();
+        mgr.getProxyAuthenticator();
+        HttpClientStreamHandle sh = mgr.acquireStream(srv.url);
+        assertEq(200, sh.submitAsync("GET", "/ok").future.get(HangGuard).status_code, "the owner's request");
+        assertEq(1, called, "the owner's callback was called by the first connection");
+    }
+
+    connectionProviderTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        Program p = getBorrower(srv.port);
+        # a connection of the host that is lent to restricted code: its getAsync() makes the manager or the client for
+        # the borrower with the proof of the host, and sets the callback that marks the connection up
+        ConnectionProvider::HttpConnection http("http-conn", "", srv.url);
+        assertEq("HttpClientConnectionManager", p.callFunction("getAsyncOf", http, srv.url), "an HTTP connection");
+        # the first connection of the object marked the connection up with the callback that getAsync() set
+        assertTrue(http.up, "the HTTP connection is up");
+        RestClient::RestConnection rest("rest-conn", "", srv.url, {}, {"data": "text"});
+        assertEq("RestClientIo", p.callFunction("getAsyncOf", rest, srv.url), "a REST connection");
+        assertTrue(rest.up, "the REST connection is up");
+
+        # the same for a borrower that the parse options restrict from the network: getAsync() gives it the client or
+        # the manager of the host's proof, which does not mean that it can use it: it sets the callback with it
+        Program nn = getNoNetworkBorrower();
+        ConnectionProvider::HttpConnection http2("http-conn-2", "", srv.url);
+        assertEq("HttpClientConnectionManager", nn.callFunction("getAsyncOnly", http2),
+            "an HTTP connection of a borrower that is restricted from the network");
+        RestClient::RestConnection rest2("rest-conn-2", "", srv.url, {}, {"data": "text"});
+        assertEq("RestClientIo", nn.callFunction("getAsyncOnly", rest2),
+            "a REST connection of a borrower that is restricted from the network");
+    }
+}
