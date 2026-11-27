@@ -291,14 +291,6 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
-<<<<<<< HEAD
-HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
-    QORE_DBG_HASH_MEMBER_FAILS();
-    return addMemberKnownAbsent(new HashMember(old.key, old.hash));
-}
-
-=======
->>>>>>> cecc7a1663
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
     assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
@@ -1615,13 +1607,14 @@ void qore_hash_private::discardUnstoredValue(QoreValue value, ExceptionSink* xsi
 }
 
 QoreHashNode* qore_hash_private::copyStripped() const {
+    assertNotReleasing();
     QoreHashNode* h = new QoreHashNode;
     qore_hash_private& hp = *h->priv;
     try {
-        hp.reserveForCopy(*this);
+        bool copy_layout = hp.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
-            HashMember* om = hp.createMemberKnownAbsent(*i);
+            HashMember* om = hp.createMemberKnownAbsent(*i, copy_layout);
             hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
         }
     } catch (...) {

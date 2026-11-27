@@ -34,6 +34,7 @@
 #define _QORE_QOREHASHNODEINTERN_H
 
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreAllocFailure.h"
 #include <atomic>
 #include <iterator>
 #include <limits>
@@ -1011,6 +1012,13 @@ public:
         calls no function per member but to allocate it
     */
     QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
+#ifdef DEBUG
+        // the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466), as in the other ways to create a
+        // member (qore#7763)
+        if (qore_dbg_hash_member_fails()) {
+            throw std::bad_alloc();
+        }
+#endif
         if (!copy_layout) [[unlikely]] {
             // the key map of this hash has fewer buckets than that of the other hash, or is hardened: the insert
             // checks the chain, or gives the bucket by the keyed hash; the hash is the member hash that insert() takes
@@ -1258,21 +1266,7 @@ public:
             copyFreedState(*h->priv);
             return h;
         }
-<<<<<<< HEAD
         return copyStripped();
-=======
-        assertNotReleasing();
-        QoreHashNode* h = new QoreHashNode;
-        qore_hash_private& hp = *h->priv;
-        bool copy_layout = hp.reserveForCopy(*this);
-        // copy all members to new object
-        for (const HashMember* i : member_list) {
-            HashMember* om = hp.createMemberKnownAbsent(*i, copy_layout);
-            hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
-        }
-        copyFreedState(hp);
-        return h;
->>>>>>> cecc7a1663
     }
 
     //! returns a copy without type information (copy() with \a strip); memory that cannot be allocated for a member
@@ -1325,14 +1319,10 @@ public:
         // copy all members to new object; a copy is not a new holder of the values: a weakly designated container in
         // the hash is shared with the copy, without the share check of a member store (qore#7342)
         for (const HashMember* i : member_list) {
-<<<<<<< HEAD
             // the member is created before the reference is taken: memory that cannot be allocated for it never
             // leaks the value (qore#7763)
-            HashMember* om = h.createMemberKnownAbsent(*i);
+            HashMember* om = h.createMemberKnownAbsent(*i, copy_layout);
             h.setNewMemberValue(om, i->val.refSelf());
-=======
-            h.setNewMemberValue(h.createMemberKnownAbsent(*i, copy_layout), i->val.refSelf());
->>>>>>> cecc7a1663
         }
     }
 
