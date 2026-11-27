@@ -425,9 +425,11 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
             if (c[1] != "by-name") {
                 continue;
             }
-            out = backquote(sprintf("cd %s && %s %s 2>&1", shellQuote(dir), env(c[2]), shellQuote(bin)));
+            # the program runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("cd %s && %s %s",
+                shellQuote(dir), env(c[2]), shellQuote(bin)), NOTHING, "QORE_JIT_TIMING=1");
             expected{c[0]} = c[3];
-            actual{c[0]} = lastLine(out);
+            actual{c[0]} = lastLine(r.out);
         }
         assertEq(expected, actual);
     }

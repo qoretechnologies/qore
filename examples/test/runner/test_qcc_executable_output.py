@@ -96,7 +96,7 @@ ALLOWED = {
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 11, "PENDING_AOT3": 14, "PENDING": 103}
+SIZES = {"ALLOWED": 11, "PENDING_AOT3": 14, "PENDING": 91}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -216,18 +216,6 @@ PENDING = {
     "examples/test/ir/on-error-rethrow/on-error-rethrow.qtest": 1,
     "examples/test/ir/qcc-load-modules.qtest": 2,
     "examples/test/ir/static-closure-class-context/static-closure-class-context.qtest": 1,
-    "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest": 1,
-    "examples/test/qore/classes/HTTPClient/connect-header-values/connect-header-values.qtest": 1,
-    "examples/test/qore/classes/Program/program-get-call-reference.qtest": 1,
-    "examples/test/qore/classes/SandboxManager/module-path-forms.qtest": 1,
-    "examples/test/qore/classes/circular-hierarchy-code.qtest": 1,
-    "examples/test/qore/classes/class-signature-member-types.qtest": 1,
-    "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest": 1,
-    "examples/test/qore/classes/deleted-program-type-arg-holders.qtest": 1,
-    "examples/test/qore/classes/generic-hash-literal-type-param.qtest": 1,
-    "examples/test/qore/classes/member-access-private-internal.qtest": 1,
-    "examples/test/qore/classes/member-lookup-paths.qtest": 1,
-    "examples/test/qore/classes/private-internal-redeclared-member.qtest": 1,
 }
 
 

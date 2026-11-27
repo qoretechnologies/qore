@@ -112,9 +112,12 @@ class ClassSignatureMemberTypesTest inherits QUnit::Test {
                 testSkip("qcc is not available or cannot compile " + Name + ": " + out);
             }
             # -b must be the first argument of a compiled program
-            string result = backquote(sprintf("%s -b %s 2>&1", exe, dir), \rc);
-            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
-            assertEq(expected(), result, sprintf("-O%s", opt));
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b %s", exe, dir),
+                NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, sprintf("-O%s", opt));
+            assertEq("", r.stderr, sprintf("-O%s: stderr", opt));
         }
     }
 }

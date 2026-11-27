@@ -198,10 +198,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   WebSocket client in the test's own process only drives it
         # - TerminalIoRestrictedLoad (#6438): the modules are loaded first in child processes that set their own
         #   --exec-mode and in a qcc executable
-        # - member-access-private-internal (#6640): its probe runs in child processes that set their own --exec-mode
-        #   and in a qcc executable
-        # - member-lookup-paths (#7194): its probe runs in child processes that set their own --exec-mode and in a
-        #   qcc executable
         # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
@@ -252,12 +248,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and arm a debug hook in them
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables, which arm a debug hook
-        # - private-internal-redeclared-member (#6393): its probes run in child processes in the default mode and that
-        #   set their own --exec-mode, and in qcc
-        # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
-        #   --exec-mode and in qcc executables
-        # - deleted-program-type-arg-holders (#6489): its checks run in child processes that set their own
-        #   --exec-mode and in qcc executables
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
@@ -290,7 +280,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - QdpInfo (#7386): its checks run qdp in child processes of its own binary
         # - FileForegroundTty (#7387): its checks run in child processes of its own binary, on a new terminal
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
-        # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
@@ -348,13 +337,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",
-                                 "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
-                                 "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
                                  "examples/test/qore/security/stdio-sandbox-change.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
-                                 "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
@@ -376,10 +362,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
-                                 "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
-                                 "examples/test/qore/classes/member-access-private-internal.qtest",
-                                 "examples/test/qore/classes/member-lookup-paths.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
