@@ -509,6 +509,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("a request target with user information", \userInfoTest());
         addTestCase("the trailer fields for trusted code", \trustedTrailerTest());
         addTestCase("the HTTP server hands the raw request", \pushTest());
+        addTestCase("values that are objects or code", \objectValuesTest());
         set_return_value(main());
     }
 
@@ -549,6 +550,25 @@ l50Xb2GWQesIt9k5jF5IOw==
             "content-length": "5",
             "headers": {"Authorization": "Basic dGVzdDp0ZXN0", "Cookie": "session=secret"},
         };
+    }
+
+    #! The filter gives no value that is an object or code, or holds one, also of the keys of the request and of the
+    #! platform's authorization context (qore#7303)
+    objectValuesTest() {
+        Mutex m();
+        hash<auto> cx = {
+            "user": m,
+            "ssl": sub () {},
+            "handler_name": ("h", \m.lock()),
+            "id": 1,
+            "platform_object": {"a": m},
+            "platform_code": sub () {},
+            "platform_data": {"a": 1},
+        };
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(cx, {}, <HttpRequestFilterOptions>{
+            "platform_context_keys": ("platform_object", "platform_code", "platform_data"),
+        });
+        assertEq({"id": 1, "platform_data": {"a": 1}}, f.cx, "only plain data is given");
     }
 
     filterTest() {

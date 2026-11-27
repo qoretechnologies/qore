@@ -2052,7 +2052,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (!info.reader) {
             throw "MCP-SERVER-ARG-ERROR", sprintf("Resource %y does not have a reader defined", params.uri);
         }
-        auto content = info.reader(cx, params.uri);
+        # the reader of a restricted Program gets the request without its credentials (qore#7303)
+        auto content = info.reader(getContextForCode(info.reader, cx), params.uri);
         # handle different content types
         # NOTE: hash<auto!> — the members below are all strings, so a plain hash<auto> would
         # narrow to hash<string, string> and reject the _meta hash added further down
@@ -2146,7 +2147,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         }
         list<hash<auto>> messages;
         if (info.handler) {
-            messages = info.handler(cx, params.arguments);
+            # the handler of a restricted Program gets the request without its credentials (qore#7303)
+            messages = info.handler(getContextForCode(info.handler, cx), params.arguments);
         } else {
             # default: return a simple user message with the prompt description
             messages = ({
@@ -2493,8 +2495,64 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         return;
     }
 
+    #! Returns the context of the tool call, resource read or prompt request that is current in this thread, if any
+    /** Restricted code (see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"; it fails
+        closed) gets the request context (\c cx) without the credentials of the request, as the code of a restricted
+        %Program that the handler calls gets it (see @ref mcpserverhandler_credentials), and the call context without
+        the handler (\c handler): the handler is the server's object, whose public methods and members (such as its
+        authenticator) restricted code must not reach.  Its \c requestState and \c inputResponses are given only
+        when they hold no object or code.  The session (\c sid), the name and the arguments of the call are given as
+        they are.  Restricted code therefore cannot call
+        @ref McpServerHandler::McpServerHandler::requestInput() "requestInput()" through the call context; the static
+        methods that act on the current call, such as isCallCancelled(), work for it as for trusted code.
+
+        @return the context of the current call, or @ref nothing if no call is current in this thread
+    */
     static *hash<McpToolCallContext> getToolCallContext() {
-        return McpCallContextHelper::get();
+        *hash<McpToolCallContext> ctx = McpCallContextHelper::get();
+        # restricted code gets the request without its credentials and not the handler (qore#7303)
+        if (ctx && McpServerHandler::callerIsRestricted()) {
+            ctx.cx = ctx.handler
+                ? ctx.handler.getRestrictedCallContext(ctx.cx)
+                : AbstractStreamRequest::filterRequest(ctx.cx, ctx.cx.hdr ?? {}, <HttpRequestFilterOptions>{
+                    # the session is given only as mcp_session and sid, as by the handler (getDispatchWithheldHeaders())
+                    "platform_headers": (McpSessionHeader,),
+                }).cx;
+            remove ctx.handler;
+            foreach string key in ("requestState", "inputResponses") {
+                if (AbstractHttpRequestHandler::holdsObjectOrCode(ctx{key})) {
+                    remove ctx{key};
+                }
+            }
+        }
+        return ctx;
+    }
+
+    #! Returns @ref True if the calling code is restricted; fails closed
+    private:internal static bool callerIsRestricted() {
+        try {
+            return SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns the request context of a call for restricted code: without the credentials of the request
+    private:internal hash<auto> getRestrictedCallContext(hash<auto> cx) {
+        return filterRequestForCode(cx, cx.hdr ?? {}).cx;
+    }
+
+    #! Returns the request header fields that the code of a restricted %Program that the handler calls does not get:
+    #! the session ID field (\c Mcp-Session-Id) (qore#7303)
+    /** The session of the call is given in the \c mcp_session key of the request context and in the \c sid of the
+        call context (@ref McpToolCallContext); a subclass that withholds more fields returns them with this one
+
+        @return the request header fields that the code of a restricted %Program does not get
+
+        @see @ref HttpServer::AbstractHttpRequestHandler::filterRequestForCode() "filterRequestForCode()"
+    */
+    private *list<string> getDispatchWithheldHeaders() {
+        return (McpSessionHeader,);
     }
 
     private *hash<McpToolInfo> findToolForCall(hash<auto> cx, string name) {
