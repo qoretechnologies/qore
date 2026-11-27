@@ -3714,9 +3714,9 @@ WebSocketCloseRecordRef Http2Session::getWebSocketCloseRecord(int32_t stream_id,
     return rec;
 }
 
-std::unordered_map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
+std::map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
     std::lock_guard<std::recursive_mutex> lg(m);
-    std::unordered_map<int32_t, WebSocketCloseRecordRef> rv;
+    std::map<int32_t, WebSocketCloseRecordRef> rv;
     rv.swap(ws_close_records);
     return rv;
 }

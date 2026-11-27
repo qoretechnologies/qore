@@ -46,6 +46,8 @@
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 
 #include "qore/intern/qore_siphash.h"
+#include "qore/intern/qore_keyed_hash.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cassert>
 #include <cerrno>
@@ -304,6 +306,12 @@ uint64_t qore_hash_process_key[2] = {0, 0};
 std::atomic<bool> qore_hash_process_key_ready{false};
 //! serializes the creation of the key
 std::mutex qore_hash_process_key_lock;
+//! acquires the lock of the key before fork() and releases it after it (qore#7750), so that a child created while
+//! another thread stores the key does not wait for the lock forever; registered once, at library initialization.
+//! Its holder only stores the key, and it can be taken under any lock of the library (a hash insert can create the
+//! key), so it ranks after them
+QoreForkStdMutex qore_hash_process_key_fork_handler(qore_hash_process_key_lock, QFLR_HASH_PROCESS_KEY,
+    "hash_process_key");
 
 //! fills \a buf with \a len random bytes from the operating system, or from OpenSSL's generator if that fails or
 //! (Linux) the kernel's pool is not ready yet
@@ -375,8 +383,9 @@ bool qore_hash_dbg_key(unsigned char* key) {
 }
 #endif
 
-//! creates the secret key; called once, with qore_hash_process_key_lock held
-void qore_hash_create_process_key() {
+//! makes a candidate for the secret key in \a k, without a lock (qore#7750: the random source is not read with the
+//! lock of the key held)
+void qore_hash_make_process_key(uint64_t* k) {
     unsigned char key[16];
 #ifdef DEBUG
     if (!qore_hash_dbg_key(key))
@@ -384,29 +393,87 @@ void qore_hash_create_process_key() {
     {
         qore_hash_random_bytes(key, sizeof key);
     }
-    uint64_t k[2] = {0, 0};
+    k[0] = k[1] = 0;
     for (size_t i = 0; i < 16; ++i) {
         k[i / 8] |= static_cast<uint64_t>(key[i]) << (8 * (i % 8));
     }
-    qore_hash_process_key[0] = k[0];
-    qore_hash_process_key[1] = k[1];
 }
 
 //! creates the secret key if it does not exist yet; thread-safe
 /** a failed creation throws and leaves no key, and a later call tries again (std::call_once is not used, as an
-    exception from it has hung later calls with some C++ runtimes)
+    exception from it has hung later calls with some C++ runtimes).  The candidate key is made before the lock is
+    taken, so that the lock, which the fork handlers acquire, is only held to store the key; threads that make
+    candidates at the same time store the first one
 */
 void qore_hash_ensure_process_key() {
     if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
         return;
     }
+    uint64_t k[2];
+    try {
+        qore_hash_make_process_key(k);
+    } catch (...) {
+        // another thread may have stored a key while this one failed to make one
+        if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
+            return;
+        }
+        throw;
+    }
     std::lock_guard<std::mutex> guard(qore_hash_process_key_lock);
     if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
-        qore_hash_create_process_key();
+        qore_hash_process_key[0] = k[0];
+        qore_hash_process_key[1] = k[1];
         qore_hash_process_key_ready.store(true, std::memory_order_release);
     }
 }
+
+#ifdef DEBUG
+//! the debug registry of the sites of keyed containers (QORE_KEYED_HASH_SITE()): site -> the hash of the probe
+std::map<std::string, uint64_t>* qore_dbg_keyed_hash_sites = nullptr;
+//! the lock of qore_dbg_keyed_hash_sites
+std::mutex qore_dbg_keyed_hash_sites_lock;
+QoreForkStdMutex qore_dbg_keyed_hash_sites_fork_handler(qore_dbg_keyed_hash_sites_lock, QFLR_KEYED_HASH_SITES,
+    "dbg_keyed_hash_sites");
+#endif
 }
+
+const uint64_t* qore_intern_hash_process_key() {
+    qore_hash_ensure_process_key();
+    return qore_hash_process_key;
+}
+
+int qore_intern_hash_process_key_check(ExceptionSink* xsink) {
+    try {
+        qore_hash_ensure_process_key();
+    } catch (const std::exception& e) {
+        xsink->raiseException("HASH-SECRET-KEY-ERROR", "cannot create the secret key of the keyed hashes: %s",
+            e.what());
+        return -1;
+    }
+    return 0;
+}
+
+#ifdef DEBUG
+void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    // called from constructors: an allocation failure only leaves the site unrecorded
+    try {
+        if (!qore_dbg_keyed_hash_sites) {
+            qore_dbg_keyed_hash_sites = new std::map<std::string, uint64_t>;
+        }
+        auto i = qore_dbg_keyed_hash_sites->insert({site, probe});
+        // every container of a site hashes with the same key
+        assert(i.first->second == probe);
+        (void)i;
+    } catch (const std::bad_alloc&) {
+    }
+}
+
+std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites() {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    return qore_dbg_keyed_hash_sites ? *qore_dbg_keyed_hash_sites : std::map<std::string, uint64_t>();
+}
+#endif
 
 size_t qore_hash_keyed_bytes(const char* str, size_t len) {
     assert(qore_hash_process_key_ready.load(std::memory_order_relaxed));

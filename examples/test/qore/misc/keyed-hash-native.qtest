@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# test-platform: macos - the random source of the secret key of the keyed hashes and its creation by concurrent threads
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class KeyedHashNativeTest
+
+#! The keyed hashers of the standard containers of the library (qore#7750)
+/** Runs the native test executable qore-keyed-hash-test, which checks that the hashers compute SipHash-1-3 with the
+    secret key of the process, and that threads that ask for the key at once get the same key; in debug builds, also
+    that the key, and so the hashes, follow QORE_DBG_HASH_KEY.
+*/
+class KeyedHashNativeTest inherits QUnit::Test {
+    public {
+        #! the time limit of a run of the executable
+        const ChildTimeout = 120s;
+    }
+
+    constructor() : Test("keyed hashes of containers", "1.0") {
+        addTestCase("the keyed hashers", \nativeTest());
+        addTestCase("the keyed hashes depend on the key of the process", \keyTest());
+        set_return_value(main());
+    }
+
+    nativeTest() {
+        string out = run();
+        assertRegex("^PASS: [0-9]+ keyed hash checks\nprobe: [0-9a-f]{16}\n$", out, out);
+        # two processes have different random keys
+        assertNeq(probe(out), probe(run()), "two processes have different keys");
+    }
+
+    keyTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("QORE_DBG_HASH_KEY is only read by debug builds");
+        }
+        string key1 = "000102030405060708090a0b0c0d0e0f";
+        string key2 = "0f0e0d0c0b0a09080706050403020100";
+        string p1 = probe(run(key1));
+        assertEq(p1, probe(run(key1)), "the same key gives the same hashes");
+        assertNeq(p1, probe(run(key2)), "another key gives other hashes");
+    }
+
+    #! returns the probe hash of the output of a run
+    private string probe(string out) {
+        *string rv = (out =~ x/^probe: ([0-9a-f]{16})$/m)[0];
+        assertTrue(exists rv, "the output has the probe hash: " + out);
+        return rv ?? "";
+    }
+
+    #! runs the executable, with QORE_DBG_HASH_KEY set to \a key if given, and returns its output
+    private string run(*string key) {
+        string native = ENV.QORE_KEYED_HASH_TEST
+            ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-keyed-hash-test";
+        if (!is_file(native)) {
+            testSkip("the native keyed hash test executable is not available");
+        }
+%ifdef NoProcess
+        testSkip("the process module is required to run bounded child processes");
+        return "";
+%else
+        hash<auto> env = ENV - "QORE_DBG_HASH_KEY";
+        if (key) {
+            env.QORE_DBG_HASH_KEY = key;
+        }
+        StringOutputStream out_stream();
+        StringOutputStream err_stream();
+        Process p(native, (), {
+            "env": env,
+            "stdout": out_stream,
+            "stderr": err_stream,
+        });
+        bool done = p.wait(ChildTimeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        string out = out_stream.getData();
+        string err = err_stream.getData();
+        assertTrue(done, "the test executable finished within the time limit");
+        assertEq(0, p.exitCode(), out + err);
+        assertEq("", err, "the test executable wrote nothing to stderr");
+        return out;
+%endif
+    }
+}

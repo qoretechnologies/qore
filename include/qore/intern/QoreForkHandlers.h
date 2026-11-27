@@ -134,6 +134,12 @@ enum QoreForkLockRank : int {
     QFLR_LLVM_TARGET_INIT = 1100,
     //! the process environment (SystemEnvironment): its holders take no other registered lock (but the ones below)
     QFLR_ENVIRONMENT = 1500,
+    //! the creation of the secret key of the keyed hashes (qore#7750): taken when the key is first needed, which can
+    //! be under any lock above (an insert into a hash can need it); its holder only stores the key
+    QFLR_HASH_PROCESS_KEY = 1600,
+    //! the registry of the keyed hash sites of debug builds (qore#7750): taken when a container with a keyed hash is
+    //! constructed, also with the locks above held; its holder only records the site
+    QFLR_KEYED_HASH_SITES = 1610,
     //! the debug output lock (printd())
     QFLR_DEBUG_OUTPUT = 1900,
     //! the allocation tracking locks (only with ENABLE_ALLOC_TRACKING), which malloc() and free() take

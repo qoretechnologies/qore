@@ -17045,6 +17045,12 @@ class Http3ServerPollStateTest {
 public:
     DLLLOCAL static void run(UnitTestCounters& c) {
         ExceptionSink xsink;
+        // the operation's maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "HTTP/3 server poll state: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         ReferenceHolder<Http3ServerPollOperationPriv> op(new Http3ServerPollOperationPriv(nullptr, nullptr,
             std::chrono::microseconds(0), false), &xsink);
         // the I/O thread made a request ready for the dispatcher
@@ -30739,6 +30745,12 @@ public:
             xsink.clear();
             return;
         }
+        // the dispatchers' maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "stateless reset: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         Disp d1, d1b, d2, none;
         UT_ASSERT(c, d1.ensureStatelessResetKey(*k1) && d1b.ensureStatelessResetKey(*k1)
             && d2.ensureStatelessResetKey(*k2), "stateless reset: the keys are derived");
@@ -33313,6 +33325,21 @@ static QoreValue f_dbg_hash_harden_alloc_failed(const QoreListNode* params, Runt
         ExceptionSink* xsink) {
     dbg_hash_harden_alloc_fail.store(false);
     return dbg_hash_harden_alloc_failed.exchange(false);
+}
+
+//! Debug-only: returns the sites of the containers with keyed hashes that were constructed in this process
+//! (QORE_KEYED_HASH_SITE(), qore#7750)
+/** @return a hash of the site names to the hash of the probe of the site's hasher, as 16 hexadecimal digits; the
+    hash depends on the secret key of the process (\c QORE_DBG_HASH_KEY in debug builds)
+*/
+static QoreValue f_dbg_keyed_hash_sites(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(stringTypeInfo), xsink);
+    for (const auto& i : qore_dbg_get_keyed_hash_sites()) {
+        QoreStringNode* str = new QoreStringNode;
+        str->sprintf("%016llx", static_cast<unsigned long long>(i.second));
+        rv->setKeyValue(i.first.c_str(), str, xsink);
+    }
+    return rv.release();
 }
 
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -39681,6 +39708,8 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 0);
     qns.addBuiltinVariant("dbg_hash_harden_alloc_failed", f_dbg_hash_harden_alloc_failed, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_keyed_hash_sites", f_dbg_keyed_hash_sites, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
