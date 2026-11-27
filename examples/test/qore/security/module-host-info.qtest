@@ -93,9 +93,13 @@ class ModuleHostInfoTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
-    #! checks the output of the worker: one "ok" line per check
+    #! checks the output of the worker: one "<check>=<result>" line per check
+    /** Other output is not the worker's (a native library that a module loads may write a warning, such as
+        onnxruntime's "Unknown CPU vendor" on some arm64 hosts), so only check lines are judged; a check that is
+        missing still fails the count below.
+    */
     private checkOutput(string out, string label) {
-        list<string> lines = select out.split("\n"), $1.val();
+        list<string> lines = select out.split("\n"), $1 =~ /^[^ =]+=/;
         list<string> failed = select lines, $1 !~ /=ok$/;
         assertEq((), failed, label + ": failed checks");
         assertEq(Kinds * Modes * Cases - SandboxedKinds * Modes * SubclassCases, lines.size(),

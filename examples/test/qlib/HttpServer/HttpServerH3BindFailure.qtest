@@ -430,8 +430,12 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         assertRegex("in 10 attempt", ex.desc);
         assertEq(10, srv.ports.size(), "10 attempts");
         assertEq((srv.ports.last(),), srv.in_use_ports, "the port of the last attempt was in use");
-        assertRegex(sprintf("^attempt 10/10 on port %d: SOCKET-BIND-ERROR: .*Address already in use.* \\(errno %d\\)$",
-            srv.ports.last(), EADDRINUSE), ex.arg.attempts.last(), "the system error of the real bind");
+        # the errno is the contract; the text is the C library's (glibc: "Address already in use", musl: "Address in
+        # use"), so it is compared with strerror() of the same errno
+        string last_attempt = ex.arg.attempts.last();
+        assertRegex(sprintf("^attempt 10/10 on port %d: SOCKET-BIND-ERROR: .* \\(errno %d\\)$", srv.ports.last(),
+            EADDRINUSE), last_attempt, "the system error of the real bind");
+        assertNeq(-1, last_attempt.find(strerror(EADDRINUSE)), "the system error text of the real bind");
         assertEq({}, srv.getListeners(), "no listener was kept");
         assertEq(0, srv.getRunningListenerCount(), "no listener is running");
     }
