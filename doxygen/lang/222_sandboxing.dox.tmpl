@@ -1081,8 +1081,10 @@ authenticate();
     An update scope admits only the code that runs in it for the class that opened it: code that sandboxed code
     supplied and that runs in the scope (a callback of the caller, a method of a class of a sandboxed %Program, the
     destructor of an object of such a class), and any code that such code calls, also a method of the object's own
-    class, acts for sandboxed code: it cannot change the object, open another update scope or share objects.  When
-    that code returns, the scope's own code changes the object again.
+    class, acts for sandboxed code: it cannot change the object, open another update scope or share objects.  So does
+    the code of a class that restricted code declared, also in a %Program whose sandbox has since been relaxed to
+    trust its code, and code that runs in the scope under the context of a thread, task or operation of restricted
+    code.  When that code returns, the scope's own code changes the object again.
 
     Only code that may share objects
     (@ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()") can mark an object with
