@@ -18,7 +18,7 @@
 
 %exec-class HandlerFunctionRequestPart5
 
-#! runs part 5 of 6 of the cases of HandlerFunctionRequestBase: group 3, qcc -O0
+#! runs part 5 of 8 of the cases of HandlerFunctionRequestBase: group 3, qcc -O0
 class HandlerFunctionRequestPart5 inherits HandlerFunctionRequestBase {
     constructor() : HandlerFunctionRequestBase("HandlerFunctionRequestPart5", 5) {
     }

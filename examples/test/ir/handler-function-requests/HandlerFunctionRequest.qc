@@ -24,6 +24,9 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
         #! the number of extra handlers that make the handlers after them run out of line
         const ExtraHandlers = 67;
 
+        #! the nesting of handlers past the nesting limit of the handlers that the lowering runs inline
+        const DeepHandlers = 17;
+
         #! the kinds of the value of the nested return: the suffix of the function name, and the expression
         const Kinds = {
             "Object": "new InnerMarker()",
@@ -142,6 +145,71 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
                     "        for (int j = 0; j < 1; ++j) {\n            OuterMarker o();\n%NESTED_TRY%        }\n"
                     "        push log, \"after loop\";\n    }\n%THROW%"),
             ),
+            (
+                # a handler past the budget at the normal end of a block in the body of a handler compiled as a
+                # function of its own: the request of its handler is that of the block, which ends the handler's body
+                # (qore#7753)
+                ("errPastCapNormal", "    on_exit { push log, \"last\"; }\n    on_error {\n        {\n"
+                    "            on_exit {\n                {\n                    on_exit {\n%NESTED%"
+                    "                    }\n                }\n            }\n%EXTRA_IN%        }\n"
+                    "        push log, \"after\";\n    }\n%THROW%"),
+                # ... and a loop of the handler's body takes it
+                ("errPastCapNormalLoop", "    on_exit { push log, \"last\"; }\n    on_error {\n"
+                    "        for (int j = 0; j < 1; ++j) {\n            {\n                on_exit {\n"
+                    "                    {\n                        on_exit {\n%NESTED%                        }\n"
+                    "                    }\n                }\n%EXTRA_IN%            }\n"
+                    "            push log, \"body\";\n        }\n        push log, \"after loop\";\n    }\n%THROW%"),
+                # a request in a handler past the budget in the cleanups of a return in a try statement of a
+                # handler, whose value replaces a value that a handler past the nesting limit handed over to the
+                # return of the function (try_replaced_handed_over, qore#7753)
+                ("retTryHandOver", "    on_exit { push log, \"last\"; }\n    on_exit {\n        try {\n"
+                    "            {\n                on_exit {\n"
+                    "                    push log, \"inner\";      ### %TAG%\n"
+                    "                }\n%EXTRA_IN%                return %VALUE%;\n            }\n"
+                    "        } catch (hash<ExceptionInfo> ex) {\n            push log, \"caught\";\n        }\n    }\n"
+                    "%DEEP%    return n - 10;\n"),
+                # a handler that hands a value over runs before the handler whose nested return a request abandons:
+                # the next handler takes the request, and the value handed over before resumes (qore#7753)
+                ("retRestore", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n%NESTED%            }\n"
+                    "            on_exit { return \"x value\"; }\n        }\n    }\n%EXTRA%    return n - 10;\n"),
+                ("retRestoreObject", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n%NESTED%            }\n"
+                    "            on_exit { return new OuterMarker(); }\n        }\n    }\n%EXTRA%    return n - 10;\n"),
+                # ... the handler's value comes from a handler of a block of its body, and the request is in the
+                # handler's own handler, which runs past the budget in the cleanups of that return (qore#7753)
+                ("retRestoreHandlerCap", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n"
+                    "                on_exit {\n                    push log, \"inner\";      ### %TAG%\n"
+                    "                }\n                {\n                    on_exit { return %VALUE%; }\n"
+                    "%EXTRA_IN%                }\n            }\n"
+                    "            on_exit { return \"x value\"; }\n        }\n    }\n%EXTRA%    return n - 10;\n"),
+                # ... the handler's value comes from a handler past the budget in its body, a run that forwards to the
+                # handler's run and whose first hand-over is that of the handler's run (qore#7753)
+                ("retRestoreForwarded", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n"
+                    "                on_exit {\n                    push log, \"inner\";      ### %TAG%\n"
+                    "                }\n                {\n                    on_exit {\n"
+                    "                        {\n                            on_exit { return %VALUE%; }\n"
+                    "                        }\n                    }\n%EXTRA_IN%                }\n            }\n"
+                    "            on_exit { return \"x value\"; }\n        }\n    }\n%EXTRA%    return n - 10;\n"),
+                # ... a loop of the handler's body takes the request (the release of the code of the request)
+                ("retRestoreLoop", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n"
+                    "                for (int j = 0; j < 1; ++j) {\n%NESTED%                }\n"
+                    "                push log, \"after loop\";\n            }\n"
+                    "            on_exit { return \"x value\"; }\n        }\n    }\n%EXTRA%    return n - 10;\n"),
+                # ... in the cleanups of a return whose value is an integer, which the first hand-over does not
+                # release: an earlier object handed over leaves no value, as with the AST interpreter (qore#7753)
+                ("retRestoreReturn", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n%NESTED%            }\n"
+                    "            on_exit { return \"x value\"; }\n%EXTRA_IN%            return n - 10;\n        }\n"
+                    "    }\n    return 5;\n"),
+                ("retRestoreReturnObject", "    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+                    "            on_exit { push log, \"next\"; }\n            on_exit {\n%NESTED%            }\n"
+                    "            on_exit { return new OuterMarker(); }\n%EXTRA_IN%            return n - 10;\n"
+                    "        }\n    }\n    return 5;\n"),
+            ),
         );
 
         #! the results of the AST interpreter of the issue (qore#7625)
@@ -163,6 +231,23 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
             "retParentLoopObject return": "RESULT:{<InnerMarker object>: {}} LOG:[\"body\", \"inner released\"]",
             # the return of a handler of a block that the request leaves replaces the request
             "errHandOverAfterObject break": "RESULT:ERR: err LOG:[\"inner released\", \"last\", \"outer released\"]",
+            # a handler past the budget at a normal exit in a handler body: its request ends the handler's body, or a
+            # loop of the body takes it (qore#7753)
+            "errPastCapNormalObject break": "RESULT:ERR: err LOG:[\"inner released\", \"last\"]",
+            "errPastCapNormalLoopObject break":
+                "RESULT:ERR: err LOG:[\"inner released\", \"after loop\", \"last\"]",
+            # the value that an earlier handler handed over resumes when the next handler takes the request (qore#7753)
+            "retRestoreData break": "RESULT:\"x value\" LOG:[\"next\", \"last\"]",
+            "retRestoreObject break": "RESULT:\"x value\" LOG:[\"inner released\", \"next\", \"last\"]",
+            # ... an object that it handed over was released when the later return replaced it (qore#7022)
+            "retRestoreObjectObject break":
+                "RESULT:null LOG:[\"outer released\", \"inner released\", \"next\", \"last\"]",
+            "retTryHandOverData break": "RESULT:\"x value\" LOG:[\"last\"]",
+            # ... from a run that forwards to the handler's run, and through a loop of the handler's body
+            "retRestoreForwardedData break": "RESULT:\"x value\" LOG:[\"next\", \"last\"]",
+            "retRestoreLoopData break": "RESULT:\"x value\" LOG:[\"after loop\", \"next\", \"last\"]",
+            # an object handed over before leaves no value, also where the return's own value is an integer
+            "retRestoreReturnObjectData break": "RESULT:null LOG:[\"outer released\", \"next\", \"last\"]",
             # the return of a try statement of the nested block is released before the local of the block around it
             "errTryReturnObject break": "RESULT:ERR: err LOG:[\"inner released\", \"outer released\", \"last\"]",
         };
@@ -194,6 +279,10 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
             \testQcc(), (2, 0));
         addPartCase(6, "requests in handlers compiled as functions of their own (group 3), qcc -O3",
             \testQcc(), (2, 3));
+        addPartCase(7, "requests in handlers compiled as functions of their own (group 4), qcc -O0",
+            \testQcc(), (3, 0));
+        addPartCase(8, "requests in handlers compiled as functions of their own (group 4), qcc -O3",
+            \testQcc(), (3, 3));
         set_return_value(main());
     }
 
@@ -211,6 +300,9 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
         string extra = strmul("    on_exit { n += 0; }\n", ExtraHandlers);
         string nested_extra = strmul("            on_exit { n += 0; }\n", ExtraHandlers);
         string extra_in = strmul("                    on_exit { n += 0; }\n", ExtraHandlers);
+        # handlers nested past the nesting limit of the handlers lowered inline, the innermost of which returns
+        string deep = strmul("    on_exit {\n", DeepHandlers) + "        return \"x value\";\n"
+            + strmul("    }\n", DeepHandlers);
         string throw_tail = "    if (n) { throw \"ERR\", \"err\"; }\n    return n - 10;\n";
         foreach list<auto> f in (Groups[group]) {
             foreach hash<auto> k in (Kinds.pairIterator()) {
@@ -227,9 +319,12 @@ class HandlerFunctionRequestBase inherits QUnit::Test {
                 body = replace(body, "%NESTED_TRY%", nested_try);
                 body = replace(body, "%NESTED_EXTRA%", replace(nested, "%MORE%", nested_extra));
                 body = replace(body, "%NESTED%", replace(nested, "%MORE%", ""));
+                body = replace(body, "%DEEP%", deep);
                 body = replace(body, "%EXTRA_IN%", extra_in);
                 body = replace(body, "%EXTRA%", extra);
                 body = replace(body, "%THROW%", throw_tail);
+                body = replace(body, "%TAG%", tag);
+                body = replace(body, "%VALUE%", k.value);
                 src += sprintf("auto sub %s(int n) {\n%s}\n", name, body);
             }
         }

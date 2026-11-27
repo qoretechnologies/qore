@@ -1579,6 +1579,20 @@ public:
         return removeHandedOverReturn(i);
     }
 
+    //! Replaces the handed-over return with \a v, whose reference it takes, and returns the value before, whose
+    //! reference passes to the caller, if one was handed over (qore#7753)
+    DLLLOCAL __attribute__((noinline, cold)) bool swapHandedOverReturn(QoreValue v, QoreValue& prev) {
+        size_t i = findHandedOverReturn();
+        if (i == NoHandedOver) {
+            held_returns.push_back(handedOverMarker());
+            held_returns.push_back(v);
+            return false;
+        }
+        prev = held_returns[i];
+        held_returns[i] = v;
+        return true;
+    }
+
     //! Releases the handed-over return, if any (QoreIROpcode::ReleaseHandedOverReturn, #6137)
     DLLLOCAL __attribute__((noinline, cold)) void releaseHandedOverReturn(ExceptionSink* xsink) {
         size_t i = findHandedOverReturn();
@@ -9730,6 +9744,24 @@ struct IRHandlerHandOver {
     }
 };
 
+// the run of a handler out of line by the IR interpreter (see below)
+struct IRHandlerRunInfo;
+// Returns the run of the innermost handler of the thread if it keeps the value that its first hand-over replaces: a
+// debugger is attached, and the hand-over that is being made is the run's first (qore#7753)
+static IRHandlerRunInfo* qore_ir_handler_run_keeps_replaced();
+// Keeps \a prev, whose reference passes, in \a run if its release cannot be observed, else releases it (qore#7753)
+static void qore_ir_handler_run_keep_replaced(IRHandlerRunInfo& run, QoreValue prev, ExceptionSink* xsink);
+// What the first hand-over of a run replaced: nothing of an earlier handler, a value that the run kept, or an object,
+// which was released
+enum class IRHandlerReplaced : uint8_t {
+    None,
+    Kept,
+    Released,
+};
+// Takes what the first hand-over of the innermost handler run of the thread replaced: the value that the run keeps,
+// whose reference passes to \a prev (qore#7753)
+static IRHandlerReplaced qore_ir_handler_run_take_replaced(QoreValue& prev);
+
 // The value of a return statement of a handler run while an exception or a thread_exit leaves its block replaces the
 // value of the return that the unwind interrupted, as in the AST interpreter, where the handler runs with a reference to
 // the return value of its function, which is released then: the first hand-over releases the values of the frame's
@@ -9798,6 +9830,20 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
             }
         }
     }
+    // the first hand-over of a run replaces the value that a run of an earlier handler handed over: while a debugger
+    // is attached, the run keeps it if its release cannot be observed, so that a request that abandons the run's
+    // return restores it, as the AST interpreter restores it (qore#7753); an object is released at once, as there
+    // (qore#7022)
+    // (only debug IR has the paths of a debugger's requests, whose ScopeExits keep the data of the return: keep_data)
+    if (h.keep_data) [[unlikely]] {
+        if (IRHandlerRunInfo* run = qore_ir_handler_run_keeps_replaced()) {
+            QoreValue prev;
+            if (h.frame->locals_slot_cache.swapHandedOverReturn(value.refSelf(), prev)) {
+                qore_ir_handler_run_keep_replaced(*run, prev, xsink);
+            }
+            return;
+        }
+    }
     h.frame->locals_slot_cache.handOverReturn(value.refSelf(), xsink);
 }
 
@@ -9813,7 +9859,21 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handler_abandon(v
 // released are not restored, as with a request in a later handler (qore#7531, qore#7625)
 static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handler_abandon_return(void* data,
         ExceptionSink* xsink) {
-    static_cast<IRHandlerHandOver*>(data)->frame->locals_slot_cache.releaseHandedOverReturn(xsink);
+    IRHandlerHandOver& h = *static_cast<IRHandlerHandOver*>(data);
+    // the value of an earlier handler that the run's first hand-over replaced resumes; an object was released when
+    // the hand-over replaced it, and no value resumes, as with the AST interpreter (qore#7753)
+    QoreValue prev;
+    switch (qore_ir_handler_run_take_replaced(prev)) {
+        case IRHandlerReplaced::Kept:
+            h.frame->locals_slot_cache.handOverReturn(prev, xsink);
+            return;
+        case IRHandlerReplaced::Released:
+            h.frame->locals_slot_cache.handOverReturn(QoreValue(), xsink);
+            return;
+        case IRHandlerReplaced::None:
+            break;
+    }
+    h.frame->locals_slot_cache.releaseHandedOverReturn(xsink);
 }
 
 // The IR interpreter's QoreIROpcode::TakeHandedOverReturn and ReleaseHandedOverReturn (#6137): the value that handlers
@@ -9872,6 +9932,35 @@ static bool qore_ir_handler_last_run(const std::vector<IROnBlockExitHandler>& ha
     return true;
 }
 
+// The value of an earlier handler that the first hand-over of a run with a debugger replaces, whose release cannot be
+// observed (data): a request that abandons the run's return restores it, as the AST interpreter restores the pending
+// return that the abandoned return replaced (PendingReturnSnapshot), and it is released with the run otherwise; the
+// run of a handler with the debug context of a debugger has one, so that a run without a debugger changes nothing
+// (qore#7753)
+struct IRHandlerKeptValue {
+    QoreValue value;
+    //! true if value holds the replaced value
+    bool has_value = false;
+    //! true if the first hand-over of the run replaced a value that an earlier handler handed over, which was an
+    //! object and was released: a request that abandons the run's return leaves no value, as the AST interpreter's
+    //! snapshot of the pending return before the request has none then (PendingReturnSnapshot)
+    bool released_replaced = false;
+
+    DLLLOCAL IRHandlerKeptValue() = default;
+    // the value is kept once
+    IRHandlerKeptValue(const IRHandlerKeptValue&) = delete;
+    IRHandlerKeptValue& operator=(const IRHandlerKeptValue&) = delete;
+
+    DLLLOCAL ~IRHandlerKeptValue() {
+        if (has_value) {
+            // data, whose release cannot raise an exception (see qore_return_release_observable())
+            ExceptionSink xsink;
+            value.discard(&xsink);
+            assert(!xsink);
+        }
+    }
+};
+
 // The run of a handler out of line by the IR interpreter, for the decision whether it takes a debugger's break or
 // continue request that ends the handler (QoreHandlerRunContext::takes_request, qore#7625)
 struct IRHandlerRunInfo {
@@ -9887,6 +9976,11 @@ struct IRHandlerRunInfo {
     const QoreHandlerRunContext* forwarded = nullptr;
     //! whether the handler is the last of its exit: computed when a request asks (-1 before)
     mutable int8_t last = -1;
+    //! the value of an earlier handler that the first hand-over of the run replaced, kept while a debugger is
+    //! attached to the run (IRHandlerKeptValue), or nullptr (qore#7753)
+    //! (not owned: executeHandlerBody() owns it for the run, which is on the stack while anything reads it: the run
+    //! itself and the runs that forward to it, nested in it; no caller reads it after the call, qore#7753)
+    IRHandlerKeptValue* kept = nullptr;
 
     bool lastRun() const {
         if (last < 0) {
@@ -9895,6 +9989,64 @@ struct IRHandlerRunInfo {
         return last;
     }
 };
+
+// documented above
+// Returns the run that keeps what the first hand-over of the innermost handler run of the thread replaces: the
+// outermost run of the chain of runs that forward to the same function and that started at the same count, as the
+// first hand-over of a run of the handlers of a block of a handler body is also the first of the runs around it that
+// it forwards to, whose return the AST interpreter's handler shares (qore#7753); nullptr if none keeps one (no debugger)
+static IRHandlerRunInfo* qore_ir_handler_run_kept_owner(QoreHandlerRunContext* ctx) {
+    if (!ctx || !ctx->run_info) {
+        return nullptr;
+    }
+    // the run_info of a context is the IRHandlerRunInfo of the run (executeHandlerBody())
+    IRHandlerRunInfo* run = const_cast<IRHandlerRunInfo*>(static_cast<const IRHandlerRunInfo*>(ctx->run_info));
+    while (run->forwarded && run->forwarded->run_info && run->forwarded->run_start_count == ctx->run_start_count) {
+        ctx = const_cast<QoreHandlerRunContext*>(run->forwarded);
+        run = const_cast<IRHandlerRunInfo*>(static_cast<const IRHandlerRunInfo*>(ctx->run_info));
+    }
+    return run->kept ? run : nullptr;
+}
+
+// documented above
+static IRHandlerRunInfo* qore_ir_handler_run_keeps_replaced() {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    if (!ctx || !ctx->run_info || !ctx->hand_over_count || *ctx->hand_over_count != ctx->run_start_count + 1) {
+        return nullptr;
+    }
+    IRHandlerRunInfo* run = qore_ir_handler_run_kept_owner(ctx);
+    return run && !run->kept->has_value && !run->kept->released_replaced ? run : nullptr;
+}
+
+// documented above
+static void qore_ir_handler_run_keep_replaced(IRHandlerRunInfo& run, QoreValue prev, ExceptionSink* xsink) {
+    if (qore_return_release_observable(prev)) {
+        run.kept->released_replaced = true;
+        prev.discard(xsink);
+        return;
+    }
+    run.kept->value = prev;
+    run.kept->has_value = true;
+}
+
+// documented above
+static IRHandlerReplaced qore_ir_handler_run_take_replaced(QoreValue& prev) {
+    IRHandlerRunInfo* run = qore_ir_handler_run_kept_owner(qore_handler_run_context());
+    if (!run) {
+        return IRHandlerReplaced::None;
+    }
+    if (run->kept->released_replaced) {
+        run->kept->released_replaced = false;
+        return IRHandlerReplaced::Released;
+    }
+    if (!run->kept->has_value) {
+        return IRHandlerReplaced::None;
+    }
+    run->kept->has_value = false;
+    prev = run->kept->value;
+    run->kept->value = QoreValue();
+    return IRHandlerReplaced::Kept;
+}
 
 // Returns true if the run of a handler takes a debugger's break or continue request (\a rc) that ends the handler, as
 // the AST interpreter's walk of the handler runs decides it (StatementBlock::requestTakenInFunction()): a handler that
@@ -9989,6 +10141,11 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
     // the handler's function returns is not used
     IRHandlerHandOver hand_over{parent_frame, try_returns, returning ? &returning->operands : nullptr};
     hand_over.keep_data = returning && returning->flow;
+    // the value that the run keeps of what its first hand-over replaces, while a debugger is attached (qore#7753):
+    // declared before the run's context and its guard, so that it is released after the context is popped
+    std::optional<IRHandlerKeptValue> kept_value;
+    // a run info is given to one run
+    assert(!run_info || !run_info->kept);
     QoreHandlerRunContext run_ctx;
     IRCallFramePool& pool = TlFramePool::get();
     QoreHandlerRunContext* outer = qore_handler_run_context();
@@ -10015,6 +10172,10 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
     if (run_info) {
         run_ctx.takes_request = qore_ir_handler_run_takes_request;
         run_ctx.run_info = run_info;
+        // a run with the debug context of a debugger keeps the value that its first hand-over replaces (qore#7753)
+        if (dbg_statements) [[unlikely]] {
+            run_info->kept = &kept_value.emplace();
+        }
     }
     run_ctx.run_start_count = run_ctx.hand_over_count ? *run_ctx.hand_over_count : 0;
     // the frame that execute() pushes for the handler
