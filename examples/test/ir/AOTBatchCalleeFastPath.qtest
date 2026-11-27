@@ -772,8 +772,8 @@ int sub main() {
 }
 
 string sub runScript(string script_path) {
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
-        libqore_dir, qore_bin, script_path));
+    return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s",
+        libqore_dir, qore_bin, script_path), NOTHING, "QORE_JIT_TIMING=1").out;
 }
 
 string sub runAot(string script_path, bool check_self_entry = False) {

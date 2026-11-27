@@ -264,6 +264,8 @@ public class LlamaParseUploadFileDataProvider inherits DataProvider::AbstractDat
                 filename = DefaultFilename;
             }
         } else if (req.file_path.val()) {
+            # the path is the caller's input: refused before it is read or anything is sent (qore#7806)
+            check_caller_file_access("the 'file_path' field of the upload-file request");
             body = ReadOnlyFile::readBinaryFile(req.file_path);
             if (!filename.val()) {
                 filename = basename(req.file_path);

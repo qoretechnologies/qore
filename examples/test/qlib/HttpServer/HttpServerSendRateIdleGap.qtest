@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerSendRateIdleGap.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) connections over TLS and the minimum send rate of their responses
+#
+# qoretechnologies/qorus#1335: the minimum send rate of a connection (stream_send_min_rate, qore#7280) charged the time
+# between two responses to the connection as time that its client made the server wait: when the last waiting response
+# body of a connection left (its client had acknowledged it), the rate was not told, and the next body was charged for
+# the whole idle time before it, up to the most that one update charges.  A long-lived connection that carried many
+# small requests ran out of credit that way, and the server then ended a small response as soon as it waited (RST_STREAM
+# CANCEL on HTTP/2, H3_REQUEST_CANCELLED on HTTP/3).  The rate is now told when the last wait of a connection ends, so
+# that the time until the next wait is not charged.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+
+%exec-class HttpServerSendRateIdleGapTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The minimum rate: the credit of one window lasts the length of the window at this rate
+const MinRate = 1024 * 1024;
+
+#! The window of the rate: an update charges at most two sixteenths of it (500 ms)
+const RateWindow = 4s;
+
+#! The time between two requests: longer than the most that one update charges, so that each is charged in full
+const IdleGap = 600ms;
+
+#! The number of requests: their idle gaps, charged in full (11 x 500 ms), use up the credit of the window (4 s); the
+#! real waits of the responses for their client may take up to 330 ms each without using it up (under valgrind too)
+const Requests = 12;
+
+#! The size of the body that waits for the client on HTTP/2: larger than the default flow-control window (65535), so
+#! that it waits for the client's WINDOW_UPDATE, and smaller than what the time of one idle gap's charge buys at the
+#! minimum rate (500 ms at 1 MiB/s: 512 KiB), so that each such charge left a debt
+const WaitingBodySize = 100 * 1024;
+
+#! Answers each request with a small body, and /waiting with a body that waits for the client's flow-control credit
+class SmallHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "waiting") {
+            return makeResponse(200, strmul("x", WaitingBodySize), {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, "small response", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerSendRateIdleGapTest inherits QUnit::Test {
+    private {
+        Logger logger;
+    }
+
+    constructor() : QUnit::Test("HttpServerSendRateIdleGap", "1.0") {
+        addTestCase("HTTP/2: the time between the responses of a connection is not charged to its send rate",
+            \testIdleGapH2());
+        addTestCase("HTTP/3: the time between the responses of a connection is not charged to its send rate",
+            \testIdleGap(), "h3");
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("send-rate-idle", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelError());
+        logger.addAppender(new StdoutAppender());
+    }
+
+    #! Starts the server with the minimum send rate; returns its port
+    private int startServer(HttpServer hs) {
+        hs.setDefaultHandler("small", new SmallHandler());
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+            "stream_send_min_rate": MinRate,
+            "stream_send_min_rate_window": RateWindow,
+        }).port;
+        hs.waitForAsyncIo();
+        return port;
+    }
+
+    #! HTTP/3: small requests on one connection, each after the connection has been idle
+    /** A small HTTP/3 response waits for the client's acknowledgement of its data
+    */
+    testIdleGap(string protocol) {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d", port);
+        int answered = 0;
+        for (int i = 0; i < Requests; ++i) {
+            if (i) {
+                # the connection is idle: nothing is sent and nothing waits
+                usleep(IdleGap);
+            }
+            # without the fix, a request after the credit was used up had its response ended (RST_STREAM or
+            # H3_REQUEST_CANCELLED): the request fails
+            try {
+                hash<auto> resp = mgr.request(url, "GET", "/small", NOTHING, NOTHING);
+                if (resp.status_code == 200) {
+                    ++answered;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(False, sprintf("request %d failed: %s: %s", i, ex.err, ex.desc));
+            }
+        }
+        assertEq(Requests, answered, "every request on the connection is answered");
+    }
+
+    #! HTTP/2: requests on one connection whose bodies wait for the client's flow-control credit, each after the
+    #! connection has been idle
+    /** A small HTTP/2 response is written to the socket at once and does not wait: a body larger than the client's
+        flow-control window does
+    */
+    testIdleGapH2() {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger});
+        on_exit hs.stop();
+        int port = startServer(hs);
+
+        # the default flow-control window: each body waits for the client's WINDOW_UPDATE frames
+        RawHttp2Client c(port, True, DefaultWindow);
+        on_exit c.close();
+        int answered = 0;
+        *hash<RawHttp2StreamResult> failed;
+        for (int i = 0; i < Requests * 2; ++i) {
+            if (i) {
+                # the connection is idle: nothing is sent and nothing waits
+                usleep(IdleGap);
+            }
+            hash<RawHttp2StreamResult> r = c.readStream(c.get("/waiting"), HangGuard);
+            # without the fix, a body after the credit was used up was reset (RST_STREAM CANCEL)
+            if (r.ended && r.data_bytes == WaitingBodySize) {
+                ++answered;
+            } else if (!failed) {
+                failed = r;
+            }
+        }
+        assertNothing(failed, sprintf("a response was not completed: %y", failed));
+        assertEq(Requests * 2, answered, "every response on the connection is completed");
+    }
+}

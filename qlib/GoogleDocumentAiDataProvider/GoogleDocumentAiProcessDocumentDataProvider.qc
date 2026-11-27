@@ -138,6 +138,8 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
                 "mimeType": mime,
             };
         } else if (req.hasKey("document_path")) {
+            # the path is the caller's input: refused before it is read or anything is sent (qore#7806)
+            check_caller_file_access("the 'document_path' field of the request");
             binary content = File::readBinaryFile(req.document_path);
             if (!content.size()) { throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "document content cannot be empty"; }
             body.rawDocument = {

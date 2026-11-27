@@ -66,6 +66,10 @@ public class CsvProfileDataProvider inherits DataProvider::AbstractDataProvider 
         if (exists req.path == exists req.data) {
             throw "CSV-PROFILE-ERROR", "exactly one of the \"path\" and \"data\" options must be given";
         }
+        if (exists req.path) {
+            # the location is the caller's input (qore#7806)
+            FileLocationHandler::checkCallerLocation(req.path);
+        }
         binary content = exists req.path
             ? FileLocationHandler::getBinaryFileFromLocation(req.path)
             : binary(req.data);

@@ -7772,6 +7772,23 @@ void QuicSession::addBoundBody(int64_t stream_id, uint64_t buffered_size) {
 void QuicSession::eraseBoundBody(int64_t stream_id) {
     if (bound_bodies_.erase(stream_id)) {
         updateActiveInputStreams();
+        endSendRateWaitIfIdleUnlocked();
+    }
+}
+
+void QuicSession::endSendRateWaitIfIdleUnlocked() {
+    // the last body or send that waited for the client has left: the session leaves the I/O thread's check of its
+    // bodies, so the end of the wait is recorded now; otherwise the window stayed waiting, and the next body was
+    // charged for the idle time before it, so that a long-lived connection with many small responses ran out of credit
+    // and had a small response cancelled as soon as it waited (qorus#1335).  The measurement is kept across the waits,
+    // so that a client cannot reset it with each response; a verdict that no waiting body ends is not left for a
+    // later, unrelated wait, as when a send of a handler thread leaves
+    if (!pump_send_rate_.enabled() || isConnectionWaitingUnlocked(-1)) {
+        return;
+    }
+    if (pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), false,
+            q_clock_getmicros_monotonic() / 1000)) {
+        pump_send_rate_.restart();
     }
 }
 

@@ -1851,6 +1851,18 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - fixed @ref DataProvider::HashDataType::getDefaultValue() "HashDataType::getDefaultValue()" to remove the default
       value of the type only when the type refuses it, not when its check fails in the context of the caller
       (<a href="https://github.com/qoretechnologies/qore/issues/7734">issue 7734</a>)
+    - fixed a bug where a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in a global variable kept
+      the program from ending, as its queue threads waited for data until its destructor ran, which only happens
+      after the program has waited for its threads; the queue threads now run only while the pipeline processes data
+      (<a href="https://github.com/qoretechnologies/qore/issues/7771">issue 7771</a>)
+    - fixed a deadlock of a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" whose
+      @ref DataProvider::PipelineOptionInfo::thread_callback "thread_callback" raised an error; the error is now
+      raised by the call that starts the run
+      (<a href="https://github.com/qoretechnologies/qore/issues/7777">issue 7777</a>)
+    - fixed a bug where a synchronous @ref DataProvider::DataProviderPipeline "DataProviderPipeline" given an iterator
+      queued its records for a queue thread that it does not start, so that
+      @ref DataProvider::DataProviderPipeline::waitDone() "waitDone()" never returned; the records are now processed
+      on the caller's thread (<a href="https://github.com/qoretechnologies/qore/issues/7793">issue 7793</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - code restricted from external information does not get the process-wide logger from

@@ -16,6 +16,7 @@
 %requires FileLocationHandler
 %requires DataProvider
 %requires FileLocationTestConnectionProvider
+%requires FileLocationLentReader
 %requires FsUtil
 %requires Util
 %requires QUnit
@@ -183,7 +184,9 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
             "return FileLocationHandler::getResourceFromLocation(loc).data; }); }\n"
             "string sub output(string loc) { return t(auto sub () { OutputStreamWrapper o = "
             "FileLocationHandler::getOutputStreamForLocation(loc); o.write(binary(\"o\")); o.close(); "
-            "o.waitForIo(); }); }", "restricted");
+            "o.waitForIo(); }); }\n"
+            "string sub lent(object o, string loc) { return t(auto sub () { "
+            "return call_object_method(o, \"read\", loc); }); }", "restricted");
         # every read and write entry, through the exemption
         assertEq(FileContents, rp.callFunction("read", p("restricted.txt")));
         assertEq(FileContents, rp.callFunction("stream", p("restricted.txt")));
@@ -205,6 +208,45 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         assertNeq("PERMISSION-DENIED", web, "the connection's https location");
         assertEq("PERMISSION-DENIED", rp.callFunction("read", "conn://web/x{ssl_cert_path=" + f + "}"),
             "a certificate file that the caller adds");
+        # also when it replaces a certificate file that the connection gives itself (qore#7806)
+        web = rp.callFunction("read", "conn://web-cert/x");
+        assertNeq("PERMISSION-DENIED", web, "the https location of a connection with a certificate file");
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", "conn://web-cert/x{ssl_cert_path=" + f + "}"),
+            "a certificate file that the caller gives instead of the connection's");
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", "conn://web-cert/x{ssl_key_path=" + f + "}"),
+            "a key file that the caller gives instead of the connection's");
+
+        # a lent object that checks the locations that the caller gives refuses the options that name local files,
+        # and uses the connection as it decides (qore#7806)
+        FileLocationLentReader::LentReader lr();
+        assertEq(FileContents, rp.callFunction("lent", lr, p("restricted.txt")), "lent, the connection's file");
+        assertNeq("PERMISSION-DENIED", rp.callFunction("lent", lr, "conn://web-cert/x"),
+            "lent, the connection's https location");
+        assertEq("PERMISSION-DENIED", rp.callFunction("lent", lr, "conn://web/x{ssl_cert_path=" + f + "}"),
+            "lent, a certificate file that the caller adds");
+        assertEq("PERMISSION-DENIED", rp.callFunction("lent", lr, "conn://web-cert/x{ssl_cert_path=" + f + "}"),
+            "lent, a certificate file that the caller gives instead of the connection's");
+        assertEq("PERMISSION-DENIED", rp.callFunction("lent", lr, "file://" + f), "lent, a file");
+
+        # a caller restricted from the network cannot send a connection's request through a proxy that it adds
+        Program np(PO_NEW_STYLE | PO_NO_NETWORK);
+        np.parse("%requires FileLocationHandler\nstring sub t(code c) { try { c(); return \"ok\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+            "string sub read(string loc) { return t(sub () { FileLocationHandler::getTextFileFromLocation(loc); }); }\n"
+            "string sub lent(object o, string loc) { return t(sub () { call_object_method(o, \"read\", loc); }); }",
+            "network-restricted");
+        # (the HTTP client that the https location needs is refused to it in any case; the proxy is refused before
+        # the connection is resolved, by the check of the conn location's options)
+        string conn_refused = "PERMISSION-DENIED: the calling code may not use this \"conn\" location, as it is "
+            "restricted from the NETWORK functional domain";
+        string plain = np.callFunction("read", "conn://web/x");
+        assertNeq(conn_refused, plain, "the connection's https location, network-restricted caller");
+        assertRegex("^PERMISSION-DENIED: .*HTTP client", plain,
+            "the connection's https location, network-restricted caller: refused by the HTTP client");
+        assertEq(conn_refused, np.callFunction("read", "conn://web/x{proxy=http://localhost:1}"),
+            "a proxy that the caller adds");
+        assertEq(conn_refused, np.callFunction("lent", lr, "conn://web/x{proxy=http://localhost:1}"),
+            "lent, a proxy that the caller adds");
 
         # the URL that an application's file API returns is read with the caller's own restrictions
         TestStore::read_url = "file://" + f;

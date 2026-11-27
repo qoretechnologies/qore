@@ -838,12 +838,13 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
     imported the function still holds it: it is taken with a reference while its options are read.  Such a Program
     is deleted once another thread has deleted it or is deleting it, also while threads still hold references to it.
 
-    @param sandboxed if not nullptr, set to true if the same Program is sandboxed (see qore_program_is_sandboxed())
+    @param restricted if not nullptr, set to true if the same Program is restricted (see qore_program_is_restricted():
+    a Program that a trusted (governed) sandbox governs is not; qore#7737)
 
     @return 1 if the code has a Program (\a po is set to its options), 0 if it has none (builtin code), -1 if the
     Program of its code has been deleted
 */
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink, bool* sandboxed = nullptr);
+        ExceptionSink* xsink, bool* restricted = nullptr);
 
 #endif

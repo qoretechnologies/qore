@@ -17370,6 +17370,70 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! A context of a thread, task or continued operation that records restricted code counts for the update scopes of
+//! shared objects when it was applied since the scope opened; one that the thread had when the scope opened, or one
+//! of trusted code, does not (qore#7737)
+static void ut_restricted_contexts_count_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* host = parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS))
+        : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS));
+    // a trusted (governed) manager: its code is not restricted
+    QoreSandboxManager* trusted_sm = new QoreSandboxManager;
+    trusted_sm->setUncontrolledApiPolicy(true);
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "contexts: the host is entered");
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: nothing is entered at first");
+        // the context of an operation continued for restricted code
+        {
+            QoreSandboxContext ctx;
+            ctx.restricted = true;
+            QoreSandboxContextHelper sch(ctx);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: a restricted operation context applied since the scope opened counts");
+            // a scope opened under it: the context is that of the code that opened it
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "contexts: a restricted operation context that the scope opened under does not count");
+        }
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: the operation context has ended");
+        // the context that a thread or task of restricted code inherited
+        {
+            QoreSandboxContext ctx;
+            ctx.restricted = true;
+            QoreInheritedSandboxHelper ish(&ctx);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: a restricted inherited context applied since the scope opened counts");
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "contexts: a restricted inherited context that the scope opened under does not count");
+        }
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: the inherited context has ended");
+        // the context of trusted (governed) code
+        {
+            QoreSandboxContext ctx;
+            trusted_sm->ref();
+            ctx.manager = trusted_sm;
+            QoreSandboxContextHelper sch(ctx);
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "contexts: the operation context of a trusted manager does not count");
+            QoreInheritedSandboxHelper ish(&ctx);
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "contexts: the inherited context of a trusted manager does not count");
+            // the manager is tightened: its code is restricted now
+            trusted_sm->setUncontrolledApiPolicy(false);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: the context of a manager that refuses uncontrolled APIs counts");
+            trusted_sm->setUncontrolledApiPolicy(true);
+        }
+    }
+    UT_ASSERT(c, !xsink, "contexts: no exception");
+    trusted_sm->deref(nullptr);
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "contexts: the Program is destroyed");
+}
+
 //! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
 //! for the update scopes of shared objects (also while it runs the code that it called and after the scope opened),
 //! the per-Program cache, the check of a builtin's caller and the Program of the calling code (qore#7202)
@@ -31807,6 +31871,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_restricted_contexts_count_for_scopes(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());

@@ -63,6 +63,8 @@ public class OpenAiFileUploadFromLocationDataProvider inherits OpenAiDataProvide
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the location is the caller's input: refused before it is read or anything is sent (qore#7806)
+        FileLocationHandler::checkCallerLocation(req.location);
         hash<auto> h = {
             "purpose": req.purpose,
             "file": FileLocationHandler::getBinaryFileFromLocation(req.location),
