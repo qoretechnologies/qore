@@ -213,16 +213,18 @@ public class SandboxSerializationProvenanceTest inherits QUnit::Test {
 
     #! objects that sandboxed code created: of a class that it declared with a trusted base class, and of a trusted
     #! class that its Program imports; their classes are the sandboxed Program's copies, with their own methods
-    /** No sandboxed code runs when the host serializes them (a serializeMembers() method of the sandboxed code's
-        class would get only that class's members, and no access to the output), and the output goes to the host, so
-        the host gets the state of the trusted class with both forms; sandboxed code does not
+    /** The host gets the state of the trusted class with the static form, which enters no other Program.  A call of
+        the object's own method enters the Program of the object's class, the sandboxed Program, so the code of the
+        call is in the sandboxed Program and the method form fails closed (the object has no provenance of its own:
+        the exception for the receiver's provenance does not apply); sandboxed code gets the state with neither form
     */
     sandboxSubclassTest() {
         foreach string func in ("sb_sub", "sb_trusted") {
             object o = p.callFunction(func);
-            assertRegex("PRIV-STATE", sprintf("%N", o.serializeToData()), func);
+            assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \o.serializeToData(), NOTHING, func);
             assertRegex("PRIV-STATE", sprintf("%N", Serializable::serializeToData(o)), func);
-            assertRegex("PRIV-STATE", sprintf("%N", Serializable::deserializeToData(o.serialize())), func);
+            assertRegex("PRIV-STATE", sprintf("%N", Serializable::deserializeToData(Serializable::serialize(o))),
+                func);
             assertThrows("SERIALIZATION-ERROR", "SspTrusted::priv", \p.callFunction(), ("ser_method", o));
         }
     }
