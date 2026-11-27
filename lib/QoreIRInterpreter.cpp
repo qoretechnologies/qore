@@ -16376,6 +16376,9 @@ load_local_done:
                             // cannot be reported to a catch block, so the instruction aborts
                             return new_h || (xsink && *xsink);
                         }
+                        // the hash was created for this store only, so a store that is rejected, or whose member
+                        // cannot be created (std::bad_alloc), leaves no value behind (qore#7763)
+                        ReferenceHolder<QoreHashNode> new_h_holder(new_h, xsink);
                         if (hks_inst->result.isValid()) {
                             qore_ir_store_new_hash_key_result(new_h, hks_inst->key_name.c_str(), val, xsink, values,
                                 cleanup, hks_inst->result.id);
@@ -16384,14 +16387,12 @@ load_local_done:
                                 xsink);
                         }
                         if (xsink && *xsink) {
-                            // the hash was created for this store only, so the rejected store leaves no value behind
-                            new_h->deref(xsink);
                             return true;
                         }
                         if (is_closure) {
-                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         } else {
-                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         }
                         if (xsink && *xsink) {
                             return true;
@@ -16534,8 +16535,9 @@ load_local_done:
                         if (!new_h || (xsink && *xsink)) {
                             return;
                         }
+                        // released if the store is rejected or its member cannot be created (qore#7763)
+                        ReferenceHolder<QoreHashNode> new_h_holder(new_h, xsink);
                         if (qore_hash_private::get(*new_h)->checkLValueKey(key_str.c_str(), xsink)) {
-                            new_h->deref(xsink);
                             return;
                         }
                         if (hksd_inst->result.isValid()) {
@@ -16545,13 +16547,12 @@ load_local_done:
                             qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key_str.c_str(), val, xsink);
                         }
                         if (xsink && *xsink) {
-                            new_h->deref(xsink);
                             return;
                         }
                         if (is_closure) {
-                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         } else {
-                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h_holder.release()), xsink);
                         }
                         if (xsink && *xsink) {
                             return;

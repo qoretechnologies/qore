@@ -7891,7 +7891,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path_cached(QoreAOTConte
     return qore_rt_make_list(vals, count, type_info, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo,
+        ExceptionSink* xsink) try {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
     bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
     ReferenceHolder<QoreHashNode> hash(
@@ -7931,7 +7932,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs, int count,
         const char* type_path, ExceptionSink* xsink) {
@@ -8300,7 +8301,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* 
 }
 
 static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* vals,
-        int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink, bool unique_keys) {
+        int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink, bool unique_keys) try {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
     bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
     ReferenceHolder<QoreHashNode> hash(
@@ -8339,11 +8340,11 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
         hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1, uint64_t val1_bits,
-        ExceptionSink* xsink, bool infer_value_type) {
+        ExceptionSink* xsink, bool infer_value_type) try {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD");
     const bool enabled = !enabled_env.get();
     if (!enabled) {
@@ -8364,18 +8365,14 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
 
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
-    if (val0.needsRef()) {
-        val0.refSelf();
-    }
-    if (val1.needsRef()) {
-        val1.refSelf();
-    }
 
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(2);
-    hp->setKeyValueKnownAbsentIntern(key0, val0);
-    hp->setKeyValueKnownAbsentIntern(key1, val1);
+    // each reference is taken once its member exists, so that memory that cannot be allocated for the hash or a
+    // member leaves no reference that nothing releases (qore#7763)
+    hp->setKeyValueKnownAbsentInternBorrowed(key0, val0);
+    hp->setKeyValueKnownAbsentInternBorrowed(key1, val1);
 
     const QoreTypeInfo* value_type = autoTypeInfo;
     if (infer_value_type) {
@@ -8388,7 +8385,7 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
         const char* key0, uint64_t val0_bits, const char* key1,
@@ -8408,26 +8405,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(
 static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1,
         uint64_t val1_bits, const char* key2, uint64_t val2_bits,
-        ExceptionSink* xsink, bool infer_value_type) {
+        ExceptionSink* xsink, bool infer_value_type) try {
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
     QoreValue val2 = fromBits(val2_bits);
-    if (val0.needsRef()) {
-        val0.refSelf();
-    }
-    if (val1.needsRef()) {
-        val1.refSelf();
-    }
-    if (val2.needsRef()) {
-        val2.refSelf();
-    }
 
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(3);
-    hp->setKeyValueKnownAbsentIntern(key0, val0);
-    hp->setKeyValueKnownAbsentIntern(key1, val1);
-    hp->setKeyValueKnownAbsentIntern(key2, val2);
+    // each reference is taken once its member exists (qore#7763)
+    hp->setKeyValueKnownAbsentInternBorrowed(key0, val0);
+    hp->setKeyValueKnownAbsentInternBorrowed(key1, val1);
+    hp->setKeyValueKnownAbsentInternBorrowed(key2, val2);
 
     const QoreTypeInfo* value_type = autoTypeInfo;
     if (infer_value_type) {
@@ -8444,7 +8433,7 @@ static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_3_unique(
         const char* key0, uint64_t val0_bits, const char* key1,
@@ -21043,6 +21032,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
 // Precondition: `lvh` is navigated to the parent container; `ct` is the
 // container's type (NT_HASH or NT_OBJECT); `last_step` is the terminal
 // HashKeySlice step with `slice_values` populated.
+//! hands a value that a slice removal removed to \a lvh, which releases it after the lvalue locks, when the removal is
+//! left with an exception (qore#7763); if the helper cannot keep it, the value is released here
+static __attribute__((noinline, cold)) void qore_lv_save_removed_temp(LValueHelper& lvh, QoreValue v,
+        ExceptionSink* xsink) {
+    try {
+        lvh.saveTemp(v);
+    } catch (...) {
+        // saveTemp() took the node only in its own copy of the value
+        v.discard(xsink);
+    }
+}
+
 QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
@@ -21082,23 +21083,36 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         qore_hash_private* hp = qore_hash_private::get(*h);
         const bool old_needs_scan = qore_hash_private::needsScan(*h);
         ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
-        if (for_each_key([&](const QoreValue& key_val) -> bool {
-            QoreHashKeyHelper mem(key_val, xsink);
-            if (*xsink) {
-                return true;
-            }
-            bool exists;
-            QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
-            if (!exists) {
+        bool failed;
+        try {
+            failed = for_each_key([&](const QoreValue& key_val) -> bool {
+                QoreHashKeyHelper mem(key_val, xsink);
+                if (*xsink) {
+                    return true;
+                }
+                if (!hp->findMember(mem.c_str())) {
+                    return false;
+                }
+                // the member of the result is created before the value leaves the hash: memory that cannot be
+                // allocated for it leaves the value in the hash (qore#7763)
+                hash_assignment_priv ha(**rvh, mem.c_str());
+                bool exists;
+                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
+                assert(exists);
+                // note that no exception can occur here
+                ha.assign(n, xsink);
+                if (*xsink) {
+                    return true;
+                }
                 return false;
-            }
-            // note that no exception can occur here
-            qore_hash_private::setKeyValueCanonical(**rvh, mem.c_str(), n, xsink);
-            if (*xsink) {
-                return true;
-            }
-            return false;
-        })) {
+            });
+        } catch (...) {
+            // memory that a member of the result needed could not be allocated: the values removed so far are
+            // released once the lvalue locks are released, as for a delete (qore#7763)
+            qore_lv_save_removed_temp(lvh, QoreValue(rvh.release()), xsink);
+            throw;
+        }
+        if (failed) {
             return QoreValue();
         }
         // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed
@@ -21138,7 +21152,14 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         QoreLValueGeneric rv;
-        qore_object_private::takeMembers(*o, rv, lvh, *key_list, is_delete);
+        try {
+            qore_object_private::takeMembers(*o, rv, lvh, *key_list, is_delete);
+        } catch (...) {
+            // takeMembers() gave the result hash to rv first: the members removed so far are released once the lvalue
+            // locks are released (qore#7763)
+            qore_lv_save_removed_temp(lvh, rv.removeValue(true), xsink);
+            throw;
+        }
         if (*xsink) {
             lvh.saveTemp(rv.removeValue(true));
             return QoreValue();
@@ -21516,7 +21537,7 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink) try {
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -22056,7 +22077,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
     return toBits(res);
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 // documented in QoreIRInterpreter.h
 int qore_rt_list_replace_with_bind_probe(LValueHelper& lvh, QoreListNode& vl, size_t offset, size_t length,

@@ -5875,6 +5875,8 @@ public:
 
     //! Adds a field value to a hash of fields: a field that is given more than once becomes a list of its values
     DLLLOCAL static void addHttpField(QoreHashNode& h, const char* name, QoreValue val) {
+        // the value is released if memory for its member or its list cannot be allocated (qore#7763)
+        ValueHolder holder(val, nullptr);
         hash_assignment_priv ha(h, name);
         if (!(*ha).isNothing()) {
             QoreListNode* l;
@@ -5884,9 +5886,9 @@ public:
                 l = new QoreListNode(autoTypeInfo);
                 l->push(ha.swap(l), nullptr);
             }
-            l->push(val, nullptr);
+            l->push(holder.release(), nullptr);
         } else {
-            ha.assign(val, nullptr);
+            ha.assign(holder.release(), nullptr);
         }
     }
 

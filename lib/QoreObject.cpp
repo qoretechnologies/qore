@@ -2485,12 +2485,17 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
             odata = data;
         }
 
+        // the member of the result is created before the value leaves the object: memory that cannot be allocated
+        // for it leaves the value in the object (qore#7763)
+        hash_assignment_priv ha(*rvh, key);
+
         // issue #4122: do not return values that are not set in the object; the key of a member that is not declared
         // is removed (qore#7179)
         bool exists;
         QoreValue n = takeMemberValue(odata, key, declared, exists);
 
         if (!exists) {
+            ha.removeMemberCreatedForAssignment();
             continue;
         }
         if (!scan_value_removed && needs_scan(n)) {
@@ -2498,7 +2503,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         }
 
         // note that no exception can occur here
-        rvh->setKeyValue(key, n, lvh.vl.xsink);
+        ha.assignNative(n, lvh.vl.xsink);
         assert(!*lvh.vl.xsink);
     }
 

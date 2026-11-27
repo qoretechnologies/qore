@@ -22,6 +22,19 @@ sub fail_next_allocation() {
 
 sub disarm() {
     call_function("dbg_fail_allocation", 0);
+    call_function("dbg_fail_allocation", 0, -1);
+}
+
+#! makes the \a n th creation of a hash member that follows in this thread fail; 0: none
+sub fail_hash_member(int n) {
+    if (n) {
+        call_function("dbg_fail_allocation", n, -1);
+    }
+}
+
+#! the number of hashes that exist in the process
+int sub live_hashes() {
+    return call_function("dbg_live_hash_count");
 }
 
 #! the request handler of the server scenario: "/fail" fails for lack of memory in builtin code
@@ -176,6 +189,103 @@ int sub hash_objects(int n) {
     return h.size() + n - 1;
 }
 
+#! stores a new object in a new key of a hash that the store creates (qore#7763)
+int sub hash_new_objects(int fail_at) {
+    *hash<auto> h;
+    fail_hash_member(fail_at);
+    h."key" = new Counted();
+    return h.size();
+}
+
+#! as hash_new_objects(), using the value of the assignment
+int sub hash_new_result_objects(int fail_at) {
+    *hash<auto> h;
+    fail_hash_member(fail_at);
+    auto v = (h."key" = new Counted());
+    return h.size() + (v ? 0 : 1);
+}
+
+#! as hash_new_objects() with a key that is not constant
+int sub hash_new_dynamic_objects(int fail_at) {
+    *hash<auto> h;
+    string k = "key";
+    fail_hash_member(fail_at);
+    h{k} = new Counted();
+    return h.size();
+}
+
+#! makes a hash with a key that is not constant
+int sub make_hash_objects(int fail_at) {
+    string k = "key";
+    fail_hash_member(fail_at);
+    hash<auto> h = {k: new Counted()};
+    return h.size();
+}
+
+#! makes hashes with constant keys
+int sub make_hash_1_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted()};
+    return h.size();
+}
+
+int sub make_hash_2_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted(), "b": new Counted()};
+    return h.size();
+}
+
+int sub make_hash_3_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = {"a": new Counted(), "b": new Counted(), "c": new Counted()};
+    return h.size();
+}
+
+#! makes a hash with the hash map operator
+int sub hash_map_objects(int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> h = map {$1.toString(): new Counted()}, (1, 2);
+    return h.size();
+}
+
+#! changes a copy of a hash, which copies it
+int sub hash_copy_objects(int fail_at) {
+    hash<auto> h = {"a": new Counted(), "b": new Counted()};
+    hash<auto> h2 = h;
+    fail_hash_member(fail_at);
+    h2."c" = h."a";
+    return h.size() + h2.size();
+}
+
+#! holds a hash
+class Box {
+    public {
+        hash<auto> h;
+    }
+}
+
+#! removes a slice of the hash that the object holds
+int sub slice_objects(Box b, int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> r = remove b.h{"a", "b"};
+    return r.size();
+}
+
+#! holds objects in members
+class Pair {
+    public {
+        auto a;
+        auto b;
+    }
+}
+
+#! removes a slice of the object's members
+int sub object_slice_objects(Pair p, int fail_at) {
+    fail_hash_member(fail_at);
+    hash<auto> r = remove p{"a", "b"};
+    return r.size();
+}
+
 #! grows a list in a method
 class Grower {
     int grow(int n) {
@@ -193,6 +303,7 @@ class AllocFailureChild {
             case "compiled": compiled(); break;
             case "locked": locked(); break;
             case "counts": counts(); break;
+            case "member-counts": memberCounts(); break;
             case "locked-unhandled": lockedUnhandled(); break;
             case "unhandled-direct": unhandled(False); break;
             case "unhandled-nested": unhandled(True); break;
@@ -343,6 +454,80 @@ class AllocFailureChild {
             }
             disarm();
             printf("%s: balanced: %y\n", name, Counted::created == Counted::destroyed);
+        }
+    }
+
+    #! the code of each case of memberCounts() with the creation of the hash member to fail (0: none)
+    static int memberCase(string name, int fail_at) {
+        switch (name) {
+            case "hash-new": return hash_new_objects(fail_at);
+            case "hash-new-result": return hash_new_result_objects(fail_at);
+            case "hash-new-dynamic": return hash_new_dynamic_objects(fail_at);
+            case "make-hash": return make_hash_objects(fail_at);
+            case "make-hash-1": return make_hash_1_objects(fail_at);
+            case "make-hash-2": return make_hash_2_objects(fail_at);
+            case "make-hash-3": return make_hash_3_objects(fail_at);
+            case "hash-map": return hash_map_objects(fail_at);
+            case "hash-copy": return hash_copy_objects(fail_at);
+            case "object-slice": {
+                Pair p();
+                p.a = new Counted();
+                p.b = new Counted();
+                on_exit if (fail_at) {
+                    # the member of the result for "a" exists; the one for "b" cannot be created: "b" stays
+                    printf("%s: kept: a: %y b: %y\n", name, exists p.a, exists p.b);
+                }
+                return object_slice_objects(p, fail_at);
+            }
+        }
+        Box b();
+        b.h = {"a": new Counted(), "b": new Counted()};
+        on_exit if (fail_at) {
+            # the member of the result for "a" exists; the one for "b" cannot be created: "b" stays in the hash
+            printf("%s: kept: %y\n", name, keys b.h);
+        }
+        return slice_objects(b, fail_at);
+    }
+
+    #! runs a case of memberCounts() whose hash member cannot be created; returns the number of hashes before
+    static int memberFailure(string name, int fail_at) {
+        int hashes = live_hashes();
+        try {
+            memberCase(name, fail_at);
+            printf("%s: no exception\n", name);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: caught %s\n", name, ex.err);
+        }
+        disarm();
+        return hashes;
+    }
+
+    #! the values and the new hash of an operation that cannot create a hash member are released once, and a value
+    #! that a removal could not store in its result stays in the hash (qore#7763): as many objects are destroyed as
+    #! were created, and as many hashes exist as before
+    static memberCounts() {
+        hash<string, int> cases = {
+            "hash-new": 1,
+            "hash-new-result": 1,
+            "hash-new-dynamic": 1,
+            "make-hash": 1,
+            "make-hash-1": 1,
+            "make-hash-2": 2,
+            "make-hash-3": 3,
+            "hash-map": 2,
+            "hash-copy": 2,
+            "slice": 2,
+            "object-slice": 2,
+        };
+        for (int i = 0; i < 50; ++i) {
+            foreach string name in (keys cases) {
+                memberCase(name, 0);
+            }
+        }
+        foreach hash<auto> c in (cases.pairIterator()) {
+            int hashes = memberFailure(c.key, c.value);
+            printf("%s: balanced: %y\n", c.key, Counted::created == Counted::destroyed);
+            printf("%s: hashes: %d\n", c.key, live_hashes() - hashes);
         }
     }
 

@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreAllocFailure.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -38611,6 +38612,11 @@ static QoreValue f_dbg_fail_allocation(const QoreListNode* params, RuntimeConfig
     return QoreValue();
 }
 
+//! Returns the number of hashes that exist in the process (qore#7763)
+static QoreValue f_dbg_live_hash_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)qore_dbg_live_hashes.load(std::memory_order_relaxed);
+}
+
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -39339,6 +39345,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_allocation", f_dbg_fail_allocation,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "n", bigIntTypeInfo, QoreValue((int64)0), "min_size");
+    qns.addBuiltinVariant("dbg_live_hash_count", f_dbg_live_hash_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");

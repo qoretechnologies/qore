@@ -67,6 +67,7 @@ class AllocFailureTest inherits QUnit::Test {
         addTestCase("compiled code", \compiledTest());
         addTestCase("allocations of native code that no runtime helper handles", \unhandledTest());
         addTestCase("the value stored when a list cannot grow is released", \countsTest());
+        addTestCase("the values and the new hash when a hash member cannot be created", \memberCountsTest());
         set_return_value(main());
     }
 
@@ -186,6 +187,42 @@ class AllocFailureTest inherits QUnit::Test {
         }
         foreach hash<auto> c in (runs) {
             hash<auto> r = run(sprintf("%s counts", c.cmd));
+            assertEq(0, r.rc, sprintf("%s: the process goes on: %s", c.name, r.out));
+            assertEq(expected, r.out, c.name);
+        }
+    }
+
+    #! the operations that make or change a hash release its values and the new hash once when a member cannot be
+    #! created, and a removal leaves the value that it could not store in its result in the hash (qore#7763): in
+    #! each mode and in compiled code
+    memberCountsTest() {
+        checkDebug();
+        list<hash<auto>> runs;
+        foreach string mode in (Modes) {
+            runs += {"name": mode, "cmd": interpreter(mode)};
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                *string exe = compiledChild(qcc, opt);
+                if (exe) {
+                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe)};
+                }
+            }
+        }
+        string expected;
+        foreach string name in (("hash-new", "hash-new-result", "hash-new-dynamic", "make-hash", "make-hash-1",
+                "make-hash-2", "make-hash-3", "hash-map", "hash-copy", "slice", "object-slice")) {
+            if (name == "slice") {
+                expected += "slice: kept: [\"b\"]\n";
+            } else if (name == "object-slice") {
+                expected += "object-slice: kept: a: False b: True\n";
+            }
+            expected += sprintf("%s: caught MEMORY-ALLOCATION-ERROR\n%s: balanced: True\n%s: hashes: 0\n", name,
+                name, name);
+        }
+        foreach hash<auto> c in (runs) {
+            hash<auto> r = run(sprintf("%s member-counts", c.cmd), True);
             assertEq(0, r.rc, sprintf("%s: the process goes on: %s", c.name, r.out));
             assertEq(expected, r.out, c.name);
         }
