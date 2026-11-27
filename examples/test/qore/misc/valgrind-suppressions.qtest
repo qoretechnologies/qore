@@ -19,7 +19,8 @@
     of a value that was never written in Qore's code (dbg_read_uninitialized()), a read of freed memory
     (dbg_use_after_free()) and a value that was never written passed by Qore's code to the LLVM call that its JIT makes
     (dbg_llvm_uninitialized_level()), debug functions, are still reported, and a JIT compile has no report, also of
-    code that LLVM's InstCombine reports on arm64 (llvm21-instcombine-select-binop-arm64-csel).
+    code that LLVM's InstCombine reports on arm64 (llvm21-instcombine-select-binop-arm64-csel), also when the function
+    is compiled with a function that it calls (llvm21-instcombine-select-binop-arm64-csel-batch).
 */
 class ValgrindSuppressionsTest inherits QUnit::Test {
     public {
@@ -36,6 +37,16 @@ printf(\"%d\\n\", t);
         #! suppressions)
         const JitSelectMaskScript = "%modern
 int sub f(int x) { int s; for (int i = 0; i < x; ++i) { s += i * 2; } return s; }
+int t = 0;
+for (int i = 0; i < 20; ++i) { t += f(10); }
+printf(\"%d\\n\", t);
+";
+
+        #! a function that calls such a function, which the JIT compiles with it
+        #! (QoreJIT::compileFunctionBatchInternal())
+        const JitBatchSelectMaskScript = "%modern
+int sub g(int x) { int s; for (int i = 0; i < x; ++i) { s += i * 2; } return s; }
+int sub f(int x) { return g(x) + 1; }
 int t = 0;
 for (int i = 0; i < 20; ++i) { t += f(10); }
 printf(\"%d\\n\", t);
@@ -60,6 +71,8 @@ printf(\"%d\\n\", t);
         addTestCase("an uninitialised value that Qore's code passes to LLVM is not suppressed", \testLlvmArgument());
         addTestCase("a JIT compile has no report", \testJit());
         addTestCase("a JIT compile of a select that a binary operator uses has no report", \testJitSelectMask());
+        addTestCase("a JIT compile of a function with the function that it calls, with such a select, has no report",
+            \testJitBatchSelectMask());
         set_return_value(main());
     }
 
@@ -103,6 +116,10 @@ printf(\"%d\\n\", t);
 
     testJitSelectMask() {
         checkJit("jit-select-mask.q", JitSelectMaskScript, "1800");
+    }
+
+    testJitBatchSelectMask() {
+        checkJit("jit-batch-select-mask.q", JitBatchSelectMaskScript, "1820");
     }
 
     #! runs the script compiled to native code under valgrind and checks its result and that it has no report
