@@ -207,8 +207,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
         #   --exec-mode
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
-        # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
-        #   and in qcc executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -267,8 +265,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
         #   child processes that set their own --exec-mode and as qcc executables
-        # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
-        #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         # - AOTModuleBuiltinApiIdentity (#7183): its checks compile modules and load them in child processes of its own
         #   binary started without an execution mode
         # - AOTGuardedMethodEntryReturnKind (#6860): its checks run qcc in child processes started without an execution
@@ -324,8 +320,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
-                                 "examples/test/qore/misc/declaration-initializer-scope.qtest",
-                                 "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/qore/vars/timezone-spelling-casefold.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
