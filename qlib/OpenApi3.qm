@@ -608,6 +608,9 @@ public class OpenApi3Loader {
         - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with JSON module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static OpenApi3Schema fromString(string openapi3Specification, *bool json, *hash<auto> opts) {
         string ser;
@@ -616,8 +619,12 @@ public class OpenApi3Loader {
         } else {
             ser = json ? "json" : "yaml";
         }
-        return new OpenApi3Schema(openapi3Specification, OpenApi3Loader::parseSchemaSource(openapi3Specification, ser),
+        OpenApi3Schema rv(openapi3Specification, OpenApi3Loader::parseSchemaSource(openapi3Specification, ser),
             opts);
+        if (!SandboxManager::createsSharedObjects()) {
+            RestSchemaValidator::AbstractObjectBase::transferToCaller(rv, SandboxManager::getImmediateCaller());
+        }
+        return rv;
     }
 
     #! Load <a href="https://swagger.io/">OpenApi3</a> definition from a file.
@@ -635,10 +642,17 @@ public class OpenApi3Loader {
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
         @throws XML-MODULE-MISSING trying to parse an XML %OpenApi3 specification with the xml module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static OpenApi3Schema fromFile(string filepath, *hash<auto> opts) {
         string file_data = ReadOnlyFile::readTextFile(filepath);
-        return new OpenApi3Schema(file_data, OpenApi3Loader::parseSchemaContent(filepath, file_data), opts);
+        OpenApi3Schema rv(file_data, OpenApi3Loader::parseSchemaContent(filepath, file_data), opts);
+        if (!SandboxManager::createsSharedObjects()) {
+            RestSchemaValidator::AbstractObjectBase::transferToCaller(rv, SandboxManager::getImmediateCaller());
+        }
+        return rv;
     }
 
     #! Load <a href="https://swagger.io/">OpenApi3</a> definition from a URL or file path.
@@ -659,6 +673,9 @@ public class OpenApi3Loader {
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
         @throws XML-MODULE-MISSING trying to parse an XML %OpenApi3 specification with the xml module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static OpenApi3Schema fromUrl(string url, *bool json, *hash<auto> opts) {
         if (!exists json) {
