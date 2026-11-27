@@ -288,12 +288,12 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
             constructor_options.path = urlh.path;
         }
         # a subtype with a "readonly" option is read-only unless the caller makes it writable, and always for a
-        # read-only connection (qore#7806)
+        # read-only connection (qore#7806); no subtype has the option at present (the file poller only reads)
         if (subtype_info{subtype}.readonly && (opts.readonly || !exists constructor_options.readonly)) {
             constructor_options.readonly = True;
         }
-        hash<auto> opts = getSubtypeOptions(subtype_info{subtype}, constructor_options);
-        return create_object(conf."class", opts);
+        hash<auto> dp_opts = getSubtypeOptions(subtype_info{subtype}, constructor_options);
+        return create_object(conf."class", dp_opts);
     }
 
     #! Returns a hash of data provider constructor option info, if applicable

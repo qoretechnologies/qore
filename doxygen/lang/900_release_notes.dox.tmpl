@@ -1513,6 +1513,13 @@
     longer report it; a declared member keeps its slot with no value (see @ref remove_object_members;
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
+    @par The Data Provider of a Filesystem Connection Is Locked to Its Directory
+    The @ref FileDataProvider::FileDataProvider "FileDataProvider" that
+    @ref ConnectionProvider::FilesystemConnection "FilesystemConnection" returns is locked to the connection's
+    directory, and the \c root and \c lock constructor options are ignored: code that used it with paths outside that
+    directory creates a @ref FileDataProvider::FileDataProvider "FileDataProvider" itself
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
 
     @par Process-Wide Values Built on First Use as Trusted Code
@@ -3065,9 +3072,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - a read-only @ref ConnectionProvider::FilesystemConnection "FilesystemConnection" gives read-only data
-      providers, and the data provider of a filesystem connection is always rooted at and locked to the connection's
-      directory, whatever constructor options the caller gives
+    - the data provider that a read-only @ref ConnectionProvider::FilesystemConnection "FilesystemConnection"
+      returns is read-only, whatever constructor options the caller gives
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it

@@ -13,7 +13,7 @@
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
           "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "No marca la conexión como caída si la ubicación del sistema de archivos es de solo lectura, y hace que los proveedores de datos que devuelve la conexión sean de solo lectura: no pueden crear, eliminar, mover, copiar ni crear directorios en la ubicación; úsese, por ejemplo, si la conexión debe apuntar a un directorio base de solo lectura; los directorios de interfaz normalmente deben poder escribirse"
+          "message": "No marca la conexión como caída si la ubicación del sistema de archivos es de solo lectura, y hace que los proveedores de datos que devuelve la conexión sean de solo lectura: no pueden crear, eliminar, mover, copiar a la ubicación ni crear directorios en ella; úsese, por ejemplo, si la conexión debe apuntar a un directorio base de solo lectura; los directorios de interfaz normalmente deben poder escribirse"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",

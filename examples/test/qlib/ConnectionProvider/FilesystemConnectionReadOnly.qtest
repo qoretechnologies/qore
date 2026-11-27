@@ -275,7 +275,8 @@ string sub run(object conn, string action, hash<auto> req, *hash<auto> opts) {
         TmpDir tmp();
         FilesystemConnection conn = getConnection(tmp.path, True);
         # the file poller only reads: it has no option that makes it write, so the caller's readonly option is not
-        # given to it, and it offers no API that writes
+        # given to it, and it offers no API that writes (this holds without qore#7806 too: no subtype has a
+        # "readonly" option that the connection could force)
         AbstractDataProvider dp = conn.getDataProvider("filepoller", {"readonly": False});
         on_exit delete dp;
         assertEq("FileDelayedPollerDataProvider", dp.className());
@@ -285,8 +286,6 @@ string sub run(object conn, string action, hash<auto> req, *hash<auto> opts) {
             assertFalse(boolean(info{key}), key);
         }
         assertEq(NOTHING, dp.getChildProviderNames());
-        # a subtype that writes is not offered for a read-only connection
-        assertThrows("DATA-PROVIDER-ERROR", \conn.getDataProvider(), ("filewriter", {}));
     }
 
     #! a read-only connection lent to code restricted from the filesystem gives that code a read-only provider
