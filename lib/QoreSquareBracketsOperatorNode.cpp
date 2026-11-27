@@ -37,6 +37,7 @@
 #include "qore/intern/QoreTypeSpec.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/LocalVar.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -392,6 +393,21 @@ int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreListNode* ln)
     return err;
 }
 
+//! the value of the operator for its evaluated operands; see QoreSquareBracketsOperatorNode::evalOnValues()
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_square_brackets_values(QoreProgram* pgm, const QoreValue l,
+        const QoreValue r, bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    if (qore_plugin_value_may_have_operation(l)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(pgm, "subscript",
+            QorePluginHelperAbi::SubscriptValue, l, r, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
+    return QoreSquareBracketsOperatorNode::doSquareBrackets(l, r, true, string_index_char, negative_offsets, xsink);
+}
+
 QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
@@ -417,16 +433,35 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     if (*xsink)
         return QoreValue();
 
-    if (qore_plugin_value_may_have_operation(*lh)) {
-        bool plugin_matched = false;
-        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
-            QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
-        if (*xsink || plugin_matched) {
-            return plugin_result;
-        }
-    }
+    return qore_square_brackets_values(getProgram(), *lh, *rh, string_index_char, negative_offsets, xsink);
+}
 
-    return doSquareBrackets(*lh, *rh, true, string_index_char, negative_offsets, xsink);
+QoreValue QoreSquareBracketsOperatorNode::evalOnValues(QoreProgram* pgm, const QoreValue l, const QoreValue r,
+        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    return qore_square_brackets_values(pgm, l, r, string_index_char, negative_offsets, xsink);
+}
+
+//! Returns the element \a r of the value that the reference \a l names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_square_brackets_through_reference(const QoreValue l,
+        const QoreValue r, bool list_ok, bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(l, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    return QoreSquareBracketsOperatorNode::doSquareBrackets(*value, r, list_ok, string_index_char, negative_offsets,
+        xsink);
+}
+
+//! Returns the elements in \a pln of the value that the reference \a l names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_square_brackets_list_range_through_reference(
+        const QoreValue l, const QoreParseListNode* pln, bool string_index_char, bool negative_offsets,
+        bool broken_list_range, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(l, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    return QoreSquareBracketsOperatorNode::doSquareBracketsListRange(*value, pln, string_index_char, negative_offsets,
+        broken_list_range, xsink);
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
@@ -610,6 +645,10 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
             }
             return bin.release();
         }
+        // elements of a reference element are elements of the referenced value (qore#6662)
+        case NT_REFERENCE:
+            return qore_square_brackets_list_range_through_reference(l, pln, string_index_char, negative_offsets,
+                broken_list_range, xsink);
         default:
             break;
     }
@@ -720,6 +759,10 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                 }
                 return bin.release();
             }
+            // an element of a reference element is an element of the referenced value (qore#6662)
+            case NT_REFERENCE:
+                return qore_square_brackets_through_reference(l, r, list_ok, string_index_char, negative_offsets,
+                    xsink);
             default:
                 return QoreValue();
         }
@@ -759,6 +802,10 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             }
             return b->getReferencedEntry(static_cast<size_t>(offset), xsink);
         }
+
+        // an element of a reference element is an element of the referenced value (qore#6662)
+        case NT_REFERENCE:
+            return qore_square_brackets_through_reference(l, r, list_ok, string_index_char, negative_offsets, xsink);
     }
 
     return QoreValue();
@@ -789,6 +836,24 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
             value_type = list;
             return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(),
                 string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
+        }
+        // the elements of a reference element are elements of the referenced value, read once and iterated as the
+        // list is (qore#6662)
+        if (lhs->getType() == NT_REFERENCE) {
+            ValueHolder value(qore_read_access_base(*lhs, xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            // a reference that the referenced lvalue holds is not read through again: no element is selected
+            if (value->getType() == NT_REFERENCE) {
+                value = QoreValue();
+            }
+            lhs.setValue(value.release(), true);
+            if (lhs->getType() == NT_LIST) {
+                value_type = list;
+                return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(),
+                    string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
+            }
         }
     } else {
         QoreOperandEvalHolder rhs(right, xsink);

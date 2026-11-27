@@ -77,8 +77,10 @@ cannot deadlock with a thread that keeps to the order.
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
 | 900 | the registry of the tombstones of retired declarations (`QoreTombstoneRegistry`): making a tombstone creates declarations and types | ACQUIRE | leaf locks (complex types, class IDs), the type registries below |
+| 950 | the lock that serializes the member additions of classes with their publication (`qore_class_private::addMemberApi()`) | ACQUIRE | leaf locks, the type registries |
 | 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the class data locks (`qore_class_data_locks`, which every construction of an object through a copied class handle takes, qore#6732), the count of thread data of debug builds (`tpd_live_count`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, the secret key of the keyed hashes (1600), debug output, allocation tracking |
 | 1020 | the registry of the generic caches by the types their keys name (`QoreGenericCacheRegistry`), taken with the complex types lock held | ACQUIRE | the locks of the caches (one per object, not registered) |
+| 1025 | the stripes of the locks of the caches of generics that belong to one object each (`qore_cache_stripe_lock()`): the cache of the concrete declarations of a generic hashdecl, the specialized IR of a user variant and the extended type counts of an IR type profile, taken with the generic cache registry's lock held | ACQUIRE | — |
 | 1030 | the registry of the epoch holds of type retirement (`QoreTypeEpochHold`), taken with the JIT's background queue lock held | ACQUIRE | — |
 | 1040 | the debug registries of the live types and declarations (debug builds only), taken whenever a type or a declaration is created or destroyed | ACQUIRE | — |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
@@ -228,6 +230,20 @@ of the work that the JIT's background compile thread was compiling is released b
 work stay with the queue. `examples/test/qore/misc/fork-type-retirement-locks.qtest` holds each lock in another thread
 across `fork()` (`dbg_fork_while_type_lock_held()`, debug builds) and forks while a background compile of a specialized
 method is in progress.
+
+## Per-object caches of generics
+
+The lock of the cache of the concrete declarations of a generic hashdecl, the lock of the cache of the specialized IR
+of a user variant and the lock of the extended type counts of an IR type profile belong to one object each, so a
+handler per lock is impossible, and a child of a `fork()` made while another thread held one inherited it held
+(qore#7554). They are the stripes of one lock array (`qore_cache_stripe_lock()`, 64 stripes, the one an object's address
+selects), acquired like the other striped leaf lock arrays. Two objects can share a stripe, so a critical section
+touches only the cache itself and takes no other stripe: a generic hashdecl's loops that call its concrete
+declarations (`setNamespace()`, `namespaceDeleted()`) do not take their locks, as a concrete declaration holds no cache.
+The process-wide name tables of call frames (`function_call_names`, `native_call_names`), the table of the inlined call
+sites of the IR interpreter (`ir_inline_sites`) and the lock of the member additions of classes (`class_member_add`)
+have handlers of their own. `examples/test/qore/misc/fork-leaf-locks.qtest` holds each of them, and each stripe, in
+another thread across `fork()`.
 
 ## Children that exit without exit-time handlers
 

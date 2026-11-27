@@ -4947,7 +4947,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @ref DataProvider::registerKnownFactories()), otherwise only apps registered by already-loaded modules are
         cached
 
-        @return the number of applications added to the cache
+        @return the number of applications added to the cache; 0 for code that may not change the cache of the data
+        provider index (sandboxed code and code restricted from external information, see
+        @ref providerindexutil_published_index), for which the refusal of each app is logged
     */
     static int cacheAllRegisteredApps() [dom=PROCESS_CONTROL] {
         int count = 0;

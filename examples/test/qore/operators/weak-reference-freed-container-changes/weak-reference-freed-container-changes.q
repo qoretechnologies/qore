@@ -107,7 +107,7 @@ sub freed_direct() {
         printf("element splice: %s\n", ex.err); }
 
     list<int> wi;
-    # a container of the lvalue's type: a weak assignment that converts the container raises (#7237)
+    # a container of the lvalue's type: a weak assignment that converts the container raises (#7237, #7572)
     wi := cast<list<int>>(list(1, 2));
     list<int> si = wi;
     try { si += (3, 4); printf("list<int> += list: %y\n", si); } catch (hash<ExceptionInfo> ex) {

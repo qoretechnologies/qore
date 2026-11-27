@@ -96,6 +96,7 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreLogicalComparisonOperatorNode.h"
 #include "qore/intern/QoreListAssignmentOperatorNode.h"
@@ -488,7 +489,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"LIST_ASSIGN", 132, true, write_slot_LIST_ASSIGN, "List assignment operator"},
     // 133: BACKQUOTE
     {"BACKQUOTE", 133, true, write_slot_BACKQUOTE, "Backquote expression"},
-    {nullptr, 134, false, nullptr, nullptr},
+    // 134: READ_REFERENCE
+    {"READ_REFERENCE", 134, true, write_slot_READ_REFERENCE, "Read through a reference element"},
     {nullptr, 135, false, nullptr, nullptr},
     {nullptr, 136, false, nullptr, nullptr},
     {nullptr, 137, false, nullptr, nullptr},

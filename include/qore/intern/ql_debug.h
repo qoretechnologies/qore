@@ -180,10 +180,21 @@ DLLLOCAL extern std::atomic<qore_dbg_removed_object_scan_hook_t> qore_dbg_remove
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook;
 
+//! called in UserClosureVariant::evalClosure() before the call of a closure created in a method takes a reference
+//! to its object (qore#7555)
+typedef void (*qore_dbg_closure_call_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_closure_call_hook_t> qore_dbg_closure_call_hook;
+
 //! called by ClosureVarValue::deref() when a dereference collects a closure-bound variable with its recursive set;
 //! set by dbg_count_closure_var_collections()
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
+//! called in ClosureVarValue::deref() after a dereference has decided and claimed the collection of a closure-bound
+//! variable, with no lock held, before it checks for references taken since and releases the value (qore#7546)
+DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_decided_hook;
+//! called in ClosureVarValue::deref() after a dereference has checked the collection of a closure-bound variable and
+//! taken its value, with no lock held, before the deletion releases the value (qore#7556)
+DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collected_hook;
 
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()

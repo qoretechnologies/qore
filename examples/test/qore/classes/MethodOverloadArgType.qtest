@@ -37,10 +37,32 @@ class QorusLikeHandler inherits WebSocketLikeHandler {
     }
 }
 
+class ParentLabel {
+    string label(int value) { return "parent int"; }
+    string label(string value) { return "parent string"; }
+}
+
+class ChildLabel inherits ParentLabel {
+    string label(int value) { return "child int"; }
+}
+
 class MethodOverloadArgTypeTest inherits QUnit::Test {
     constructor() : QUnit::Test("MethodOverloadArgTypeTest", "1.0", \ARGV) {
         addTestCase("inherited overload selected with parameter args", \testInheritedOverloadWithParameterArgs());
+        addTestCase("a warmed call still selects inherited overloads", \testWarmOverload());
         set_return_value(main());
+    }
+
+    private string dynamicLabel(auto obj, auto value) {
+        return obj.label(value);
+    }
+
+    testWarmOverload() {
+        ChildLabel obj();
+        assertEq("child int", dynamicLabel(obj, 42));
+        assertEq("child int", dynamicLabel(obj, 43));
+        assertEq("parent string", dynamicLabel(obj, "text"));
+        assertEq("child int", dynamicLabel(obj, 44));
     }
 
     testInheritedOverloadWithParameterArgs() {

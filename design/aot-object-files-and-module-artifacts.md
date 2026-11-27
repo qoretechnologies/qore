@@ -358,6 +358,38 @@ automatically:
   built from the same sources. A change to a file that is not fingerprinted
   never changes the identity, so rebuilding libqore for unrelated fixes keeps
   every installed AOT module loadable.
+- **Domain and restriction values.** A module records the functional domains
+  that its code uses, those its header declares, the parse options of its
+  header and of its module commands and the restrictions of its dependencies as
+  the bits of `include/qore/Restrictions.h` (`QDOM_*`, `PO_*`) and of
+  `lib/QoreParseOptions.cpp` (the extended options above bit 63, and the masks
+  of the positive and free options, with which the loader compares them), which
+  are therefore in `_qcc_format_sources`: a change of a value, of a mask or of
+  the restriction that a domain maps to changes the identity (qore#7526).
+- **Builtin functional domains.** An AOT module records the functional domains
+  that its code used when it was compiled (`FUNCTIONAL_DOMAIN`), and loading it
+  into a restricted Program checks that record; the builtins that it calls are
+  not looked at again. The fingerprint therefore has an `@builtin-domains`
+  entry: `cmake/QoreWriteBuiltinDomainTable.cmake`, run by `qcc-format-version`
+  before the fingerprint, writes `qore-builtin-domains.txt` from the
+  qpp-generated sources of libqore that every configuration has (the
+  registration lines of the builtin functions, classes and methods that name a
+  domain other than `QDOM_DEFAULT`, and the parent classes of the builtin
+  classes, which give them their domains, also those with type arguments, each
+  with the name of its file). A
+  builtin that gains, loses or changes a functional domain changes the
+  identity, so a module compiled before is refused (and its source, which the
+  loader tries instead, is checked against the new domains), while a change of
+  the code or documentation of a builtin does not (qore#7508). A change of the
+  name or signature of a builtin that has a domain, or of the parent classes of
+  a builtin class, changes it too. These changes are made in `lib/*.qpp`, whose
+  paths are not in `qcc-format-source-labels.txt`: a check of whether a change
+  is fingerprinted counts a change of the `dom=` of a declaration, of a
+  declaration that has one, or of the `vparent` of a class as well. The
+  optional `lib/ql_alloc_tracking.qpp`, the builtins that libqore registers in
+  hand-written code (the debug hooks of `lib/ql_debug.cpp`, all
+  `QDOM_DEBUG_HOOK`, which only debug builds have) and those of binary modules
+  are not covered.
 - **Recording.** The generated module descriptor calls
   `qore_aot_fill_module_runtime_identity()` after `qore_aot_fill_module_desc()`
   with the identity of the compiling libqore (descriptor revision 2). Every
@@ -1112,11 +1144,12 @@ compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
 writer. The reader checks that a `.qo` is within its supported version
-range. Each format bump sets the minimum to the version that it writes: v52,
-whose format changes the AOT-identity batch shares (owner-qualified wildcard
-bounds, qore#7184; the declaration index of METHODS records, qore#7169; the
-callee of each background helper, qore#7087), is the minimum, so artifacts from
-v51 and earlier require recompilation; a qcc executable checks the version of the
+range. Each format bump sets the minimum to the version that it writes: v53,
+whose format changes the second AOT-identity batch shares (among them the typed
+ReleaseOwnedTemp of a replaced pending return in debug IR, qore#7022, class
+signature hashes with the namespace path of their class, qore#7397, and debugger
+statement spans with source columns, qore#7490), is the minimum, so artifacts
+from v52 and earlier require recompilation; a qcc executable checks the version of the
 program image that it embeds when it starts, before it reads anything else. A reader change within the supported range
 still needs to invalidate cached artifacts when it changes their interpretation.
 

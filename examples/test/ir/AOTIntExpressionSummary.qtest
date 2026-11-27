@@ -4,6 +4,7 @@
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%requires json
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -292,9 +293,12 @@ bool sub side_effect_bool_expr(int value) {
     return value > 0;
 }
 
+# 81 nodes: more than a summary can have (QORE_AOT_INT_EXPRESSION_MAX_NODES)
 int sub too_large(int value) {
     return value + 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
-        + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20;
+        + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20
+        + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29 + 30
+        + 31 + 32 + 33 + 34 + 35 + 36 + 37 + 38 + 39 + 40;
 }
 ";
 }
@@ -606,81 +610,175 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
-        || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"kind\": 10[^\n]*\"key\": \"a\"/)
-        || !(provider_index =~ /\"qore_path\": \"hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"second\"/)
-        || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"first\"/)
-        # A summary without an exception edge cannot count characters in an arbitrary string.
-        || !(provider_index =~ /\"qore_path\": \"hash_checked_length\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"multiple_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"wide_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"cfg_float_expr\(bool,bool,float\)\"[^\n]*\"float_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"kind\": 9/)
-        || !(provider_index =~ /\"qore_path\": \"cfg_float_div\(bool,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"string_starts_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"string_ends_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"string_contains_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"string_find_expr\(string,string,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"string_rfind_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"multiple_string_ops_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"nested_string_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"kind\": 19/)
-        || !(provider_index =~ /\"kind\": 20/)
-        || !(provider_index =~ /\"kind\": 21/)
-        || !(provider_index =~ /\"kind\": 22/)
-        || !(provider_index =~ /\"kind\": 23/)
-        || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"two_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"kind\": 29[^\n]*\"key\": \"value\"/)
-        || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_divide_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"modulo_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"constant_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"dynamic_shift_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"negative_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"wide_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"negate_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"multiple_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"conditional_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"local_branch_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"asymmetric_param_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"maybe_unassigned_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"maybe_removed_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"maybe_removed_param\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"kind\": 24/)
-        || !(provider_index =~ /\"kind\": 25/)
-        || !(provider_index =~ /\"kind\": 26/)
-        || !(provider_index =~ /\"kind\": 27/)
-        || !(provider_index =~ /\"kind\": 28/)
-        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 6/)
-        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 7/)
-        || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"side_effect_bool_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
-    printf("unexpected integer expression metadata:\n%s", provider_index);
+hash<auto> provider_index_data;
+try {
+    provider_index_data = parse_json(provider_index);
+} catch (hash<ExceptionInfo> ex) {
+    printf("cannot parse the integer expression metadata: %s: %s\n%s", ex.err, ex.desc, provider_index);
+    exit(2);
+}
+
+#! returns the fast-entry record of the function at \a path, or adds an error to \a errors if it has not exactly one
+/** A function has several records under its path in the symbol index (the definition, its native body and its fast
+    entry); only the fast-entry record (\c "qore_fast_v1" in the native records) carries the expression summaries.
+*/
+*hash<auto> sub fast_entry(hash<auto> index, string path, reference<list<string>> errors) {
+    list<auto> fast = select index.native ?? (), $1.qore_path == path && $1.abi_kind == "qore_fast_v1";
+    if (fast.size() != 1) {
+        push errors, sprintf("%s: %d fast-entry records, expected 1", path, fast.size());
+        return;
+    }
+    return fast[0];
+}
+
+#! checks that the function at \a path has a summary of the \a kind ("int" or "float") if \a composed, or none
+sub check_summary(hash<auto> index, string path, string kind, bool composed, reference<list<string>> errors) {
+    *hash<auto> rec = fast_entry(index, path, \errors);
+    if (!rec) {
+        return;
+    }
+    *list<auto> nodes = rec{kind + "_expression_nodes"};
+    if (composed != boolean(nodes)) {
+        push errors, sprintf("%s: %s summary expected: %y; got: %y", path, kind, composed, nodes);
+    }
+}
+
+#! checks that the summary of the \a kind ("int" or "float") of the function at \a path has nodes of \a node_kinds
+sub check_summary_kinds(hash<auto> index, string path, string kind, list<int> node_kinds,
+        reference<list<string>> errors) {
+    *hash<auto> rec = fast_entry(index, path, \errors);
+    if (!rec) {
+        return;
+    }
+    *list<auto> nodes = rec{kind + "_expression_nodes"};
+    foreach int node_kind in (node_kinds) {
+        if (!(select nodes ?? (), $1.kind == node_kind)) {
+            push errors, sprintf("%s: %s summary has no node of kind %d: %y", path, kind, node_kind, nodes);
+        }
+    }
+}
+
+#! checks that the fast entry of the function at \a path returns \a return_kind
+sub check_fast_return_kind(hash<auto> index, string path, int return_kind, reference<list<string>> errors) {
+    *hash<auto> rec = fast_entry(index, path, \errors);
+    if (rec && rec.fast_return_kind != return_kind) {
+        push errors, sprintf("%s: fast_return_kind expected: %d; got: %y", path, return_kind,
+            rec.fast_return_kind);
+    }
+}
+
+#! checks that the function at \a path is defined without a fast entry, which is what would carry a summary
+sub check_no_fast_entry(hash<auto> index, string path, reference<list<string>> errors) {
+    if (!(select index.defines ?? (), $1.qore_path == path)) {
+        push errors, sprintf("%s: not defined", path);
+    }
+    list<auto> fast = select index.native ?? (), $1.qore_path == path && $1.abi_kind == "qore_fast_v1";
+    if (fast) {
+        push errors, sprintf("%s: unexpected fast-entry records: %y", path, fast);
+    }
+}
+
+#! checks that a summary of the \a kinds ("int", "float") of a fast entry has a node of \a node_kind (with \a key)
+sub check_any_node(hash<auto> index, list<string> kinds, int node_kind, *string key, reference<list<string>> errors) {
+    foreach hash<auto> rec in (select index.native ?? (), $1.abi_kind == "qore_fast_v1") {
+        foreach string kind in (kinds) {
+            if (select rec{kind + "_expression_nodes"} ?? (),
+                    $1.kind == node_kind && (!exists key || $1.key === key)) {
+                return;
+            }
+        }
+    }
+    push errors, sprintf("no %s summary node of kind %d%s", kinds.join("/"), node_kind,
+        exists key ? sprintf(" with key %y", key) : "");
+}
+
+list<string> metadata_errors = ();
+if (!(select provider_index_data.context ?? (), $1.key == "symbol_index_version" && $1.value == "37")) {
+    push metadata_errors, sprintf("symbol_index_version expected: \"37\"; got: %y",
+        (select provider_index_data.context ?? (), $1.key == "symbol_index_version"));
+}
+list<string> all_kinds = ("int", "float", "string");
+check_summary(provider_index_data, "bounded_expr(int,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "pair(int,int)", "int", True, \metadata_errors);
+check_fast_return_kind(provider_index_data, "positive_bool_expr(int,int)", 3, \metadata_errors);
+check_summary(provider_index_data, "positive_bool_expr(int,int)", "int", True, \metadata_errors);
+check_fast_return_kind(provider_index_data, "nested_positive_bool_expr(int,int)", 3, \metadata_errors);
+check_summary(provider_index_data, "nested_positive_bool_expr(int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "bitwise_expr(int,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_bitwise_expr(int,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "compare_select_expr(int,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_compare_select_expr(int,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "bounded_float_expr(float,float,float)", "float", True, \metadata_errors);
+check_summary(provider_index_data, "nested_float_expr(float,float,float)", "float", True, \metadata_errors);
+check_summary(provider_index_data, "hash_float_expr(hash<string, float>,float)", "float", True, \metadata_errors);
+# a summary does not compose a callee summary that can raise an exception, whose frame it would lack:
+# the nested_* functions of such callees have none (qore#7632)
+check_summary(provider_index_data, "nested_hash_float_expr(hash<string, float>,float)", "float", False,
+    \metadata_errors);
+check_any_node(provider_index_data, all_kinds, 10, "a", \metadata_errors);
+check_summary(provider_index_data, "hash_string_measure(hash<string, string>,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_hash_string_measure(hash<string, string>,int)", "int", False,
+    \metadata_errors);
+check_any_node(provider_index_data, all_kinds, 30, "second", \metadata_errors);
+check_any_node(provider_index_data, all_kinds, 30, "first", \metadata_errors);
+# A summary without an exception edge cannot count characters in an arbitrary string.
+check_summary(provider_index_data, "hash_checked_length(hash<string, string>,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "divide_float_expr(float,float)", "float", True, \metadata_errors);
+check_summary(provider_index_data, "negate_float_expr(float)", "float", True, \metadata_errors);
+check_summary(provider_index_data, "nested_divide_float_expr(float,float,float)", "float", False, \metadata_errors);
+check_summary(provider_index_data, "multiple_divide_float_expr(float,float,float)", "float", False, \metadata_errors);
+check_summary(provider_index_data, "wide_float_expr(float)", "float", True, \metadata_errors);
+check_summary_kinds(provider_index_data, "cfg_float_expr(bool,bool,float)", "float", (8, 9), \metadata_errors);
+check_summary(provider_index_data, "cfg_float_div(bool,float,float)", "float", False, \metadata_errors);
+check_summary(provider_index_data, "string_measure_expr(string,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "nested_string_measure_expr(string,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "optional_string_measure_expr(*string,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "string_starts_expr(string,string,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "string_ends_expr(string,string,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "string_contains_expr(string,string,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "string_find_expr(string,string,int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "string_rfind_expr(string,string,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "multiple_string_ops_expr(string,string,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "nested_string_expr(string,string,int)", "int", False, \metadata_errors);
+foreach int node_kind in (19, 20, 21, 22, 23) {
+    check_any_node(provider_index_data, all_kinds, node_kind, NOTHING, \metadata_errors);
+}
+check_summary(provider_index_data, "list_measure_expr(list<int>,list<int>,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "hash_value_expr(hash<string, int>,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_hash_value_expr(hash<string, int>,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "multi_hash_value_expr(hash<string, int>,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_multi_hash_value_expr(hash<string, int>,int)", "int", False,
+    \metadata_errors);
+check_summary(provider_index_data, "two_hash_value_expr(hash<string, int>,hash<string, int>)", "int", True,
+    \metadata_errors);
+check_any_node(provider_index_data, all_kinds, 29, "value", \metadata_errors);
+check_summary(provider_index_data, "divide_expr(int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "nested_divide_expr(int,int,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "modulo_expr(int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "constant_shift_expr(int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "dynamic_shift_expr(int,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "negative_shift_expr(int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "wide_shift_expr(int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "negate_expr(int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "multiple_divide_expr(int,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "conditional_divide_expr(int,int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "local_branch_expr(int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "asymmetric_param_expr(int,int)", "int", True, \metadata_errors);
+check_summary(provider_index_data, "maybe_unassigned_local(int)", "int", False, \metadata_errors);
+# a function whose local or parameter may be removed has no fast entry, and so no summary
+check_no_fast_entry(provider_index_data, "maybe_removed_local(int)", \metadata_errors);
+check_no_fast_entry(provider_index_data, "maybe_removed_param(int,int)", \metadata_errors);
+foreach int node_kind in (24, 25, 26, 27, 28) {
+    check_any_node(provider_index_data, all_kinds, node_kind, NOTHING, \metadata_errors);
+}
+check_any_node(provider_index_data, ("float",), 6, NOTHING, \metadata_errors);
+check_any_node(provider_index_data, ("float",), 7, NOTHING, \metadata_errors);
+check_summary(provider_index_data, "side_effect_expr(int)", "int", False, \metadata_errors);
+check_summary(provider_index_data, "side_effect_bool_expr(int)", "int", False, \metadata_errors);
+# a summary is bounded: a function with more nodes has none
+check_summary(provider_index_data, "too_large(int)", "int", False, \metadata_errors);
+if (metadata_errors) {
+    printf("unexpected integer expression metadata:\n%s\n%s", metadata_errors.join("\n"), provider_index);
     exit(2);
 }
 

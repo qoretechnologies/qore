@@ -38,6 +38,13 @@ public namespace EdifactUtil {
         #! Creates the cache helper
         /** @param root the cache root directory; if not given, the directory in the \c QORE_EDIFACT_DIRCACHE
             environment variable, or \c ~/.qore/edifact
+
+            For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO",
+            see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+            "SandboxManager::callerMayReadExternalInfo()"), the environment is empty, as it is in that code itself:
+            neither \c QORE_EDIFACT_DIRCACHE nor \c HOME is read, so such code gives a root that does not start
+            with \c "~" (otherwise \c EDIFACT-CACHE-ERROR is raised when the cache is used; see
+            @ref sandbox_ambient_host_data)
         */
         constructor(*string root) {
             self.root = root;
@@ -57,6 +64,12 @@ public namespace EdifactUtil {
             if (!path.size() || path[0] != "~") {
                 return path;
             }
+            # the environment of the host only for a caller that could read it itself (qore#7586)
+            if (!SandboxManager::callerMayReadExternalInfo()) {
+                throw "EDIFACT-CACHE-ERROR", "cannot expand '~' in the cache path: the home directory is external "
+                    "information, which the calling code may not read (PO_NO_EXTERNAL_INFO); give the cache root "
+                    "explicitly";
+            }
             string home = getenv("HOME") ?? "";
             if (!home.size()) {
                 throw "EDIFACT-CACHE-ERROR", "HOME is not set; cannot expand '~' in cache path";
@@ -71,7 +84,11 @@ public namespace EdifactUtil {
         }
 
         string getCacheRoot() {
-            string dir = root.val() ? root : (getenv(EdifactCacheEnvVar) ?? EdifactCacheDefaultRoot);
+            # the environment of the host only for a caller that could read it itself (qore#7586)
+            string dir = root.val()
+                ? root
+                : ((SandboxManager::callerMayReadExternalInfo() ? getenv(EdifactCacheEnvVar) : NOTHING)
+                    ?? EdifactCacheDefaultRoot);
             return expandUserPath(dir);
         }
 

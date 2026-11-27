@@ -104,6 +104,10 @@ DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len, Except
     const char* context);
 // checks that a string has no NUL character: a string passed to the Kerberos or GSSAPI libraries, or decoded from
 // hex, is used as a C string, which would be cut at a NUL character; a secret is not shown in the exception
+//! Returns true if the calling code may read the Kerberos configuration of the host (it is not restricted from
+//! external information, see qore_caller_may_read_external_info(); fails closed with a libqore without it, qore#6844)
+DLLLOCAL bool krb5_caller_may_read_host_config();
+
 DLLLOCAL int krb5_check_no_nul(const QoreString* str, const char* what, const char* what_plural, const char* err,
     bool secret, ExceptionSink* xsink);
 DLLLOCAL bool krb5_is_empty_cache_error(krb5_error_code rc);

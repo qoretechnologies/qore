@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRScalarFusedLocalsTest
+
+#! The fixed-aggregate scalar replacement keeps the stores of the locals that a fused instruction reads
+/** The replacement removes the store of a local that holds a constant when no instruction reads the local any more.
+    It counted the reads of LoadLocal instructions only, but a loop condition (BranchIfLtLocalInt) and an addition of
+    two locals (AddAssignLocalInt) read their locals themselves: the store of the bound of a loop or of the source of
+    an addition was removed, and the fused instruction read a local that was never assigned (in every compiled tier).
+    The scenario must print in every tier and as a compiled executable what the AST tier prints.
+*/
+class IRScalarFusedLocalsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+    }
+
+    constructor() : QUnit::Test("IRScalarFusedLocalsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
+        fixture = get_script_dir() + "/IRScalarFusedLocalsScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("scalar replacement", \testScalarReplacement());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        assertEq("fused local scalarization checks passed\n", astOutput());
+    }
+
+    #! the functions whose locals the fused instructions access still have their lists and hashes replaced
+    testScalarReplacement() {
+        string stats = run("ir", "QORE_IR_OPT_STATS=1 ");
+        foreach string name in (("nonzeroStart", "negativeStart", "localBound", "addSource", "capturedCounter",
+                "referencedCounter")) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-lists=1 ", stats, name + " list replaced");
+        }
+        assertRegex("IR-OPT: hashLoop:.* scalar-hashes=1 ", stats, "hashLoop hash replaced");
+        # an index that a fused instruction changes is not a constant: the list stays
+        foreach string name in (("incrementIndex", "decrementIndex", "addIndex")) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-lists=0 ", stats, name + " list kept");
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-scalar-fused-locals-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            string compile_out = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -O%d "
+                "-o %s %s", shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qcc_bin), level,
+                shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))),
+                sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode, string env = "") {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

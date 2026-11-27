@@ -33,10 +33,14 @@ set(_QORE_MACROS_INTERN_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # Creates the targets that write the qcc format fingerprint and the AOT runtime identity header derived from it
 #
 # qore_aot_runtime_identity_targets(STAMP <fingerprint> INPUT_LIST <manifest> INPUT_LABELS <labels>
-#                                   HEADER <identity header>)
+#                                   HEADER <identity header>
+#                                   [DOMAIN_SOURCES <list> DOMAIN_TABLE <table>])
 #
-# - qcc-format-version writes the fingerprint of the files named in INPUT_LIST (QoreWriteContentDigest.cmake), and
-#   then the header (QoreWriteAOTRuntimeIdentity.cmake); each file is rewritten only when its content changes
+# - qcc-format-version writes the table of the functional domains of the builtins declared in the generated sources
+#   named in DOMAIN_SOURCES first, if given (QoreWriteBuiltinDomainTable.cmake; INPUT_LIST names the table, so that the
+#   identity covers it, qore#7508), then the fingerprint of the files named in INPUT_LIST
+#   (QoreWriteContentDigest.cmake), and then the header (QoreWriteAOTRuntimeIdentity.cmake); each file is rewritten
+#   only when its content changes
 # - qore-aot-runtime-identity depends on it, for the targets that compile the header in
 #
 # Both files are written by the commands of a target that runs in every build, never by a custom command: the
@@ -49,7 +53,7 @@ set(_QORE_MACROS_INTERN_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # is newer than a qmod exactly when the qmod was compiled for a previous identity or build configuration, and since it
 # is only rewritten when its content changes, a build in which no fingerprinted source changed rebuilds nothing.
 function(qore_aot_runtime_identity_targets)
-    cmake_parse_arguments(_QARI "" "STAMP;INPUT_LIST;INPUT_LABELS;HEADER" "" ${ARGN})
+    cmake_parse_arguments(_QARI "" "STAMP;INPUT_LIST;INPUT_LABELS;HEADER;DOMAIN_SOURCES;DOMAIN_TABLE" "" ${ARGN})
     foreach(_qari_arg STAMP INPUT_LIST INPUT_LABELS HEADER)
         if (NOT _QARI_${_qari_arg})
             message(FATAL_ERROR "qore_aot_runtime_identity_targets() requires ${_qari_arg}")
@@ -58,7 +62,20 @@ function(qore_aot_runtime_identity_targets)
     if (_QARI_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "qore_aot_runtime_identity_targets(): unknown arguments: ${_QARI_UNPARSED_ARGUMENTS}")
     endif()
+    if ((_QARI_DOMAIN_SOURCES AND NOT _QARI_DOMAIN_TABLE) OR (_QARI_DOMAIN_TABLE AND NOT _QARI_DOMAIN_SOURCES))
+        message(FATAL_ERROR "qore_aot_runtime_identity_targets(): DOMAIN_SOURCES and DOMAIN_TABLE are given together")
+    endif()
+    set(_qari_domain_command)
+    set(_qari_domain_byproducts)
+    if (_QARI_DOMAIN_TABLE)
+        set(_qari_domain_command COMMAND ${CMAKE_COMMAND}
+            -DINPUT_LIST=${_QARI_DOMAIN_SOURCES}
+            -DOUTPUT=${_QARI_DOMAIN_TABLE}
+            -P ${_QORE_MACROS_INTERN_DIR}/QoreWriteBuiltinDomainTable.cmake)
+        set(_qari_domain_byproducts ${_QARI_DOMAIN_TABLE})
+    endif()
     add_custom_target(qcc-format-version
+        ${_qari_domain_command}
         COMMAND ${CMAKE_COMMAND}
             -DINPUT_LIST=${_QARI_INPUT_LIST}
             -DINPUT_LABELS=${_QARI_INPUT_LABELS}
@@ -68,7 +85,7 @@ function(qore_aot_runtime_identity_targets)
             -DINPUT=${_QARI_STAMP}
             -DOUTPUT=${_QARI_HEADER}
             -P ${_QORE_MACROS_INTERN_DIR}/QoreWriteAOTRuntimeIdentity.cmake
-        BYPRODUCTS ${_QARI_STAMP} ${_QARI_HEADER}
+        BYPRODUCTS ${_qari_domain_byproducts} ${_QARI_STAMP} ${_QARI_HEADER}
         COMMENT "Checking the qcc format-version fingerprint and the AOT runtime identity"
         VERBATIM
     )
