@@ -12434,7 +12434,10 @@ static __attribute__((noinline)) uint64_t qore_rt_string_method_join_other(QoreV
     // the finish of the join (a step with a value is made by qore_rt_string_method_join_start()); the join is the
     // string node that the start made, and an inline short string, which has no reference, is given as it is
     assert(value.isNothing());
-    return toBits(first.refSelf());
+    if (!first.isShortString()) {
+        first.getInternalNode()->ref();
+    }
+    return toBits(first);
 }
 
 //! string.method.join.start: the join of the values that a fused map gives, for <list>::join() of the map
