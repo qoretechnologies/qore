@@ -204,7 +204,9 @@ public class HttpAsyncTarget {
         the request without consuming a handler thread; returning @ref nothing allows normal dispatch.
 
         A successful preparation that returns @ref nothing is paired with either @ref onHttpRequest() or
-        @ref cancelPreparedHttpRequest(). The latter is called when handler-pool submission fails.
+        @ref cancelPreparedHttpRequest(). The latter is called when the request is not handled: when its handler-pool
+        submission fails, or when @ref saveDispatchContext() raises an exception on the handler-pool thread that is
+        to run the request (an HTTP/1.1 request).
 
         @warning This callback must be fast and non-blocking because it runs on an async callback dispatcher
         worker.
@@ -216,10 +218,19 @@ public class HttpAsyncTarget {
         return NOTHING;
     }
 
-    #! Cancels request preparation after handler-pool submission fails
+    #! Cancels the preparation of a request that is not handled
     /** The default implementation is a no-op. Targets that reserve capacity in @ref prepareHttpRequest() must
         release it here. This callback is not called when preparation returns a response because no reservation
         should remain in that case.
+
+        It is called once for a prepared request that does not reach @ref onHttpRequest():
+        - when the request's handler-pool submission fails: on the async callback dispatcher worker that prepared
+          the request
+        - when @ref saveDispatchContext() raises an exception on the handler-pool thread that is to run an HTTP/1.1
+          request: on that thread, outside any saved dispatch context (that of the failed save is not restored)
+
+        The request's connection is closed after this callback has returned, without a response; the request still
+        counts for a stop of its listener until then.
 
         @param info connection and request information passed to @ref prepareHttpRequest()
     */
@@ -241,6 +252,11 @@ public class HttpAsyncTarget {
         global), so that handler-pool thread reuse never leaks state from one
         dispatch into the next.  The default implementation is a no-op and
         returns @ref nothing.
+
+        If this method raises an exception for an HTTP/1.1 request, the request is not handled:
+        \c onHttpRequest() is not called, nor is @ref restoreDispatchContext(); the error is logged,
+        @ref cancelPreparedHttpRequest() is called on the same thread, and the connection is closed without a response
+        (qore#7769).  The exception is then raised as the error of the handler-pool task.
 
         @return opaque save data to be passed to @ref restoreDispatchContext() at dispatch end
     */

@@ -328,11 +328,16 @@ draining listener while `listeners_draining` is set (`draining_lids`, filled in 
 
 An HTTP/1.1 dispatch that is handed to the handler pool always ends its count, with no cost on the success path
 (qore#7769):
+- every H1 error path ends the dispatch last, after the target's `onError()` or `cancelPreparedHttpRequest()` and
+  the close of the connection (`endFailedDispatch()`, `endAbortedDispatch()`, `endUnsubmittedDispatch()`), with the
+  dispatch set as the one that the thread runs meanwhile (`running_dispatch`), so that a drain that such a callback
+  waits for ends it; their steps do not depend on each other.
 - the dispatch is submitted with a runner of its own (`submitDispatchToHandlerPool()`, `dispatchTaskRunner()`,
   `runDispatchPoolTask()`, `runDispatchBody()`), whose success path has the shape of `runHandlerBody()`: the same
   handoff and work item, and a `try` around `saveDispatchContext()` only. When it raises an exception, the body is
   called with the thread-local `aborting_dispatch` set: the body reads it first and ends its dispatch
-  (`endAbortedDispatch()`: the count is decremented and the connection closed, the request is not handled); the
+  (`endAbortedDispatch()`: the target's preparation is canceled and the connection closed, then the count ends, so
+  that a stop of the listener returns only after the close; the request is not handled); the
   exception is then raised as before. Nothing is carried in the work item (a member or a key in it was measured at
   +18.5k and +5.5k Ir per pool request).
 - a task that is still queued when the controller stops is run: the controller stops its pool with `stopWait()`,

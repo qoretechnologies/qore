@@ -1606,8 +1606,8 @@ public class HttpAsyncSocketIoController {
         *HttpAsyncTarget target = task.target;
         *code<nothing()> body = task.body;
         if (!exists target || !exists body) {
-            log(LoggerLevel::ERROR, "handler-pool task missing target/body: target=%y body=%y",
-                exists target, exists body);
+            log(LoggerLevel::ERROR, "HTTP/1.1 dispatch task without its %s: the request is not handled",
+                exists target ? "body" : (exists body ? "target" : "target and body"));
             # the body that ends the dispatch is called, if there is one
             if (exists body) {
                 endAbortedDispatchBody(body, NOTHING);
@@ -1630,15 +1630,22 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Calls the body of an HTTP/1.1 dispatch that cannot run, so that it ends its dispatch (qore#7769)
-    private static endAbortedDispatchBody(code<nothing()> body, *hash<ExceptionInfo> ex) {
+    /** The body ends the dispatch with endAbortedDispatch(), whose steps do not depend on each other; an exception
+        that it raises nevertheless is logged here, as the error of the task is the one that is raised
+    */
+    private endAbortedDispatchBody(code<nothing()> body, *hash<ExceptionInfo> ex) {
         Priv::aborting_dispatch = ex ?? <ExceptionInfo>{"err": "HTTP-DISPATCH-ERROR",
             "desc": "the handler-pool task has no target"};
+        on_exit Priv::aborting_dispatch = NOTHING;
         try {
             body();
-        } catch (hash<ExceptionInfo> ex) {
-            # the error of the task is the one that is raised
+        } catch (hash<ExceptionInfo> body_ex) {
+            try {
+                log(LoggerLevel::ERROR, "Error ending an HTTP/1.1 dispatch that cannot run: %s: %s: %s",
+                    get_ex_pos(body_ex), body_ex.err, body_ex.desc);
+            } catch () {
+            }
         }
-        Priv::aborting_dispatch = NOTHING;
     }
 
     #! Runs a task of submitToHandlerPool(); runDispatchPoolTask() is its variant for HTTP/1.1 dispatches (keep in step)
@@ -5460,22 +5467,10 @@ public class HttpAsyncSocketIoController {
                 handled1 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
-            if (Priv::running_dispatch) {
-                Priv::running_dispatch = NOTHING;
-                if (draining) {
-                    endDispatch(dispatch_uh, dispatch_counter);
-                } else {
-                    dispatch_counter.dec();
-                }
-            }
-            log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
-            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
-                dispatch_uh, "inline request");
-            if (dispatch_state != HttpConnectionState::Http3
-                    && dispatch_state != HttpConnectionState::Http3Sending) {
-                try { dispatch_sock.close(); } catch () {}
-            }
+            # the connection is closed, then the dispatch ends, unless a drain in this thread ended it
+            endFailedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, dispatch_listener,
+                dispatch_cx, ex, "handling inline request", "inline request",
+                dispatch_state != HttpConnectionState::Http3 && dispatch_state != HttpConnectionState::Http3Sending);
             return;
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
@@ -5503,23 +5498,10 @@ public class HttpAsyncSocketIoController {
                 handled2 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
-            if (Priv::running_dispatch) {
-                Priv::running_dispatch = NOTHING;
-                if (draining) {
-                    endDispatch(dispatch_uh, dispatch_counter);
-                } else {
-                    dispatch_counter.dec();
-                }
-            }
-            log(LoggerLevel::ERROR, "Error preparing request for %y: %s: %s",
-                dispatch_uh, ex.err, ex.desc);
-            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
-                dispatch_cx, dispatch_uh, "request preparation");
-            if (dispatch_state != HttpConnectionState::Http3
-                    && dispatch_state != HttpConnectionState::Http3Sending) {
-                try { dispatch_sock.close(); } catch () {}
-            }
+            # the connection is closed, then the dispatch ends, unless a drain in this thread ended it
+            endFailedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, dispatch_listener,
+                dispatch_cx, ex, "preparing request", "request preparation",
+                dispatch_state != HttpConnectionState::Http3 && dispatch_state != HttpConnectionState::Http3Sending);
             return;
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
@@ -5544,7 +5526,9 @@ public class HttpAsyncSocketIoController {
             # the task cannot run the request (its target's saveDispatchContext() raised an exception): the dispatch
             # ends without it (see runDispatchBody(), qore#7769)
             if (Priv::aborting_dispatch) {
-                endAbortedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info);
+                endAbortedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info,
+                    dispatch_state != HttpConnectionState::Http3
+                        && dispatch_state != HttpConnectionState::Http3Sending);
                 return;
             }
             # the dispatch that this thread runs, which a drain that this thread waits for ends (see waitDrain())
@@ -5557,23 +5541,11 @@ public class HttpAsyncSocketIoController {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
-                if (Priv::running_dispatch) {
-                    Priv::running_dispatch = NOTHING;
-                    if (draining) {
-                        endDispatch(dispatch_uh, dispatch_counter);
-                    } else {
-                        dispatch_counter.dec();
-                    }
-                }
-                log(LoggerLevel::ERROR, "Error handling keep-alive request for %y: %s: %s",
-                    dispatch_uh, ex.err, ex.desc);
-                dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
-                    dispatch_uh, "keep-alive request");
-                if (dispatch_state != HttpConnectionState::Http3
-                        && dispatch_state != HttpConnectionState::Http3Sending) {
-                    try { dispatch_sock.close(); } catch () {}
-                }
+                # the connection is closed, then the dispatch ends, unless a drain in this thread ended it
+                endFailedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, dispatch_listener,
+                    dispatch_cx, ex, "handling keep-alive request", "keep-alive request",
+                    dispatch_state != HttpConnectionState::Http3
+                        && dispatch_state != HttpConnectionState::Http3Sending);
                 return;
             }
             # the dispatch ends here, unless a drain in this thread ended it
@@ -5593,24 +5565,10 @@ public class HttpAsyncSocketIoController {
         try {
             submitDispatchToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here: the connection is closed below
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
-            }
-            log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
-                dispatch_uh, ex.err, ex.desc);
-            try {
-                dispatch_target.cancelPreparedHttpRequest(conn_info);
-            } catch (hash<ExceptionInfo> cancel_ex) {
-                log(LoggerLevel::ERROR, "Failed to cancel request preparation for %y: %s: %s",
-                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
-            }
-            if (dispatch_state != HttpConnectionState::Http3
-                    && dispatch_state != HttpConnectionState::Http3Sending) {
-                try { dispatch_sock.close(); } catch () {}
-            }
+            # the connection is closed, then the dispatch ends
+            endUnsubmittedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info, ex,
+                "Failed to submit handler",
+                dispatch_state != HttpConnectionState::Http3 && dispatch_state != HttpConnectionState::Http3Sending);
         }
     }
 
@@ -5619,25 +5577,105 @@ public class HttpAsyncSocketIoController {
     /** As when the task cannot be submitted (see handleHeaderComplete()): the error is logged, the target's
         preparation of the request is canceled (HttpAsyncTarget::cancelPreparedHttpRequest(): a target that reserves
         resources in prepareHttpRequest() releases them there), and the connection is closed; the target's onError()
-        is not called, as the request never reached the target's handling
+        is not called, as the request never reached the target's handling.
+
+        The dispatch ends last, after the connection was closed, so that a stop of the request's listener, which waits
+        for it, returns only then; the steps do not depend on each other: each one is taken when another raises an
+        exception
     */
     private endAbortedDispatch(string uh, Counter dispatch_counter, Socket sock, HttpAsyncTarget target,
-            hash<HttpConnectionInfo> conn_info) {
+            hash<HttpConnectionInfo> conn_info, bool close_sock) {
         *hash<ExceptionInfo> ex = Priv::aborting_dispatch;
-        if (draining) {
-            endDispatch(uh, dispatch_counter);
-        } else {
-            dispatch_counter.dec();
+        # the dispatch that this thread runs, which a drain that the cancel waits for ends (see waitDrain())
+        Priv::running_dispatch = dispatch_counter;
+        on_exit endRunningDispatch(uh, dispatch_counter);
+        try {
+            log(LoggerLevel::ERROR, "Request of %y not handled: the dispatch context of the handler could not be "
+                "saved: %s: %s", uh, ex.err, ex.desc);
+        } catch () {
         }
-        log(LoggerLevel::ERROR, "Request of %y not handled: the dispatch context of the handler could not be saved: "
-            "%s: %s", uh, ex.err, ex.desc);
+        cancelPreparedRequest(uh, target, conn_info);
+        if (close_sock) {
+            try { sock.close(); } catch () {}
+        }
+    }
+
+    #! Ends an HTTP/1.1 dispatch whose task could not be submitted to the handler pool: the error is logged, the
+    #! target's preparation of the request is canceled and the connection is closed, then the dispatch ends
+    /** As endAbortedDispatch(), in the thread that submitted the task, which runs the dispatch again
+    */
+    private endUnsubmittedDispatch(string uh, Counter dispatch_counter, Socket sock, HttpAsyncTarget target,
+            hash<HttpConnectionInfo> conn_info, hash<ExceptionInfo> ex, string msg, bool close_sock) {
+        # the dispatch that this thread runs, which a drain that the cancel waits for ends (see waitDrain())
+        Priv::running_dispatch = dispatch_counter;
+        on_exit endRunningDispatch(uh, dispatch_counter);
+        try {
+            log(LoggerLevel::ERROR, "%s for %y: %s: %s", msg, uh, ex.err, ex.desc);
+        } catch () {
+        }
+        cancelPreparedRequest(uh, target, conn_info);
+        if (close_sock) {
+            try { sock.close(); } catch () {}
+        }
+    }
+
+    #! Cancels the target's preparation of an HTTP/1.1 request that is not handled; an error is logged
+    private cancelPreparedRequest(string uh, HttpAsyncTarget target, hash<HttpConnectionInfo> conn_info) {
         try {
             target.cancelPreparedHttpRequest(conn_info);
         } catch (hash<ExceptionInfo> cancel_ex) {
-            log(LoggerLevel::ERROR, "Failed to cancel request preparation for %y: %s: %s", uh, cancel_ex.err,
-                cancel_ex.desc);
+            try {
+                log(LoggerLevel::ERROR, "Failed to cancel request preparation for %y: %s: %s", uh, cancel_ex.err,
+                    cancel_ex.desc);
+            } catch () {
+            }
         }
-        try { sock.close(); } catch () {}
+    }
+
+    #! Ends an HTTP/1.1 dispatch whose request failed in this thread: the error is logged, the target's onError() is
+    #! called and the connection is closed, then the dispatch ends
+    /** The dispatch ends last, so that a stop of the request's listener, which waits for it, returns only when the
+        connection was closed; the steps do not depend on each other.  While they run, the dispatch is the one that
+        this thread runs (\c Priv::running_dispatch), so that a drain that onError() waits for ends it (see
+        waitDrain())
+    */
+    private endFailedDispatch(string uh, Counter dispatch_counter, Socket sock, HttpAsyncTarget target,
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx, hash<ExceptionInfo> ex, string what,
+            string phase, bool close_sock) {
+        on_exit endRunningDispatch(uh, dispatch_counter);
+        try {
+            log(LoggerLevel::ERROR, "Error %s for %y: %s: %s", what, uh, ex.err, ex.desc);
+        } catch () {
+        }
+        try {
+            dispatchOnError(target, sock, ex, listener, cx, uh, phase);
+        } catch () {
+        }
+        if (close_sock) {
+            try { sock.close(); } catch () {}
+        }
+    }
+
+    #! Ends the HTTP/1.1 dispatch that this thread runs, unless a drain in this thread ended it
+    private endRunningDispatch(string uh, Counter dispatch_counter) {
+        if (!Priv::running_dispatch) {
+            return;
+        }
+        Priv::running_dispatch = NOTHING;
+        if (draining) {
+            try {
+                endDispatch(uh, dispatch_counter);
+                return;
+            } catch (hash<ExceptionInfo> ex) {
+                # the dispatch still ends
+                try {
+                    log(LoggerLevel::ERROR, "Error ending the dispatch of %y while draining: %s: %s", uh, ex.err,
+                        ex.desc);
+                } catch () {
+                }
+            }
+        }
+        dispatch_counter.dec();
     }
 
     #! Handles completion of H1 async body reading
@@ -5736,20 +5774,9 @@ public class HttpAsyncSocketIoController {
                 handled3 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
-            if (Priv::running_dispatch) {
-                Priv::running_dispatch = NOTHING;
-                if (draining) {
-                    endDispatch(dispatch_uh, dispatch_counter);
-                } else {
-                    dispatch_counter.dec();
-                }
-            }
-            log(LoggerLevel::ERROR, "Error preparing request after body read for %y: %s: %s",
-                dispatch_uh, ex.err, ex.desc);
-            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
-                dispatch_cx, dispatch_uh, "request preparation after body read");
-            try { dispatch_sock.close(); } catch () {}
+            # the connection is closed, then the dispatch ends, unless a drain in this thread ended it
+            endFailedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, dispatch_listener,
+                dispatch_cx, ex, "preparing request after body read", "request preparation after body read", True);
             return;
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
@@ -5771,7 +5798,7 @@ public class HttpAsyncSocketIoController {
             # the task cannot run the request (its target's saveDispatchContext() raised an exception): the dispatch
             # ends without it (see runDispatchBody(), qore#7769)
             if (Priv::aborting_dispatch) {
-                endAbortedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info);
+                endAbortedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info, True);
                 return;
             }
             # the dispatch that this thread runs, which a drain that this thread waits for ends (see waitDrain())
@@ -5784,20 +5811,9 @@ public class HttpAsyncSocketIoController {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
-                if (Priv::running_dispatch) {
-                    Priv::running_dispatch = NOTHING;
-                    if (draining) {
-                        endDispatch(dispatch_uh, dispatch_counter);
-                    } else {
-                        dispatch_counter.dec();
-                    }
-                }
-                log(LoggerLevel::ERROR, "Error handling request after body read for %y: %s: %s",
-                    dispatch_uh, ex.err, ex.desc);
-                dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
-                    dispatch_uh, "request after body read");
-                try { dispatch_sock.close(); } catch () {}
+                # the connection is closed, then the dispatch ends, unless a drain in this thread ended it
+                endFailedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, dispatch_listener,
+                    dispatch_cx, ex, "handling request after body read", "request after body read", True);
                 return;
             }
             # the dispatch ends here, unless a drain in this thread ended it
@@ -5817,21 +5833,9 @@ public class HttpAsyncSocketIoController {
         try {
             submitDispatchToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here: the connection is closed below
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
-            }
-            log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
-                dispatch_uh, ex.err, ex.desc);
-            try {
-                dispatch_target.cancelPreparedHttpRequest(conn_info);
-            } catch (hash<ExceptionInfo> cancel_ex) {
-                log(LoggerLevel::ERROR, "Failed to cancel request preparation after body read for %y: %s: %s",
-                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
-            }
-            try { dispatch_sock.close(); } catch () {}
+            # the connection is closed, then the dispatch ends
+            endUnsubmittedDispatch(dispatch_uh, dispatch_counter, dispatch_sock, dispatch_target, conn_info, ex,
+                "Failed to submit handler after body read", True);
         }
     }
 

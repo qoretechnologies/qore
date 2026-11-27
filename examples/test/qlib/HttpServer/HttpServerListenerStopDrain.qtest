@@ -133,6 +133,16 @@ class HoldTarget inherits HttpAsyncTarget {
         Queue context_failures();
         #! receives the path of each request whose preparation was canceled
         Queue prepared_cancels();
+        #! if set, a cancel of a request's preparation waits until it is zero (see closeBeforeStopTest())
+        *Counter cancel_gate;
+        #! receives the count of the listener's dispatches during each cancel of a request's preparation
+        Queue cancel_counts();
+        #! receives "cancel-returned" when a held cancel of a request's preparation returns
+        Queue cancel_returns();
+        #! if set, a failing saveDispatchContext() waits until it is zero before it raises (see drainingAbortTest())
+        *Counter save_gate;
+        #! receives "save-entered" when a failing saveDispatchContext() waits for save_gate
+        Queue save_entered();
     }
 
     constructor(HttpAsyncTarget d) {
@@ -165,9 +175,18 @@ class HoldTarget inherits HttpAsyncTarget {
         return d.prepareHttpRequest(info);
     }
 
-    #! records each cancel of a request's preparation (see contextFailureTest())
+    #! records each cancel of a request's preparation (see contextFailureTest()), and holds it if cancel_gate is set
     cancelPreparedHttpRequest(hash<HttpConnectionInfo> info) {
+        *Counter dc = info.listener.dispatch_counter;
+        cancel_counts.push(dc ? dc.getCount() : -1);
         prepared_cancels.push(info.hdr.path);
+        *Counter gate = cancel_gate;
+        if (gate) {
+            if (gate.waitForZero(HangTimeout)) {
+                throw "TEST-ERROR", "the held cancel was not released";
+            }
+            cancel_returns.push("cancel-returned");
+        }
         d.cancelPreparedHttpRequest(info);
     }
 
@@ -197,6 +216,13 @@ class HoldTarget inherits HttpAsyncTarget {
         # a target whose dispatch context cannot be saved for the next task (see contextFailureTest())
         if (fail_context) {
             fail_context = False;
+            *Counter gate = save_gate;
+            if (gate) {
+                save_entered.push("save-entered");
+                if (gate.waitForZero(HangTimeout)) {
+                    throw "TEST-ERROR", "the held save was not released";
+                }
+            }
             context_failures.push("failed");
             throw "CONTEXT-ERROR", "the dispatch context cannot be saved";
         }
@@ -387,6 +413,12 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
             addTestCase(sprintf("h1: a request%s whose target cannot save its dispatch context does not hold a "
                 "listener's stop", post ? " with a body" : ""), \contextFailureTest(), post);
         }
+        addTestCase("h1: a stop waits for the close of a request whose dispatch context cannot be saved",
+            \closeBeforeStopTest());
+        addTestCase("h1: a request whose dispatch context cannot be saved during a drain ends the drain",
+            \drainingAbortTest());
+        addTestCase("h1: the handler thread of a request whose dispatch context cannot be saved serves the next one",
+            \singleThreadAfterAbortTest());
         addTestCase("h1: a request queued in the handler pool at the stop of the server ends a listener's stop",
             \queuedDispatchTest());
         addTestCase("h1: a request whose task the handler pool cancels ends the wait of a listener's stop",
@@ -421,7 +453,7 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
 
     #! Starts a server with a listener of the given protocol and a second HTTP/1.1 listener
     private hash<auto> startServer(string proto, DrainTestHandler h, timeout drain_timeout = LongDrain,
-            *LoggerAppender appender, *AbstractHttpRequestHandler ws) {
+            *LoggerAppender appender, *AbstractHttpRequestHandler ws, *int max_handler_threads) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("needs a debug build of the library for the stop hooks of HttpListener");
         }
@@ -429,7 +461,11 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
         if (appender) {
             logger.addAppender(appender);
         }
-        HoldServer srv(<HttpServerOptionInfo>{"logger": logger, "drain_timeout": drain_timeout});
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{"logger": logger, "drain_timeout": drain_timeout};
+        if (max_handler_threads) {
+            opts.max_handler_threads = max_handler_threads;
+        }
+        HoldServer srv(opts);
         if (ws) {
             srv.setHandler("ws", "^ws", NOTHING, ws);
         }
@@ -1386,5 +1422,115 @@ class HttpServerListenerStopDrainTest inherits QUnit::Test {
         assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
         assertFalse(ev.seen.contains("drain-timeout"), sprintf("the drain ended at once: %y", ev.seen));
         assertEq(0, srv.hold.prepared_cancels.size(), "the preparation of the request is canceled once");
+    }
+
+    #! The dispatch of a request that cannot run ends after its preparation was canceled and its connection closed
+    /** So that the stop of its listener returns only when the connection is closed (qore#7769): the cancel is held,
+        and the request still counts for the stop meanwhile
+    */
+    closeBeforeStopTest() {
+        DrainTestHandler h();
+        # the drain does not end while the request is counted: its timeout ends it
+        hash<auto> s = startServer("h1", h, 100ms);
+        HoldServer srv = s.srv;
+        Counter gate(1);
+        on_exit {
+            if (gate.getCount()) {
+                gate.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        srv.hold.cancel_gate = gate;
+        srv.hold.fail_context = True;
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("failed", srv.hold.context_failures.get(HangTimeout), "the dispatch context could not be saved");
+        assertEq("/quick", srv.hold.prepared_cancels.get(HangTimeout), "the preparation of the request is canceled");
+        # the cancel is held now
+        assertEq(1, srv.hold.cancel_counts.get(HangTimeout), "the request still counts during the cancel");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        # the stop has closed the listener's connections and waits for its dispatches
+        assertEq("connections-closed", ev.waitFor(("connections-closed", "stop-returned")),
+            "the stop waits for the request");
+        gate.dec();
+        assertEq("cancel-returned", srv.hold.cancel_returns.get(HangTimeout), "the held cancel returns");
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the request is closed");
+        assertEq(0, srv.hold.prepared_cancels.size(), "the preparation of the request is canceled once");
+    }
+
+    #! A request whose dispatch context cannot be saved while its listener drains ends its dispatch for the drain
+    drainingAbortTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h);
+        HoldServer srv = s.srv;
+        Counter gate(1);
+        on_exit {
+            if (gate.getCount()) {
+                gate.dec();
+            }
+            StopEvents::clearHooks();
+            srv.stop();
+        }
+        StopEvents ev(s.li.id);
+        ev.setHooks();
+
+        srv.hold.save_gate = gate;
+        srv.hold.fail_context = True;
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the task is held in the target's saveDispatchContext() before it raises
+        assertEq("save-entered", srv.hold.save_entered.get(HangTimeout), "the task saves the dispatch context");
+
+        Counter stop_done = stopListener(srv, s.li.id, ev);
+        assertEq("drain-started", ev.waitFor(("drain-started", "stop-returned")), "the drain of the listener starts");
+        # the failure while the listener drains (the draining branch of endAbortedDispatch())
+        gate.dec();
+        assertEq("failed", srv.hold.context_failures.get(HangTimeout), "the dispatch context could not be saved");
+        assertEq("/quick", srv.hold.prepared_cancels.get(HangTimeout), "the preparation of the request is canceled");
+        assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the request is closed");
+        assertEq(0, stop_done.waitForZero(HangTimeout), "the stop of the listener returns");
+        # the drain ended with the request's dispatch, long before its timeout
+        assertTrue(ev.seen.contains("drain-ended"), sprintf("the drain ended: %y", ev.seen));
+        assertFalse(ev.seen.contains("drain-timeout"), sprintf("the drain did not time out: %y", ev.seen));
+    }
+
+    #! With one handler thread, the requests after one whose dispatch context cannot be saved are answered normally
+    singleThreadAfterAbortTest() {
+        DrainTestHandler h();
+        hash<auto> s = startServer("h1", h, LongDrain, NOTHING, NOTHING, 1);
+        HoldServer srv = s.srv;
+        on_exit srv.stop();
+
+        srv.hold.fail_context = True;
+        {
+            Socket sock();
+            on_exit sock.close();
+            sock.connect("localhost:" + s.li.port, HangTimeout);
+            sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq("failed", srv.hold.context_failures.get(HangTimeout), "the dispatch context could not be saved");
+            assertEq("SOCKET-CLOSED", readEnd(sock), "the connection of the request is closed");
+        }
+        # the next requests run on the same handler thread, whose state of the failed task was cleared
+        Socket sock();
+        on_exit sock.close();
+        sock.connect("localhost:" + s.li.port, HangTimeout);
+        for (int i = 0; i < 2; ++i) {
+            sock.send("GET /quick HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readResponse(sock);
+            assertEq(200, resp.status_code, sprintf("request %d after the failure is answered", i + 1));
+            assertEq("ok", resp.body, sprintf("request %d after the failure is handled", i + 1));
+        }
+        assertEq(1, srv.hold.prepared_cancels.size(), "only the failed request's preparation is canceled");
+        assertEq(0, srv.hold.context_failures.size(), "the dispatch context is saved for the next requests");
     }
 }
