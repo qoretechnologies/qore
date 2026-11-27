@@ -117,8 +117,7 @@ class InstanceofTypeParamTest inherits QUnit::Test {
         checkWorkerOutput("aot", res.out);
         # the same without the cache of the resolved types of instanceof (#5976)
         {
-            # the output on stdout followed by the output on stderr, as of the execution modes, apart from the module
-            # loader's warnings and the native compilation trace, which are not output of the program
+            # checked as the run above
             hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
                 sprintf("QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE=1 LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
             assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", "aot without type cache", res.out));
