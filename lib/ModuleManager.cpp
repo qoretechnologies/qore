@@ -2502,6 +2502,10 @@ QoreProgram* QoreBuiltinModule::getModuleProgram() const {
     return qore_is_aot_user_module(name.c_str()) ? qore_aot_get_module_pgm(name.c_str()) : nullptr;
 }
 
+bool QoreBuiltinModule::reexportsInNamespaceInit() const {
+    return qore_is_aot_user_module(name.c_str());
+}
+
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
     QoreModuleContextHelper qmc(name.c_str(), tpgm, xsink);
     // issue #3592: must add feature first
@@ -7663,8 +7667,28 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // the direct requirements and the reexports of the module (#7796): an AOT user module has those of the
     // directives of its source, which its image records, and which it loads in its initialization, not in a module
     // context of its own; a binary module has the dependencies that it declares
-    if (mod_info.is_aot && qore_is_aot_user_module(name)) {
-        qore_aot_get_module_requirements(name, bmi->reqmod, bmi->rmod);
+    if (qore_is_aot_user_module(name)) {
+        name_vec_t required, reexported;
+        qore_aot_get_module_requirements(name, required, reexported);
+        // a module compiled before its image recorded its direct requirements has its recorded dependencies, which
+        // can name the "qore" feature and features that are builtin
+        for (const std::string& dep : required) {
+            if (dep != "qore" && qoreFeatureList.find(dep) == qoreFeatureList.end()) {
+                bmi->addModuleRequirement(dep.c_str());
+            }
+        }
+        for (const std::string& dep : reexported) {
+            bool dup = false;
+            for (const std::string& r : bmi->rmod) {
+                if (r == dep) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                bmi->addModuleReExport(dep.c_str());
+            }
+        }
     } else {
         for (const std::string& dep : mod_info.dependencies) {
             bmi->addModuleRequirement(dep.c_str());

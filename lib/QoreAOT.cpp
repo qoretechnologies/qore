@@ -1383,6 +1383,8 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
     qore_program_private* pp, const char* cancel_context, const char* skip_feature = nullptr,
     const std::vector<std::string>* explicit_deps = nullptr);
+static std::vector<std::string> aotLoadedReexports(const qore_program_private* pp,
+    const std::vector<std::string>& reexports);
 static void aotAddDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
     const std::string& dep, const char* skip_feature = nullptr);
 static void aotAddFeatureDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
@@ -26691,11 +26693,29 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
         // there; failed optional loads must remain optional. The raw scanner's
         // returned dependency list is therefore not used for qmod hard-dep
         // serialization.
-        if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
-            p += 11;
+        // %try-reexport-module is the same request with reexport: a module that it loads is reexported as well
+        // (#7796); the reexports that the scan finds are filtered in the same way (aotLoadedReexports())
+        bool try_reexport = false;
+        if (p + 20 <= end && strncmp(p, "%try-reexport-module", 20) == 0) {
+            try_reexport = true;
+        }
+        if (try_reexport || (p + 11 <= end && strncmp(p, "%try-module", 11) == 0)) {
+            p += try_reexport ? 20 : 11;
             // Skip whitespace after %try-module
             while (p < end && (*p == ' ' || *p == '\t')) {
                 ++p;
+            }
+            // skip the optional variable declaration that receives the load error: "(var_decl)"
+            if (p < end && *p == '(') {
+                while (p < end && *p != ')' && *p != '\n') {
+                    ++p;
+                }
+                if (p < end && *p == ')') {
+                    ++p;
+                }
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
             }
             // Now read the module name (stop at whitespace, newline, or version operators)
             const char* name_start = p;
@@ -26717,6 +26737,9 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
                 }
                 if (dep_name != "qore") {
                     deps.push_back(dep_name);
+                    if (try_reexport && reexport_deps) {
+                        reexport_deps->push_back(dep_name);
+                    }
                 }
             }
         }
@@ -28868,7 +28891,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             error = "operation cancelled during AOT module dependency serialization";
             return false;
         }
-        serializeReexportModules(writer, reexport_mods);
+        serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
         // Pass module name to filter out items from reexported dependencies
         std::string ns_error;
@@ -29403,7 +29426,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 error = "operation cancelled during AOT split module dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             // Pass module name to filter out items from reexported dependencies
             std::string ns_error;
@@ -29847,6 +29870,23 @@ static bool aotProgramHasLoadedDependency(const qore_program_private* pp, const 
     }
     return pp->featureList.find(dep) != pp->featureList.end()
         || pp->userFeatureList.find(dep) != pp->userFeatureList.end();
+}
+
+//! Returns the reexports that the directive scan found (extractAllDependencies()) that the Program loaded
+/** A reexport whose module the Program did not load (a failed %try-reexport-module request, a directive in a
+    conditional block that was not parsed) is not one: the module's namespace initialization would load it when the
+    module is applied to a Program, and get_module_hash() reports it (#7796)
+*/
+static std::vector<std::string> aotLoadedReexports(const qore_program_private* pp,
+        const std::vector<std::string>& reexports) {
+    std::vector<std::string> rv;
+    std::unordered_set<std::string> seen;
+    for (const std::string& dep : reexports) {
+        if (aotProgramHasLoadedDependency(pp, dep) && seen.insert(dep).second) {
+            rv.push_back(dep);
+        }
+    }
+    return rv;
 }
 
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
@@ -33446,7 +33486,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "operation cancelled during AOT module-fragment dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             // Pass compile_file=target_canon so the metadata blob lists
             // only this file's contributions.
@@ -33991,7 +34031,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT aggregated-module dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             std::string ns_error;
             if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str(),
@@ -34566,7 +34606,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT archive dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             std::string ns_error;
             if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str(),

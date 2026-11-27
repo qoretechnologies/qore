@@ -2580,7 +2580,9 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
       the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
       a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
       module's code loads at run time; for a binary module, the dependencies that its module description declares
-      (\c QoreModuleInfo::dependencies)
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2626,7 +2628,9 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
       the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
       a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
       module's code loads at run time; for a binary module, the dependencies that its module description declares
-      (\c QoreModuleInfo::dependencies)
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @par Example:
     @code{.py}
@@ -2677,7 +2681,9 @@ list<hash<auto>> get_module_list() {
       the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
       a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
       module's code loads at run time; for a binary module, the dependencies that its module description declares
-      (\c QoreModuleInfo::dependencies)
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
@@ -2723,7 +2729,9 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
       the reexported modules; a @ref try-module "%try-module" request that failed (when the module was compiled, for
       a compiled module) is not a requirement, nor is a module that the required modules require, nor one that the
       module's code loads at run time; for a binary module, the dependencies that its module description declares
-      (\c QoreModuleInfo::dependencies)
+      (\c QoreModuleInfo::dependencies); for an AOT module compiled by a qcc that did not record its direct
+      requirements, the list is approximate: it is the module's recorded dependencies, which can include modules
+      that it requires only through other modules
 
     @par Example:
     @code{.py}

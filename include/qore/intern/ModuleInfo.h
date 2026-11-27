@@ -349,8 +349,17 @@ public:
 
     DLLLOCAL void addToProgram(QoreProgram* pgm, ExceptionSink& xsink) const {
         addToProgramImpl(pgm, xsink);
-        if (!xsink)
+        // the namespace initialization of an AOT user module loads the modules that it reexports itself, before it
+        // merges the module's namespace, and only when it gets that far; they are not loaded again here, also not
+        // after an initialization that stopped and handled its error itself (#7796)
+        if (!xsink && !rmod.empty() && !reexportsInNamespaceInit()) {
             reexport(xsink, pgm);
+        }
+    }
+
+    //! returns true if the module's namespace initialization loads the modules that it reexports (rmod) itself
+    DLLLOCAL virtual bool reexportsInNamespaceInit() const {
+        return false;
     }
 
     DLLLOCAL bool equalTo(const QoreAbstractModule* m) const {
@@ -1727,6 +1736,9 @@ public:
 
     //! returns the Program of an AOT user module, or nullptr for a binary module
     DLLLOCAL QoreProgram* getModuleProgram() const override;
+
+    //! returns true for an AOT user module, whose namespace initialization loads its reexported modules
+    DLLLOCAL bool reexportsInNamespaceInit() const override;
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s' (feature '%s'): %s calling module_delete: %p\n",
