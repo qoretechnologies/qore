@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the module of FunctionReferenceFastPath.q: its functions run in the module's Program, also when the script calls
+# them through references that it made
+
+%modern
+
+module FunctionReferenceFastPathModule {
+    version = "1.0";
+    desc = "functions called through references for the tests of qore#5578";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+# a function that only the module's code calls: the module's functions run in its Program, which resolves it
+int sub mod_internal_double(int x) {
+    return x * 2;
+}
+
+public int sub mod_step(int x) {
+    return mod_internal_double(x) + 1;
+}
+
+public int sub mod_throw(int x) {
+    throw "MODULE-FUNCREF-ERROR", sprintf("module x=%d", x), x;
+}
+
+public code sub mod_get_ref() {
+    return \mod_step();
+}
+
+public int sub mod_call(code f, int x) {
+    return f(x);
+}

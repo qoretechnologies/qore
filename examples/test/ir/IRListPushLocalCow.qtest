@@ -140,7 +140,9 @@ const PushCount = 1000;
 # the pushes did not push every element; a few lists can be created outside the pushes (the count reads themselves,
 # a tier-up), never one per push
 string sub classify(code<hash<auto>(int)> measure) {
-    hash<auto> h = measure(PushCount);
+    # through the generic call path: a call through the reference would take the runtime's fast call of the function
+    # (qore#5578), which in the JIT and tiered modes promotes it to native code before its first call
+    hash<auto> h = call_function(measure, PushCount);
     if (h.size != PushCount) {
         return \"error\";
     }
