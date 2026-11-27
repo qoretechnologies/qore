@@ -2355,11 +2355,11 @@ static constexpr unsigned QORE_TZ_MAX_SYMLINKS = 40;
 
 //! sets the name of a directory entry as it is stored (qore#7592)
 /** On macOS, whose file systems do not distinguish the case of names by default, the name is the stored name, which
-    can differ from \a comp in case; on other systems, whose file systems distinguish case, it is \a comp
-
-    @return 0 for OK, -1 if the entry does not exist or its name cannot be read
+    can differ from \a comp in case; on other systems, whose file systems distinguish case, and if the stored name
+    cannot be read (a missing entry, which the walk then does not open, or a file system without the attribute), it
+    is \a comp
 */
-static int get_entry_name(int dirfd, const std::string& comp, std::string& name) {
+static void get_entry_name(int dirfd, const std::string& comp, std::string& name) {
 #ifdef __APPLE__
     struct attrlist al;
     memset(&al, 0, sizeof al);
@@ -2373,23 +2373,25 @@ static int get_entry_name(int dirfd, const std::string& comp, std::string& name)
         char buf[NAME_MAX * 3 + 1];
     } __attribute__((aligned(4), packed));
     NameBuf nb;
-    if (getattrlistat(dirfd, comp.c_str(), &al, &nb, sizeof nb, FSOPT_NOFOLLOW)) {
-        return -1;
+    if (!getattrlistat(dirfd, comp.c_str(), &al, &nb, sizeof nb, FSOPT_NOFOLLOW)) {
+        // the name must be within the returned data and end with a NUL character; the offset is relative to the
+        // reference
+        size_t avail = std::min(static_cast<size_t>(nb.len), sizeof nb);
+        size_t ref_pos = offsetof(NameBuf, ref);
+        int32_t off = nb.ref.attr_dataoffset;
+        size_t len = nb.ref.attr_length;
+        if (off >= static_cast<int32_t>(sizeof nb.ref) && len && ref_pos + static_cast<size_t>(off) + len <= avail) {
+            const char* start = reinterpret_cast<const char*>(&nb) + ref_pos + off;
+            if (!start[len - 1]) {
+                name.assign(start, len - 1);
+                return;
+            }
+        }
     }
-    // the name must be within the returned data and end with a NUL character
-    const char* start = reinterpret_cast<const char*>(&nb.ref) + nb.ref.attr_dataoffset;
-    const char* end = reinterpret_cast<const char*>(&nb) + std::min(static_cast<size_t>(nb.len), sizeof nb);
-    if (nb.ref.attr_dataoffset < static_cast<int32_t>(sizeof nb.ref) || start >= end || !nb.ref.attr_length
-            || nb.ref.attr_length > static_cast<uint32_t>(end - start) || start[nb.ref.attr_length - 1]) {
-        return -1;
-    }
-    name.assign(start, nb.ref.attr_length - 1);
-    return 0;
 #else
     (void)dirfd;
-    name = comp;
-    return 0;
 #endif
+    name = comp;
 }
 
 //! opens the zoneinfo file of a canonical region name if it is reached inside of the zoneinfo directory
@@ -2472,9 +2474,7 @@ static int open_region_file(const QoreString& root, const char* region, std::str
         // the component is the last of the region as given if it is the last one and in the region's part of the path
         bool region_last = false;
         if (want_entry) {
-            if (get_entry_name(dirs.top(), comp, entry_name)) {
-                return -1;
-            }
+            get_entry_name(dirs.top(), comp, entry_name);
             size_t start = pos - 1 - comp.size();
             region_last = last && start >= todo.size() - region_tail;
         }
@@ -2947,7 +2947,15 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadSpelling(const char* region
         raiseUnknownRegion(region, xsink);
         return nullptr;
     }
-    rv = getZone(entry, data, sbuf, primary_name, true, region_aliases, label, xsink);
+    // an error in the data names the region as given
+    ExceptionSink entry_xsink;
+    rv = getZone(entry, data, sbuf, primary_name, true, region_aliases, label, &entry_xsink);
+    if (entry_xsink) {
+        assert(!rv);
+        entry_xsink.clear();
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
     if (rv) {
         // the spelling is remembered, so that it is not walked for each use; the map is bounded (it is emptied when it
         // is full), and it is only a cache, so a failure to remember is ignored

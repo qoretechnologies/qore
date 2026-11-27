@@ -213,7 +213,7 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("dbg_tz_region_cache() is only in debug builds of the library");
         }
-        if ((PlatformOS == "Windows")) {
+        if (PlatformOS == "Windows") {
             testSkip("the region spelling cache is not used on Windows");
         }
         if (pool.size() < n) {
@@ -244,7 +244,10 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
     }
 
     testBounded() {
-        list<hash<TzSpelling>> sps = take(ZoneLimit + 3 * NameLimit + 4);
+        # the spellings of this case and two for restricted code
+        list<hash<TzSpelling>> sps = take(ZoneLimit + 3 * NameLimit + 4 + 2);
+        list<hash<TzSpelling>> rsps = sps[sps.size() - 2..];
+        splice sps, sps.size() - 2;
         hash<auto> st0 = stats();
         int zone_limit = st0.spelling_zones + ZoneLimit;
         call_function("dbg_tz_set_spelling_limits", zone_limit, NameLimit);
@@ -307,7 +310,8 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
             assertEq(region, (new TimeZone(region)).region(), "an entry name after the limit: " + region);
         }
 
-        # data: a kept spelling keeps its name, a spelling over the limit gets the entry name
+        # data: a kept spelling keeps its name, a spelling over the limit gets the entry name (with spellings of the
+        # length of their entries, whose region names can be replaced in serialized data: case variants)
         if (kept[0].spelling.size() == kept[0].entry.size()) {
             date d = Serializable::deserialize(spelledDate(kept[0].entry, kept[0].spelling));
             assertEq(kept[0].spelling, d.info().zone.region(), "a kept spelling in data");
@@ -322,7 +326,6 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
             Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
             p.setSandboxManager(new SandboxManager());
             p.parse(TenantCode, "tenant-spellings");
-            list<hash<TzSpelling>> rsps = take(2);
             hash<auto> before = stats();
             foreach hash<TzSpelling> sp in (rsps) {
                 string expected = sprintf("%s|%d", canonical(sp.entry), (new TimeZone(sp.entry)).UTCOffset());
@@ -332,7 +335,9 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
             }
             hash<auto> after = stats();
             assertEq(before.spelling_zones, after.spelling_zones, "restricted code adds no zones of spellings");
-            assertLe(512, after.restricted_spellings, "restricted spellings are bounded");
+            # restricted code remembers the canonical names of its spellings (qore#7442)
+            assertEq(before.restricted_spellings + rsps.size(), after.restricted_spellings,
+                "restricted spellings are remembered");
         }
     }
 

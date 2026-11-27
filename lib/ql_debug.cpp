@@ -58,6 +58,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QoreDatagramDispatcher.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include <qore/QoreSSLPrivateKey.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -69,7 +70,6 @@
 #include "qore/intern/QC_Counter.h"
 #include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Datasource.h"
-#include "qore/intern/QoreTimeZoneManager.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
