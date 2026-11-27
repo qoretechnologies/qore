@@ -1,0 +1,48 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a module that a tenant loads from a path that it chose (qore#7146): its code must never get the state of the
+#! trusted serialization forms, also when trusted code loads it by name later
+module SandboxSerializationTrustedLib2 {
+    version = "1.0";
+    desc = "trusted serialization forms test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+#! a class of the module with non-public state
+public class StLib2Data inherits Serializable {
+    private {
+        string secret = "LIB2-STATE";
+    }
+
+    string getSecret() {
+        return secret;
+    }
+}
+
+#! the code of a class of the module: acts for itself
+public class StLib2Cache {
+    #! serializes and deserializes a value of its own with the trusted forms
+    static string roundTrip() {
+        try {
+            StLib2Data o = Serializable::deserializeTrusted(Serializable::serializeTrusted(new StLib2Data()));
+            return o.getSecret();
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+}
+
+#! module code outside a class: acts for its caller
+public string sub st_lib2_round_trip() {
+    try {
+        StLib2Data o = Serializable::deserializeTrusted(Serializable::serializeTrusted(new StLib2Data()));
+        return o.getSecret();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}

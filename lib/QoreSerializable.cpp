@@ -44,6 +44,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <string>
 #include <set>
@@ -544,6 +545,10 @@ QoreHashNode* QoreSerializable::serializeToData(const QoreValue val, int64 flags
 
 QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags, true);
+    // the owner rule of the non-public members of objects with the provenance of a sandbox (qore#7033) is lifted only
+    // for calling code that the owner rules do not apply to: not for code that a sandbox with tenant isolation
+    // governs, such as a governed tenant, which may use the trusted forms; decided once, at the start (qore#7146)
+    context.caller.setOwnerRuleLifted(!qore_caller_tenant_isolated());
     return serializeToDataIntern(val, context, xsink);
 }
 
@@ -635,9 +640,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     }
 
     // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
-    // created the object (qore#7033); a trusted API gives all state, as its output is never given to sandboxed code
-    // (Program::serialize(), Serializable::serializeTrusted(), qore#7146)
-    bool non_public = context.caller.isUnrestricted()
+    // created the object (qore#7033); a trusted API gives all state to calling code that the owner rules do not apply
+    // to, as its output is never given to sandboxed code (Program::serialize(), Serializable::serializeTrusted(),
+    // qore#7146)
+    bool non_public = context.caller.ownerRuleLifted()
         || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index

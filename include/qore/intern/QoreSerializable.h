@@ -206,6 +206,17 @@ public:
         return unrestricted;
     }
 
+    //! for a trusted API: sets whether the owner rule of the non-public members of objects with the provenance of a
+    //! sandbox (qore#7033) is lifted, which is decided once for the calling code (qore#7146)
+    DLLLOCAL void setOwnerRuleLifted(bool lifted) {
+        owner_rule_lifted = unrestricted && lifted;
+    }
+
+    //! returns true if the owner rule of the non-public members of objects is lifted (see setOwnerRuleLifted())
+    DLLLOCAL bool ownerRuleLifted() const {
+        return owner_rule_lifted;
+    }
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
@@ -215,6 +226,8 @@ private:
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
     bool unrestricted = false;
+    //! true if the owner rule of the non-public members of objects is lifted for a trusted API
+    bool owner_rule_lifted = false;
 };
 
 class QoreInternalSerializationContext {
