@@ -184,10 +184,8 @@ public:
 
     //! Records stream data that arrived before a listener was registered
     /** @param stream_key composite key "session_id:stream_id"
-    */
-    /** @param stream_key composite key "session_id:stream_id"
-        @param known true if the stream is known to have a listener to come: the notification took the release of its
-        Queue (see takeStreamRelease()), as its session closed or a drain ended it
+        @param known true if the stream can still have a listener to come although its Queue is released: the
+        notification took the release of its Queue alone (see takeStreamRelease()), as a drain ended its tunnel
 
         Recorded only for a stream that a listener can still register for: its Queue is registered, its listener is
         notified of the close of its session, or @p known; a notification that runs after the release of a stream's
@@ -236,11 +234,12 @@ public:
         --releases_in_progress;
     }
 
-    //! Returns true if the registrations of a stream of a session that has closed have been released already
-    /** True if the session has closed, and the stream's entry is not in @ref stream_queues and no release of its
-        registrations is recorded: the close of its session has been delivered (closeSessionStreams()), and the
-        notification that released the registrations of its streams ran, so that a listener that registers for it now
-        gets no further notification and is released at once (registerStreamListener(), qore#7802)
+    //! Returns true if no notification of a stream of a session that has closed is to come
+    /** True if the session has closed, the stream's entry is not in @ref stream_queues and no release of its
+        registrations is recorded.  Called by registerStreamListener() only for a listener whose registration found
+        the session closed (registerStreamCloseNotify()), which then got the close in the registration's replay: with
+        no Queue entry and no release left, no notification of the stream is to come, so the listener is released at
+        once (qore#7802)
     */
     DLLLOCAL bool isClosedSessionStreamReleased(int64_t session_id, const std::string& stream_key) const {
         {
@@ -349,14 +348,19 @@ public:
 
         @param session_id the QUIC session of the stream
         @param stream_key composite key "session_id:stream_id"
+
+        @return true if the session had closed when the listener registered: its listener then gets its close from
+        the registration's replay, if not from the notification of the session's close (qore#7802)
     */
-    DLLLOCAL void registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
+    DLLLOCAL bool registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
         AutoLocker al(op_lock);
         close_notify_streams.insert(stream_key);
         // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents()
         if (sock_obj && qore_socket_object_private(sock_obj).isQuicSessionClosedOrGone(session_id)) {
             peer_closed_streams.insert(stream_key);
+            return true;
         }
+        return false;
     }
 
     //! Drops a stream key registered with @ref registerStreamCloseNotify()

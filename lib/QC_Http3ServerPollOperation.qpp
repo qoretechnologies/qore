@@ -1644,7 +1644,8 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // Mirror the registration in the priv so the I/O thread can queue a close
     // wakeup for this stream when its QUIC session dies (the QoreObject member
     // hash above is not reachable from closeSessionStreams()).
-    priv->registerStreamCloseNotify(session_id, skey);
+    // true if the session had closed when the listener registered (qore#7802)
+    bool closed_at_registration = priv->registerStreamCloseNotify(session_id, skey);
 
     // Replay a notification this listener was not yet registered to receive: either data
     // arrived / is queued (consumePendingOrQueueReady()), or the peer already reset the
@@ -1663,7 +1664,7 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // the listener of a stream whose session has closed and whose registrations were released before it registered got
     // its last notification above, the replay of the close: the session gives no more events, so it is released now
     // (qore#7802); while the close or the release is still to come, its notification releases the listener
-    if (listener_obj && priv->isClosedSessionStreamReleased(session_id, skey)) {
+    if (listener_obj && closed_at_registration && priv->isClosedSessionStreamReleased(session_id, skey)) {
         priv->deregisterStreamCloseNotify(skey);
         ExceptionSink release_xsink;
         {
@@ -1810,6 +1811,28 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_A
     bool queue_released = false;
     bool tunnel_released = false;
     std::string skey(stream_key->c_str());
+    // applies a release taken below when the method returns, also when it ends with an exception, as the release
+    // function cannot throw (qore#7802)
+    class StreamReleaseApply {
+    public:
+        StreamReleaseApply(QoreObject* self, Http3ServerPollOperationPriv* priv, const std::string& skey,
+                const bool& queue_released, const bool& tunnel_released) : self(self), priv(priv), skey(skey),
+                queue_released(queue_released), tunnel_released(tunnel_released) {
+        }
+
+        ~StreamReleaseApply() {
+            if (queue_released || tunnel_released) {
+                h3_release_stream_registrations(self, priv, skey, queue_released, tunnel_released);
+            }
+        }
+
+    private:
+        QoreObject* self;
+        Http3ServerPollOperationPriv* priv;
+        const std::string& skey;
+        const bool& queue_released;
+        const bool& tunnel_released;
+    } release_apply(self, priv, skey, queue_released, tunnel_released);
     {
         AutoLocker ml(priv->stream_member_lock);
         priv->takeStreamRelease(skey, queue_released, tunnel_released);
@@ -1841,9 +1864,6 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_A
             (int)(!had_listeners ? 1 : 0));
     }
 
-    if (queue_released || tunnel_released) {
-        h3_release_stream_registrations(self, priv, skey, queue_released, tunnel_released);
-    }
 }
 
 //! Returns and clears the list of stream keys with data available
