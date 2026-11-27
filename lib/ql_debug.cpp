@@ -58,6 +58,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QoreDatagramDispatcher.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include <qore/QoreSSLPrivateKey.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -1138,28 +1139,28 @@ namespace {
 */
 class DbgCompletionRejectOp : public SocketPollOperationBase {
 public:
-    DLLLOCAL DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
+    DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
             bool worker) : sock_obj(sock_obj), promise(promise), err(std::move(err)), desc(std::move(desc)),
             worker(worker) {
     }
 
-    DLLLOCAL virtual bool needsWorkerDispatch() const override {
+    virtual bool needsWorkerDispatch() const override {
         return worker;
     }
 
-    DLLLOCAL ~DbgCompletionRejectOp() {
+    ~DbgCompletionRejectOp() {
         ExceptionSink xsink;
         promise->deref(&xsink);
     }
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return false;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (calls++) {
             xsink->raiseException(err.c_str(), "%s", desc.c_str());
             return nullptr;
@@ -1170,7 +1171,7 @@ public:
         return *xsink ? nullptr : info.release();
     }
 
-    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
+    virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
             override {
         if (canceled) {
             promise->setError("DBG-CANCELED", "the operation was canceled", QoreValue(), xsink);
@@ -1185,7 +1186,7 @@ public:
         return true;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return "waiting";
     }
 
@@ -10930,7 +10931,8 @@ public:
                 if (e->d_name[0] == '.') {
                     continue;
                 }
-                char path[64], target[256];
+                // the prefix and the longest name that a directory entry can have
+                char path[sizeof("/proc/self/fd/") + sizeof(e->d_name)], target[256];
                 snprintf(path, sizeof(path), "/proc/self/fd/%s", e->d_name);
                 ssize_t len = readlink(path, target, sizeof(target) - 1);
                 if (len <= 0) {
@@ -17044,6 +17046,12 @@ class Http3ServerPollStateTest {
 public:
     DLLLOCAL static void run(UnitTestCounters& c) {
         ExceptionSink xsink;
+        // the operation's maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "HTTP/3 server poll state: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         ReferenceHolder<Http3ServerPollOperationPriv> op(new Http3ServerPollOperationPriv(nullptr, nullptr,
             std::chrono::microseconds(0), false), &xsink);
         // the I/O thread made a request ready for the dispatcher
@@ -17360,6 +17368,70 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
 
     pgm->waitForTerminationAndDeref(&xsink);
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
+}
+
+//! A context of a thread, task or continued operation that records restricted code counts for the update scopes of
+//! shared objects when it was applied since the scope opened; one that the thread had when the scope opened, or one
+//! of trusted code, does not (qore#7737)
+static void ut_restricted_contexts_count_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* host = parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS))
+        : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS));
+    // a trusted (governed) manager: its code is not restricted
+    QoreSandboxManager* trusted_sm = new QoreSandboxManager;
+    trusted_sm->setUncontrolledApiPolicy(true);
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "contexts: the host is entered");
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: nothing is entered at first");
+        // the context of an operation continued for restricted code
+        {
+            QoreSandboxContext ctx;
+            ctx.restricted = true;
+            QoreSandboxContextHelper sch(ctx);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: a restricted operation context applied since the scope opened counts");
+            // a scope opened under it: the context is that of the code that opened it
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "contexts: a restricted operation context that the scope opened under does not count");
+        }
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: the operation context has ended");
+        // the context that a thread or task of restricted code inherited
+        {
+            QoreSandboxContext ctx;
+            ctx.restricted = true;
+            QoreInheritedSandboxHelper ish(&ctx);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: a restricted inherited context applied since the scope opened counts");
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "contexts: a restricted inherited context that the scope opened under does not count");
+        }
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "contexts: the inherited context has ended");
+        // the context of trusted (governed) code
+        {
+            QoreSandboxContext ctx;
+            trusted_sm->ref();
+            ctx.manager = trusted_sm;
+            QoreSandboxContextHelper sch(ctx);
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "contexts: the operation context of a trusted manager does not count");
+            QoreInheritedSandboxHelper ish(&ctx);
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "contexts: the inherited context of a trusted manager does not count");
+            // the manager is tightened: its code is restricted now
+            trusted_sm->setUncontrolledApiPolicy(false);
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "contexts: the context of a manager that refuses uncontrolled APIs counts");
+            trusted_sm->setUncontrolledApiPolicy(true);
+        }
+    }
+    UT_ASSERT(c, !xsink, "contexts: no exception");
+    trusted_sm->deref(nullptr);
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "contexts: the Program is destroyed");
 }
 
 //! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
@@ -25420,6 +25492,63 @@ static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+//! Debug-only: returns the sizes of the time zone region name caches (qore#7592)
+/** Keys: \c region_names (region names with zones), \c spelling_zones (zones of region spellings that are not the
+    name of the entry in the zoneinfo directory that they reach), \c spelling_names (spellings beyond the limit whose
+    entry names are remembered), \c restricted_spellings (spellings whose canonical names are remembered for
+    restricted code), \c region_file_reads (zoneinfo files of regions opened).  Not on Windows.
+*/
+static QoreValue f_dbg_tz_region_cache(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_region_cache() is not available on Windows");
+    return QoreValue();
+#else
+    QoreTimeZoneManager::DbgRegionCacheStats st = QTZM.dbgGetRegionCacheStats();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    rv->setKeyValue("region_names", static_cast<int64>(st.region_names), xsink);
+    rv->setKeyValue("spelling_zones", static_cast<int64>(st.spelling_zones), xsink);
+    rv->setKeyValue("spelling_names", static_cast<int64>(st.spelling_names), xsink);
+    rv->setKeyValue("restricted_spellings", static_cast<int64>(st.restricted_spellings), xsink);
+    rv->setKeyValue("region_file_reads", static_cast<int64>(st.region_file_reads), xsink);
+    return rv.release();
+#endif
+}
+
+//! Debug-only: sets the limits of the time zone region spelling caches; 0 restores a default (qore#7592)
+static QoreValue f_dbg_tz_set_spelling_limits(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 zones = get_param_value(params, 0).getAsBigInt();
+    int64 names = get_param_value(params, 1).getAsBigInt();
+    if (zones < 0 || names < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tz_set_spelling_limits() requires limits >= 0");
+        return QoreValue();
+    }
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_spelling_limits() is not available on Windows");
+#else
+    QTZM.dbgSetSpellingLimits(static_cast<size_t>(zones), static_cast<size_t>(names));
+#endif
+    return QoreValue();
+}
+
+//! Debug-only: sets the zoneinfo directory from which time zone regions that are not cached are read (qore#7592)
+/** NOTHING restores the directory of the build.  Refused for restricted code.  Not on Windows.
+*/
+static QoreValue f_dbg_tz_set_zoneinfo_root(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_zoneinfo_root() is not available on Windows");
+#else
+    // the directory can be an inline short string (issue #7038), which get<const QoreStringNode>() reads as an absent
+    // argument, and the root would be reset
+    QoreStringDataHelper dir(get_param_value(params, 0));
+    if (dir && strlen(dir.c_str()) != dir.size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the zoneinfo directory has a NUL character");
+        return QoreValue();
+    }
+    QTZM.dbgSetZoneinfoRoot(dir ? dir.c_str() : nullptr, xsink);
+#endif
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -25818,6 +25947,44 @@ static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, R
         return QoreValue();
     }
     return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: holds or releases the flushes of the callbacks of the global async I/O controller made in callbacks
+/** A held flush may return, and still counts as a callback that waits in the flush, so that a test can check what a
+    flush made by another thread does then (qore#7509)
+*/
+static QoreValue f_dbg_async_io_hold_callback_flush(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    bool hold = get_param_value(params, 0).getAsBool();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgHoldCallbackFlush(hold);
+    return QoreValue();
+}
+
+//! Debug-only: waits until a flush of the callbacks of the global async I/O controller made in a callback is held
+/** @return True if a flush is held, False if none was when the timeout elapsed
+*/
+static QoreValue f_dbg_async_io_wait_callback_flush_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitCallbackFlushHeld(static_cast<int>(timeout_ms));
 }
 
 //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner of the global async I/O controller
@@ -30808,6 +30975,12 @@ public:
             xsink.clear();
             return;
         }
+        // the dispatchers' maps use the keyed hash of the process (qore#7750)
+        if (qore_intern_hash_process_key_check(&xsink)) {
+            UT_ASSERT(c, false, "stateless reset: the secret key of the keyed hashes is created");
+            xsink.clear();
+            return;
+        }
         Disp d1, d1b, d2, none;
         UT_ASSERT(c, d1.ensureStatelessResetKey(*k1) && d1b.ensureStatelessResetKey(*k1)
             && d2.ensureStatelessResetKey(*k2), "stateless reset: the keys are derived");
@@ -31698,6 +31871,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_restricted_contexts_count_for_scopes(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -33621,6 +33795,21 @@ static QoreValue f_dbg_hash_harden_alloc_failed(const QoreListNode* params, Runt
     return dbg_hash_harden_alloc_failed.exchange(false);
 }
 
+//! Debug-only: returns the sites of the containers with keyed hashes that were constructed in this process
+//! (QORE_KEYED_HASH_SITE(), qore#7750)
+/** @return a hash of the site names to the hash of the probe of the site's hasher, as 16 hexadecimal digits; the
+    hash depends on the secret key of the process (\c QORE_DBG_HASH_KEY in debug builds)
+*/
+static QoreValue f_dbg_keyed_hash_sites(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(stringTypeInfo), xsink);
+    for (const auto& i : qore_dbg_get_keyed_hash_sites()) {
+        QoreStringNode* str = new QoreStringNode;
+        str->sprintf("%016llx", static_cast<unsigned long long>(i.second));
+        rv->setKeyValue(i.first.c_str(), str, xsink);
+    }
+    return rv.release();
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -34815,6 +35004,117 @@ static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeC
     return rv.release();
 #else
     xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
+#ifdef DEBUG
+namespace {
+//! the access to the members of a hash during its release that dbg_hash_access_during_release() makes
+enum class HashReleaseAccess {
+    LOOKUP,
+    LVALUE,
+    ITERATE,
+};
+
+//! the hash of the current dbg_hash_access_during_release() call in this thread, if any
+thread_local QoreHashNode* hash_release_access_target = nullptr;
+//! the access that the current dbg_hash_access_during_release() call in this thread makes
+thread_local HashReleaseAccess hash_release_access = HashReleaseAccess::LOOKUP;
+
+//! runs at each step of the release of each hash while dbg_hash_access_during_release() is armed; accesses the
+//! members of the hash of the call in this thread once
+void dbg_hash_release_access_hook(qore_hash_private* p) {
+    QoreHashNode* h = hash_release_access_target;
+    if (!h || qore_hash_private::get(*h) != p) {
+        return;
+    }
+    hash_release_access_target = nullptr;
+    // each access asserts in a debug build that the hash is not being released; "b" is a member that is not freed
+    // yet at the first step of the release on both paths
+    switch (hash_release_access) {
+        case HashReleaseAccess::LOOKUP:
+            p->findMember("b");
+            break;
+        case HashReleaseAccess::LVALUE: {
+            // the lvalue of an assignment, which can create the member (findCreateMember())
+            hash_assignment_priv ha(*p, "b");
+            break;
+        }
+        case HashReleaseAccess::ITERATE: {
+            ConstHashIterator hi(h);
+            hi.next();
+            break;
+        }
+    }
+}
+}
+#endif
+
+//! accesses the members of a hash during its release, which a debug build asserts never happens (qore#7569)
+/** Makes a hash with the members \c "a", \c "b" and \c "c" and releases it; at the first step of its release, a hook
+    looks up a member (\c "lookup"), takes a member as an lvalue (\c "lvalue") or iterates the members
+    (\c "iterate").  Each access trips an assertion that ends the process: a test runs it in a child process.
+
+    @param access \c "lookup", \c "lvalue" or \c "iterate"
+    @param deep if true, the hash is nested in lists deeply enough for its release to be made by the iterative
+    release of nested containers (qore_hash_private::freeNextMember()), else by qore_hash_private::freeMembers()
+
+    @throw DBG-ARGUMENT-ERROR an unknown access, the hook is armed by another call, or the build is not a debug build
+*/
+static QoreValue f_dbg_hash_access_during_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef DEBUG
+    HARD_QORE_VALUE_PARAM(access, const QoreStringNode, params, 0);
+    bool deep = HARD_QORE_VALUE_BOOL(params, 1);
+    HashReleaseAccess a;
+    if (!strcmp(access->c_str(), "lookup")) {
+        a = HashReleaseAccess::LOOKUP;
+    } else if (!strcmp(access->c_str(), "lvalue")) {
+        a = HashReleaseAccess::LVALUE;
+    } else if (!strcmp(access->c_str(), "iterate")) {
+        a = HashReleaseAccess::ITERATE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown access '%s'; expecting \"lookup\", \"lvalue\" or "
+            "\"iterate\"", access->c_str());
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("a", 1, xsink);
+    h->setKeyValue("b", 2, xsink);
+    h->setKeyValue("c", 3, xsink);
+    QoreHashNode* target = *h;
+    ValueHolder v(h.release(), xsink);
+    if (deep) {
+        // nested more deeply than the recursive release goes (see qore_container_free_helper)
+        for (unsigned i = 0; i < QORE_CONTAINER_FREE_RECURSION_DEPTH + 4; ++i) {
+            ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+            l->push(v.release(), xsink);
+            v = l.release();
+        }
+    }
+
+    qore_dbg_hash_release_step_hook_t expected = nullptr;
+    if (!qore_dbg_hash_release_step_hook.compare_exchange_strong(expected, dbg_hash_release_access_hook)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() is armed by another call");
+        return QoreValue();
+    }
+    // disarms the hook when the release ends
+    struct HookHelper {
+        HookHelper(QoreHashNode* target, HashReleaseAccess a) {
+            hash_release_access_target = target;
+            hash_release_access = a;
+        }
+        ~HookHelper() {
+            hash_release_access_target = nullptr;
+            qore_dbg_hash_release_step_hook.store(nullptr);
+        }
+    } hook_helper(target, a);
+    v = QoreValue();
+    return QoreValue();
+#else
+    xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hash_access_during_release() requires a debug build");
     return QoreValue();
 #endif
 }
@@ -36854,8 +37154,9 @@ int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms) {
 */
 static QoreValue f_dbg_http_ws_simulate_send_progress(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    int64_t rate = get_param_value(params, 0).getAsBigInt();
-    int64_t step_ms = get_param_value(params, 1).getAsBigInt();
+    // int64 (long long), as QLLD expects, and as getAsBigInt() returns
+    int64 rate = get_param_value(params, 0).getAsBigInt();
+    int64 step_ms = get_param_value(params, 1).getAsBigInt();
     if (rate <= 0) {
         dbg_ws_sim_rate.store(0, std::memory_order_release);
         return QoreValue();
@@ -37058,7 +37359,8 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     release Counter of 0, it only reports it); \c "h3-race-winner": the address family race of an HTTP/3 client
     connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread);
     \c "send-drain-wait": an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full
-    and is about to wait for it to drain (qore#7465)
+    and is about to wait for it to drain (qore#7465); \c "acquire-start": a request is about to acquire a connection
+    from its client's connection manager, before the manager's state is checked (qore#7741)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -37110,6 +37412,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3RaceWinner);
     } else if (!strcmp(name->c_str(), "send-drain-wait")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::SendDrainWait);
+    } else if (!strcmp(name->c_str(), "acquire-start")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::AcquireStart);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -39609,6 +39913,10 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_callback_flush", f_dbg_async_io_hold_callback_flush,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_callback_flush_held", f_dbg_async_io_wait_callback_flush_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_hold_io_commands", f_dbg_async_io_hold_io_commands,
@@ -39734,6 +40042,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
+    qns.addBuiltinVariant("dbg_tz_region_cache", f_dbg_tz_region_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
+    qns.addBuiltinVariant("dbg_tz_set_zoneinfo_root", f_dbg_tz_set_zoneinfo_root, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "dir");
+    qns.addBuiltinVariant("dbg_tz_set_spelling_limits", f_dbg_tz_set_spelling_limits, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "zones", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "names");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
@@ -39949,6 +40264,8 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 0);
     qns.addBuiltinVariant("dbg_hash_harden_alloc_failed", f_dbg_hash_harden_alloc_failed, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_keyed_hash_sites", f_dbg_keyed_hash_sites, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -40061,6 +40378,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "release");
     qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
+    qns.addBuiltinVariant("dbg_hash_access_during_release", f_dbg_hash_access_during_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "access", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "deep");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

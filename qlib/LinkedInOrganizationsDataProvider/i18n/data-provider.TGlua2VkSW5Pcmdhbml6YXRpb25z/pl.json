@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
-          "source": "Get Current Member",
+          "source": "Get current member",
           "message": "Pobierz bieżącego użytkownika"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Pobiera profil użytkownika, którego autoryzację posiada to połączenie.\n\nPrzydatne do potwierdzenia, z którym kontem jest powiązane połączenie; organizacje zarządzane przez to konto są dostępne dla wszystkich pozostałych akcji."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Wyświetl listę organizacji"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Wyświetla organizacje, którymi zarządza uwierzytelniony członek, wraz z nazwą, opisem, logo, wielkością, branżami i adresem URL strony każdej z nich.\n\nWartość `id` organizacji tutaj jest parametrem przyjmowanym przez wszystkie pozostałe akcje, a URN `organizational_page` jest adresem używanym przez API analityki i obserwacji LinkedIn."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "Pobierz organizację"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "Wyświetl listę postów"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Najnowsza wersja, która może być wersją roboczą lub zaplanowanym postem; zaplanowany post jest identyfikowany przez ustawione pole `scheduled_at`"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Pobierz wpis"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Najnowsza wersja, która może być wersją roboczą lub zaplanowanym postem; zaplanowany post jest identyfikowany przez ustawione pole `scheduled_at`"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "Pobierz listę komentarzy"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
-          "source": "List Reactions",
+          "source": "List reactions",
           "message": "Wyświetl reakcje"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Engagement Summary",
+          "source": "Get engagement summary",
           "message": "Pobierz podsumowanie zaangażowania"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Identyfikatory URN treści do podsumowania: postów, aktywności lub komentarzy. Można podać kilka naraz, co jest znacznie tańsze niż jedno wywołanie dla każdego"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
-          "source": "List Followers",
+          "source": "List followers",
           "message": "Wyświetl listę obserwujących"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
-          "source": "List Following",
+          "source": "List following",
           "message": "Wyświetl obserwowane"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Follower Statistics",
+          "source": "Get follower statistics",
           "message": "Pobierz statystyki obserwujących"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Podziel według relacji członka z organizacją, co pozwala odróżnić pracowników od pozostałych osób"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
-          "source": "Get Visitor Statistics",
+          "source": "Get visitor statistics",
           "message": "Pobierz statystyki odwiedzających"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Karta osób na stronie"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "Nowy post"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {

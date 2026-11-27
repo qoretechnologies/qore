@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
-          "source": "Query Points",
+          "source": "Query points",
           "message": "Interroga punti"
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Esegui ricerca per similarità vettoriale, filtri e ricerca ibrida su una collezione Qdrant"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
-          "source": "Upsert Points",
+          "source": "Upsert points",
           "message": "Upsert punti"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Inserisci o aggiorna punti con vettori e payload facoltativi in una collezione Qdrant"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "Crea collezione"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Crea una nuova collezione vettoriale con parametri vettoriali e metriche di distanza configurabili"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Elenca raccolte"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Recupera un elenco di tutte le collezioni nell'istanza Qdrant"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
-          "source": "Count Points",
+          "source": "Count points",
           "message": "Conta punti"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Conta il numero di punti in una collection Qdrant, facoltativamente con un filtro"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
-          "source": "Health Check",
+          "source": "Health check",
           "message": "Controllo integrità"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Verifica lo stato di integrità del server Qdrant"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
-          "source": "Delete Points",
+          "source": "Delete points",
           "message": "Elimina punti"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Elimina punti da una collezione Qdrant tramite ID punto o condizioni di filtro"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
-          "source": "Get Points",
+          "source": "Get points",
           "message": "Ottieni punti"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Recupera punti specifici da una collezione Qdrant tramite i relativi ID, inclusi vettori e payload"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
-          "source": "Scroll Points",
+          "source": "Scroll points",
           "message": "Scorri punti"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Esegui l'iterazione su tutti i punti in una collezione Qdrant utilizzando la paginazione con scroll e filtri facoltativi"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Recupera raccolta"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Recupera informazioni dettagliate su una collezione Qdrant specifica, inclusi configurazione e stato"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "Elimina raccolta"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Elimina una collezione e tutti i relativi dati dall'istanza Qdrant"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
-          "source": "Collection Exists",
+          "source": "Collection exists",
           "message": "Collection esistente"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Verifica se una collection specifica esiste nell'istanza Qdrant"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
-          "source": "Query Batch Points",
+          "source": "Query batch points",
           "message": "Interroga punti in batch"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Esegui più query di ricerca per similarità vettoriale in una singola richiesta batch su una collezione Qdrant"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
-          "source": "Query Grouped Points",
+          "source": "Query grouped points",
           "message": "Interroga punti raggruppati"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Esegui una ricerca per similarità vettoriale su una collezione Qdrant con risultati raggruppati in base a un campo payload specificato"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
-          "source": "List All Aliases",
+          "source": "List all aliases",
           "message": "Elenca tutti gli alias"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Recupera un elenco di tutti gli alias e delle relative collezioni associate nell'istanza Qdrant"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
-          "source": "Update Aliases",
+          "source": "Update aliases",
           "message": "Aggiorna alias"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Crea, rinomina o elimina alias di collezione nell'istanza Qdrant"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
-          "source": "Set Payload",
+          "source": "Set payload",
           "message": "Imposta payload"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Imposta o aggiorna le coppie chiave-valore del payload sui punti in una collezione Qdrant tramite ID punto o condizioni di filtro"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
-          "source": "Liveness Check",
+          "source": "Liveness check",
           "message": "Controllo liveness"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Verifica se il server Qdrant è attivo e reattivo"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
-          "source": "Batch Update Points",
+          "source": "Batch update points",
           "message": "Aggiorna punti in batch"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Esegui un batch di operazioni eterogenee sui punti (upsert, eliminazione, impostazione/sovrascrittura/eliminazione/azzeramento payload, aggiornamento/eliminazione vettori) in una singola richiesta per aggiornamenti in blocco ad alte prestazioni"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
-          "source": "Search Points",
+          "source": "Search points",
           "message": "Cerca punti"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Ricerca per similarità vettoriale su una collezione Qdrant con risultati restituiti come flusso di record per un'elaborazione efficiente nella pipeline"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
-          "source": "Create/Upsert Point",
+          "source": "Create/upsert point",
           "message": "Crea/Upsert punto"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {

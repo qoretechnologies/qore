@@ -63,7 +63,7 @@ module WeaviateDataProvider {
             "app": WeaviateDataProvider::AppName,
             "path": "/list-classes",
             "action": "list-classes",
-            "display_name": "List Schema Classes",
+            "display_name": "List schema classes",
             "short_desc": "List Weaviate schema classes",
             "desc": "Calls `GET /v1/schema` to enumerate the configured Weaviate classes "
                 "(name, properties, vectorizer, sharding config).",

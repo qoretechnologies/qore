@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Vytvořit kontakt"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Název příležitosti (např. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Aktualizovat kontakt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Název příležitosti (např. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Smazat kontakt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Jedinečný identifikátor kontaktu, který se má odstranit"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Seznam kontaktů"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Získat kontakt"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "ID kontaktu"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
+          "source": "Create organisation",
           "message": "Vytvořit organizaci"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Název příležitosti (např. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
+          "source": "Update organisation",
           "message": "Aktualizovat organizaci"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Název příležitosti (např. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
+          "source": "Delete organisation",
           "message": "Smazat organizaci"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Jedinečný identifikátor organizace ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
+          "source": "List organisations",
           "message": "Zobrazit organizace"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
+          "source": "Get organisation",
           "message": "Získat organizaci"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "ID organizace"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "Vytvořit leada"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Název štítku"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "Aktualizovat leada"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "Název štítku"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "Odstranit zájemce"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "Jedinečný identifikátor leada ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Vypsat leady"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -4080,7 +4080,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Získat zájemce"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "ID leadu"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
+          "source": "Create opportunity",
           "message": "Vytvořit příležitost"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Role popisující vztah mezi objekty"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
+          "source": "Update opportunity",
           "message": "Aktualizovat příležitost"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4984,7 +4984,7 @@
           "message": "Role popisující vztah mezi objekty"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
+          "source": "Delete opportunity",
           "message": "Smazat příležitost"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -5008,7 +5008,7 @@
           "message": "Jedinečný identifikátor příležitosti ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Zobrazit příležitosti"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -5112,7 +5112,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
+          "source": "Get opportunity",
           "message": "Získat příležitost"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -5132,7 +5132,7 @@
           "message": "ID příležitosti"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Vytvořit projekt"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -5508,7 +5508,7 @@
           "message": "Role popisující vztah mezi objekty"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Aktualizovat projekt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -5896,7 +5896,7 @@
           "message": "Role popisující vztah mezi objekty"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "Smazat projekt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -5920,7 +5920,7 @@
           "message": "Jedinečný identifikátor projektu ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Seznam projektů"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Získat projekt"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "ID projektu"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Vytvořit úkol"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -6404,7 +6404,7 @@
           "message": "Jedinečný identifikátor odkazu úkolu"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Aktualizovat úkol"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -6776,7 +6776,7 @@
           "message": "Jedinečný identifikátor odkazu úkolu"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Odstranit úkol"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -6800,7 +6800,7 @@
           "message": "Jedinečný identifikátor úkolu ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Seznam úloh"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
@@ -6904,7 +6904,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Získat úlohu"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "ID úkolu"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Vytvořit poznámku"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -7052,7 +7052,7 @@
           "message": "Viditelné pro tým vlastníka"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "Aktualizovat poznámku"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -7192,7 +7192,7 @@
           "message": "Viditelné pro tým vlastníka"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "Smazat poznámku"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -7216,7 +7216,7 @@
           "message": "Jedinečný identifikátor poznámky ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Zobrazit poznámky"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -7320,7 +7320,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
+          "source": "Get note",
           "message": "Získat poznámku"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
@@ -7340,7 +7340,7 @@
           "message": "ID poznámky"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
+          "source": "Create calendar event",
           "message": "Vytvořit událost v kalendáři"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7460,7 +7460,7 @@
           "message": "ID uživatele, který vlastní tuto událost"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
+          "source": "Update calendar event",
           "message": "Aktualizovat událost kalendáře"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7592,7 +7592,7 @@
           "message": "ID uživatele, který vlastní tuto událost"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
+          "source": "Delete calendar event",
           "message": "Smazat událost kalendáře"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Jedinečný identifikátor události kalendáře ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
+          "source": "List calendar events",
           "message": "Zobrazit události kalendáře"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -7720,7 +7720,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
+          "source": "Get calendar event",
           "message": "Získat událost kalendáře"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7740,7 +7740,7 @@
           "message": "ID události"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Vytvořit produkt"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -7944,7 +7944,7 @@
           "message": "Hodnota vlastního pole. Může být řetězec, číslo, logická hodnota nebo datum podle konfigurace pole"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -8160,7 +8160,7 @@
           "message": "Hodnota vlastního pole. Může být řetězec, číslo, logická hodnota nebo datum podle konfigurace pole"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Smazat produkt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -8184,7 +8184,7 @@
           "message": "Jedinečný identifikátor produktu ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Vypsat produkty"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -8288,7 +8288,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -8308,7 +8308,7 @@
           "message": "ID produktu"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "Smazat e-mail"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -8332,7 +8332,7 @@
           "message": "Jedinečný identifikátor e-mailu ke smazání"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Vypsat e-maily"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -8436,7 +8436,7 @@
           "message": "Hodnota k porovnání s `field_name`. Musí být spárováno s `field_name`. Směruje požadavek přes koncový bod `/Search` služby Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "Získat e-mail"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "ID e-mailu"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Spustí se při vytvoření nového kontaktu v Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
+          "source": "New organisation",
           "message": "Nová organizace"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -8480,7 +8480,7 @@
           "message": "Spustí se při vytvoření nové organizace v Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
+          "source": "New lead",
           "message": "Nový lead"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Spustí se při vytvoření nového zájemce v Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
+          "source": "New opportunity",
           "message": "Nová obchodní příležitost"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
@@ -8504,7 +8504,7 @@
           "message": "Spustí se při vytvoření nové obchodní příležitosti v Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
+          "source": "New task",
           "message": "Nový úkol"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {

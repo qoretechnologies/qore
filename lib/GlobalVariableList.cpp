@@ -125,6 +125,23 @@ Var* GlobalVariableList::runtimeCreateVar(const char* name, const QoreTypeInfo* 
     return var;
 }
 
+Var* GlobalVariableList::runtimeCreateOwnVar(const char* name, const QoreTypeInfo* typeInfo, bool builtin,
+        Var*& replaced) {
+    replaced = nullptr;
+    map_var_t::iterator i = vmap.find(name);
+    if (i != vmap.end()) {
+        if (!i->second->isRef()) {
+            return nullptr;
+        }
+        replaced = i->second;
+        vmap.erase(i);
+    }
+
+    Var* var = new Var(get_runtime_location(), name, typeInfo, builtin);
+    vmap[var->getName()] = var;
+    return var;
+}
+
 Var* GlobalVariableList::parseCreatePendingVar(const QoreProgramLocation* loc, const char* name, const QoreTypeInfo* typeInfo) {
     assert(!parseFindVar(name));
 

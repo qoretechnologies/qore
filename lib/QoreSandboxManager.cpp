@@ -1909,7 +1909,10 @@ void qore_sandbox_manager_ops::notifyThreadSlotReleasedImpl(QoreSandboxManager* 
 }
 
 void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b) {
-    if (const auto* managers = QoreSandboxComposition::members(b)) {
+    // the caller counted a thread of the manager, so it exists: the null test of members(const QoreSandboxManager*)
+    // would give the compiler a path releasing the count of a null manager after inlining (#7757)
+    assert(b);
+    if (const auto* managers = QoreSandboxComposition::members(*b)) {
         for (auto* manager : *managers) {
             qore_sandbox_manager_ops(manager).releaseThreadSlotQuiet();
         }
@@ -2410,9 +2413,29 @@ bool qore_object_program_is_restricted(const QoreObject* obj) {
     return qore_program_is_restricted(obj->getProgram());
 }
 
+bool qore_calling_class_is_restricted() {
+    const qore_class_private* cls = qore_innermost_frame_is_builtin() ? runtime_get_caller_class()
+        : runtime_get_class();
+    // a builtin class is trusted; sandbox_ctx is the permanent mark of a class that restricted code committed
+    // (qore#7635)
+    return cls && !cls->sys && (cls->sandbox_ctx || cls->isRestrictedCode());
+}
+
 bool qore_program_is_restricted(const QoreProgram* pgm) {
-    if (!pgm) {
-        return false;
+    // fails closed: true if the sandboxes cannot be resolved
+    return qore_program_restricted_state(pgm) != 0;
+}
+
+int qore_program_restricted_state(const QoreProgram* pgm) {
+    // every restricted Program is sandboxed (a Program with a manager is); checked first, as it is cheap
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
+        return 0;
+    }
+    // restricted code created the Program or committed code in it with no restricting sandbox that the Program could
+    // keep (qore#7737): restricted for good
+    if (qore_program_private::get(*const_cast<QoreProgram*>(pgm))->restricted_marked.load(
+            std::memory_order_acquire)) {
+        return 1;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
@@ -2422,12 +2445,13 @@ bool qore_program_is_restricted(const QoreProgram* pgm) {
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
-            return qore_program_is_sandboxed(pgm);
+            return 1;
         }
-        return !sm->trustsUncontrolledApis();
+        return sm->trustsUncontrolledApis() ? 0 : 1;
     } catch (std::bad_alloc&) {
-        // the composition of the Program's sandboxes could not be made: fails closed
-        return true;
+        // the composition of the Program's sandboxes could not be made: not known (each caller fails closed in its
+        // own direction)
+        return -1;
     }
 }
 
@@ -2551,6 +2575,10 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
         xsink->outOfMemory();
         return -1;
     }
+    // restricted code with no restricting sandbox that the Program could keep (a Program restricted by its flag
+    // alone): the Program is marked restricted for good when the code is committed, as the sandbox that it keeps would
+    // not tell (qore#7737; see pendCreatorSandbox() and commitPendingCreatorSandbox())
+    pcs.mark_restricted = pcs.restricted && !(pcs.sm && !pcs.sm->trustsUncontrolledApis());
     return 0;
 }
 
@@ -2594,6 +2622,10 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
     if (pcs.sandboxed && pcs.restricted) {
         pending_restricted_caller = true;
     }
+    // the mark of a Program restricted by its flag alone, set if the code is committed (qore#7737)
+    if (pcs.mark_restricted) {
+        pending_restricted_mark = true;
+    }
     return 0;
 }
 
@@ -2625,6 +2657,7 @@ bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
 
 void qore_program_private::dropPendingCreatorSandbox() {
     pending_restricted_caller = false;
+    pending_restricted_mark = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2639,6 +2672,7 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
     // goes ahead, cleared when it ends
     const bool restricted = pending_restricted_caller;
+    const bool mark = pending_restricted_mark;
     if (pending_creator_sandbox || pending_creator_policy) {
         try {
             addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
@@ -2649,6 +2683,11 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     }
     dropPendingCreatorSandbox();
     commit_restricted_caller = restricted;
+    // restricted code commits code with no restricting sandbox that the Program keeps: restricted for good
+    // (qore#7737); set only when the code is committed, so a parse that fails or is rolled back does not mark it
+    if (mark) {
+        restricted_marked.store(true, std::memory_order_release);
+    }
     return 0;
 }
 
@@ -2735,8 +2774,11 @@ void qore_release_module_program_pins() {
 //------------------------------------------------------------------------------
 
 const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager* manager) {
-    return manager && manager->fs_mgr.priv->composition
-        ? &manager->fs_mgr.priv->composition->managers : nullptr;
+    return manager ? members(*manager) : nullptr;
+}
+
+const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager& manager) {
+    return manager.fs_mgr.priv->composition ? &manager.fs_mgr.priv->composition->managers : nullptr;
 }
 
 bool QoreSandboxComposition::same(const QoreSandboxManager* a, const QoreSandboxManager* b) {

@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Získať aktuálneho používateľa"
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Získa profil prihláseného člena: meno, e-mailovú adresu, profilový obrázok a jazykové/regionálne nastavenie (locale).\n\nPole `urn` je hodnota `urn:li:person:{id}` URN člena, ktorú rozhrania LinkedIn API vyžadujú všade tam, kde je potrebné uviesť člena."
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
-          "source": "Create Text Post",
+          "source": "Create text post",
           "message": "Vytvoriť textový príspevok"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
-          "source": "Create Article Post",
+          "source": "Create article post",
           "message": "Vytvoriť príspevok s článkom"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Image Post",
+          "source": "Create image post",
           "message": "Vytvoriť príspevok s obrázkom"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
-          "source": "Create Video Post",
+          "source": "Create video post",
           "message": "Vytvoriť príspevok s videom"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Multi-Image Post",
+          "source": "Create multi-image post",
           "message": "Vytvoriť príspevok s viacerými obrázkami"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
-          "source": "Reshare Post",
+          "source": "Reshare post",
           "message": "Znova zdieľať príspevok"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Zabrániť ostatným v opätovnom zdieľaní príspevku"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update Post",
+          "source": "Update post",
           "message": "Aktualizovať príspevok"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Nový text príspevku, ktorý nahradí existujúci text.\n\nZmienky a hashtagy sa zapisujú **priamo v texte (inline)**: `@[Qore Technologies](urn:li:organization:2414183)` označuje organizáciu a `#coding` je hashtag."
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete Post",
+          "source": "Delete post",
           "message": "Odstrániť príspevok"
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "URN príspevku na odstránenie"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Získať príspevok"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Najnovšia verzia, ktorá môže byť `DRAFT` alebo `PROCESSING` namiesto uverejnenej"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
-          "source": "Upload Image",
+          "source": "Upload image",
           "message": "Nahrať obrázok"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "URN entity, ktorá bude vlastníkom položky. Predvolená hodnota je overený člen (`urn:li:person:...`); URN organizácie (`urn:li:organization:...`) vyžaduje rolu správcu (administrator) alebo správcu obsahu (content-admin) na danej stránke a rozsah (scope) `w_organization_social`"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
-          "source": "Upload Video",
+          "source": "Upload video",
           "message": "Nahrať video"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {

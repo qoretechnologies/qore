@@ -55,9 +55,24 @@ class ExplicitDiscardTest inherits QUnit::Test {
             string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
                 quote(libqore_dir), quote(qcc_bin), level, quote(exe), quote(fixture)), \rc);
             assertEq(0, rc, output);
-            output = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", quote(libqore_dir), quote(exe)), \rc);
+            output = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", quote(libqore_dir), quote(exe)), \rc);
             assertEq(0, rc, output);
             assertEq(Expected, output);
         }
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @param cmd the command that runs the executable
+        @param rc the exit status of the executable, if given
+
+        @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd, *reference<int> rc) {
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        rc = res.rc;
+        return res.out;
     }
 }

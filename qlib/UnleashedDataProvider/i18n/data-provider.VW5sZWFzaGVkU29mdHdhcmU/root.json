@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
-          "message": "Search Customers"
+          "source": "Search customers",
+          "message": "Search customers"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
           "source": "List and search customers",
@@ -352,8 +352,8 @@
           "message": "Retrieve a list of customers from Unleashed with optional filtering by customer code, name, email, customer type, or modification date."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -604,8 +604,8 @@
           "message": "Street address line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a customer by GUID",
@@ -628,8 +628,8 @@
           "message": "The unique identifier (GUID) of the customer to retrieve"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -784,8 +784,8 @@
           "message": "Whether credit is stopped for this customer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
-          "message": "Search Products"
+          "source": "Search products",
+          "message": "Search products"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
           "source": "List and search products",
@@ -796,8 +796,8 @@
           "message": "Retrieve a list of products from Unleashed with optional filtering by product code, description, or barcode."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
-          "message": "Create Product"
+          "source": "Create product",
+          "message": "Create product"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -916,8 +916,8 @@
           "message": "Whether this is an assembled product (made from components)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a product by GUID",
@@ -940,8 +940,8 @@
           "message": "The unique identifier (GUID) of the product to retrieve"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -1036,8 +1036,8 @@
           "message": "Whether the product can be purchased"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
-          "source": "Obsolete Product",
-          "message": "Obsolete Product"
+          "source": "Obsolete product",
+          "message": "Obsolete product"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
           "source": "Mark a product as obsolete",
@@ -1060,8 +1060,8 @@
           "message": "The unique identifier (GUID) of the product to mark as obsolete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
-          "source": "Search Sales Orders",
-          "message": "Search Sales Orders"
+          "source": "Search sales orders",
+          "message": "Search sales orders"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
           "source": "List and search sales orders",
@@ -1072,8 +1072,8 @@
           "message": "Retrieve a list of sales orders from Unleashed with optional filtering."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
-          "message": "Create Sales Order"
+          "source": "Create sales order",
+          "message": "Create sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Create a new sales order",
@@ -1384,8 +1384,8 @@
           "message": "Postal code for delivery"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
-          "message": "Get Sales Order"
+          "source": "Get sales order",
+          "message": "Get sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
           "source": "Get a sales order by GUID",
@@ -1408,8 +1408,8 @@
           "message": "The unique identifier (GUID) of the sales order to retrieve"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
-          "message": "Update Sales Order"
+          "source": "Update sales order",
+          "message": "Update sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Update an existing sales order",
@@ -1624,8 +1624,8 @@
           "message": "The price per unit"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
-          "message": "Delete Sales Order"
+          "source": "Delete sales order",
+          "message": "Delete sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
           "source": "Delete a sales order",
@@ -1648,8 +1648,8 @@
           "message": "The unique identifier (GUID) of the sales order to delete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
-          "source": "Complete Sales Order",
-          "message": "Complete Sales Order"
+          "source": "Complete sales order",
+          "message": "Complete sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
           "source": "Complete a sales order",
@@ -1672,8 +1672,8 @@
           "message": "The unique identifier (GUID) of the sales order to complete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
-          "source": "Search Credit Notes",
-          "message": "Search Credit Notes"
+          "source": "Search credit notes",
+          "message": "Search credit notes"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
           "source": "List and search credit notes",
@@ -1684,8 +1684,8 @@
           "message": "Retrieve a list of credit notes from Unleashed with optional filtering."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Create Credit Note",
-          "message": "Create Credit Note"
+          "source": "Create credit note",
+          "message": "Create credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
           "source": "Create a new credit note",
@@ -1864,8 +1864,8 @@
           "message": "Comments or notes for this credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Get Credit Note",
-          "message": "Get Credit Note"
+          "source": "Get credit note",
+          "message": "Get credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
           "source": "Get a credit note by GUID",
@@ -1888,8 +1888,8 @@
           "message": "The unique identifier (GUID) of the credit note to retrieve"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Update Credit Note",
-          "message": "Update Credit Note"
+          "source": "Update credit note",
+          "message": "Update credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
           "source": "Update an existing credit note",
@@ -2044,8 +2044,8 @@
           "message": "Comments or notes for this credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Delete Credit Note",
-          "message": "Delete Credit Note"
+          "source": "Delete credit note",
+          "message": "Delete credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
           "source": "Delete a credit note",
@@ -2068,8 +2068,8 @@
           "message": "The unique identifier (GUID) of the credit note to delete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
-          "source": "Complete Credit Note",
-          "message": "Complete Credit Note"
+          "source": "Complete credit note",
+          "message": "Complete credit note"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
           "source": "Complete a credit note",
@@ -2092,8 +2092,8 @@
           "message": "The unique identifier (GUID) of the credit note to complete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Create Credit Note Line",
-          "message": "Create Credit Note Line"
+          "source": "Create credit note line",
+          "message": "Create credit note line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
           "source": "Add a line item to a credit note",
@@ -2152,8 +2152,8 @@
           "message": "The unit price for this line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Update Credit Note Line",
-          "message": "Update Credit Note Line"
+          "source": "Update credit note line",
+          "message": "Update credit note line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
           "source": "Update a credit note line item",
@@ -2212,8 +2212,8 @@
           "message": "The unit price for this line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Delete Credit Note Line",
-          "message": "Delete Credit Note Line"
+          "source": "Delete credit note line",
+          "message": "Delete credit note line"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
           "source": "Delete a credit note line item",
@@ -2248,8 +2248,8 @@
           "message": "The unique identifier (GUID) of the line to delete"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
-          "message": "New Customer"
+          "source": "New customer",
+          "message": "New customer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
           "source": "Trigger when a customer is created or updated",
@@ -2260,8 +2260,8 @@
           "message": "Fires when a new customer is detected or an existing customer is modified via polling."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
-          "message": "New Sales Order"
+          "source": "New sales order",
+          "message": "New sales order"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
           "source": "Trigger when a sales order is created or updated",

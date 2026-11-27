@@ -621,7 +621,8 @@ public:
 
         Called on a worker of this dispatcher (a callback that flushes the callbacks, or a destructor that its
         release of an object runs, such as that of a server's async I/O controller stopped in a callback), it does
-        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508).
+        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508), nor
+        for the callbacks of the other workers that wait here, for the same reason (qore#7509).
     */
     DLLLOCAL void waitForIdle();
 
@@ -656,6 +657,17 @@ public:
         @return true if a thread waits in waitForIdle(), false if none did when \a timeout_ms elapsed
     */
     DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
+
+    //! Debug-only: holds the flushes in callbacks (waitForIdle() called in a callback) once they may return
+    /** A held flush still counts as a callback that waits in waitForIdle() (see callback_idle_waiters), so that a
+        test can check what another flush does then (qore#7509); \a hold False releases the flushes that are held
+    */
+    DLLLOCAL void dbgHoldCallbackFlush(bool hold);
+
+    //! Debug-only: waits until a flush in a callback is held (see dbgHoldCallbackFlush())
+    /** @return true if a flush is held, false if none was when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitCallbackFlushHeld(int timeout_ms);
 
     //! Debug-only: waits until a thread waits in waitForOwnerIdle() (in flushCallbacksByOwner(), whose mark is then
     //! set; qore#7010)
@@ -820,11 +832,21 @@ private:
         blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
         forever (qorus-core shutdown deadlock). */
     int active_continue_poll = 0;
+    //! Number of workers whose callback waits in waitForIdle()
+    /** Subset of @ref active_processing less @ref active_continue_poll.  waitForIdle() does not wait for them: each
+        ends only when its own wait has returned (qore#7509) */
+    int callback_idle_waiters = 0;
 #ifdef DEBUG
     //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
     std::atomic<int64_t> dbg_on_complete_dispatched{0};
     //! Debug-only: the number of threads blocked in waitForIdle() (see dbgWaitIdleWaiter())
     int dbg_idle_waiters = 0;
+    //! Debug-only: if true, a flush in a callback is held once it may return (see dbgHoldCallbackFlush())
+    bool dbg_hold_callback_flush = false;
+    //! Debug-only: the number of flushes in callbacks that are held (see dbgHoldCallbackFlush())
+    int dbg_callback_flushes_held = 0;
+    //! Debug-only: signaled when a flush in a callback is held, and when the hold changes
+    QoreCondition dbg_callback_flush_cond;
     //! Debug-only: signaled when a thread blocks in waitForIdle()
     QoreCondition dbg_idle_waiter_cond;
     //! Debug-only: the number of threads blocked in waitForOwnerIdle() (see dbgWaitOwnerIdleWaiter())
@@ -1165,6 +1187,12 @@ public:
 
     //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
     DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
+
+    //! Debug-only: holds or releases the flushes in callbacks (see QoreCallDispatcher::dbgHoldCallbackFlush())
+    DLLLOCAL void dbgHoldCallbackFlush(bool hold);
+
+    //! Debug-only: waits until a flush in a callback is held (see QoreCallDispatcher::dbgWaitCallbackFlushHeld())
+    DLLLOCAL bool dbgWaitCallbackFlushHeld(int timeout_ms);
 
     //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner (see
     //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())

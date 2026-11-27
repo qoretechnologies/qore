@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Crear registro"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -376,7 +376,7 @@
           "message": "El nombre de la tabla de Business Central, p. ej.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Buscar un solo registro"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -412,7 +412,7 @@
           "message": "El nombre de la tabla de Business Central, p. ej.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Buscar registros"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "El nombre de la tabla de Business Central, p. ej.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Actualizar registros"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "El nombre de la tabla de Business Central, p. ej.: `customers`"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Eliminar registros"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

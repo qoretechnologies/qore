@@ -223,7 +223,7 @@ module RestClientDataProvider {
             "app": RestClientDataProvider::AppName,
             "path": "/call",
             "action": "call",
-            "display_name": "Call REST API / Webhook",
+            "display_name": "Call REST API / webhook",
             "short_desc": "Make a call to a REST server or webhook",
             "desc": "Make a call to a REST server or a webhook and return the response",
             "action_code": DPAT_API,

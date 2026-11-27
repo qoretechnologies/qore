@@ -104,9 +104,15 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
             libqore_dir, libqore_dir, qcc_bin, out, src));
     }
 
+    #! runs a qcc executable and returns its output followed by its exit status, as "; echo EXIT=$?" did (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's warnings and the
+        native compilation trace, which are not output of the program (see ExecModeHarness::run_command()), and a line
+        \c EXIT=<i>status</i>; the executable runs in its default environment, which only traces native compilation
+    */
     private string runCompiled(string path) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
-            libqore_dir, path));
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s",
+            libqore_dir, path), NOTHING, "QORE_JIT_TIMING=1");
+        return sprintf("%sEXIT=%d\n", res.out, res.rc);
     }
 
     testNestedEmptyHashLiteralHint() {

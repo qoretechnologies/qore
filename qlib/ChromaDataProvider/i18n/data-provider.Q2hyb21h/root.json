@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
-          "message": "Vector Search"
+          "source": "Vector search",
+          "message": "Vector search"
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.short_desc": {
           "source": "Search a Chroma collection by query vector",

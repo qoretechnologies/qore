@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Список кампаній"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Кампанії з помилками"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Отримати кампанію"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Унікальний ідентифікатор кампанії для отримання"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "Створити кампанію"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Назва кампанії для створення"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
-          "source": "Pause Campaign",
+          "source": "Pause campaign",
           "message": "Призупинити кампанію"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Унікальний ідентифікатор кампанії для призупинення"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
-          "source": "Start Campaign",
+          "source": "Start campaign",
           "message": "Запустити кампанію"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Унікальний ідентифікатор кампанії для запуску"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Список лідів"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Ідентифікатор кампанії, з якої потрібно отримати лідів"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Отримати ліда"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Адреса електронної пошти ліда для отримання"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Add Lead to Campaign",
+          "source": "Add lead to campaign",
           "message": "Додати ліда до кампанії"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "URL-адреса вебсайту, пов’язаного з лідом"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "Оновити лід"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "Встановіть `True`, щоб позначити цього ліда як зацікавленого у вашій пропозиції"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Remove Lead from Campaign",
+          "source": "Remove lead from campaign",
           "message": "Видалити ліда з кампанії"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Адреса електронної пошти ліда, якого потрібно видалити з кампанії"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "Список дій"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Якщо `True`, повертає лише першу появу кожного типу активності для кожного ліда в кампанії"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Отримати список завдань"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Максимальна кількість завдань для повернення (макс. 100)"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Отримати завдання"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Унікальний ідентифікатор завдання для отримання"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Створити завдання"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Дата й час виконання цього завдання"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Оновити завдання"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Оновлені дата й час терміну виконання завдання"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Видалити завдання"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "Унікальний ідентифікатор завдання для видалення"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Адреса електронної пошти контакту для отримання. Для пошуку контактів Lemlist v2 API вимагає вказання конкретної адреси електронної пошти."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Адреса електронної пошти контакту для отримання"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "URL-адреса вебсайту, пов’язаного з контактом"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Оновлена URL-адреса вебсайту для контакту"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Адреса електронної пошти контакту для видалення"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "Лист надіслано"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "Лист відкрито"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "Перехід за посиланням у листі"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
-          "source": "Email Replied",
+          "source": "Email replied",
           "message": "Отримано відповідь на лист"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "Лист повернуто через помилку доставки"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Marked Interested",
+          "source": "Lead marked interested",
           "message": "Ліда позначено як зацікавленого"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
-          "source": "Lead Marked Not Interested",
+          "source": "Lead marked not interested",
           "message": "Ліда позначено як незацікавленого"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {

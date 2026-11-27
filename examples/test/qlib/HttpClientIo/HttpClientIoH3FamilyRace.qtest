@@ -131,7 +131,8 @@ public class HttpClientIoH3FamilyRaceTest inherits QUnit::Test {
     }
 
     globalTearDown() {
-        if (dns) {
+        # the DNS server is started only with library debugging
+        if (Option::HAVE_LIBRARY_DEBUGGING && dns) {
             if (exists old_grace) {
                 setenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS", old_grace);
             } else {
@@ -361,7 +362,7 @@ public class HttpClientIoH3FamilyRaceTest inherits QUnit::Test {
     }
 
     private bool check() {
-        if (!dns) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !dns) {
             testSkip("requires a debug build (dbg_cares_set_servers())");
             return False;
         }

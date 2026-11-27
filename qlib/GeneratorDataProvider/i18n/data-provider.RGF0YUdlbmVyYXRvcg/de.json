@@ -16,7 +16,7 @@
           "message": "Konfigurierbare Datensatzströme zum Testen von Datenpipelines ohne externe Dienstverbindungen generieren"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Datensätze generieren"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Ein fester Datums-/Uhrzeitwert, der als Referenzpunkt für die Generierung von Datumsfeldern verwendet wird; zusammen mit einem Seed stellt dies die vollständige Reproduzierbarkeit von Datumsfeldern über mehrere Durchläufe hinweg sicher; wenn nicht angegeben, wird das aktuelle Datum/die aktuelle Uhrzeit zu Beginn der Generierung verwendet"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Aus Vorlage generieren"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Convertir un fichier"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Le délai d'expiration de la conversion en secondes, de `10` à `1200` ; s'il n'est pas défini, la valeur par défaut du convertisseur s'applique, par exemple `900` pour les documents Office et `120` pour les pages web."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Obtenir les informations d'un convertisseur"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Autres paramètres du convertisseur, sous forme de hash associant les noms de paramètres ConvertAPI à leurs valeurs.\n\nLes paramètres de chaque convertisseur sont listés dans la [documentation ConvertAPI](https://docs.convertapi.com) et renvoyés par l'action `get-converter-info`.\n\n- Les valeurs scalaires sont envoyées telles quelles\n- Un hash de fichier (`name` et `content`) est envoyé comme un fichier\n- Une liste de hashs de fichiers est envoyée comme une liste de fichiers\n\n**Exemple** : `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "Convertir un PDF en images"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Autres paramètres du convertisseur, sous forme de hash associant les noms de paramètres ConvertAPI à leurs valeurs.\n\nLes paramètres de chaque convertisseur sont listés dans la [documentation ConvertAPI](https://docs.convertapi.com) et renvoyés par l'action `get-converter-info`.\n\n- Les valeurs scalaires sont envoyées telles quelles\n- Un hash de fichier (`name` et `content`) est envoyé comme un fichier\n- Une liste de hashs de fichiers est envoyée comme une liste de fichiers\n\n**Exemple** : `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "Fusionner des fichiers PDF"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

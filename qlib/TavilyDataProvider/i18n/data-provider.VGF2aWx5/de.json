@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Das Web durchsuchen"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Schränkt eine `news`-Suche auf die letzten N Tage ein.\n\n**Ersetzt durch `time_range`**, das für jedes Thema gilt; diese Option wird weiterhin akzeptiert, damit bestehende Abläufe funktionieren."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "Seiten lesen"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Zurückgeben, was diese Anfrage an Guthaben gekostet hat, als `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "Eine Website crawlen"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Zurückgeben, was diese Anfrage an Guthaben gekostet hat, als `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "Eine Website kartieren"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Zurückgeben, was diese Anfrage an Guthaben gekostet hat, als `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "Recherche starten"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Wie die Inhalte codiert sind. Standardmäßig `base64`, was der einzige Encoding-Typ für Tavily-Dokumente ist."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "Rechercheergebnis abrufen"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Der zu lesende Rechercheauftrag, wie von **Recherche starten** in `request_id` zurückgegeben.\n\nDie Auswahlliste zeigt die Rechercheaufträge, die dieses Konto gestartet hat, aus dem Nutzungsprotokoll.  Das Protokoll wird einige Minuten nach dem Start eines Auftrags geschrieben, ein eben begonnener Auftrag steht also noch nicht darin: Verwenden Sie dann die von **Recherche starten** zurückgegebene `request_id`."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "Guthabenverbrauch abrufen"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Nur die Nutzung dieses Projekts melden statt der des gesamten Kontos.  Wird als Header `X-Project-ID` gesendet.\n\nTavily veröffentlicht keinen Endpunkt, der Projekte auflistet, daher kann dies nicht als Auswahlliste angeboten werden; entnehmen Sie den Wert dem Tavily-Dashboard."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "API-Nutzungsprotokolle auflisten"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

@@ -18,7 +18,10 @@ public:
     //! Returns a referenced intersection, flattening and deduplicating its borrowed arguments.
     DLLLOCAL static QoreSandboxManager* combine(const std::vector<QoreSandboxManager*>& managers);
     DLLLOCAL static bool same(const QoreSandboxManager* a, const QoreSandboxManager* b);
+    //! Returns the members of a composition, or nullptr if the manager is null or not a composition
     DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager* manager);
+    //! Returns the members of a composition, or nullptr if the manager is not a composition
+    DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager& manager);
 
     //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
     //! (qore#6536)
@@ -138,6 +141,9 @@ DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
 /** As qore_object_program_is_restricted(), for a Program; false for nullptr (builtin code)
 */
 DLLLOCAL bool qore_program_is_restricted(const QoreProgram* pgm);
+//! As qore_program_is_restricted(), but returns -1 if the sandboxes cannot be resolved for lack of memory, so that
+//! each caller fails closed in its own direction (qore#7737)
+DLLLOCAL int qore_program_restricted_state(const QoreProgram* pgm);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110): the Program that declares the class, or else the first

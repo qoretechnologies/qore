@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
-          "message": "Create a Customer"
+          "source": "Create a customer",
+          "message": "Create a customer"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -436,8 +436,8 @@
           "message": "An external reference ID for the customer"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
-          "message": "Update a Customer"
+          "source": "Update a customer",
+          "message": "Update a customer"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -504,8 +504,8 @@
           "message": "Customer note"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
-          "source": "Add Customer to Group",
-          "message": "Add Customer to Group"
+          "source": "Add customer to group",
+          "message": "Add customer to group"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
           "source": "Add a customer to a group",
@@ -536,8 +536,8 @@
           "message": "The ID of the customer group"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
-          "source": "Remove Customer From Group",
-          "message": "Remove Customer From Group"
+          "source": "Remove customer from group",
+          "message": "Remove customer from group"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
           "source": "Remove a customer from a group",
@@ -568,8 +568,8 @@
           "message": "The ID of the customer group"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
-          "message": "List Customers"
+          "source": "List customers",
+          "message": "List customers"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List all customers",
@@ -640,8 +640,8 @@
           "message": "Descending order"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
-          "message": "Get a Customer"
+          "source": "Get a customer",
+          "message": "Get a customer"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a single customer by ID",
@@ -660,8 +660,8 @@
           "message": "The customer ID"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
-          "message": "Delete a Customer"
+          "source": "Delete a customer",
+          "message": "Delete a customer"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -692,8 +692,8 @@
           "message": "The current version of the customer profile (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
-          "message": "Create an Order"
+          "source": "Create an order",
+          "message": "Create an order"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -740,8 +740,8 @@
           "message": "External reference"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
-          "message": "Create Paid Order"
+          "source": "Create paid order",
+          "message": "Create paid order"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
           "source": "Create and pay an order",
@@ -792,8 +792,8 @@
           "message": "List of payment IDs to apply. If empty, uses external payment."
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
-          "source": "Get Orders",
-          "message": "Get Orders"
+          "source": "Get orders",
+          "message": "Get orders"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
           "source": "Get multiple orders by ID",
@@ -824,8 +824,8 @@
           "message": "Filter by location"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
-          "message": "Search Orders"
+          "source": "Search orders",
+          "message": "Search orders"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
           "source": "Search for orders",
@@ -928,8 +928,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
-          "message": "Get an Order"
+          "source": "Get an order",
+          "message": "Get an order"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -948,8 +948,8 @@
           "message": "The order ID"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
-          "source": "Cancel an Order",
-          "message": "Cancel an Order"
+          "source": "Cancel an order",
+          "message": "Cancel an order"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
           "source": "Cancel an order",
@@ -980,8 +980,8 @@
           "message": "The current version of the order (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
-          "message": "Create a Payment"
+          "source": "Create a payment",
+          "message": "Create a payment"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
           "source": "Create a new payment",
@@ -1080,8 +1080,8 @@
           "message": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
-          "message": "Complete Payment"
+          "source": "Complete payment",
+          "message": "Complete payment"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
           "source": "Complete a payment",
@@ -1108,8 +1108,8 @@
           "message": "Version token for concurrency"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
-          "message": "Refund Payment"
+          "source": "Refund payment",
+          "message": "Refund payment"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
           "source": "Refund a payment",
@@ -1160,8 +1160,8 @@
           "message": "Reason for refund"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
-          "message": "List Payments"
+          "source": "List payments",
+          "message": "List payments"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
           "source": "List payments",
@@ -1236,8 +1236,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get a Payment",
-          "message": "Get a Payment"
+          "source": "Get a payment",
+          "message": "Get a payment"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
           "source": "Get a single payment by ID",
@@ -1256,8 +1256,8 @@
           "message": "The payment ID"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
-          "message": "Create Invoice"
+          "source": "Create invoice",
+          "message": "Create invoice"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a new invoice",
@@ -1372,8 +1372,8 @@
           "message": "Invoice description"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
-          "message": "List Invoices"
+          "source": "List invoices",
+          "message": "List invoices"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
           "source": "List invoices",
@@ -1404,8 +1404,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
-          "message": "Get an Invoice"
+          "source": "Get an invoice",
+          "message": "Get an invoice"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get a single invoice by ID",
@@ -1424,8 +1424,8 @@
           "message": "The invoice ID"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
-          "message": "Send Invoice"
+          "source": "Send invoice",
+          "message": "Send invoice"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
           "source": "Send (publish) an invoice",
@@ -1456,8 +1456,8 @@
           "message": "The current version of the invoice (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
-          "source": "Cancel Invoice",
-          "message": "Cancel Invoice"
+          "source": "Cancel invoice",
+          "message": "Cancel invoice"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
           "source": "Cancel an invoice",
@@ -1488,8 +1488,8 @@
           "message": "The current version of the invoice (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
-          "source": "Create Appointment",
-          "message": "Create Appointment"
+          "source": "Create appointment",
+          "message": "Create appointment"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
           "source": "Create a new booking",
@@ -1560,8 +1560,8 @@
           "message": "Note from customer"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
-          "source": "List Bookings",
-          "message": "List Bookings"
+          "source": "List bookings",
+          "message": "List bookings"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
           "source": "List bookings",
@@ -1628,8 +1628,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
-          "source": "Get a Booking",
-          "message": "Get a Booking"
+          "source": "Get a booking",
+          "message": "Get a booking"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
           "source": "Get a single booking by ID",
@@ -1648,8 +1648,8 @@
           "message": "The booking ID"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
-          "source": "Cancel Booking",
-          "message": "Cancel Booking"
+          "source": "Cancel booking",
+          "message": "Cancel booking"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
           "source": "Cancel a booking",
@@ -1680,8 +1680,8 @@
           "message": "The current version of the booking (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
-          "source": "Change Inventory",
-          "message": "Change Inventory"
+          "source": "Change inventory",
+          "message": "Change inventory"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
           "source": "Change inventory counts",
@@ -1800,8 +1800,8 @@
           "message": "No state"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
-          "source": "Get Inventory Count",
-          "message": "Get Inventory Count"
+          "source": "Get inventory count",
+          "message": "Get inventory count"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
           "source": "Get inventory counts for an item",
@@ -1836,8 +1836,8 @@
           "message": "Optional list of location IDs to filter counts by"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
-          "source": "Search Catalog",
-          "message": "Search Catalog"
+          "source": "Search catalog",
+          "message": "Search catalog"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
           "source": "Search catalog objects",
@@ -1880,8 +1880,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
-          "source": "Find Service",
-          "message": "Find Service"
+          "source": "Find service",
+          "message": "Find service"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
           "source": "Find a service in the catalog",
@@ -1912,8 +1912,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
-          "message": "List Refunds"
+          "source": "List refunds",
+          "message": "List refunds"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
           "source": "List refunds",
@@ -2040,8 +2040,8 @@
           "message": "Maximum results"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get a Refund",
-          "message": "Get a Refund"
+          "source": "Get a refund",
+          "message": "Get a refund"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
           "source": "Get a single refund by ID",
@@ -2060,8 +2060,8 @@
           "message": "The refund ID"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "New Customer",
-          "message": "New Customer"
+          "source": "New customer",
+          "message": "New customer"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new customer is created",
@@ -2084,8 +2084,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
-          "source": "Order Created/Updated",
-          "message": "Order Created/Updated"
+          "source": "Order created/updated",
+          "message": "Order created/updated"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
           "source": "Trigger when an order is created or updated",
@@ -2108,8 +2108,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
-          "source": "Payment Created/Updated",
-          "message": "Payment Created/Updated"
+          "source": "Payment created/updated",
+          "message": "Payment created/updated"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a payment is created or updated",
@@ -2132,8 +2132,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
-          "message": "New Appointment"
+          "source": "New appointment",
+          "message": "New appointment"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
           "source": "Trigger when a new booking is created",
@@ -2156,8 +2156,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
-          "source": "New Catalog Item",
-          "message": "New Catalog Item"
+          "source": "New catalog item",
+          "message": "New catalog item"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
           "source": "Trigger when a new catalog item is added",
@@ -2180,8 +2180,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
-          "message": "New Invoice"
+          "source": "New invoice",
+          "message": "New invoice"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
           "source": "Trigger when a new invoice is created",
@@ -2204,8 +2204,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
-          "message": "New Events"
+          "source": "New events",
+          "message": "New events"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
           "source": "Trigger when new events occur",

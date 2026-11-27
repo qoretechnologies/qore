@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.display_name": {
-          "source": "Get Fine-Tune Details",
+          "source": "Get fine-tune details",
           "message": "取得微調模型詳細資料"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.short_desc": {
@@ -364,7 +364,7 @@
           "message": "選擇自有模型，或輸入 `org-id/lora-name` 以使用共用 LoRA。基礎模型與精度必須相符。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.display_name": {
-          "source": "List Fine-Tunes",
+          "source": "List fine-tunes",
           "message": "列表精細表"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "列出所選帳戶擁有的微調模型。\n\n**可用性：**目前結構描述仍保留此操作，但舊版微調流程已淘汰。必須確認帳戶是否支援。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "刪除精細通訊錄"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.short_desc": {
@@ -400,7 +400,7 @@
           "message": "選擇自有模型，或輸入 `org-id/lora-name` 以使用共用 LoRA。基礎模型與精度必須相符。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "查詢點數餘額"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "產生媒體前請確認可用餘額。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.display_name": {
-          "source": "Get Result on This Region",
+          "source": "Get result on this region",
           "message": "取得此區域的結果"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.short_desc": {
@@ -436,7 +436,7 @@
           "message": "啟動動作傳回的作業 ID。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.display_name": {
-          "source": "Start FLUX Pro 1.1 Image",
+          "source": "Start FLUX Pro 1.1 image",
           "message": "開始使用 FLUX Pro 1.1 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.short_desc": {
@@ -712,7 +712,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.display_name": {
-          "source": "Start FLUX Dev Image",
+          "source": "Start FLUX Dev image",
           "message": "開始使用 FLUX Dev 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.display_name": {
-          "source": "Start FLUX Pro 1.1 Ultra Image",
+          "source": "Start FLUX Pro 1.1 Ultra image",
           "message": "開始使用 FLUX Pro 1.1 Ultra 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.display_name": {
-          "source": "Start Image Fill",
+          "source": "Start image fill",
           "message": "開始填補影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.display_name": {
-          "source": "Start Image Expansion",
+          "source": "Start image expansion",
           "message": "開始擴展影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.display_name": {
-          "source": "Start Legacy Fine-Tuned Fill",
+          "source": "Start legacy fine-tuned fill",
           "message": "開始使用舊版微調模型填補"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.display_name": {
-          "source": "Start Legacy Fine-Tuned Ultra",
+          "source": "Start legacy fine-tuned Ultra",
           "message": "啟動舊版 Ultra 微調模型"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.display_name": {
-          "source": "Start FLUX.2 Flex Image",
+          "source": "Start FLUX.2 Flex image",
           "message": "開始使用 FLUX.2 Flex 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.display_name": {
-          "source": "Start FLUX.2 Klein 9B Image",
+          "source": "Start FLUX.2 Klein 9B image",
           "message": "開始使用 FLUX.2 Klein 9B 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.display_name": {
-          "source": "Start FLUX.2 Klein 9B Preview",
+          "source": "Start FLUX.2 Klein 9B preview",
           "message": "啟動 FLUX.2 Klein 9B Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.display_name": {
-          "source": "Start FLUX.2 Klein 4B Image",
+          "source": "Start FLUX.2 Klein 4B image",
           "message": "開始使用 FLUX.2 Klein 4B 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.display_name": {
-          "source": "Start FLUX.2 Max Image",
+          "source": "Start FLUX.2 Max image",
           "message": "開始使用 FLUX.2 Max 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.short_desc": {
@@ -7168,7 +7168,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.display_name": {
-          "source": "Start FLUX.2 Pro Preview",
+          "source": "Start FLUX.2 Pro preview",
           "message": "啟動 FLUX.2 Pro Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.short_desc": {
@@ -8368,7 +8368,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.display_name": {
-          "source": "Start FLUX.2 Pro Image",
+          "source": "Start FLUX.2 Pro image",
           "message": "開始使用 FLUX.2 Pro 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.short_desc": {
@@ -9568,7 +9568,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.display_name": {
-          "source": "Start FLUX 3 Video",
+          "source": "Start FLUX 3 video",
           "message": "開始使用 FLUX 3 產生影片"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "檔案名稱"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.display_name": {
-          "source": "Start Video Upscale",
+          "source": "Start video upscale",
           "message": "開始放大影片"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.short_desc": {
@@ -10284,7 +10284,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.display_name": {
-          "source": "Start Video Edit",
+          "source": "Start video edit",
           "message": "開始編輯影片"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.short_desc": {
@@ -10464,7 +10464,7 @@
           "message": "數值越低，內容審核越嚴格。服務可能套用額外限制。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.display_name": {
-          "source": "Start Image Outpainting",
+          "source": "Start image outpainting",
           "message": "開始影像向外擴繪"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.short_desc": {
@@ -10760,7 +10760,7 @@
           "message": "完全依照原文使用提示詞，不自動擴充。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.display_name": {
-          "source": "Start Virtual Try-On v1",
+          "source": "Start virtual try-on v1",
           "message": "開始虛擬試穿 v1"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.display_name": {
-          "source": "Start Virtual Try-On v2",
+          "source": "Start virtual try-on v2",
           "message": "開始虛擬試穿 v2"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.short_desc": {
@@ -11504,7 +11504,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.display_name": {
-          "source": "Start Object Erasure",
+          "source": "Start object erasure",
           "message": "開始移除物件"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.short_desc": {
@@ -11876,7 +11876,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.display_name": {
-          "source": "Start Image Deblurring",
+          "source": "Start image deblurring",
           "message": "開始影像去模糊"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.short_desc": {
@@ -12104,7 +12104,7 @@
           "message": "用於驗證回呼簽章的密鑰。需要 webhook URL。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.display_name": {
-          "source": "Start FLUX Kontext Max Image",
+          "source": "Start FLUX Kontext Max image",
           "message": "開始使用 FLUX Kontext Max 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.short_desc": {
@@ -12764,7 +12764,7 @@
           "message": "數值越低，內容審核越嚴格。服務可能套用額外限制。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.display_name": {
-          "source": "Start FLUX Kontext Pro Image",
+          "source": "Start FLUX Kontext Pro image",
           "message": "開始使用 FLUX Kontext Pro 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.short_desc": {
@@ -13424,7 +13424,7 @@
           "message": "數值越低，內容審核越嚴格。服務可能套用額外限制。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.display_name": {
-          "source": "Report Licensed Model Usage",
+          "source": "Report licensed model usage",
           "message": "回報授權模型用量"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.short_desc": {
@@ -13460,7 +13460,7 @@
           "message": "要申報的實際授權生成次數。此報告會影響計費。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.display_name": {
-          "source": "Start FLUX Pro Image",
+          "source": "Start FLUX Pro image",
           "message": "開始使用 FLUX Pro 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.short_desc": {
@@ -13712,7 +13712,7 @@
           "message": "檔案名稱"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.display_name": {
-          "source": "Start Klein 4B LoRA Image",
+          "source": "Start Klein 4B LoRA image",
           "message": "開始使用 Klein 4B LoRA 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.short_desc": {
@@ -14396,7 +14396,7 @@
           "message": "控制所選模型的影響程度。必要時請在提示詞中加入其觸發詞。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.display_name": {
-          "source": "Start Klein 9B LoRA Image",
+          "source": "Start Klein 9B LoRA image",
           "message": "開始使用 Klein 9B LoRA 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.short_desc": {
@@ -15080,7 +15080,7 @@
           "message": "控制所選模型的影響程度。必要時請在提示詞中加入其觸發詞。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.display_name": {
-          "source": "Start Klein 9B KV LoRA Image",
+          "source": "Start Klein 9B KV LoRA image",
           "message": "開始使用 Klein 9B KV LoRA 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.short_desc": {
@@ -16448,7 +16448,7 @@
           "message": "控制所選模型的影響程度。必要時請在提示詞中加入其觸發詞。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.display_name": {
-          "source": "Start Klein Base 4B LoRA Image",
+          "source": "Start Klein Base 4B LoRA image",
           "message": "開始使用 Klein Base 4B LoRA 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.short_desc": {
@@ -17084,7 +17084,7 @@
           "message": "控制所選模型的影響程度。必要時請在提示詞中加入其觸發詞。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.display_name": {
-          "source": "Start Klein Base 9B LoRA Image",
+          "source": "Start Klein Base 9B LoRA image",
           "message": "開始使用 Klein Base 9B LoRA 產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.short_desc": {
@@ -17720,7 +17720,7 @@
           "message": "控制所選模型的影響程度。必要時請在提示詞中加入其觸發詞。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.display_name": {
-          "source": "Get Routed Result",
+          "source": "Get routed result",
           "message": "從指定區域取得結果"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.short_desc": {
@@ -17792,7 +17792,7 @@
           "message": "下載位元組數上限；預設為 100 MiB，最高為 512 MiB。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.display_name": {
-          "source": "Wait for Result",
+          "source": "Wait for result",
           "message": "等待結果"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.short_desc": {
@@ -17864,7 +17864,7 @@
           "message": "下載位元組數上限；預設為 100 MiB，最高為 512 MiB。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.display_name": {
-          "source": "Download Result",
+          "source": "Download result",
           "message": "下載結果"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.short_desc": {
@@ -17956,7 +17956,7 @@
           "message": "草稿快取"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.display_name": {
-          "source": "Generate Video",
+          "source": "Generate video",
           "message": "產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.short_desc": {
@@ -18472,7 +18472,7 @@
           "message": "下載位元組數上限；預設為 100 MiB，最高為 512 MiB。"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "產生影像"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
@@ -18536,7 +18536,7 @@
           "message": "FLUX.2 Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1wcm8tcHJldmlldw.display_name": {
-          "source": "FLUX.2 Pro Preview",
+          "source": "FLUX.2 Pro preview",
           "message": "FLUX.2 Pro Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1tYXg.display_name": {
@@ -18556,7 +18556,7 @@
           "message": "FLUX.2 Klein 9B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1rbGVpbi05Yi1wcmV2aWV3.display_name": {
-          "source": "FLUX.2 Klein 9B Preview",
+          "source": "FLUX.2 Klein 9B preview",
           "message": "FLUX.2 Klein 9B Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {

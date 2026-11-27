@@ -378,7 +378,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Contacts",
                 "operation_id": "getContacts",
-                "display_name": "Find Contacts",
+                "display_name": "Find contacts",
                 "short_desc": "List the contacts in the organisation",
                 "desc": "Lists contacts - customers, suppliers and everyone else in the address book.\n\n"
                     "`where` filters with Xero's expression language: `IsCustomer==true`, "
@@ -400,7 +400,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Contacts",
                 "operation_id": "updateOrCreateContacts",
-                "display_name": "Create or Update Contacts",
+                "display_name": "Create or update contacts",
                 "short_desc": "Create contacts, or update them by ID",
                 "desc": "Creates or updates contacts.\n\n"
                     "`Contacts` is an **array** even for one contact - that is Xero's envelope. A member "
@@ -435,7 +435,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Invoices",
                 "operation_id": "getInvoices",
-                "display_name": "Find Invoices",
+                "display_name": "Find invoices",
                 "short_desc": "List invoices and bills",
                 "desc": "Lists invoices.\n\n"
                     "**Bills are invoices here**: `Type==\"ACCPAY\"` selects what Xero's UI calls a bill "
@@ -462,7 +462,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Invoices",
                 "operation_id": "updateOrCreateInvoices",
-                "display_name": "Create or Update Invoices",
+                "display_name": "Create or update invoices",
                 "short_desc": "Create invoices or bills, or update them by ID",
                 "desc": "Creates or updates invoices.\n\n"
                     "`Invoices` is an **array** even for one invoice. Each member needs `Type` - `ACCREC` "
@@ -529,7 +529,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Invoices/{InvoiceID}/History",
                 "operation_id": "getInvoiceHistory",
-                "display_name": "Find Invoice History",
+                "display_name": "Find invoice history",
                 "short_desc": "Read an invoice's history and notes",
                 "desc": "Reads the history of an invoice: who changed it, when, and any notes recorded "
                     "against it.",
@@ -544,7 +544,7 @@ public class XeroManifest {
                 "method": "PUT",
                 "path": "/Invoices/{InvoiceID}/History",
                 "operation_id": "createInvoiceHistory",
-                "display_name": "Add Note to Invoice",
+                "display_name": "Add note to invoice",
                 "short_desc": "Record a note against an invoice",
                 "desc": "Adds a note to an invoice's history.\n\n"
                     "`HistoryRecords` is an **array** even for one note, and the note itself is its "
@@ -566,7 +566,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Invoices/{InvoiceID}/Email",
                 "operation_id": "emailInvoice",
-                "display_name": "Email Invoice",
+                "display_name": "Email invoice",
                 "short_desc": "Send an invoice to its contact by email",
                 "desc": "Sends an invoice to the email address on its contact.\n\n"
                     "Xero decides the recipient and the template; there is nothing to fill in but the "
@@ -582,7 +582,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Quotes",
                 "operation_id": "updateOrCreateQuotes",
-                "display_name": "Create or Update Quotes",
+                "display_name": "Create or update quotes",
                 "short_desc": "Create quotes, or update them by ID",
                 "desc": "Creates or updates quotes.\n\n"
                     "`Quotes` is an **array** even for one quote, and each needs a `Contact`, a `Date` and "
@@ -633,7 +633,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/RepeatingInvoices",
                 "operation_id": "updateOrCreateRepeatingInvoices",
-                "display_name": "Create or Update Repeating Invoices",
+                "display_name": "Create or update repeating invoices",
                 "short_desc": "Set up an invoice that repeats on a schedule",
                 "desc": "Creates or updates repeating invoice templates.\n\n"
                     "`Schedule` is what makes it repeat - its period, unit and next scheduled date - and "
@@ -692,7 +692,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Payments",
                 "operation_id": "getPayments",
-                "display_name": "Find Payments",
+                "display_name": "Find payments",
                 "short_desc": "List the payments in the organisation",
                 "desc": "Lists payments made against invoices and credit notes.\n\n"
                     "This is exported so that the **New Payment** event has something to read: the "
@@ -708,7 +708,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Payments",
                 "operation_id": "createPayment",
-                "display_name": "Create Payment",
+                "display_name": "Create payment",
                 "short_desc": "Record a payment against an invoice",
                 "desc": "Records a payment.\n\n"
                     "Unlike most of the accounting API this takes **one** payment rather than an envelope "
@@ -772,7 +772,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/CreditNotes",
                 "operation_id": "getCreditNotes",
-                "display_name": "Find Credit Notes",
+                "display_name": "Find credit notes",
                 "short_desc": "List the credit notes in the organisation",
                 "desc": "Lists credit notes.\n\n"
                     "This is exported so that the credit note dropdown and the **New Credit Note** event "
@@ -788,7 +788,7 @@ public class XeroManifest {
                 "method": "PUT",
                 "path": "/CreditNotes/{CreditNoteID}/Allocations",
                 "operation_id": "createCreditNoteAllocation",
-                "display_name": "Allocate Credit Note",
+                "display_name": "Allocate credit note",
                 "short_desc": "Apply a credit note to an invoice",
                 "desc": "Applies a credit note to one or more invoices.\n\n"
                     "`Allocations` is an **array** even for one allocation, and each names the `Invoice` it "
@@ -825,7 +825,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/BankTransactions",
                 "operation_id": "getBankTransactions",
-                "display_name": "Find Bank Transactions",
+                "display_name": "Find bank transactions",
                 "short_desc": "List the bank transactions in the organisation",
                 "desc": "Lists bank transactions - spend and receive money entries against a bank "
                     "account.\n\n"
@@ -842,7 +842,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/BankTransactions",
                 "operation_id": "updateOrCreateBankTransactions",
-                "display_name": "Create Bank Transaction",
+                "display_name": "Create bank transaction",
                 "short_desc": "Record money spent or received against a bank account",
                 "desc": "Creates or updates bank transactions.\n\n"
                     "`BankTransactions` is an **array** even for one. Each needs a `Type` - `SPEND` or "
@@ -917,7 +917,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Items",
                 "operation_id": "getItems",
-                "display_name": "Find Items",
+                "display_name": "Find items",
                 "short_desc": "List the items in the organisation",
                 "desc": "Lists inventory and service items with their codes, prices and accounts.\n\n"
                     "The response is `{Items: [...]}`.",
@@ -930,7 +930,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Items",
                 "operation_id": "updateOrCreateItems",
-                "display_name": "Create or Update Items",
+                "display_name": "Create or update items",
                 "short_desc": "Create items, or update them by ID",
                 "desc": "Creates or updates items.\n\n"
                     "`Items` is an **array** even for one item, and `Code` is what identifies an item to a "
@@ -966,7 +966,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Accounts",
                 "operation_id": "getAccounts",
-                "display_name": "Find Accounts",
+                "display_name": "Find accounts",
                 "short_desc": "List the chart of accounts",
                 "desc": "Lists the chart of accounts with each account's code, name, type and tax type.\n\n"
                     "This is what backs the account, account-code and bank-account dropdowns; the "
@@ -982,7 +982,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/TaxRates",
                 "operation_id": "getTaxRates",
-                "display_name": "Find Tax Rates",
+                "display_name": "Find tax rates",
                 "short_desc": "List the tax rates in the organisation",
                 "desc": "Lists tax rates with the `TaxType` code a line item uses to name one.\n\n"
                     "This is what backs the tax type dropdown; the application this module replaces "
@@ -999,7 +999,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/PurchaseOrders",
                 "operation_id": "getPurchaseOrders",
-                "display_name": "Find Purchase Orders",
+                "display_name": "Find purchase orders",
                 "short_desc": "List the purchase orders in the organisation",
                 "desc": "Lists purchase orders.\n\n"
                     "`Status` selects one state, and `DateFrom` and `DateTo` bound the listing by order "
@@ -1031,7 +1031,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Projects",
                 "operation_id": "getProjects",
-                "display_name": "Find Projects",
+                "display_name": "Find projects",
                 "short_desc": "List the projects in the organisation",
                 "desc": "Lists projects.\n\n"
                     "`contactID` narrows the listing to one contact's projects and `states` to `INPROGRESS` "
@@ -1060,7 +1060,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Projects",
                 "operation_id": "createProject",
-                "display_name": "Create Project",
+                "display_name": "Create project",
                 "short_desc": "Create a project for a contact",
                 "desc": "Creates a project.\n\n"
                     "`contactId` and `name` are required; `estimateAmount` and `deadlineUtc` are the "
@@ -1083,7 +1083,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/ProjectsUsers",
                 "operation_id": "getProjectUsers",
-                "display_name": "Find Project Users",
+                "display_name": "Find project users",
                 "short_desc": "List the users who can be assigned to project tasks",
                 "desc": "Lists the users of the projects API - the people time can be recorded against.",
                 "groups": (GroupProjects,),
@@ -1098,7 +1098,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Projects/{projectId}/Tasks",
                 "operation_id": "getTasks",
-                "display_name": "Find Tasks",
+                "display_name": "Find tasks",
                 "short_desc": "List the tasks in a project",
                 "desc": "Lists a project's tasks with their rates, charge types and estimates.",
                 "groups": (GroupProjects,),
@@ -1119,7 +1119,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Projects/{projectId}/Tasks",
                 "operation_id": "createTask",
-                "display_name": "Create Task",
+                "display_name": "Create task",
                 "short_desc": "Add a task to a project",
                 "desc": "Creates a task in a project.\n\n"
                     "`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a "

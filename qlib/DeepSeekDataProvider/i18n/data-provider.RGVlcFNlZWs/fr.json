@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Complétion de chat"
         },
         "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Identifiant pseudonyme pour l'isolation du cache et de la planification. Utilisez des lettres, des chiffres, des traits de soulignement ou des traits d'union ; au plus 512 caractères. Excluez les informations personnelles."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lister les modèles"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Trouver les modèles disponibles pour vos flux de travail."
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Balance",
+          "source": "Get balance",
           "message": "Obtenir le solde"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Vérifier le crédit disponible avant d'exécuter les flux de travail IA.\n\nRenvoie la disponibilité du crédit et les soldes sans générer de jetons."
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.display_name": {
-          "source": "Fill in the Middle",
+          "source": "Fill in the middle",
           "message": "Remplissage au milieu"
         },
         "app.RGVlcFNlZWs.action.ZmltLWNvbXBsZXRpb24.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Nombre de probabilités de jetons alternatives entre `0` et `20`."
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Créer une réponse"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Identifiant pseudonyme pour l'isolation du cache et de la planification. Utilisez des lettres, des chiffres, des traits de soulignement ou des traits d'union ; au plus 512 caractères. Excluez les informations personnelles."
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Image File",
+          "source": "Upload image file",
           "message": "Télécharger un fichier image"
         },
         "app.RGVlcFNlZWs.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Supprimer automatiquement le fichier après `3600` à `2592000` secondes. Omettre pour le conserver."
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Image Files",
+          "source": "List image files",
           "message": "Lister les fichiers images"
         },
         "app.RGVlcFNlZWs.action.bGlzdC1maWxlcw.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Données utilisateur"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get Image File",
+          "source": "Get image file",
           "message": "Obtenir le fichier image"
         },
         "app.RGVlcFNlZWs.action.Z2V0LWZpbGU.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Sélectionnez un fichier image téléchargé."
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete Image File",
+          "source": "Delete image file",
           "message": "Supprimer le fichier image"
         },
         "app.RGVlcFNlZWs.action.ZGVsZXRlLWZpbGU.short_desc": {

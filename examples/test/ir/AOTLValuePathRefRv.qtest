@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes: the AST interpreter, qcc executables and a native test
 # test-platform: macos - native AOT IR serialization and the IR of closure bodies that qcc executables run
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -9,6 +10,7 @@
 %requires QUnit
 %requires ../TestInterpreter.qm
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 %exec-class AOTLValuePathRefRvTest
 
 #! An LValuePath instruction keeps whether its value is used through the serialized IR of an AOT image (qore#6328)
@@ -56,9 +58,13 @@ class AOTLValuePathRefRvTest inherits QUnit::Test {
 
     compiledClosures() {
         int rc;
-        string expected = backquote(prefix + shellQuote(qore) + " -b --exec-mode=ast " + shellQuote(script) + " 2>&1",
-            \rc);
-        assertEq(0, rc, expected);
+        # the output on stdout; stderr holds nothing but the module loader's warnings and the native compilation
+        # trace, which are not output of the program
+        hash<ExecModeHarness::ModeRunResult> ast = ExecModeHarness::run_command(prefix + shellQuote(qore)
+            + " -b --exec-mode=ast " + shellQuote(script));
+        assertEq(0, ast.rc, ast.out);
+        assertEq("", ast.stderr, "ast: stderr");
+        string expected = ast.stdout;
         TmpDir tmp("qore-aot-lvalue-path-ref-rv-");
         foreach string opt in (("0", "3")) {
             string exe = sprintf("%s/unused-results-O%s", tmp.path, opt);
@@ -68,9 +74,14 @@ class AOTLValuePathRefRvTest inherits QUnit::Test {
             # the native closures, and the closure bodies from the IR of the image
             foreach string env in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ")) {
                 string label = sprintf("-O%s %s", opt, env);
-                string result = backquote(sprintf("%s%s%s -b 2>&1", prefix, env, shellQuote(exe)), \rc);
-                assertEq(0, rc, label + ": " + result);
-                assertEq(expected, result, label);
+                # the closure bodies from the IR of the image run on the IR: with the harness's trace environment
+                # (ExecModeHarness::TraceEnv: JIT thresholds of 1, synchronous compilation) they would be compiled to
+                # native code first, so that run only traces native compilation, with the default thresholds
+                hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s%s%s -b", prefix,
+                    env, shellQuote(exe)), NOTHING, env ? "QORE_JIT_TIMING=1" : NOTHING);
+                assertEq(0, res.rc, label + ": " + res.out);
+                assertEq(expected, res.stdout, label);
+                assertEq("", res.stderr, label + ": stderr");
             }
         }
     }

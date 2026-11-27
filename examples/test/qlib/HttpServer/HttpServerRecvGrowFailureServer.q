@@ -116,12 +116,23 @@ class GrowFailureHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! the handler threads of the server: one for a request whose read fails, one for a request that waits for its error,
+#! and spares
+const HandlerThreads = 4;
+
 BodyErrorCapture capture();
 GrowFailureHandler handler(capture);
 Logger logger("test", LoggerLevel::getLevelError());
 logger.addAppender(capture);
 HttpServer server(<HttpServerOptionInfo>{
     "logger": logger,
+    # the handler threads of the server are all started now, before its address space is limited, and none ends: a
+    # handler thread that started later would map its stack in the room for the data of a request, and how many start,
+    # and when the earlier ones end, depends on the load of the host (qore#7775)
+    "idle_threads": HandlerThreads,
+    "max_handler_threads": HandlerThreads,
+    "min_idle_handler_threads": HandlerThreads,
+    "max_idle_handler_threads": HandlerThreads,
     # no limit, so that the buffer of a body read grows until no more memory can be allocated for it, and not only
     # up to the default limit of a body that the server reads into memory
     "max_request_body_size": 0,

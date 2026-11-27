@@ -132,6 +132,7 @@ class HeartbeatHandler inherits WebSocketHandler {
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         # on HTTP/3, the stream's staged data is held back, as when the client grants no credit, until the test
         # releases it
+        # debug-builtin-guard: "hold" is set only for the handler that globalSetUp() creates with library debugging
         if (hold && cx."header-info".session_id) {
             call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
         }

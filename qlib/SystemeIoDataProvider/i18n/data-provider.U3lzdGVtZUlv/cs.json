@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Vytvořit kontakt"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Hodnota vlastního pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Aktualizovat kontakt"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Hodnota vlastního pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Smazat kontakt"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Jedinečný identifikátor kontaktu, který se má odstranit"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Seznam kontaktů"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Získat kontakt"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -656,7 +656,7 @@
           "message": "ID kontaktu"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign Tag to Contact",
+          "source": "Assign tag to contact",
           "message": "Přiřadit štítek ke kontaktu"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Jedinečný identifikátor štítku, který má být kontaktu přiřazen"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Odebrat štítek z kontaktu"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Jedinečný identifikátor štítku, který má být z kontaktu odebrán"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Vytvořit štítek"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "Název vytvářeného štítku"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Aktualizovat štítek"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Nový název pro štítek"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Smazat štítek"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Jedinečný identifikátor štítku, který se má odstranit"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Seznam štítků"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Získat štítek"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
@@ -876,7 +876,7 @@
           "message": "ID štítku"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact Field",
+          "source": "Create contact field",
           "message": "Vytvořit pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Jedinečný identifikátor (slug) pro vlastní pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact Field",
+          "source": "Update contact field",
           "message": "Aktualizovat pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Nový zobrazovaný název pro vlastní pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact Field",
+          "source": "Delete contact field",
           "message": "Smazat pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Jedinečný identifikátor (slug) vlastního pole kontaktu ke smazání"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact Fields",
+          "source": "List contact fields",
           "message": "Vypsat pole kontaktů"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact Field",
+          "source": "Get contact field",
           "message": "Získat pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Slug pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "Zobrazit kurzy"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create Enrollment",
+          "source": "Create enrollment",
           "message": "Vytvořit zápis"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "Seznam ID modulů, ke kterým má být udělen přístup. Vyžadováno, když je `accessType` nastaveno na `partial_access`"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Delete Enrollment",
+          "source": "Delete enrollment",
           "message": "Smazat zápis"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Jedinečný identifikátor zápisu ke smazání"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "Zobrazit zápisy"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "Vypsat komunity"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Create Membership",
+          "source": "Create membership",
           "message": "Vytvořit členství"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Jedinečný identifikátor kontaktu, který má být přidán jako člen"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Delete Membership",
+          "source": "Delete membership",
           "message": "Smazat členství"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Jedinečný identifikátor členství ke smazání"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
-          "source": "List Memberships",
+          "source": "List memberships",
           "message": "Členství v seznamech"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Cancel Subscription",
+          "source": "Cancel subscription",
           "message": "Zrušit předplatné"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Jedinečný identifikátor předplatného, které má být zrušeno"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "Vypsat předplatná"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Sestupně"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Spustí se při vytvoření nového kontaktu v Systeme.io"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
-          "source": "New Tag",
+          "source": "New tag",
           "message": "Nový štítek"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {

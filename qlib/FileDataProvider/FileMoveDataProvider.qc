@@ -73,6 +73,8 @@ public class FileMoveDataProvider inherits FileDataProviderBase {
         @throws PATH-EXISTS-ERROR If destination path exists and overwrite flag is False
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the paths are the caller's input (qore#7806)
+        checkCallerFileAccess();
         if (root.val() && lock) {
             checkPath(\req.source);
             checkPath(\req.target);

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
+          "source": "Create incident",
           "message": "インシデントの作成"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "ServiceNow の REST API を使用して `incident` テーブルにレコードを作成し、ServiceNow でインシデントを作成します"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
+          "source": "Find single incident",
           "message": "単一のインシデントを検索"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
@@ -364,7 +364,7 @@
           "message": "ServiceNowのREST APIを使用して`incident`テーブル内の特定のレコードを検索します"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
+          "source": "Find matching incidents",
           "message": "一致するインシデントの検索"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "ServiceNow の REST API を使用して `incident` テーブル内のレコードを検索します"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
+          "source": "Update incidents",
           "message": "インシデントの更新"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "ServiceNowのREST APIを使用して`incident`テーブル内のレコードを更新します"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
+          "source": "Delete incidents",
           "message": "インシデントの削除"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "ServiceNow の REST API を使用して `incident` テーブル内のレコードを削除します"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "レコードを作成"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -424,7 +424,7 @@
           "message": "ServiceNow テーブルの名前（例: `incident`）"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "単一レコードの検索"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "ServiceNow テーブルの名前（例: `incident`）"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "レコードの検索"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -472,7 +472,7 @@
           "message": "ServiceNow テーブルの名前（例: `incident`）"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -496,7 +496,7 @@
           "message": "ServiceNow テーブルの名前（例: `incident`）"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "レコードを削除"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

@@ -140,10 +140,12 @@ class StringAppendInPlaceTest inherits QUnit::Test {
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
             libqore_dir, qcc_bin, opt, exe, getWorker()));
         assertTrue(is_file(exe), sprintf("compiled program -O%d: %s", opt, compile_out));
-        int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe), \rc);
-        assertEq(0, rc, sprintf("compiled program -O%d exit code: %s", opt, out));
-        checkWorkerOutput(sprintf("aot-O%d", opt), out);
+        # the output on stdout followed by the output on stderr, as of the execution modes, apart from the module
+        # loader's warnings and the native compilation trace, which are not output of the program
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+            sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertEq(0, res.rc, sprintf("compiled program -O%d exit code: %s", opt, res.out));
+        checkWorkerOutput(sprintf("aot-O%d", opt), res.out);
     }
 
     private string getWorker() {

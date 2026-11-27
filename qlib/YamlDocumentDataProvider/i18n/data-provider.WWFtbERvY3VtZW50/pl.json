@@ -8,7 +8,7 @@
           "message": "Odczytuje dane dokumentu YAML z określonej lokalizacji pliku.\n\nPlik YAML może zawierać jeden lub więcej dokumentów oddzielonych znacznikami `---`. Każdy dokument jest iterowany jako oddzielny rekord.\n\n**Główne opcje**\n- `path`: lokalizacja pliku do odczytu (wymagane)\n- `encoding`: kodowanie znaków (domyślnie: `UTF-8`)\n- `skip_empty_documents`: pomijanie pustych dokumentów (domyślnie: `True`)\n- `max_documents`: maksymalna liczba dokumentów do odczytania (`0` = bez limitu)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
-          "source": "Read YAML Document File",
+          "source": "Read YAML document file",
           "message": "Odczytaj plik dokumentu YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -104,7 +104,7 @@
           "message": "Odczytuje dane YAML w postaci tekstu przekazanego bezpośrednio jako ciąg znaków.\n\nDane YAML mogą zawierać jeden lub więcej dokumentów oddzielonych znacznikami `---`. Każdy dokument jest iterowany jako oddzielny rekord.\n\n**Główne opcje**\n- `data`: ciąg znaków YAML do sparsowania (wymagane)\n- `encoding`: kodowanie znaków (domyślnie: `UTF-8`)\n- `skip_empty_documents`: pomijanie pustych dokumentów (domyślnie: `True`)\n- `max_documents`: maksymalna liczba dokumentów do odczytania (`0` = bez limitu)\n"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read YAML Inline Data",
+          "source": "Read YAML inline data",
           "message": "Odczytaj dane tekstowe YAML"
         },
         "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
@@ -200,7 +200,7 @@
           "message": "Zapisuje rekordy dokumentów YAML jako strumień wielodokumentowy do określonej lokalizacji pliku.\n\nRekordy są gromadzone i zapisywane z separatorami dokumentów `---` po zakończeniu akcji.\n\n**Główne opcje**\n- `path`: lokalizacja pliku wyjściowego (wymagane)\n- `flow_style`: użyj kompaktowego formatu YAML (domyślnie: `False`)\n- `encoding`: kodowanie znaków (domyślnie: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
-          "source": "Write YAML Document File",
+          "source": "Write YAML document file",
           "message": "Zapisz plik dokumentu YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
@@ -308,7 +308,7 @@
           "message": "Generuje z rekordów wielodokumentowy strumień YAML i zwraca go jako dane, na przykład w celu dołączenia do wiadomości e-mail lub przesłania inną akcją.\n\nKażdy rekord staje się jednym dokumentem YAML, oddzielonym znacznikami `---`; akcja zwraca wygenerowane dane w `data` oraz liczbę dokumentów w `record_count`.\n\n**Główne opcje**\n- `flow_style`: użyj kompaktowego formatu YAML (domyślnie: `False`)\n- `encoding`: kodowanie znaków (domyślnie: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write YAML Inline Data",
+          "source": "Write YAML inline data",
           "message": "Zapisz dane tekstowe YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {

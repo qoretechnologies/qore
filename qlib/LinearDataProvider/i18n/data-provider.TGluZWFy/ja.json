@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "課題を作成"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
@@ -524,7 +524,7 @@
           "message": "サブ課題を作成するための親課題"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
+          "source": "Search issues",
           "message": "課題の検索"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
@@ -640,7 +640,7 @@
           "message": "返す結果の最大数"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "課題の取得"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
@@ -664,7 +664,7 @@
           "message": "取得する課題"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "課題の更新"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
@@ -848,7 +848,7 @@
           "message": "親課題ID（サブ課題にする場合）"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
+          "source": "Archive issue",
           "message": "課題をアーカイブ"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "アーカイブする課題"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
+          "source": "Create comment",
           "message": "コメントを作成"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Markdown形式のコメント本文/コンテンツ"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "プロジェクトを作成"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "プロジェクトの目標完了日"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "プロジェクトの検索"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "返す結果の最大数"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
+          "source": "Create cycle",
           "message": "サイクルを作成"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "サイクルの終了日"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
+          "source": "Search cycles",
           "message": "サイクルの検索"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "返す結果の最大数"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "ラベルを作成"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "ラベルを作成するチーム（ワークスペースラベルの場合は空のままにします）"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
+          "source": "Search labels",
           "message": "ラベルの検索"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "返す結果の最大数"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
+          "source": "Search teams",
           "message": "チームの検索"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "返す結果の最大数"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
+          "source": "Get team",
           "message": "チームを取得"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "取得するチーム"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
+          "source": "Issue created",
           "message": "課題の作成"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "このチームで作成された課題のみをトリガー（任意）"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
+          "source": "Issue updated",
           "message": "課題の更新"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "このチームで更新された課題に対してのみトリガー（任意）"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
+          "source": "Comment created",
           "message": "コメント作成時"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {

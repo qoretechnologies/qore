@@ -23,7 +23,8 @@ class CiLeftoverCleanupTest(unittest.TestCase):
         for script in ("test-ubuntu.sh", "test-alpine.sh"):
             with self.subTest(script=script):
                 source = (ROOT / "examples/test/docker_test" / script).read_text()
-                tests = source.index("./run_tests.sh || TEST_RC=$?")
+                # the tests run as a suite of the job (ci-suites.sh)
+                tests = source.index('qore_ci_suite "Qore tests (run_tests.sh)"')
                 cleanup = source.index("examples/test/docker_test/drop-test-run-leftovers.q || true")
                 self.assertLess(tests, cleanup)
                 # as the tests' user, before the job ends on a failure of the tests

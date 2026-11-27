@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "캠페인 목록"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -388,7 +388,7 @@
           "message": "오류가 있는 캠페인"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "캠페인 가져오기"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -412,7 +412,7 @@
           "message": "조회할 캠페인의 고유 식별자"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "캠페인 만들기"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -436,7 +436,7 @@
           "message": "생성할 캠페인 이름"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
-          "source": "Pause Campaign",
+          "source": "Pause campaign",
           "message": "캠페인 일시 중지"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "일시 중지할 캠페인의 고유 식별자"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
-          "source": "Start Campaign",
+          "source": "Start campaign",
           "message": "캠페인 시작"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "시작할 캠페인의 고유 식별자"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "리드 나열"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "리드를 조회할 캠페인의 식별자"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "리드 조회"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "조회할 리드의 이메일 주소"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Add Lead to Campaign",
+          "source": "Add lead to campaign",
           "message": "캠페인에 리드 추가"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "리드와 연결된 웹사이트 URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "리드 업데이트"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "이 리드를 귀하의 제안에 관심이 있는 것으로 표시하려면 `True`(으)로 설정하세요"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Remove Lead from Campaign",
+          "source": "Remove lead from campaign",
           "message": "캠페인에서 리드 제거"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "캠페인에서 제거할 리드의 이메일 주소"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "활동 목록 조회"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -896,7 +896,7 @@
           "message": "`True`인 경우 캠페인당 리드별 각 활동 유형의 첫 번째 발생만 반환합니다."
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "작업 목록 조회"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "반환할 최대 작업 수 (최대 100개)"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "작업 가져오기"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
@@ -944,7 +944,7 @@
           "message": "조회할 작업의 고유 식별자"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "작업 생성"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "이 작업의 마감 날짜 및 시간"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "작업 업데이트"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "이 작업의 업데이트된 마감 날짜 및 시간"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "작업 삭제"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "삭제할 작업의 고유 식별자"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "연락처 목록"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "조회할 연락처의 이메일 주소입니다. Lemlist v2 API는 연락처를 조회하기 위해 특정 이메일 주소가 필요합니다."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "연락처 가져오기"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "조회할 연락처의 이메일 주소"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "연락처 생성"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "연락처와 연결된 웹사이트 URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "연락처 업데이트"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "연락처의 업데이트된 웹사이트 URL"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "연락처 삭제"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "삭제할 연락처의 이메일 주소"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "이메일 전송됨"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "이메일 열림"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "이메일 링크 클릭됨"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
-          "source": "Email Replied",
+          "source": "Email replied",
           "message": "이메일 답장됨"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "이메일 반송됨"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Marked Interested",
+          "source": "Lead marked interested",
           "message": "리드가 관심 있음으로 표시됨"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "선택적으로 특정 Lemlist 캠페인으로 이벤트를 필터링합니다."
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
-          "source": "Lead Marked Not Interested",
+          "source": "Lead marked not interested",
           "message": "리드가 관심 없음으로 표시됨"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {

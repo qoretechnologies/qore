@@ -388,8 +388,8 @@
           "message": "The GUID of the group to create the bitlink in. Uses the default group if not specified"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
-          "source": "Create a Bitlink",
-          "message": "Create a Bitlink"
+          "source": "Create a bitlink",
+          "message": "Create a bitlink"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
           "source": "Create a bitlink with advanced options",
@@ -532,8 +532,8 @@
           "message": "The URL where users can install the app if not already installed"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
-          "source": "Update a Bitlink",
-          "message": "Update a Bitlink"
+          "source": "Update a bitlink",
+          "message": "Update a bitlink"
         },
         "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
           "source": "Update an existing bitlink",
@@ -604,8 +604,8 @@
           "message": "A new list of tags for the bitlink (replaces existing tags)"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
-          "source": "Delete a Bitlink",
-          "message": "Delete a Bitlink"
+          "source": "Delete a bitlink",
+          "message": "Delete a bitlink"
         },
         "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
           "source": "Delete an existing bitlink",
@@ -628,8 +628,8 @@
           "message": "The bitlink ID to delete (e.g., `bit.ly/abc123`)"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
-          "source": "Get Bitlink Clicks",
-          "message": "Get Bitlink Clicks"
+          "source": "Get bitlink clicks",
+          "message": "Get bitlink clicks"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
           "source": "Get click summary for a bitlink",
@@ -696,8 +696,8 @@
           "message": "The number of time units to query. Use `-1` for all available data"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
-          "source": "Create Custom Bitlink",
-          "message": "Create Custom Bitlink"
+          "source": "Create custom bitlink",
+          "message": "Create custom bitlink"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
           "source": "Add a custom back-half to a bitlink",
@@ -732,8 +732,8 @@
           "message": "The ID of the existing bitlink to add a custom back-half to"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
-          "source": "List Bitlinks",
-          "message": "List Bitlinks"
+          "source": "List bitlinks",
+          "message": "List bitlinks"
         },
         "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
           "source": "List bitlinks in a group",
@@ -856,8 +856,8 @@
           "message": "Maximum results"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
-          "source": "Get a Bitlink",
-          "message": "Get a Bitlink"
+          "source": "Get a bitlink",
+          "message": "Get a bitlink"
         },
         "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
           "source": "Get a single bitlink by ID",
@@ -876,8 +876,8 @@
           "message": "The bitlink ID"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
-          "message": "List Groups"
+          "source": "List groups",
+          "message": "List groups"
         },
         "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
           "source": "List all groups",
@@ -904,8 +904,8 @@
           "message": "Filter by organization"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
-          "message": "Update a Group"
+          "source": "Update a group",
+          "message": "Update a group"
         },
         "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
           "source": "Update an existing group",
@@ -964,8 +964,8 @@
           "message": "A list of branded short domains to associate with the group"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
-          "source": "Get a Group",
-          "message": "Get a Group"
+          "source": "Get a group",
+          "message": "Get a group"
         },
         "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
           "source": "Get a single group by GUID",
@@ -984,8 +984,8 @@
           "message": "The group GUID"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
-          "message": "List Organizations"
+          "source": "List organizations",
+          "message": "List organizations"
         },
         "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
           "source": "List all organizations",
@@ -1004,8 +1004,8 @@
           "message": "Get a specific organization"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get an Organization",
-          "message": "Get an Organization"
+          "source": "Get an organization",
+          "message": "Get an organization"
         },
         "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Get a single organization by GUID",
@@ -1024,8 +1024,8 @@
           "message": "The organization GUID"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create a Campaign",
-          "message": "Create a Campaign"
+          "source": "Create a campaign",
+          "message": "Create a campaign"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
           "source": "Create a new campaign",
@@ -1084,8 +1084,8 @@
           "message": "A list of channel GUIDs to associate with the campaign"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Update a Campaign",
-          "message": "Update a Campaign"
+          "source": "Update a campaign",
+          "message": "Update a campaign"
         },
         "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
           "source": "Update an existing campaign",
@@ -1144,8 +1144,8 @@
           "message": "A new list of channel GUIDs to associate with the campaign"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
-          "message": "List Campaigns"
+          "source": "List campaigns",
+          "message": "List campaigns"
         },
         "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
           "source": "List campaigns",
@@ -1172,8 +1172,8 @@
           "message": "Filter by group"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get a Campaign",
-          "message": "Get a Campaign"
+          "source": "Get a campaign",
+          "message": "Get a campaign"
         },
         "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
           "source": "Get a single campaign by GUID",
@@ -1192,8 +1192,8 @@
           "message": "The campaign GUID"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
-          "source": "List Branded Short Domains",
-          "message": "List Branded Short Domains"
+          "source": "List branded short domains",
+          "message": "List branded short domains"
         },
         "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
           "source": "List all branded short domains",
@@ -1204,8 +1204,8 @@
           "message": "List all branded short domains (BSDs) available in the account"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
-          "source": "Create a QR Code",
-          "message": "Create a QR Code"
+          "source": "Create a QR code",
+          "message": "Create a QR code"
         },
         "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
           "source": "Create a new QR code",
@@ -1392,8 +1392,8 @@
           "message": "ISO 8601 timestamp when the QR code should expire"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
-          "source": "Update a QR Code",
-          "message": "Update a QR Code"
+          "source": "Update a QR code",
+          "message": "Update a QR code"
         },
         "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
           "source": "Update an existing QR code",
@@ -1592,8 +1592,8 @@
           "message": "ISO 8601 timestamp when the QR code should expire"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
-          "source": "List QR Codes",
-          "message": "List QR Codes"
+          "source": "List QR codes",
+          "message": "List QR codes"
         },
         "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
           "source": "List QR codes in a group",
@@ -1620,8 +1620,8 @@
           "message": "Group to list QR codes for"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
-          "source": "Get a QR Code",
-          "message": "Get a QR Code"
+          "source": "Get a QR code",
+          "message": "Get a QR code"
         },
         "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
           "source": "Get a single QR code by ID",
@@ -1640,8 +1640,8 @@
           "message": "The QR code ID"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
-          "source": "Bitlink Clicked",
-          "message": "Bitlink Clicked"
+          "source": "Bitlink clicked",
+          "message": "Bitlink clicked"
         },
         "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {
           "source": "Trigger when a bitlink receives clicks",

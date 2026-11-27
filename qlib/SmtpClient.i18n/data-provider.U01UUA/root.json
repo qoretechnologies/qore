@@ -16,8 +16,8 @@
           "message": "Generic SMTP server for sending emails"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send an Email With SMTP",
-          "message": "Send an Email With SMTP"
+          "source": "Send an email with SMTP",
+          "message": "Send an email with SMTP"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
           "source": "Send an email through a generic SMTP server",

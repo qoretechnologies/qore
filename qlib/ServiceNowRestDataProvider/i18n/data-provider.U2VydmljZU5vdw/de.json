@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
-          "source": "Create Incident",
+          "source": "Create incident",
           "message": "Incident erstellen"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Einen Incident in ServiceNow erstellen, indem ein Datensatz in der Tabelle `incident` über die REST-API von ServiceNow erstellt wird"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
-          "source": "Find Single Incident",
+          "source": "Find single incident",
           "message": "Einzelnen Incident suchen"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Einen bestimmten Datensatz in der Tabelle `incident` über die REST-API von ServiceNow suchen"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
-          "source": "Find Matching Incidents",
+          "source": "Find matching incidents",
           "message": "Passende Incidents suchen"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Datensätze in der Tabelle `incident` über die REST-API von ServiceNow suchen"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
-          "source": "Update Incidents",
+          "source": "Update incidents",
           "message": "Incidents aktualisieren"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Datensätze in der Tabelle `incident` über die REST-API von ServiceNow aktualisieren"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
-          "source": "Delete Incidents",
+          "source": "Delete incidents",
           "message": "Incidents löschen"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Datensätze in der Tabelle `incident` über die REST-API von ServiceNow löschen"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Datensatz erstellen"
         },
         "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Der Name der ServiceNow-Tabelle, z. B.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Einzelnen Datensatz suchen"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Der Name der ServiceNow-Tabelle, z. B.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Datensätze suchen"
         },
         "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Der Name der ServiceNow-Tabelle, z. B.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Datensätze aktualisieren"
         },
         "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Der Name der ServiceNow-Tabelle, z. B.: `incident`"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Datensätze löschen"
         },
         "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

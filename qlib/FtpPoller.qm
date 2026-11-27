@@ -63,7 +63,7 @@ module FtpPoller {
             "app": FtpPoller::AppName,
             "path": "/",
             "action": "ftp-file-event",
-            "display_name": "FTP File Received",
+            "display_name": "FTP file received",
             "subtype": "ftppoller",
             "short_desc": "A file is uploaded to an FTP server",
             "desc": "React to files uploaded to an FTP server; the action configuration determines if the event "
@@ -191,6 +191,8 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - the \c local_dir option is refused to a creator restricted from the file system (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - added @ref FtpPoller::FtpPoller::setFatal() "FtpPoller::setFatal()" and
       @ref FtpPoller::FtpPoller::isFatal() "isFatal()" for subclasses, which cannot use the private members of the
       class when sandboxed code declares them
@@ -515,6 +517,10 @@ public class FtpPoller {
             conf.start_thread = get_thread_capability("start_thread");
         }
 
+        if (exists conf.local_dir) {
+            # the local directory is the creator's input (qore#7806)
+            check_creator_file_access("the 'local_dir' option of the FTP poller");
+        }
         if (exists conf.local_dir && (!is_dir(conf.local_dir) || !is_writable(conf.local_dir))) {
             throw "FTPPOLLER-CONSTRUCTOR-ARG-ERROR", sprintf("invalid local directory %y; directory does not exist or "
                 "cannot be written to", conf.local_dir);
@@ -637,6 +643,10 @@ public class FtpPoller {
                 conf.protocol);
         }
 
+        if (exists conf.local_dir) {
+            # the local directory is the creator's input (qore#7806)
+            check_creator_file_access("the 'local_dir' option of the FTP poller");
+        }
         if (exists conf.local_dir && (!is_dir(conf.local_dir) || !is_writable(conf.local_dir))) {
             throw "FTPPOLLER-CONSTRUCTOR-ERROR", sprintf("invalid local directory %y; directory does not exist or "
                 "cannot be written to", conf.local_dir);

@@ -16,7 +16,7 @@
           "message": "Čítanie a zápis štandardných JSON súborov (nie NDJSON/JSON Lines). Podporuje JSON súbory obsahujúce pole objektov (spracovávané ako jednotlivé záznamy) alebo jediný objekt (vrátený ako jeden záznam). Poskytuje konfigurovateľný formátovaný výstup (pretty-print) pre zápis."
         },
         "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
-          "source": "Read JSON File",
+          "source": "Read JSON file",
           "message": "Prečítať súbor JSON"
         },
         "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
@@ -120,7 +120,7 @@
           "message": "Ponechať text vo vstupnom kódovaní tak, ako bol prečítaný, bez kontroly"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read JSON Inline Data",
+          "source": "Read JSON inline data",
           "message": "Prečítať priame dáta JSON"
         },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
@@ -188,7 +188,7 @@
           "message": "Kódovanie US-ASCII"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
-          "source": "Write JSON File",
+          "source": "Write JSON file",
           "message": "Zapísať súbor JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Zapísať kompaktný výstup JSON bez nadbytočných medzier"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Write JSON Data",
+          "source": "Write JSON data",
           "message": "Zapísať JSON dáta"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {

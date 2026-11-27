@@ -148,6 +148,7 @@ enum qore_stream_type : unsigned char {
 }
 
 class qore_class_private;
+class QoreStackLocation;
 
 //! Returns the class context of the code that serializes, deserializes or formats (qore#7146)
 /** In the frame of a builtin (Serializable::serialize(), sprintf(), ...), the class context of the code that called it;
@@ -159,16 +160,18 @@ DLLLOCAL const qore_class_private* qore_serialization_caller_class();
 //! Returns true if the calling code itself is trusted, for the trusted serialization APIs (Program::deserialize(),
 //! Program::serialize(), qore#7146)
 /** The code of a class that trusted code declared, or the code of a trusted Program outside a class that is not a
-    library module's; library code outside a class acts for its caller, which is trusted if no sandbox governs it
+    library module's; library code outside a class acts for its caller, which is trusted if no restricting sandbox
+    governs it (qore#7737)
 */
 DLLLOCAL bool qore_serialization_calling_code_trusted();
 
 //! Decides for each object whether the code that serializes, deserializes or formats it gets the non-public state that
 //! the classes declared by trusted code declare (qore#7146)
 /** The code of a class that trusted code declared gets the state of the objects of the classes that it has private
-    access to (its own hierarchy); for any other object, the state is withheld if sandboxed code is in the chain of
-    callers (qore_caller_is_sandboxed(), which fails closed), so that trusted code that formats or serializes a value
-    for a sandboxed caller does not give it the state of another class's object.  The trusted APIs give all state.
+    access to (its own hierarchy); for any other object, the state is withheld if restricted code is in the chain of
+    callers (qore_caller_is_restricted(), which fails closed; qore#7737), so that trusted code that formats or
+    serializes a value for a restricted caller does not give it the state of another class's object.  The trusted
+    APIs give all state.
 */
 class QoreSerializationCaller {
 public:
@@ -178,6 +181,9 @@ public:
         the builtin was called with; a serialization that meets no class with protected state reads nothing
     */
     DLLLOCAL QoreSerializationCaller() {
+#ifdef DEBUG
+        recordFrame();
+#endif
     }
 
     //! for a trusted API: all state is given
@@ -213,6 +219,20 @@ private:
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
     bool unrestricted = false;
+
+#ifdef DEBUG
+    // The lazy reads of restricts() are correct only if the thread's frame is the one that this object was created in
+    // (the builtin's frame: every check runs after the user code it called, such as a serializeMembers() hook, has
+    // returned); DEBUG builds record what qore_serialization_caller_class() and qore_caller_is_sandboxed() read and
+    // assert at every restricts() call that it has not changed
+    const QoreStackLocation* dbg_stack_loc = nullptr;
+    const qore_class_private* dbg_class = nullptr;
+    const qore_class_private* dbg_caller_class = nullptr;
+    const QoreProgram* dbg_pgm = nullptr;
+
+    DLLLOCAL void recordFrame();
+    DLLLOCAL void assertFrame() const;
+#endif
 };
 
 class QoreInternalSerializationContext {

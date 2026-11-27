@@ -30,8 +30,14 @@
     requests.
 
     The race is made deterministic: the server's async target is wrapped, and the wrapper returns the request's
-    result only once the controller has logged the removal of the listener, which another thread runs with
-    HttpServer::stopListenerID() (the stop itself waits for the request).
+    result only once the controller has logged that it closed the connections of the listener, which another thread
+    runs with HttpServer::stopListenerID() (the stop itself waits for the request).
+
+    qore#7692: the stop of a listener now waits for the requests of the listener whose handlers run (and drains its
+    connections first) before it removes the listener, so a request can no longer return after the removal; the race
+    is the same with the close of the listener's connections, which the stop runs before it waits for the requests:
+    the wrapper waits for that close instead of the removal, and the server's drain is turned off (drain_timeout 0) so
+    that the close runs at once.
 
     The SSE case is run over HTTP/1.1, HTTP/2 and HTTP/3: a stream of an HTTP/2 or HTTP/3 connection is added to the
     connection's operation rather than submitted, and that operation, which the removal cancels (HTTP/2) or whose
@@ -56,10 +62,10 @@
 #! Upper bound for any wait that a regression turns into a hang
 const HangTimeout = 30s;
 
-#! Signals the removal of the listeners of a listener ID from the controller's log
-/** An HTTP/3 listener is a TCP listener and the QUIC listener paired with it, which the controller removes one after
-    the other; HttpServer removes each of them twice (when the listener stops and once it has stopped), so the
-    listeners are counted by their hash.
+#! Signals the close of the connections of the listeners of a listener ID from the controller's log
+/** An HTTP/3 listener is a TCP listener and the QUIC listener paired with it, whose connections the controller closes
+    one after the other; the stop of a listener closes them twice (before and after it waits for the requests in
+    progress, qore#7692), so the listeners are counted by their hash.
 */
 class RemovalSignal inherits LoggerAppenderWithLayout {
     public {
@@ -80,7 +86,7 @@ class RemovalSignal inherits LoggerAppenderWithLayout {
         if (type != EVENT_LOG) {
             return;
         }
-        *string lhash = (params =~ x/Removed listener "([0-9a-f]+)"/)[0];
+        *string lhash = (params =~ x/Async HTTP listener "([0-9a-f]+)": closing/)[0];
         if (!lhash) {
             return;
         }
@@ -167,7 +173,7 @@ class RaceTarget inherits HttpAsyncTarget {
                 s.stopListenerID(l);
             }();
             if (signal.removed.waitForZero(HangTimeout)) {
-                throw "TEST-ERROR", "the listener was not removed";
+                throw "TEST-ERROR", "the connections of the listener were not closed";
             }
         }
         return rv;
@@ -234,7 +240,8 @@ class HttpListenerRemovalRaceTest inherits QUnit::Test {
         Logger logger("listener-removal-race", LoggerLevel::getLevelInfo());
         logger.addAppender(signal);
         logger.addAppender(new ServerWarnings());
-        RaceServer srv(<HttpServerOptionInfo>{"logger": logger});
+        # no drain: the stop closes the connections of the listener at once (qore#7692)
+        RaceServer srv(<HttpServerOptionInfo>{"logger": logger, "drain_timeout": 0});
         srv.setHandler("race", path, NOTHING, handler);
         hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
         if (proto != "h1") {

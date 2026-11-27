@@ -183,8 +183,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
         #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
-        # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
-        #   compiled with qcc
         # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - index-writer-filesystem (#6500): each execution mode runs in a child process of its own, which loads the
         #   modules once
@@ -211,16 +209,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
         # - hash-member-order (#7272): its probe runs in child processes that set their own --exec-mode and in a qcc
         #   executable
-        # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
-        #   their own --exec-mode
-        # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
-        # - empty-string-order (#6090): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
-        # - foreach-enum-element-release (#6091): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
         # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
         #   ISO-8859-1
         # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
@@ -229,8 +219,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   differ
         # - default-encoding-keys (#6604): its checks run in child processes whose default character encodings
         #   differ
-        # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
         # - ParseStackBoundary-5 (#6420): the AOT module loads that it checks run in child processes (the fixture)
         # - parse-load-module-location (#6047): its module loads run in child processes, one for each stack size
@@ -243,37 +231,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
         #   executables and with a module compiled by qcc
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
-        # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
-        #   and in qcc executables
-        # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
-        #   and in qcc executables
-        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - hashdecl-member-default-typeparam (#6240): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - hashdecl-default-closure-typeparam (#6269): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
-        # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
-        # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
-        #   executables
-        # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
         #   in a child process with --exec-mode=ast
         # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
         #   executables
-        # - closure-default-self-ref (#6417, #5949): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
-        # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
-        #   and in qcc executables
-        # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
-        #   qcc executables
         # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
@@ -284,8 +250,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   raise unhandled exceptions at the same time
         # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
-        # - or-nothing-container-casts (#6174, #5734): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
         #   whose standard output and error output it reads
         # - asyncio_poll_complete_notify (#6804): its checks run in child processes without an execution mode, whose
@@ -298,12 +262,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   a debug hook in them
         # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
         #   and arm a debug hook in them
-        # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
-        #   their own --exec-mode, in qcc executables and in a qcc-compiled module
-        # - generic-static-intermediate (#6447, #6448): its probes run in child processes that set their own
-        #   --exec-mode, in qcc executables and in a qcc-compiled module
-        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
-        #   executables and in a qcc-compiled module
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables, which arm a debug hook
         # - private-internal-redeclared-member (#6393): its probes run in child processes in the default mode and that
@@ -318,13 +276,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - frame-check-qcc-o3 (#7072): its checks run in a qcc executable and in child processes that set their own
         #   --exec-mode
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
-        # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
-        #   qcc executables
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
-        # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
-        #   executables
-        # - expression-declarations-modes (#6524): its probes run in child processes that set their own --exec-mode and
-        #   in qcc executables
         # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
         # - AOTModuleDependencyRestrictions (#6406) and AOTModuleHeaderRequests (#6386): their checks run in child
         #   processes that set their own --exec-mode and in qcc executables
@@ -408,7 +360,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
-                                 "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTLinkUnresolvedReference.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -419,43 +370,28 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",
-                                 "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
                                  "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
-                                 "examples/test/qore/classes/method-reference-per-class.qtest",
-                                 "examples/test/qore/classes/explicit-type-param-method-call.qtest",
-                                 "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
                                  "examples/test/qore/security/stdio-sandbox-change.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
-                                 "examples/test/qore/classes/deleted-object-generic-variant.qtest",
-                                 "examples/test/qore/classes/deleted-object-overload.qtest",
-                                 "examples/test/qore/operators/empty-string-order.qtest",
-                                 "examples/test/qore/operators/float-int-conversion.qtest",
-                                 "examples/test/qore/operators/hash-equality.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
-                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
-                                 "examples/test/qore/functions/number-round-exact.qtest",
-                                 "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
                                  "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
-                                 "examples/test/qore/misc/foreach-enum-element-release.qtest",
-                                 "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest",
                                  "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest",
                                  "examples/test/module-cpp-api/parse-load-module-location/"
@@ -463,20 +399,12 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
                                  "examples/test/qore/misc/test-interpreter-options/test-interpreter-options.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
-                                 "examples/test/qore/functions/generic-call-parse-type.qtest",
-                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
-                                 "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest",
-                                 "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
-                                 "examples/test/qore/classes/or-nothing-container-casts.qtest",
-                                 "examples/test/qore/classes/generic-static-call-type-params.qtest",
-                                 "examples/test/qore/classes/generic-static-intermediate.qtest",
-                                 "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest",
@@ -494,7 +422,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
-                                 "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
                                  "examples/test/qore/security/sandbox-timezone-paths-library.qtest",
                                  "examples/test/qore/misc/small-main-stack-startup.qtest",

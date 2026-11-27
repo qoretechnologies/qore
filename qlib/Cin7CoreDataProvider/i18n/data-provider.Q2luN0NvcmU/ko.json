@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "고객 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "이름, ID 또는 수정 날짜별로 선택적 필터링을 적용하여 Cin7Core에서 고객 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "고객 생성"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "고객에 대한 쉼표로 구분된 태그"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "고객 조회"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -744,7 +744,7 @@
           "message": "조회할 고객의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "고객 업데이트"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "고객에 대한 쉼표로 구분된 태그"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
+          "source": "Search suppliers",
           "message": "공급업체 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "선택적 필터링을 적용하여 Cin7Core에서 공급업체 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "공급업체 생성"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "공급업체에 지정할 쉼표로 구분된 태그"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "공급업체 가져오기"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "조회할 공급업체의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "공급업체 업데이트"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "이 공급업체와 연결된 태그"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "제품 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "SKU, 이름, 카테고리 또는 브랜드별로 선택적 필터링을 적용하여 Cin7Core에서 제품 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "제품 가져오기"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "조회할 제품의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
+          "source": "Find product availability",
           "message": "제품 가용성 찾기"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "창고 위치별 제품 가용성 및 재고 수준을 확인합니다."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
+          "source": "Search sales",
           "message": "판매 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "선택적 필터링을 적용하여 Cin7Core에서 판매 주문 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
+          "source": "Create sale",
           "message": "판매 생성"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
@@ -2368,7 +2368,7 @@
           "message": "이 행의 총액"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
+          "source": "Get sale",
           "message": "판매 가져오기"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "조회할 판매의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
+          "source": "Update sale",
           "message": "판매 업데이트"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "이 청구에 대한 총 금액"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
+          "source": "Delete sale",
           "message": "판매 삭제"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "삭제/무효화할 판매의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
+          "source": "Search sale payments",
           "message": "판매 결제 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "판매 결제 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
+          "source": "Add sale payment",
           "message": "판매 결제 추가"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "결제를 기록할 계정"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
+          "source": "Update sale payment",
           "message": "판매 결제 업데이트"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "결제에 대한 참조 번호 또는 메모"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
+          "source": "Delete sale payment",
           "message": "판매 결제 삭제"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "삭제할 결제의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
+          "source": "Add sale attachment",
           "message": "판매 첨부 파일 추가"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Base64 문자열로 인코딩된 파일 내용"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
+          "source": "Delete sale attachment",
           "message": "판매 첨부 파일 삭제"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "삭제할 첨부 파일의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
+          "source": "Add sale pack",
           "message": "판매 포장 추가"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
@@ -3496,7 +3496,7 @@
           "message": "포장을 위한 창고 위치"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
+          "source": "Get sale pack",
           "message": "판매 포장 가져오기"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "특정 포장 레코드를 가져오기 위한 선택적 작업 ID"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
+          "source": "Add sale shipment",
           "message": "판매 배송 추가"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "배송이 필요한 기한 날짜"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
+          "source": "Find sale fulfilment",
           "message": "판매 이행 찾기"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "판매에 대한 이행, 피킹 및 패킹 작업을 검색합니다."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
+          "source": "Find sale invoices",
           "message": "판매 송장 찾기"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "판매 주문과 연결된 송장을 검색합니다."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
+          "source": "Find sale credit notes",
           "message": "판매 크레딧 노트 찾기"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "판매 주문과 연결된 크레딧 노트를 검색합니다."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
+          "source": "Search stock adjustments",
           "message": "재고 조정 검색"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "Cin7Core에서 재고 조정 목록을 조회합니다."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "재고 조정 생성"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "조정의 단위 비용"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "재고 조정 가져오기"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "조회할 재고 조정의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "재고 조정 업데이트"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4180,7 +4180,7 @@
           "message": "조정 상태(Draft, Authorized, Void)"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "재고 조정 삭제"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "삭제/무효화할 재고 조정의 고유 식별자(GUID)"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
+          "source": "Find assemblies",
           "message": "조립품 찾기"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "조립 및 완제품 작업을 검색합니다."
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "새 결제"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "폴링을 통해 판매에서 새 결제가 감지되면 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
+          "source": "New sale credit note authorized",
           "message": "새 판매 크레딧 노트 승인됨"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "폴링을 통해 새 판매 크레딧 노트가 승인되면 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
+          "source": "New sale invoice authorized",
           "message": "새 판매 송장 승인됨"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
@@ -4252,7 +4252,7 @@
           "message": "폴링을 통해 새 판매 송장이 승인되면 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
+          "source": "Sale tracking changed",
           "message": "판매 배송 추적 변경됨"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "폴링을 통해 판매 배송 추적 또는 배송 정보가 변경되면 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
+          "source": "Sale voided",
           "message": "판매 무효화됨"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
@@ -4276,7 +4276,7 @@
           "message": "폴링을 통해 판매 주문이 무효화되면 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
+          "source": "Stock level update",
           "message": "재고 수준 업데이트"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "폴링을 통해 제품 재고 수준이 변경될 때 실행됩니다."
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "고객 업데이트됨"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4300,7 +4300,7 @@
           "message": "폴링을 통해 고객이 생성되거나 수정될 때 트리거됩니다."
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
+          "source": "Supplier updated",
           "message": "공급업체 업데이트됨"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {

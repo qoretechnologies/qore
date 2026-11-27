@@ -16,7 +16,7 @@
           "message": "Obecný REST server"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.display_name": {
-          "source": "Call REST API / Webhook",
+          "source": "Call REST API / webhook",
           "message": "Zavolat REST API / webhook"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.short_desc": {

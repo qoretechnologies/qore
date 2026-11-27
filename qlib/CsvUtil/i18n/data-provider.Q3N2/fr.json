@@ -16,7 +16,7 @@
           "message": "Lire et écrire des données de fichiers CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Lire un fichier CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "Si `true` (par défaut `false`), si une ligne est analysée avec un nombre de colonnes ou de champs différent des autres lignes, une exception `CSVFILEITERATOR-DATA-ERROR` est levée\n\nVeuillez noter que l'activation de cette option entraînera une baisse de performances"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Lire les données en ligne CSV"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Si `true` (par défaut `false`), si une ligne est analysée avec un nombre de colonnes ou de champs différent des autres lignes, une exception `CSVFILEITERATOR-DATA-ERROR` est levée\n\nVeuillez noter que l'activation de cette option entraînera une baisse de performances"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Profiler des données CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Si `True` (par défaut), les valeurs d'exemple et les contre-exemples sont masqués selon leur forme : les lettres deviennent `x` ou `X` et les chiffres `9`, afin qu'un profil puisse être partagé sans les données"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Écrire les données CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1208,7 +1208,7 @@
           "message": "Définissez sur `false` pour supprimer la sortie des en-têtes ; la valeur par défaut est `true`, ce qui signifie que les en-têtes sont générés s'ils sont présents"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Créer des données CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Ідентифікатор етапу життєвого циклу контакту"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Ідентифікатор етапу життєвого циклу контакту"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Унікальний ідентифікатор контакту, який потрібно видалити"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "ID контакту"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Створити обліковий запис"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "Ідентифікатор батьківського облікового запису/компанії"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "Оновити обліковий запис"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Ідентифікатор батьківського облікового запису/компанії"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "Видалити обліковий запис"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Унікальний ідентифікатор облікового запису для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "Список акаунтів"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Отримати обліковий запис"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "ID облікового запису"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create Deal",
+          "source": "Create deal",
           "message": "Створити угоду"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "Ймовірність виграшу угоди (від `0` до `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update Deal",
+          "source": "Update deal",
           "message": "Оновити угоду"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Ймовірність виграшу угоди (від `0` до `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
-          "source": "Delete Deal",
+          "source": "Delete deal",
           "message": "Видалити угоду"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Унікальний ідентифікатор угоди для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Список угод"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get Deal",
+          "source": "Get deal",
           "message": "Отримати угоду"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "ID угоди"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Створити завдання"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Ідентифікатор типу завдання"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Оновити завдання"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -2308,7 +2308,7 @@
           "message": "Ідентифікатор типу завдання"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Видалити завдання"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "Унікальний ідентифікатор завдання для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Отримати список завдань"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Отримати завдання"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "ID завдання"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "Створити зустріч"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "Ідентифікатор контакту, облікового запису або угоди для зв'язування"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Update Appointment",
+          "source": "Update appointment",
           "message": "Оновити зустріч"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Ідентифікатор контакту, облікового запису або угоди для зв'язування"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Delete Appointment",
+          "source": "Delete appointment",
           "message": "Видалити зустріч"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Унікальний ідентифікатор зустрічі для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
-          "source": "List Appointments",
+          "source": "List appointments",
           "message": "Список зустрічей"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
-          "source": "Get Appointment",
+          "source": "Get appointment",
           "message": "Отримати зустріч"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Ідентифікатор зустрічі"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Створити примітку"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Ідентифікатор контакту, облікового запису або угоди для зв'язування"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "Оновити нотатку"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Оновлений вміст/текст нотатки"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "Видалити примітку"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Унікальний ідентифікатор примітки для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact Event",
+          "source": "New contact event",
           "message": "Подія: новий контакт"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "Опитувати нові контакти, створені у Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
-          "source": "New Deal Event",
+          "source": "New deal event",
           "message": "Подія: нова угода"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Опитувати нові угоди, створені у Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
-          "source": "New Account Event",
+          "source": "New account event",
           "message": "Подія нового облікового запису"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Опитувати щодо нових облікових записів, створених у Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task Event",
+          "source": "New task event",
           "message": "Подія: нове завдання"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Опитувати нові завдання, створені у Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment Event",
+          "source": "New appointment event",
           "message": "Подія нової зустрічі"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {

@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "搜尋索引"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "若為 `true`（預設為 `false`），會將文件版本作為命中結果的一部分返回"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
-          "source": "k-NN Search",
+          "source": "k-NN search",
           "message": "k-NN 搜尋"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "選填的最低分數臨界值"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
-          "source": "Neural Search",
+          "source": "Neural search",
           "message": "神經網路搜尋"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "選填的最低分數臨界值"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
-          "source": "Hybrid Search",
+          "source": "Hybrid search",
           "message": "混合搜尋"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "每個混合子查詢從每個分區擷取的搜尋結果數量上限"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector Index",
+          "source": "Create vector index",
           "message": "建立向量索引"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "等待回應的時間長度"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "新增文件"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "若為 `true` (預設 `false`)，目的地必須為索引別名"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "批次操作"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "若為 true，目標必須是索引別名"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "滾動搜尋"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

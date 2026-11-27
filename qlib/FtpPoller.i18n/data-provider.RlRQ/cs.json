@@ -16,7 +16,7 @@
           "message": "Obecný FTP server pro výměnu souborů přes FTP a FTPS"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "Přijat soubor přes FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

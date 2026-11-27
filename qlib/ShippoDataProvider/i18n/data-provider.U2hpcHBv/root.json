@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
-          "message": "Create Shipment"
+          "source": "Create shipment",
+          "message": "Create shipment"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
           "source": "Create a new shipment to get rates",
@@ -1724,8 +1724,8 @@
           "message": "If `True`, rates will be generated asynchronously. Default is `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
-          "message": "Get Shipment"
+          "source": "Get shipment",
+          "message": "Get shipment"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
           "source": "Get a shipment by ID",
@@ -1748,8 +1748,8 @@
           "message": "The unique identifier of the shipment to retrieve"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
-          "message": "Search Shipments"
+          "source": "Search shipments",
+          "message": "Search shipments"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
           "source": "List and search shipments",
@@ -1760,8 +1760,8 @@
           "message": "Retrieve a list of shipments from Shippo with optional filtering by creation date."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
-          "source": "Create Label by Rate",
-          "message": "Create Label by Rate"
+          "source": "Create label by rate",
+          "message": "Create label by rate"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
           "source": "Create a shipping label from a rate",
@@ -1860,8 +1860,8 @@
           "message": "If `True`, the label will be generated asynchronously. Default is `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
-          "message": "Get Shipping Label"
+          "source": "Get shipping label",
+          "message": "Get shipping label"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
           "source": "Get a shipping label by ID",
@@ -1884,8 +1884,8 @@
           "message": "The unique identifier of the transaction (shipping label) to retrieve"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
-          "source": "Search Shipping Labels",
-          "message": "Search Shipping Labels"
+          "source": "Search shipping labels",
+          "message": "Search shipping labels"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
           "source": "List and search shipping labels",
@@ -1960,8 +1960,8 @@
           "message": "Delivery failed"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
-          "message": "Create Order"
+          "source": "Create order",
+          "message": "Create order"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -2636,8 +2636,8 @@
           "message": "Any notes or special instructions for the order"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
-          "message": "Get Order"
+          "source": "Get order",
+          "message": "Get order"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get an order by ID",
@@ -2660,8 +2660,8 @@
           "message": "The unique identifier of the order to retrieve"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List and search orders",
@@ -2712,8 +2712,8 @@
           "message": "Shipped"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
-          "source": "Validate Address",
-          "message": "Validate Address"
+          "source": "Validate address",
+          "message": "Validate address"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
           "source": "Validate a shipping address",
@@ -2868,8 +2868,8 @@
           "message": "Indicates whether the address is a residential location"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
-          "source": "New Parcel",
-          "message": "New Parcel"
+          "source": "New parcel",
+          "message": "New parcel"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
           "source": "Trigger when a new parcel is created",
@@ -2880,8 +2880,8 @@
           "message": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details including dimensions and weight."
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
-          "source": "New Shipment",
-          "message": "New Shipment"
+          "source": "New shipment",
+          "message": "New shipment"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
           "source": "Trigger when a new shipment is created",
@@ -2892,8 +2892,8 @@
           "message": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details including addresses, parcels, and available rates."
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
-          "source": "New Shipping Label",
-          "message": "New Shipping Label"
+          "source": "New shipping label",
+          "message": "New shipping label"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
           "source": "Trigger when a new shipping label is created",
@@ -2904,8 +2904,8 @@
           "message": "Fires when a new shipping label (transaction) is detected in Shippo via polling. Provides label details including tracking number and label URL."
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
-          "source": "New Order",
-          "message": "New Order"
+          "source": "New order",
+          "message": "New order"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {
           "source": "Trigger when a new order is created",

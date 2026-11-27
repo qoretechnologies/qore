@@ -76,6 +76,7 @@ sub export_to(Program h) {
 
     constructor() : QUnit::Test("thread capability scopes and Programs that sandboxed code created", "1.0", \ARGV) {
         addTestCase("a child's function called through its Program object", \childByObject());
+        addTestCase("a child of the code of a trusted (governed) sandbox", \trustedGovernedChild());
         addTestCase("a child's function imported into a trusted Program", \importedFunction());
         addTestCase("a child's function copied into an evaluation Program", \evalProgram());
         addTestCase("sandboxed code starts a thread for a host callable", \hostCallable());
@@ -88,8 +89,9 @@ sub export_to(Program h) {
     }
 
     globalSetUp() {
+        # a restricting sandbox (the default policy): a trusted (governed) one does not make its code restricted
+        # (qore#7737)
         SandboxManager sm();
-        sm.setUncontrolledApiPolicy(True);
         # the module is read with the policy of the sandbox, which must allow it (qore#7518)
         sm.addFilesystemAllowedPath(get_script_dir() + "ScopeProgramMaker.qm", QSEC_READ);
         sandboxed = new Program(PO_MODERN);
@@ -118,6 +120,25 @@ hash<auto> sub module_probe(string src, code set) {
     return p.callFunction(\"probe\", set);
 }
 ", "sandboxed");
+    }
+
+    #! the code of a Program that a trusted (governed) sandbox governs, and of a Program that it creates, is trusted
+    #! code: it sees the host's capabilities and sets a scope (qore#7737)
+    trustedGovernedChild() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        Program trusted(PO_MODERN);
+        trusted.setSandboxManager(sm);
+        trusted.parse("%modern
+Program sub mk(string src) {
+    Program c(PO_MODERN);
+    c.parse(src, \"child\");
+    return c;
+}
+", "trusted-governed");
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        Program child = trusted.callFunction("mk", ProbeSource);
+        assertEq(Trusted, child.callFunction("probe", \try_set()));
     }
 
     childByObject() {
@@ -185,12 +206,12 @@ hash<auto> sub module_probe(string src, code set) {
             "copied": eval.getCallReference("probe"),
         };
         foreach string k in (keys refs) {
-            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", sub () {
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a restricted Program", sub () {
                 ThreadCapabilityScope scope({"start_thread": refs{k}});
             }, NOTHING, k + " as capability code");
             ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
             code start_thread = get_thread_capability("start_thread");
-            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", start_thread, refs{k},
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a restricted Program", start_thread, refs{k},
                 k + " as the code given to a capability");
         }
     }

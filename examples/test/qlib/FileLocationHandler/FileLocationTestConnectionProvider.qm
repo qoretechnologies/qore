@@ -150,6 +150,16 @@ hash<string, hash<auto>> sub ConnectionMap() {
                 "url": "https://localhost:1/base",
             },
         },
+        # an HTTPS connection that gives a client certificate file of its own (qore#7806)
+        "web-cert": {
+            "class_name": "ConnectionProvider::HttpConnection",
+            "config": {
+                "name": "web-cert",
+                "desc": "test HTTPS connection with a client certificate file",
+                "url": "https://localhost:1/base",
+                "opts": {"ssl_cert_path": root + "/no-such-cert.pem"},
+            },
+        },
         # a connection type with no file location support at all
         "no-files": {
             "class_name": "FileLocationTestConnectionProvider::NoFileConnection",

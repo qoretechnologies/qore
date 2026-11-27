@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
-          "source": "Get Current Member",
+          "source": "Get current member",
           "message": "Отримати поточного учасника"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Отримує профіль учасника, чию авторизацію використовує це підключення.\n\nКорисно для перевірки, до якого облікового запису прив'язано підключення; решта дій матиме доступ до організацій, якими керує цей обліковий запис."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Отримати список організацій"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Повертає список організацій, якими керує автентифікований учасник, із назвою, описом, логотипом, розміром, галузями та URL-адресою сторінки для кожної з них.\n\n`id` організації тут є тим, що приймає кожна інша дія, а URN `organizational_page` є тим, до чого звертаються API аналітики та підписок LinkedIn."
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "Отримати організацію"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "Список публікацій"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Остання версія, яка може бути чернеткою або запланованою публікацією; запланована публікація визначається наявністю встановленого поля `scheduled_at`"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Отримати допис"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Остання версія, яка може бути чернеткою або запланованою публікацією; запланована публікація визначається наявністю встановленого поля `scheduled_at`"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "Список коментарів"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
-          "source": "List Reactions",
+          "source": "List reactions",
           "message": "Список реакцій"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Engagement Summary",
+          "source": "Get engagement summary",
           "message": "Отримати підсумок взаємодії"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "URN вмісту для підсумовування: публікації, дії або коментарі. Можна вказати кілька одночасно, що значно економніше, ніж окремий виклик для кожного"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
-          "source": "List Followers",
+          "source": "List followers",
           "message": "Список підписників"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
@@ -736,7 +736,7 @@
           "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
-          "source": "List Following",
+          "source": "List following",
           "message": "Список відстежуваних"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Follower Statistics",
+          "source": "Get follower statistics",
           "message": "Отримати статистику підписників"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Розбивка за зв'язком учасника з організацією, що відрізняє працівників від усіх інших"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
-          "source": "Get Visitor Statistics",
+          "source": "Get visitor statistics",
           "message": "Отримати статистику відвідувачів"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Вкладка людей сторінки"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "Новий допис"
         },
         "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {

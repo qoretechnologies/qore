@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Доповнення чату"
         },
         "app.T2xsYW1h.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Хеш, який задає структуровану форму відповіді, наприклад `{type: \"json_object\"}` або `{type: \"json_schema\", schema: {...}}`."
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Створити ембединги"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -596,7 +596,7 @@
           "message": "Рядок тривалості, що визначає, скільки часу Ollama утримує модель завантаженою в пам'яті після завершення запиту (наприклад, `\"5m\"`, `\"1h\"`, `\"0\"` для негайного вивантаження)."
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Installed Models",
+          "source": "List installed models",
           "message": "Список встановлених моделей"
         },
         "app.T2xsYW1h.action.bGlzdC1tb2RlbHM.short_desc": {

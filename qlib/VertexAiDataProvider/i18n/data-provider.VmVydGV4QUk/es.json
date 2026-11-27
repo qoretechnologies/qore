@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Generar contenido"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Referencia a un recurso de contenido en caché creado previamente (p. ej., `projects/{project}/locations/{region}/cachedContents/{id}`); reducción importante de costos para prompts del sistema repetidos"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Incrustar texto"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {

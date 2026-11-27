@@ -72,6 +72,8 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
     */
     constructor(string base_path, *string tenant_id)
             : AbstractModelRegistryBackend(tenant_id) {
+        # the directory is the creator's input (qore#7806)
+        check_creator_file_access("the base path of a filesystem model registry backend");
         self.base_path = base_path;
 
         # Create base directory (and tenant subdirectory) if needed

@@ -75,6 +75,8 @@ public class FileStatDataProvider inherits FileDataProviderBase {
         @throw STAT-ERROR if the path cannot be read
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the paths are the caller's input (qore#7806)
+        checkCallerFileAccess();
         string path = normalize_dir(req.path, root);
         if (root.val() && lock) {
             checkPath(\path);

@@ -100,7 +100,7 @@ module LlamaParseDataProvider {
                 "app": LlamaParseDataProvider::AppName,
                 "path": "/" + LlamaParseUploadFileDataProvider::ProviderName,
                 "action": "upload-file",
-                "display_name": "Upload File",
+                "display_name": "Upload file",
                 "short_desc": "Upload a document so that it can be parsed, extracted from or classified",
                 "desc": "Uploads a document to LlamaParse and returns the stored file.\n\n"
                     "Uploading is worth doing on its own rather than passing a URL to every job: the "
@@ -129,7 +129,7 @@ module LlamaParseDataProvider {
                 "path": "/parse-document",
                 "action": "parse-document",
                 "billing": <DataProviderBillingInfo>{"unit": "credit"},
-                "display_name": "Parse Document and Wait",
+                "display_name": "Parse document and wait",
                 "short_desc": "Parse a document and wait for the extracted content",
                 "desc": "Submits a document to LlamaParse, waits for parsing to finish, and returns the "
                     "extracted content as markdown, plain text or structured JSON.\n\n"

@@ -1719,6 +1719,10 @@ conn.checkSandboxAccess(True);
     #! The connection options that name files that the module code of a connection reads
     /** Code restricted from the \c FILESYSTEM domain that is lent a connection whose scheme declares any of them uses
         it only with the files that its creator gave (see getLentTargetSource())
+
+        @note A sandbox's file-system and network policy also applies to a connection that is lent to the code that
+        it governs, including the paths and locations that the lending host configured it with: a host that wants its
+        sandboxed tenants to use such a connection allows those paths in the sandbox (see @ref sandbox_lent_connections)
     */
     const FilePathOptions = ("ssl_cert_path", "ssl_key_path", "ssl_ca_file", "ssl_ca_path", "negotiate_keytab",
         "negotiate_credential_cache", "gcp_sa_json_path",

@@ -1605,10 +1605,12 @@ release() {
 
     The deferral is released when \a cleanup returns, including when it throws, and calls nest.
 
-    Sandboxed code is never deferred (see @ref cancel_security): called by code of a sandboxed %Program, this
-    function only calls \a cleanup; called by trusted code, the sandboxed code that \a cleanup calls (a callback, a
-    method of a sandboxed class, the destructor of an object of a sandboxed class) runs with cancellation, program
-    interrupts and sandbox limits not deferred.
+    Restricted code is never deferred (see @ref cancel_security and @ref sandbox_manager_classes): called by code of a
+    restricted %Program, this function only calls \a cleanup; called by trusted code, the restricted code that
+    \a cleanup calls (a callback, a method of a restricted class, the destructor of an object of a restricted class)
+    runs with cancellation, program interrupts and sandbox limits not deferred.  The code of a %Program that a trusted
+    (governed) sandbox governs keeps the deferral, as trusted code does: an interrupt or a limit of its sandbox is
+    delivered at its next cancellation point after \a cleanup returns.
 
     @param cleanup the @ref call_reference "call reference" or @ref closure "closure" to call with
     cancellation deferred
@@ -1666,13 +1668,15 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     }
     // declared first so that it is destroyed last: the deferral covers the argument list's own
     // teardown, which can run destructors.  The helper's destructor releases it on every path,
-    // including when the call throws.  Sandboxed code never runs with cancellation deferred (see
-    // "Sandboxed code never runs deferred" in design/cooperative-cancellation.md): called by a sandboxed
-    // Program, the function only calls the code; called by trusted code, the deferral is suspended again
-    // while sandboxed code that the cleanup calls runs (ProgramThreadCountContextHelper)
+    // including when the call throws.  Restricted code never runs with cancellation deferred (see
+    // "Restricted code never runs deferred" in design/cooperative-cancellation.md): called by a restricted
+    // Program, the function only calls the code; called by trusted code, also the code of a trusted (governed)
+    // sandbox (qore#7737), the deferral is suspended again while restricted code that the cleanup calls runs
+    // (ProgramThreadCountContextHelper)
     std::optional<QoreCancelDeferralHelper> cdh;
-    // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
-    if (!qore_calling_code_is_sandboxed()) {
+    // (code compiled in another Program than the one it runs in is that Program's code, qore#7202; and the code of a
+    // class of restricted code, qore#7737)
+    if (!qore_calling_code_is_restricted()) {
         cdh.emplace();
     }
     ReferenceHolder<QoreListNode> vargs(xsink);

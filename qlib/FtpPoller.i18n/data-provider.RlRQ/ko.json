@@ -16,7 +16,7 @@
           "message": "FTP 및 FTPS를 통해 파일을 교환하기 위한 일반 FTP 서버"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
-          "source": "FTP File Received",
+          "source": "FTP file received",
           "message": "FTP 파일 수신됨"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {

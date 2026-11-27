@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Vyhledat zákazníky"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Načíst seznam zákazníků z Unleashed s volitelným filtrováním podle kódu zákazníka, jména, e-mailu, typu zákazníka nebo data úpravy."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvořit zákazníka"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Adresa ulice"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Jedinečný identifikátor (GUID) zákazníka, kterého chcete načíst"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Zda je pro tohoto zákazníka pozastaven úvěr"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Hledat produkty"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Načíst seznam produktů z Unleashed s volitelným filtrováním podle kódu produktu, popisu nebo čárového kódu."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Vytvořit produkt"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Určuje, zda se jedná o sestavený produkt (vyrobený z komponent)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Jedinečný identifikátor (GUID) produktu, který chcete načíst"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Určuje, zda lze produkt zakoupit"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
-          "source": "Obsolete Product",
+          "source": "Obsolete product",
           "message": "Zastaralý produkt"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Jedinečný identifikátor (GUID) produktu k označení jako zastaralý"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
-          "source": "Search Sales Orders",
+          "source": "Search sales orders",
           "message": "Vyhledat prodejní objednávky"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Načíst seznam prodejních objednávek z Unleashed s volitelným filtrováním."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Vytvořit prodejní objednávku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "PSČ pro doručení"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Získat prodejní objednávku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Jedinečný identifikátor (GUID) prodejní objednávky, která se má načíst"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Aktualizovat prodejní objednávku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Cena za jednotku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Odstranit prodejní objednávku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Jedinečný identifikátor (GUID) prodejní objednávky ke smazání"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
-          "source": "Complete Sales Order",
+          "source": "Complete sales order",
           "message": "Dokončit prodejní objednávku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Jedinečný identifikátor (GUID) prodejní objednávky k dokončení"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
-          "source": "Search Credit Notes",
+          "source": "Search credit notes",
           "message": "Vyhledat dobropisy"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Načíst seznam dobropisů z Unleashed s volitelným filtrováním."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Create Credit Note",
+          "source": "Create credit note",
           "message": "Vytvořit dobropis"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Komentáře nebo poznámky k tomuto dobropisu"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Get Credit Note",
+          "source": "Get credit note",
           "message": "Získat dobropis"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Jedinečný identifikátor (GUID) dobropisu, který se má načíst"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Update Credit Note",
+          "source": "Update credit note",
           "message": "Aktualizovat dobropis"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Komentáře nebo poznámky k tomuto dobropisu"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Delete Credit Note",
+          "source": "Delete credit note",
           "message": "Smazat dobropis"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "Jedinečný identifikátor (GUID) dobropisu ke smazání"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
-          "source": "Complete Credit Note",
+          "source": "Complete credit note",
           "message": "Dokončit dobropis"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Jedinečný identifikátor (GUID) dobropisu k dokončení"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Create Credit Note Line",
+          "source": "Create credit note line",
           "message": "Vytvořit položku dobropisu"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Jednotková cena pro tuto položku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Update Credit Note Line",
+          "source": "Update credit note line",
           "message": "Aktualizovat řádek dobropisu"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Jednotková cena pro tuto položku"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Delete Credit Note Line",
+          "source": "Delete credit note line",
           "message": "Smazat řádek dobropisu"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Jedinečný identifikátor (GUID) řádku ke smazání"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "Nový zákazník"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -2260,7 +2260,7 @@
           "message": "Spustí se při zjištění nového zákazníka nebo při úpravě existujícího zákazníka pomocí dotazování."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "Nová prodejní objednávka"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

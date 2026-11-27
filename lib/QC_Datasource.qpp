@@ -2508,7 +2508,10 @@ ds.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id)
     @param event_mask the bitmask of event classes to deliver; see @ref sql_mutation_masks
     @param arg an argument reported unchanged in the \c "arg" key of every event
 
-    @note observer registration is scoped to this object; there is no process-global registry
+    @note
+    - observer registration is scoped to this object; there is no process-global registry
+    - an observer that queries this object captures it weakly, or the object is never destroyed: see
+      @ref sql_mutation_observer_capture
 
     @see
     - @ref Qore::SQL::AbstractDatasource::setMutationObserver() "AbstractDatasource::setMutationObserver()"

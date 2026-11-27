@@ -239,10 +239,10 @@ const qore_class_private* qore_serialization_caller_class() {
 
 bool qore_serialization_calling_code_trusted() {
     // the code that invokes the builtin, also through a call reference or a closure that other code created: not the
-    // code of a sandboxed Program
+    // code of a restricted Program (the code of a trusted, governed, sandbox is trusted; qore#7737)
     {
         QoreProgram* invoking_pgm = qore_builtin_caller_program();
-        if (invoking_pgm && qore_program_is_sandboxed(invoking_pgm)) {
+        if (invoking_pgm && qore_program_is_restricted(invoking_pgm)) {
             return false;
         }
     }
@@ -252,18 +252,22 @@ bool qore_serialization_calling_code_trusted() {
         // the code of a class that trusted code declared acts for itself
         return !class_ctx->isSandboxDeclared(true);
     }
-    // the code of a trusted Program outside a class acts for itself; library code acts for its caller
+    // the code of a trusted Program outside a class acts for itself; library code acts for its caller; the code of a
+    // trusted (governed) sandbox is trusted, as for the private access of reflection (qore#7737)
     const QoreProgram* pgm = getProgram();
-    if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+    if (pgm && !qore_program_is_restricted(pgm) && !qore_program_is_library_module(pgm)) {
         return true;
     }
-    return !qore_caller_is_sandboxed();
+    return !qore_caller_is_restricted();
 }
 
 bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool internal) {
     if (unrestricted) {
         return false;
     }
+#ifdef DEBUG
+    assertFrame();
+#endif
     if (!class_ctx_known) {
         class_ctx = qore_serialization_caller_class();
         class_ctx_known = true;
@@ -275,12 +279,28 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
         || (!internal && decl.runtimeCheckPrivateClassAccess(class_ctx)))) {
         return false;
     }
-    // any other code: withheld if sandboxed code is in the chain of callers
+    // any other code: withheld if restricted code is in the chain of callers (qore#7737)
     if (chain_sandboxed < 0) {
-        chain_sandboxed = qore_caller_is_sandboxed() ? 1 : 0;
+        chain_sandboxed = qore_caller_is_restricted() ? 1 : 0;
     }
     return chain_sandboxed;
 }
+
+#ifdef DEBUG
+void QoreSerializationCaller::recordFrame() {
+    dbg_stack_loc = get_runtime_stack_location();
+    dbg_class = runtime_get_class();
+    dbg_caller_class = runtime_get_caller_class();
+    dbg_pgm = getProgram();
+}
+
+void QoreSerializationCaller::assertFrame() const {
+    assert(get_runtime_stack_location() == dbg_stack_loc);
+    assert(runtime_get_class() == dbg_class);
+    assert(runtime_get_caller_class() == dbg_caller_class);
+    assert(getProgram() == dbg_pgm);
+}
+#endif
 
 bool QoreSerializationCaller::withholds(const qore_class_private& decl, bool internal) {
     return decl.sandboxSerializationProtected() && restricts(decl, internal);
@@ -607,8 +627,8 @@ QoreValue QoreSerializable::serializeObjectToData(const QoreObject& obj, bool we
 imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject& self,
         QoreInternalSerializationContext& context, const QoreString& str, imap_t::iterator hint,
         ExceptionSink* xsink) {
-    // code that is sandboxed or acts for sandboxed code cannot serialize a shared object (qore#7673); checked before
-    // the object is added to the index, so that a refused object aborts the serialization
+    // code that is restricted or acts for restricted code cannot serialize a shared object (qore#7673, qore#7737);
+    // checked before the object is added to the index, so that a refused object aborts the serialization
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {

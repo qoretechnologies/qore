@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
-          "message": "List Parcels"
+          "source": "List parcels",
+          "message": "List parcels"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
           "source": "List and search parcels",
@@ -436,8 +436,8 @@
           "message": "Maximum number of aggregated records to return across pages"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
-          "message": "Get Parcel"
+          "source": "Get parcel",
+          "message": "Get parcel"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
           "source": "Get a single parcel by ID",
@@ -460,8 +460,8 @@
           "message": "Numeric ID of the parcel to retrieve"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
-          "message": "Create Parcel"
+          "source": "Create parcel",
+          "message": "Create parcel"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
           "source": "Create a new parcel",
@@ -1284,8 +1284,8 @@
           "message": "Number of labels to generate for this parcel (multi-collo shipments)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
-          "message": "Update Parcel"
+          "source": "Update parcel",
+          "message": "Update parcel"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
           "source": "Update an existing parcel",
@@ -1356,8 +1356,8 @@
           "message": "Display name of the shipping method (e.g., 'Unstamped letter')"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
-          "message": "Cancel Parcel"
+          "source": "Cancel parcel",
+          "message": "Cancel parcel"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
           "source": "Cancel an announced parcel",
@@ -1380,8 +1380,8 @@
           "message": "Numeric ID of the parcel to cancel"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
-          "message": "Get Parcel Label"
+          "source": "Get parcel label",
+          "message": "Get parcel label"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
           "source": "Get shipping label URLs for a parcel",
@@ -1404,8 +1404,8 @@
           "message": "Numeric ID of the parcel whose label URLs are being retrieved"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
-          "message": "Get Parcel Document"
+          "source": "Get parcel document",
+          "message": "Get parcel document"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
           "source": "Download a parcel document (label, customs, invoice)",
@@ -1540,8 +1540,8 @@
           "message": "PNG image (only available for certain document types like QR codes)"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
-          "message": "List Shipping Methods"
+          "source": "List shipping methods",
+          "message": "List shipping methods"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
           "source": "List available shipping methods",
@@ -1636,8 +1636,8 @@
           "message": "If `True`, include a detailed pricing breakdown on each method"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
-          "message": "List Sender Addresses"
+          "source": "List sender addresses",
+          "message": "List sender addresses"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
           "source": "List sender addresses",
@@ -1648,8 +1648,8 @@
           "message": "Retrieve a list of sender addresses configured on your SendCloud account; the default sender address is used when no other is specified on a parcel."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List the authenticated user",
@@ -1660,8 +1660,8 @@
           "message": "Retrieve the SendCloud user/account owning the current API credentials. The list contains at most one entry because the API returns the authenticated user only."
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
-          "message": "Get User"
+          "source": "Get user",
+          "message": "Get user"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
           "source": "Get the authenticated user",
@@ -1672,8 +1672,8 @@
           "message": "Retrieve information about the currently authenticated SendCloud user (account owner)."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
-          "message": "List Service Points"
+          "source": "List service points",
+          "message": "List service points"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
           "source": "List service points for a country",
@@ -1756,8 +1756,8 @@
           "message": "Postal code to search service points near (with distance returned)"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
-          "message": "Search Service Points"
+          "source": "Search service points",
+          "message": "Search service points"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
           "source": "Search service points across carriers",
@@ -1912,8 +1912,8 @@
           "message": "House number used together with the search origin"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
-          "message": "List Returns"
+          "source": "List returns",
+          "message": "List returns"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
           "source": "List and search returns",
@@ -2004,8 +2004,8 @@
           "message": "Maximum number of aggregated records to return across pages"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
-          "message": "Get Return"
+          "source": "Get return",
+          "message": "Get return"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
           "source": "Get a single return by ID",
@@ -2028,8 +2028,8 @@
           "message": "Numeric ID of the return to retrieve"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
-          "message": "Create Return"
+          "source": "Create return",
+          "message": "Create return"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {
           "source": "Create a new return",
@@ -2448,8 +2448,8 @@
           "message": "Phone number of the recipient (required by some carriers)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
-          "message": "Update Return"
+          "source": "Update return",
+          "message": "Update return"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
           "source": "Update an existing return",
@@ -2548,8 +2548,8 @@
           "message": "Updated return reason"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
-          "message": "Cancel Return"
+          "source": "Cancel return",
+          "message": "Cancel return"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
           "source": "Cancel a return",
@@ -2572,8 +2572,8 @@
           "message": "Numeric ID of the return to cancel"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
-          "message": "List Brands"
+          "source": "List brands",
+          "message": "List brands"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
           "source": "List configured brands",
@@ -2584,8 +2584,8 @@
           "message": "Retrieve a list of brands configured on your SendCloud account. Brands are used to customize tracking pages and shipping documentation."
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
-          "message": "Parcel Status Changed"
+          "source": "Parcel status changed",
+          "message": "Parcel status changed"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
           "source": "Trigger when a parcel's status changes",
@@ -2596,8 +2596,8 @@
           "message": "Fires whenever the status of a SendCloud parcel changes. The poll interval is configurable; a minimum interval is enforced to respect SendCloud API limits."
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
-          "message": "Return Updated"
+          "source": "Return updated",
+          "message": "Return updated"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when a return is created or updated",

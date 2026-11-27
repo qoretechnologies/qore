@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Créer un contact"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Le nom de l'occasion (par exemple, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Mettre à jour le contact"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Le nom de l'occasion (par exemple, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Supprimer le contact"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "L'identifiant unique du contact à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Lister les contacts"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Obtenir le contact"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "L'ID du contact"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
+          "source": "Create organisation",
           "message": "Créer une organisation"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Le nom de l'occasion (par exemple, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
+          "source": "Update organisation",
           "message": "Mettre à jour l'organisation"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Le nom de l'occasion (par exemple, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
+          "source": "Delete organisation",
           "message": "Supprimer l'organisation"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "L'identifiant unique de l'organisation à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
+          "source": "List organisations",
           "message": "Lister les organisations"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
+          "source": "Get organisation",
           "message": "Obtenir l'organisation"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "L'ID de l'organisation"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "Créer un prospect"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Le nom de l'étiquette"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "Mettre à jour la piste"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "Le nom de l'étiquette"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "Supprimer le lead"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "L'identifiant unique du lead à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Lister les leads"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -4080,7 +4080,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Obtenir la piste"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "L'ID du lead"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
+          "source": "Create opportunity",
           "message": "Créer une opportunité"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Le rôle décrivant la relation entre les objets"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
+          "source": "Update opportunity",
           "message": "Mettre à jour l'opportunité"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4984,7 +4984,7 @@
           "message": "Le rôle décrivant la relation entre les objets"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
+          "source": "Delete opportunity",
           "message": "Supprimer l'opportunité"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -5008,7 +5008,7 @@
           "message": "L'identifiant unique de l'opportunité à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Lister les opportunités"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -5112,7 +5112,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
+          "source": "Get opportunity",
           "message": "Obtenir l'opportunité"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -5132,7 +5132,7 @@
           "message": "L'ID de l'opportunité"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Créer un projet"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -5508,7 +5508,7 @@
           "message": "Le rôle décrivant la relation entre les objets"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Mettre à jour le projet"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -5896,7 +5896,7 @@
           "message": "Le rôle décrivant la relation entre les objets"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "Supprimer le projet"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -5920,7 +5920,7 @@
           "message": "L'identifiant unique du projet à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Lister les projets"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Obtenir le projet"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "L'ID du projet"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Créer une tâche"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -6404,7 +6404,7 @@
           "message": "L'identifiant unique du lien de tâche"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Mettre à jour la tâche"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -6776,7 +6776,7 @@
           "message": "L'identifiant unique du lien de tâche"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Supprimer la tâche"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -6800,7 +6800,7 @@
           "message": "L'identifiant unique de la tâche à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Lister les tâches"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
@@ -6904,7 +6904,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Obtenir la tâche"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "L'ID de la tâche"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Créer une note"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -7052,7 +7052,7 @@
           "message": "Visible par l'équipe du propriétaire"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "Mettre à jour la note"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -7192,7 +7192,7 @@
           "message": "Visible par l'équipe du propriétaire"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "Supprimer la note"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -7216,7 +7216,7 @@
           "message": "L'identifiant unique de la note à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Lister les notes"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -7320,7 +7320,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
+          "source": "Get note",
           "message": "Obtenir la note"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
@@ -7340,7 +7340,7 @@
           "message": "L'ID de la note"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
+          "source": "Create calendar event",
           "message": "Créer un événement de calendrier"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7460,7 +7460,7 @@
           "message": "L'ID de l'utilisateur propriétaire de cet événement"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
+          "source": "Update calendar event",
           "message": "Mettre à jour l'événement de calendrier"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7592,7 +7592,7 @@
           "message": "L'ID de l'utilisateur propriétaire de cet événement"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
+          "source": "Delete calendar event",
           "message": "Supprimer l'événement de calendrier"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "L'identifiant unique de l'événement de calendrier à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
+          "source": "List calendar events",
           "message": "Lister les événements de calendrier"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -7720,7 +7720,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
+          "source": "Get calendar event",
           "message": "Obtenir l'événement de calendrier"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7740,7 +7740,7 @@
           "message": "L'ID de l'événement"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Créer un produit"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -7944,7 +7944,7 @@
           "message": "La valeur du champ personnalisé. Peut être une chaîne, un nombre, un booléen ou une date selon la configuration du champ"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Mettre à jour le produit"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -8160,7 +8160,7 @@
           "message": "La valeur du champ personnalisé. Peut être une chaîne, un nombre, un booléen ou une date selon la configuration du champ"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Supprimer le produit"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -8184,7 +8184,7 @@
           "message": "L'identifiant unique du produit à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Lister les produits"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -8288,7 +8288,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Obtenir le produit"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -8308,7 +8308,7 @@
           "message": "L'ID du produit"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "Supprimer l'e-mail"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -8332,7 +8332,7 @@
           "message": "L'identifiant unique de l'e-mail à supprimer"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Lister les e-mails"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -8436,7 +8436,7 @@
           "message": "Valeur à faire correspondre avec `field_name`. Doit être associée à `field_name`. Achemine la requête via le point de terminaison `/Search` d'Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "Obtenir l'e-mail"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "L'ID de l'e-mail"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nouveau contact"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Se déclenche lorsqu'un nouveau contact est créé dans Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
+          "source": "New organisation",
           "message": "Nouvelle organisation"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -8480,7 +8480,7 @@
           "message": "Se déclenche lorsqu'une nouvelle organisation est créée dans Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
+          "source": "New lead",
           "message": "Nouveau lead"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Se déclenche lorsqu'une nouvelle piste est créée dans Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
+          "source": "New opportunity",
           "message": "Nouvelle opportunité"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
@@ -8504,7 +8504,7 @@
           "message": "Se déclenche lorsqu'une nouvelle opportunité est créée dans Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
+          "source": "New task",
           "message": "Nouvelle tâche"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {

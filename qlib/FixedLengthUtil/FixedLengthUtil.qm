@@ -63,7 +63,7 @@ module FixedLengthUtil {
             "path": "/",
             "action": "read",
             "subtype": "fixedlengthread",
-            "display_name": "Read Fixed-Length Data",
+            "display_name": "Read fixed-length data",
             "short_desc": "Read fixed-length file data from a specific file location",
             "desc": "Read fixed-length file data from a specific file location",
             "action_code": DPAT_FIND,
@@ -85,7 +85,7 @@ module FixedLengthUtil {
             "path": "/",
             "action": "write",
             "subtype": "fixedlengthwrite",
-            "display_name": "Write Fixed-Length Data",
+            "display_name": "Write fixed-length data",
             "short_desc": "Write fixed-length file data to a specific file location",
             "desc": "Write fixed-length file data to a specific file location",
             "action_code": DPAT_CREATE,
@@ -142,6 +142,9 @@ module FixedLengthUtil {
 
 
     @section fixedlengthutil_v1_7 Version 1.7
+    - the read and write data providers created with a file path refuse a creator restricted from the file system
+      (\c PERMISSION-DENIED)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - the iterators and the read data provider take the \c "encoding_errors" option, which says what a line that is
       not valid in its encoding gives: \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads it as
       \c ISO-8859-1, \c "keep" keeps it without a check (see @ref fixedlengthglobals and @ref encoding_errors)

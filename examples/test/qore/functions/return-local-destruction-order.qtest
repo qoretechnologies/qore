@@ -76,9 +76,11 @@ class ReturnLocalDestructionOrderTest inherits QUnit::Test {
                 testSkip("qcc is not available or cannot compile " + Program + ": " + out);
             }
             # -b must be the first argument of a compiled program
-            string result = backquote(sprintf("%s -b 2>&1", shellQuote(exe)), \rc);
-            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
-            assertEq(expected(), result, "-O" + opt);
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", shellQuote(exe)));
+            assertEq(0, res.rc, sprintf("-O%s: exit status (output: %y)", opt, res.out));
+            assertEq(expected(), res.stdout, "-O" + opt);
+            # the native compilation trace and the module loader's warnings are not output of the program
+            assertEq("", res.stderr, sprintf("-O%s: stderr", opt));
         }
     }
 

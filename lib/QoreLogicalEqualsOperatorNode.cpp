@@ -140,7 +140,7 @@ static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const Qor
 
 template <bool StrictBoolean>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalEqualsOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder l(left, xsink);
+    QoreOperandEvalHolder l(left, xsink, this->snapshotLeft());
     if (*xsink)
         return QoreValue();
 
@@ -541,7 +541,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
 }
 
 bool QoreLogicalEqualsOperatorNode::floatSoftEqual(ExceptionSink *xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
@@ -550,7 +550,7 @@ bool QoreLogicalEqualsOperatorNode::floatSoftEqual(ExceptionSink *xsink) const {
 }
 
 bool QoreLogicalEqualsOperatorNode::bigIntSoftEqual(ExceptionSink *xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
@@ -559,7 +559,7 @@ bool QoreLogicalEqualsOperatorNode::bigIntSoftEqual(ExceptionSink *xsink) const 
 }
 
 bool QoreLogicalEqualsOperatorNode::boolSoftEqual(ExceptionSink *xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;

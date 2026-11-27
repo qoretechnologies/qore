@@ -82,7 +82,8 @@ kept policy manager, and a policy check must not cache "none" for the other look
 Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every caller
 then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted startup with
 `SandboxManager::createTrustedBuildCall()` (`qore_create_trusted_build_call()`), a `SandboxBoundCallReference` in build
-mode. A call evaluates its arguments in the caller's context, sets a construction barrier (the module initialization
+mode.  Only code that is not restricted creates one (`qore_caller_is_restricted()`, qore#7737): also the code of a
+trusted (governed) sandbox, whose sandbox then governs the build as that of the Program that created the capability. A call evaluates its arguments in the caller's context, sets a construction barrier (the module initialization
 barrier with a trusted loader, `QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`, `ModuleInitBarrier::build`),
 then enters the Program that created it and runs the callback (no policy mask, unlike `createSystemPolicyCall()`: the
 barrier hides the caller's policy already). Under the barrier nothing of the caller below it is seen:

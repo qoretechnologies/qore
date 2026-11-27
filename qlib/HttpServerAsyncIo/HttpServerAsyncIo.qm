@@ -152,6 +152,19 @@ public namespace HttpServerAsyncIo {
 
     #! Result info for HTTP request callbacks
     public hashdecl HttpRequestResultInfo {
+        #! An object that the controller keeps until it has handed the response to its I/O
+        /** The controller releases it in the thread that handled the result (a thread of its handler pool or its
+            callback dispatcher, never an I/O thread), once the response has been given to the I/O: sent, or queued
+            for the I/O thread, which sends it independently of the target; for an HTTP/2 or HTTP/3 request, after the
+            request's stream has been cleaned up.  A target keeps with it what the request needs until then: the
+            HttpServer module keeps the request's server, so that a server whose last reference the program released
+            while the request ran is destroyed only after the request's response has been handed to the I/O
+            (qore#7509).  A result that hands the connection to a handler (\c dedicated, \c streaming) has none.
+
+            @since HttpServerAsyncIo 1.0
+        */
+        *object request_hold;
+
         #! The request was a \c HEAD request
         /** The response has no message body and no \c Content-Length is added to it; a \c Content-Length in \c hdr is
             sent as it is (RFC 9110 section 9.3.2).  The socket methods that send the response check this: the body must be

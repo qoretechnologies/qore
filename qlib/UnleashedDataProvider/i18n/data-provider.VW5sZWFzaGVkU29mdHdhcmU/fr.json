@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Rechercher des clients"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Récupérer une liste de clients depuis Unleashed avec un filtrage optionnel par code client, nom, e-mail, type de client ou date de modification."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Créer un client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Ligne d'adresse postale"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtenir le client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -628,7 +628,7 @@
           "message": "L'identifiant unique (GUID) du client à récupérer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Mettre à jour le client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Indique si le crédit est interrompu pour ce client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Rechercher des produits"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Récupérer une liste de produits depuis Unleashed avec un filtrage optionnel par code produit, description ou code-barres."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Créer un produit"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Indique s'il s'agit d'un produit assemblé (fabriqué à partir de composants)"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Obtenir le produit"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "L'identifiant unique (GUID) du produit à récupérer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Mettre à jour le produit"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Indique si le produit peut être acheté"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
-          "source": "Obsolete Product",
+          "source": "Obsolete product",
           "message": "Rendre le produit obsolète"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "L'identifiant unique (GUID) du produit à marquer comme obsolète"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
-          "source": "Search Sales Orders",
+          "source": "Search sales orders",
           "message": "Rechercher des commandes clients"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Récupérer une liste de commandes clients depuis Unleashed avec un filtrage optionnel."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Créer une commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Code postal de livraison"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Obtenir la commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "L'identifiant unique (GUID) de la commande client à récupérer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Mettre à jour la commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Le prix unitaire"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Supprimer la commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "L'identifiant unique (GUID) de la commande client à supprimer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
-          "source": "Complete Sales Order",
+          "source": "Complete sales order",
           "message": "Terminer la commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "L'identifiant unique (GUID) de la commande client à terminer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
-          "source": "Search Credit Notes",
+          "source": "Search credit notes",
           "message": "Rechercher des avoirs"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Récupérer une liste d'avoirs depuis Unleashed avec un filtrage optionnel."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Create Credit Note",
+          "source": "Create credit note",
           "message": "Créer un avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Commentaires ou notes pour cet avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Get Credit Note",
+          "source": "Get credit note",
           "message": "Obtenir l'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "L'identifiant unique (GUID) de l'avoir à récupérer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Update Credit Note",
+          "source": "Update credit note",
           "message": "Mettre à jour l'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Commentaires ou notes pour cet avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Delete Credit Note",
+          "source": "Delete credit note",
           "message": "Supprimer l'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "L'identifiant unique (GUID) de l'avoir à supprimer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
-          "source": "Complete Credit Note",
+          "source": "Complete credit note",
           "message": "Terminer l'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "L'identifiant unique (GUID) de l'avoir à terminer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Create Credit Note Line",
+          "source": "Create credit note line",
           "message": "Créer une ligne d'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Le prix unitaire pour cette ligne"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Update Credit Note Line",
+          "source": "Update credit note line",
           "message": "Mettre à jour la ligne d'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Le prix unitaire pour cette ligne"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
-          "source": "Delete Credit Note Line",
+          "source": "Delete credit note line",
           "message": "Supprimer la ligne d'avoir"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "L'identifiant unique (GUID) de la ligne à supprimer"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "Nouveau client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
@@ -2260,7 +2260,7 @@
           "message": "Se déclenche lorsqu'un nouveau client est détecté ou qu'un client existant est modifié via interrogation."
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "Nouvelle commande client"
         },
         "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

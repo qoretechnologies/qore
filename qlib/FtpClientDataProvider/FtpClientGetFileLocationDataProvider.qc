@@ -74,6 +74,8 @@ public class FtpClientGetFileLocationDataProvider inherits AbstractDataProvider 
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the location is the caller's input: refused before anything is written or transferred (qore#7806)
+        FileLocationHandler::checkCallerLocation(req.location, False);
         string path = FtpClientDataProvider::getPath(ftp, req.path);
         OutputStreamWrapper stream = FileLocationHandler::getOutputStreamForLocation(req.location);
         on_success {

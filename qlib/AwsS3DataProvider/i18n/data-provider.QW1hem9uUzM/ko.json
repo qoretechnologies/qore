@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "버킷 목록 조회"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "인증된 계정이 소유한 모든 버킷과 각 버킷의 생성 날짜를 나열합니다."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "버킷 생성"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "새 버킷에서 객체 잠금을 사용하도록 설정합니다. 객체 잠금은 생성 후에 활성화할 수 없으며 버전 관리가 필요한데, 이 옵션을 설정하면 버전 관리가 자동으로 활성화됩니다"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "객체 목록 조회"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "이전에 잘린 목록 조회에서 반환된 `next_continuation_token` 값입니다. 다음 페이지를 가져오는 데 사용됩니다."
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "객체 가져오기"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "지정할 객체의 특정 버전입니다. 버전 관리가 활성화된 버킷에서만 의미가 있습니다. 설정하지 않으면 현재 버전이 사용됩니다."
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "파일 다운로드"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "지정할 객체의 특정 버전입니다. 버전 관리가 활성화된 버킷에서만 의미가 있습니다. 설정하지 않으면 현재 버전이 사용됩니다."
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "파일 업로드"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "객체를 암호화할 AWS KMS 키(키 ID, 별칭 또는 ARN)입니다.\n\n`server_side_encryption`에서 KMS 체계를 선택할 때만 사용되며, 설정하지 않으면 버킷의 기본 KMS 키가 사용됩니다"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "텍스트 객체 생성"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "객체를 암호화할 AWS KMS 키(키 ID, 별칭 또는 ARN)입니다.\n\n`server_side_encryption`에서 KMS 체계를 선택할 때만 사용되며, 설정하지 않으면 버킷의 기본 KMS 키가 사용됩니다"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "객체 삭제"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "지정할 객체의 특정 버전입니다. 버전 관리가 활성화된 버킷에서만 의미가 있습니다. 설정하지 않으면 현재 버전이 사용됩니다."
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "객체 복사"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "몇 시간 내에 검색되는 장기 아카이브 데이터로, 가장 저렴한 스토리지 클래스입니다"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "사전 서명된 URL 생성"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Amazon S3가 다운로드 제공 시 사용할 `Content-Disposition`입니다. 브라우저가 객체를 표시하는 대신 지정된 이름으로 저장하도록 하려면 이 옵션을 사용하세요."
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "객체 삭제"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "거버넌스 모드 객체 잠금 보존 상태인 객체를 제거합니다.\n\n자격 증명에 `s3:BypassGovernanceRetention` 권한이 있어야 합니다. **규정 준수** 모드로 잠긴 객체는 잠금이 만료될 때까지 누구도 제거할 수 없습니다."
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "객체 이동"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "몇 시간 내에 검색되는 장기 아카이브 데이터로, 가장 저렴한 스토리지 클래스입니다"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "객체 태그 가져오기"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "지정할 객체의 특정 버전입니다. 버전 관리가 활성화된 버킷에서만 의미가 있습니다. 설정하지 않으면 현재 버전이 사용됩니다."
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "객체 태그 설정"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "지정할 객체의 특정 버전입니다. 버전 관리가 활성화된 버킷에서만 의미가 있습니다. 설정하지 않으면 현재 버전이 사용됩니다."
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "객체 버전 나열"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "이전에 잘린 목록 조회에서 반환된 `next_version_id_marker` 값입니다. `key_marker`(와)과 함께 사용됩니다."
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "버킷 삭제"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "삭제할 버킷의 이름입니다. 이미 비어 있어야 합니다."
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "객체 찾기"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "요청당 가져올 키 수입니다. Amazon S3는 이를 `1000`(으)로 제한합니다.\n\n이는 반환되는 레코드 수가 아니라 순회가 요청으로 분할되는 방식에 영향을 미칩니다. 반복기는 필요한 만큼 추가 페이지를 가져옵니다."
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "새 버킷"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "이 날짜보다 오래된 항목은 보고하지 않습니다.\n\n설정하지 않으면 모니터링 시작 후에 나타난 항목만 보고하므로, 기존 버킷이 처음 실행될 때 대량의 이벤트가 발생하지 않습니다."
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "새 파일 또는 업데이트된 파일"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

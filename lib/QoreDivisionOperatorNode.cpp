@@ -55,7 +55,7 @@ QoreValue QoreDivisionOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   QoreOperandEvalHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
    if (*xsink)
       return QoreValue();
    QoreOperandEvalHolder rh(right, xsink);
@@ -153,7 +153,7 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
 }
 
 QoreValue QoreDivisionOperatorNode::floatDivision(ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();
@@ -169,7 +169,7 @@ QoreValue QoreDivisionOperatorNode::floatDivision(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return QoreValue();
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();

@@ -101,8 +101,12 @@ class UndefinedArithmeticBase inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 file));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
-                libqore_dir, exe)), "qcc " + opt);
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+                sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe));
+            assertEq(0, res.rc, sprintf("qcc %s: exit status (output: %y)", opt, res.out));
+            assertEq(expected, res.stdout, "qcc " + opt);
+            # the native compilation trace and the module loader's warnings are not output of the program
+            assertEq("", res.stderr, "qcc " + opt + ": stderr");
         }
     }
 

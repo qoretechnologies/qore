@@ -89,6 +89,19 @@ public hashdecl RawHttp2StreamResult {
 
 #! An HTTP/2 client that sends requests and reads frames only when asked to
 public class RawHttp2Client {
+    public {
+        #! the error code of each RST_STREAM frame received, by stream ID
+        hash<string, int> resets = {};
+        #! the error code of the GOAWAY frame received, if one was
+        *int goaway_code;
+        #! the last stream ID of the GOAWAY frame received, if one was
+        *int goaway_last_stream_id;
+        #! the debug data of the GOAWAY frame received, if one was
+        *string goaway_debug;
+        #! the server's SETTINGS_MAX_CONCURRENT_STREAMS, once its SETTINGS frame has been read
+        *int max_concurrent_streams;
+    }
+
     private {
         Socket sock();
         #! True for TLS (ALPN h2), False for cleartext HTTP/2 with prior knowledge
@@ -144,10 +157,46 @@ public class RawHttp2Client {
         return stream_id;
     }
 
+    #! Sends a GET request for @p path with one more header field, given literally (a malformed name is sent as it is); returns its stream ID
+    int getWithHeader(string path, string name, string value) {
+        int stream_id = next_stream_id;
+        next_stream_id += 2;
+        binary block = (tls ? <8287> : <8286>) + <04> + literalLength(path) + binary(path)
+            + <01> + literalLength("localhost") + binary("localhost") + literalHeader(name, value);
+        sock.send(frame(FrameHeaders, FlagEndStream | FlagEndHeaders, stream_id, block), io_timeout);
+        return stream_id;
+    }
+
+    #! Sends an extended CONNECT request (RFC 8441) that opens a WebSocket connection on @p path; returns its stream ID
+    /** The request does not end the stream; its header block is like the one of @ref get(), with @c :method
+        @c CONNECT, @c :protocol @c websocket and @c sec-websocket-version @c 13
+    */
+    int connectWebSocket(string path) {
+        int stream_id = next_stream_id;
+        next_stream_id += 2;
+        binary block = <02> + literalLength("CONNECT") + binary("CONNECT")
+            + (tls ? <87> : <86>) + <04> + literalLength(path) + binary(path)
+            + <01> + literalLength("localhost") + binary("localhost")
+            + literalHeader(":protocol", "websocket") + literalHeader("sec-websocket-version", "13");
+        sock.send(frame(FrameHeaders, FlagEndHeaders, stream_id, block), io_timeout);
+        return stream_id;
+    }
+
+    #! Sends a GOAWAY frame with the given error code and last stream ID 0 (the client accepts no stream)
+    sendGoaway(int error_code = 0) {
+        sock.send(frame(FrameGoaway, 0, 0, u32(0) + u32(error_code)), io_timeout);
+    }
+
+    #! Sends a DATA frame on the stream
+    sendData(int stream_id, binary data, bool end_stream = False) {
+        sock.send(frame(FrameData, end_stream ? FlagEndStream : 0, stream_id, data), io_timeout);
+    }
+
     #! Reads frames until the stream ends (END_STREAM or RST_STREAM) or the connection is closed
     /** SETTINGS and PING frames are acknowledged; the data of other streams is read and not counted; each DATA frame
-        of the stream is credited back (WINDOW_UPDATE for the stream and the connection), so that the whole body can
-        be read whatever the client's windows
+        of the stream is credited back (WINDOW_UPDATE for the stream and the connection; the connection only for the
+        frame that ends the stream), so that the whole body can be read whatever the client's windows; every RST_STREAM and GOAWAY frame is recorded (@ref resets,
+        @ref goaway_code)
 
         @param stream_id the stream to read
         @param read_timeout the timeout of each read
@@ -158,33 +207,16 @@ public class RawHttp2Client {
         hash<RawHttp2StreamResult> rv();
         while (True) {
             *hash<auto> f = readFrame(read_timeout);
-            if (!f) {
+            if (!f || !handleFrame(f)) {
                 rv.closed = True;
+                rv.goaway_code = goaway_code;
                 return rv;
             }
             switch (f.type) {
-                case FrameSettings:
-                    if (!(f.flags & FlagAck)) {
-                        if (!sendOrClosed(frame(FrameSettings, FlagAck, 0, binary()))) {
-                            rv.closed = True;
-                            return rv;
-                        }
-                    }
-                    break;
-                case FramePing:
-                    if (!(f.flags & FlagAck)) {
-                        if (!sendOrClosed(frame(FramePing, FlagAck, 0, f.payload))) {
-                            rv.closed = True;
-                            return rv;
-                        }
-                    }
-                    break;
-                case FrameGoaway:
-                    rv.goaway_code = f.payload.size() >= 8 ? u32val(f.payload, 4) : -1;
-                    break;
                 case FrameRstStream:
                     if (f.stream_id == stream_id) {
-                        rv.reset_code = u32val(f.payload, 0);
+                        rv.reset_code = resets{stream_id};
+                        rv.goaway_code = goaway_code;
                         return rv;
                     }
                     break;
@@ -192,26 +224,105 @@ public class RawHttp2Client {
                     if (f.stream_id == stream_id) {
                         rv.data_bytes += f.payload.size();
                     }
-                    if (f.payload.size() && !(f.flags & FlagEndStream)) {
-                        if (!sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
-                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())))) {
-                            rv.closed = True;
-                            return rv;
-                        }
-                    }
                     if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
                         rv.ended = True;
+                        rv.goaway_code = goaway_code;
                         return rv;
                     }
                     break;
                 case FrameHeaders:
                     if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
                         rv.ended = True;
+                        rv.goaway_code = goaway_code;
                         return rv;
                     }
                     break;
             }
         }
+    }
+
+    #! Reads frames, handled as by @ref readStream(), until one matches @p pred; returns it, or NOTHING if the server closed the connection
+    /** @throw SOCKET-TIMEOUT a frame did not arrive in time
+    */
+    *hash<auto> readUntil(code<bool(hash<auto>)> pred, timeout read_timeout) {
+        while (True) {
+            *hash<auto> f = readFrame(read_timeout);
+            if (!f || !handleFrame(f)) {
+                return;
+            }
+            if (pred(f)) {
+                return f;
+            }
+        }
+    }
+
+    #! Sends a PING and reads frames until its acknowledgement; returns False if the server closed the connection first
+    /** As frames are read in order, every frame that the server sent before it acknowledged the PING has been read
+        and handled (and recorded) when this method returns True
+
+        @throw SOCKET-TIMEOUT a frame did not arrive in time
+    */
+    bool ping(timeout read_timeout) {
+        binary opaque = <7177373730000001>;
+        sock.send(frame(FramePing, 0, 0, opaque), io_timeout);
+        return exists readUntil(bool sub (hash<auto> f) {
+            return f.type == FramePing && (f.flags & FlagAck) && f.payload == opaque;
+        }, read_timeout);
+    }
+
+    #! Reads frames until the server closes the connection
+    /** @throw SOCKET-TIMEOUT a frame did not arrive in time: the server did not close the connection
+    */
+    waitClosed(timeout read_timeout) {
+        readUntil(bool sub (hash<auto> f) { return False; }, read_timeout);
+    }
+
+    #! Handles a frame read: acknowledges SETTINGS and PING, credits DATA back, records RST_STREAM and GOAWAY
+    /** @return False if the server has closed or reset the connection (a send failed for it)
+    */
+    private bool handleFrame(hash<auto> f) {
+        switch (f.type) {
+            case FrameSettings:
+                if (!(f.flags & FlagAck)) {
+                    for (int i = 0; i + 6 <= f.payload.size(); i += 6) {
+                        # SETTINGS_MAX_CONCURRENT_STREAMS (0x3)
+                        if (((f.payload[i] << 8) | f.payload[i + 1]) == 3) {
+                            max_concurrent_streams = u32val(f.payload, i + 2);
+                        }
+                    }
+                    return sendOrClosed(frame(FrameSettings, FlagAck, 0, binary()));
+                }
+                break;
+            case FramePing:
+                if (!(f.flags & FlagAck)) {
+                    return sendOrClosed(frame(FramePing, FlagAck, 0, f.payload));
+                }
+                break;
+            case FrameGoaway:
+                goaway_last_stream_id = f.payload.size() >= 4 ? (u32val(f.payload, 0) & 0x7fffffff) : -1;
+                goaway_code = f.payload.size() >= 8 ? u32val(f.payload, 4) : -1;
+                goaway_debug = f.payload.size() > 8 ? f.payload.substr(8).toString() : "";
+                break;
+            case FrameRstStream:
+                resets{f.stream_id} = u32val(f.payload, 0);
+                break;
+            case FrameData:
+                # the data is credited back to the connection, also the data of the frame that ends its stream (whose
+                # stream needs no more credit): otherwise each stream would use up part of the connection's window
+                # for good (qorus#1335)
+                if (f.payload.size()) {
+                    bool ends = (f.flags & FlagEndStream).toBool();
+                    binary credit = frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()));
+                    if (!ends) {
+                        credit += frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size()));
+                    }
+                    # a credit that cannot be sent after the end of a stream does not change that the stream ended:
+                    # the next read finds the closed connection
+                    return sendOrClosed(credit) || ends;
+                }
+                break;
+        }
+        return True;
     }
 
     #! Reads several streams while granting their data at a given rate in total, until each ends or the time is up
@@ -353,6 +464,11 @@ public class RawHttp2Client {
     #! Returns the 32-bit big-endian integer at @p offset
     static int u32val(binary b, int offset) {
         return (b[offset] << 24) | (b[offset + 1] << 16) | (b[offset + 2] << 8) | b[offset + 3];
+    }
+
+    #! Returns an HPACK literal header field without indexing with a new name, without Huffman coding
+    private static binary literalHeader(string name, string value) {
+        return <00> + literalLength(name) + binary(name) + literalLength(value) + binary(value);
     }
 
     #! Returns the HPACK length prefix of a literal shorter than 127 bytes, without Huffman coding
