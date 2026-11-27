@@ -448,7 +448,7 @@ public class DiscoveryQualificationTest inherits QUnit::Test {
 
     #! getDiscoveryInventoryFailures() returns the failure of each provider that raises an exception (qore#7788)
     /** That a provider registered while a module loads belongs to the module is checked by
-        I18nSourceTreeRegistration.qtest, which loads the module in a process of its own
+        I18nFailClosed.qtest (inventoryFailure), which loads the module in a process of its own
     */
     private inventoryProviderFailuresWithoutSessionTest() {
         string suffix = get_random_string(8);
