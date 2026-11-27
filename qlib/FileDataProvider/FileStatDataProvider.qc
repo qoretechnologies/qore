@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileStatDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileStatDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,12 +81,15 @@ public class FileStatDataProvider inherits FileDataProviderBase {
         if (root.val() && lock) {
             checkPath(\path);
         }
-        # += to ensure that "rv" stays "hash<auto>"
-        hash<auto> rv += (req.symlink ? hlstat(path) : hstat(path));
-
-        if (!rv) {
-            throw "STAT-ERROR", sprintf("%s: cannot stat(): %s", path, strerror()), errno();
-        }
+        # += to ensure that "rv" stays "hash<auto>"; the path must be under the root directory, also if it changes
+        # after it was checked (qore#7821)
+        hash<auto> rv += runConfined(hash<auto> sub () {
+            *hash<auto> h = req.symlink ? hlstat(path) : hstat(path);
+            if (!h) {
+                throw "STAT-ERROR", sprintf("%s: cannot stat(): %s", path, strerror()), errno();
+            }
+            return h;
+        });
         rv += {
             "name": basename(path),
             "filepath": path,

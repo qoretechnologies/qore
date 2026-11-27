@@ -1528,6 +1528,11 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Calls Confined to a Directory
+    @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()" confines the
+    file-system access of a call to a directory by real path, pinned against concurrent path changes, in addition to
+    the sandboxes in force (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>).
+
     @par Process-Wide Values Built on First Use as Trusted Code
     @ref Qore::Thread::LazySharedValue "LazySharedValue" and @ref Qore::Thread::LazySharedMap "LazySharedMap" build
     process-wide state once, as trusted code, for whichever caller needs it first, so that it is marked as shared and
@@ -2370,6 +2375,8 @@
     - @ref filedataproviderintro "FileDataProvider" module
       - the get request takes the \c encoding_errors field for text (see @ref encoding_errors)
         (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - the \c lock of a root directory holds against symbolic links (see @ref filedataprovider_root_lock)
+        (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>)
       - see @ref filedataprovider_v2_2 for all changes
 
     - @ref filelocationhandlerintro "FileLocationHandler" module
@@ -3423,6 +3430,10 @@
       file system, also with a lent provider, as do providers created with a path and the file options of locations;
       see @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "checkCallerLocation()"
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
+    - security fix: a file data provider locked to a root directory (as of a file connection) holds against symbolic
+      links and concurrent path changes, with the new
+      @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()"; see
+      @ref filedataprovider_root_lock (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)

@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - symbolic link resolution and the pinned file-system confinement of a locked root directory
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The root directory that a FileDataProvider is locked to holds against symbolic links (qore#7821): a link that leads
+# outside of the root directory is refused for every action, links that stay under it work, and a path that is
+# replaced by a link to a file outside of the root directory after it was checked is refused too (the replacement is
+# made with dbg_fs_swap_on_open() in debug builds).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileDataProvider
+
+%exec-class FileDataProviderSymlinkLockTest
+
+class FileDataProviderSymlinkLockTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the code of the Programs that the host lends providers and connections to
+        const Source = "%modern
+%requires DataProvider
+%requires FileDataProvider
+%requires ConnectionProvider
+# makes the request with a provider that the host created and returns the data read or the error
+string sub lent(AbstractDataProvider dp, hash<auto> req) {
+    try {
+        auto rv = dp.doRequest(req);
+        if (rv.typeCode() == NT_LIST) {
+            return (foldl $1 + \",\" + $2, (map $1.name, rv)) ?? \"\";
+        }
+        return rv.data.typeCode() == NT_BINARY ? binary_to_string(rv.data) : \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# makes the request with the child of the data provider of a connection that the host created
+string sub lent_conn(AbstractConnection conn, string child, hash<auto> req) {
+    return lent(conn.getDataProvider().getChildProviderEx(child), req);
+}
+";
+
+        TmpDir tmp;
+        #! the root directory and the directory outside of it, by their real paths
+        string root;
+        string outside;
+        #! a directory next to the root directory whose name starts with the root directory's name
+        string sibling;
+    }
+
+    constructor() : Test("FileDataProviderSymlinkLockTest", "1.0") {
+        addTestCase("links out of the root", \linksOutTest());
+        addTestCase("writes through links", \writesTest());
+        addTestCase("copy follows links", \copyFollowTest());
+        addTestCase("links in the root", \linksInTest());
+        addTestCase("root and paths", \rootTest());
+        addTestCase("unlocked", \unlockedTest());
+        addTestCase("lent", \lentTest());
+        addTestCase("changed after the check", \raceTest());
+        addTestCase("confined call", \confinedCallTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (PlatformOS == "Windows") {
+            return;
+        }
+        tmp = new TmpDir("FileDataProviderSymlinkLock-");
+        string base = realpath(tmp.path);
+        root = base + "/root";
+        outside = base + "/outside";
+        sibling = base + "/rootx";
+    }
+
+    setUp() {
+        if (PlatformOS == "Windows") {
+            testSkip("symbolic links");
+        }
+        # a fresh tree for every test
+        foreach string dir in ((root, outside, sibling)) {
+            if (is_dir(dir)) {
+                remove_tree(dir);
+            }
+        }
+        mkdir(root);
+        mkdir(root + "/sub");
+        mkdir(outside);
+        mkdir(outside + "/d");
+        mkdir(sibling);
+        writeFile(root + "/in.txt", "inside");
+        writeFile(outside + "/secret.txt", "secret");
+        writeFile(outside + "/d/secret.txt", "secret");
+        writeFile(sibling + "/secret.txt", "secret");
+        # links that leave the root directory
+        symlink(outside + "/secret.txt", root + "/file-out");
+        symlink(outside, root + "/dir-out");
+        symlink("../outside/secret.txt", root + "/rel-out");
+        symlink("chain2", root + "/chain1");
+        symlink("sub/../../outside", root + "/chain2");
+        symlink(outside + "/missing", root + "/dangling");
+        symlink("missing-in", root + "/dangling-in");
+        symlink("loop2", root + "/loop1");
+        symlink("loop1", root + "/loop2");
+        # links that stay under it
+        symlink("in.txt", root + "/file-in");
+        symlink("sub", root + "/dir-in");
+        symlink(root + "/in.txt", root + "/abs-in");
+        symlink("../in.txt", root + "/sub/up-in");
+    }
+
+    tearDown() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+    }
+
+    #! reading, listing and getting the status of a path through a link that leaves the root directory is refused
+    linksOutTest() {
+        FileDataProvider fdp({"root": root});
+        foreach string path in (("file-out", "rel-out", "dir-out/secret.txt", "chain1/secret.txt",
+                "dir-out/d/secret.txt", root + "/file-out")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": path}), "get " + path);
+            assertEq("SANDBOX-ERROR", req(fdp, "stat", {"path": path}), "stat " + path);
+            assertEq("SANDBOX-ERROR", req(fdp, "stat", {"path": path, "symlink": True}), "lstat " + path);
+        }
+        # the status of a link that stays under the root directory
+        assertEq("ok", req(fdp, "stat", {"path": "file-in", "symlink": True}));
+        foreach string path in (("dir-out", "chain1", "dir-out/d")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "list", {"path": path}), "list " + path);
+        }
+        # a listing leaves out the links that lead outside, whose status would be that of a file outside
+        list<string> names = map $1.name, fdp.getChildProviderEx("list").doRequest({"path": "."});
+        foreach string name in (("file-out", "dir-out", "rel-out", "chain1", "chain2", "dangling")) {
+            assertFalse(inlist(name, names), "listed " + name);
+        }
+        # (the list action lists files, not directories)
+        foreach string name in (("in.txt", "file-in", "abs-in")) {
+            assertTrue(inlist(name, names), "listed " + name);
+        }
+        # a dangling link, a loop of links and a path under a file cannot be resolved
+        foreach string path in (("dangling", "dangling-in", "loop1", "loop1/x", "in.txt/x")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": path}), "get " + path);
+        }
+        # a read-only provider too
+        FileDataProvider ro({"root": root, "readonly": True});
+        assertEq("SANDBOX-ERROR", req(ro, "get", {"path": "file-out"}), "read-only get");
+        assertEq("SANDBOX-ERROR", req(ro, "list", {"path": "dir-out"}), "read-only list");
+    }
+
+    #! creating, changing, copying, moving and deleting through a link that leaves the root directory is refused
+    writesTest() {
+        FileDataProvider fdp({"root": root});
+        # creating a file in a directory outside, or through a link to a file outside
+        foreach string path in (("dir-out/new.txt", "file-out", "rel-out", "chain1/new.txt", "dangling",
+                "dangling-in")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "create", {"path": path, "data": "x"}), "create " + path);
+        }
+        assertEq("secret", ReadOnlyFile::readTextFile(outside + "/secret.txt"));
+        assertFalse(is_file(outside + "/new.txt"));
+        assertFalse(is_file(outside + "/missing"));
+        assertFalse(is_file(root + "/missing-in"));
+        # creating directories outside
+        foreach string path in (("dir-out/newdir", "dir-out/a/b/c", "chain1/newdir")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "mkdir", {"path": path}), "mkdir " + path);
+        }
+        assertFalse(is_dir(outside + "/newdir"));
+        assertFalse(is_dir(outside + "/a"));
+        # copying and moving into a directory outside, and out of one
+        assertEq("SANDBOX-ERROR", req(fdp, "copy", {"source": "in.txt", "target": "dir-out/copied.txt"}), "copy in");
+        assertEq("SANDBOX-ERROR", req(fdp, "copy", {"source": "file-out", "target": "copied.txt"}), "copy out");
+        assertEq("SANDBOX-ERROR", req(fdp, "copy", {"source": "dir-out", "target": "copied-dir"}), "copy dir out");
+        assertEq("SANDBOX-ERROR", req(fdp, "move", {"source": "in.txt", "target": "dir-out/moved.txt"}), "move in");
+        assertEq("SANDBOX-ERROR", req(fdp, "move", {"source": "dir-out/secret.txt", "target": "moved.txt"}),
+            "move out");
+        assertFalse(is_file(outside + "/copied.txt"));
+        assertFalse(is_file(outside + "/moved.txt"));
+        assertFalse(is_file(root + "/copied.txt"));
+        assertFalse(is_dir(root + "/copied-dir"));
+        assertFalse(is_file(root + "/moved.txt"));
+        assertTrue(is_file(root + "/in.txt"));
+        # deleting through a link, or a link that leads outside
+        foreach string path in (("dir-out/secret.txt", "dir-out/d", "chain1/secret.txt", "dir-out", "file-out",
+                "chain1", "dangling")) {
+            assertEq("SANDBOX-ERROR", req(fdp, "delete", {"path": path}), "delete " + path);
+            assertTrue(exists_or_link(root + "/" + path), "not deleted " + path);
+        }
+        assertEq("secret", ReadOnlyFile::readTextFile(outside + "/secret.txt"));
+        assertEq("secret", ReadOnlyFile::readTextFile(outside + "/d/secret.txt"));
+        # a directory holding a link that leads outside is not deleted, and nothing in it is removed
+        mkdir(root + "/holder");
+        mkdir(root + "/holder/deeper");
+        writeFile(root + "/holder/a.txt", "a");
+        writeFile(root + "/holder/deeper/b.txt", "b");
+        symlink(outside + "/d", root + "/holder/deeper/zdir");
+        assertEq("SANDBOX-ERROR", req(fdp, "delete", {"path": "holder"}));
+        assertTrue(is_file(root + "/holder/a.txt"));
+        assertTrue(is_file(root + "/holder/deeper/b.txt"));
+        assertTrue(is_link(root + "/holder/deeper/zdir"));
+        assertEq("secret", ReadOnlyFile::readTextFile(outside + "/d/secret.txt"));
+        # a directory holding links that stay under the root directory is deleted with them
+        unlink(root + "/holder/deeper/zdir");
+        symlink("../a.txt", root + "/holder/deeper/zin");
+        assertEq("ok", req(fdp, "delete", {"path": "holder"}));
+        assertFalse(exists_or_link(root + "/holder"));
+        assertTrue(is_file(root + "/in.txt"));
+        # moving a directory changes where its relative links lead: they are then refused, as is a delete of it
+        mkdir(root + "/a");
+        mkdir(root + "/a/b");
+        writeFile(root + "/x.txt", "x");
+        symlink("../../x.txt", root + "/a/b/link");
+        assertEq("x", req(fdp, "get", {"path": "a/b/link"}));
+        assertEq("ok", req(fdp, "move", {"source": "a/b", "target": "b"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": "b/link"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "delete", {"path": "b"}));
+        assertTrue(is_link(root + "/b/link"));
+        # a link that leads outside is not moved
+        assertEq("SANDBOX-ERROR", req(fdp, "move", {"source": "file-out", "target": "sub/mlink"}));
+        assertTrue(is_link(root + "/file-out"));
+    }
+
+    #! a copy that follows the links in a directory reads nothing outside of the root directory
+    copyFollowTest() {
+        mkdir(root + "/tree");
+        writeFile(root + "/tree/a.txt", "inside");
+        symlink(outside + "/secret.txt", root + "/tree/link");
+        FileDataProvider fdp({"root": root});
+        # without following links, a link that leads outside is left out, as in a listing
+        assertEq("ok", req(fdp, "copy", {"source": "tree", "target": "tree-links"}));
+        assertEq("inside", ReadOnlyFile::readTextFile(root + "/tree-links/a.txt"));
+        assertFalse(exists_or_link(root + "/tree-links/link"));
+        # following them, the file outside is not read: the link is left out too
+        assertEq("ok", req(fdp, "copy", {"source": "tree", "target": "tree-copy", "follow_symlinks": True}));
+        assertEq("inside", ReadOnlyFile::readTextFile(root + "/tree-copy/a.txt"));
+        assertFalse(exists_or_link(root + "/tree-copy/link"));
+        if (is_dir(root + "/tree-copy")) {
+            Dir dir();
+            dir.chdir(root + "/tree-copy");
+            foreach string name in (dir.listNames()) {
+                string path = root + "/tree-copy/" + name;
+                assertFalse(!is_link(path) && is_file(path)
+                    && ReadOnlyFile::readTextFile(path) == "secret", name);
+            }
+        }
+    }
+
+    #! links that stay under the root directory work for reads and writes
+    linksInTest() {
+        FileDataProvider fdp({"root": root});
+        foreach string path in (("file-in", "abs-in", "dir-in/up-in", "sub/up-in", root + "/file-in")) {
+            assertEq("inside", req(fdp, "get", {"path": path}), "get " + path);
+            assertEq("ok", req(fdp, "stat", {"path": path}), "stat " + path);
+        }
+        assertEq("ok", req(fdp, "list", {"path": "dir-in"}));
+        assertEq("ok", req(fdp, "create", {"path": "dir-in/new.txt", "data": "new"}));
+        assertEq("new", ReadOnlyFile::readTextFile(root + "/sub/new.txt"));
+        assertEq("ok", req(fdp, "create", {"path": "file-in", "data": "changed"}));
+        assertEq("changed", ReadOnlyFile::readTextFile(root + "/in.txt"));
+        assertEq("ok", req(fdp, "mkdir", {"path": "dir-in/a/b"}));
+        assertTrue(is_dir(root + "/sub/a/b"));
+        # following a link that stays under the root directory
+        assertEq("ok", req(fdp, "copy", {"source": "file-in", "target": "dir-in/copied.txt",
+            "follow_symlinks": True}));
+        assertEq("changed", ReadOnlyFile::readTextFile(root + "/sub/copied.txt"));
+        assertEq("ok", req(fdp, "move", {"source": "dir-in/copied.txt", "target": "moved.txt"}));
+        assertEq("changed", ReadOnlyFile::readTextFile(root + "/moved.txt"));
+        assertEq("ok", req(fdp, "delete", {"path": "dir-in/new.txt"}));
+        assertFalse(is_file(root + "/sub/new.txt"));
+        # a read-only provider reads through them
+        FileDataProvider ro({"root": root, "readonly": True});
+        assertEq("changed", req(ro, "get", {"path": "file-in"}));
+        assertEq("ok", req(ro, "list", {"path": "dir-in"}));
+    }
+
+    #! the root directory given as a link, a root that does not exist, ".." and a sibling directory
+    rootTest() {
+        # a root directory given by a link to it
+        symlink(root, tmp.path + "/root-link");
+        on_exit unlink(tmp.path + "/root-link");
+        FileDataProvider linked({"root": tmp.path + "/root-link"});
+        assertEq("inside", req(linked, "get", {"path": "in.txt"}));
+        assertEq("inside", req(linked, "get", {"path": "file-in"}));
+        assertEq("SANDBOX-ERROR", req(linked, "get", {"path": "file-out"}));
+        assertEq("SANDBOX-ERROR", req(linked, "get", {"path": root + "/file-out"}));
+        assertEq("ok", req(linked, "create", {"path": "linked.txt", "data": "x"}));
+        assertTrue(is_file(root + "/linked.txt"));
+
+        FileDataProvider fdp({"root": root});
+        # ".." stays refused
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": "../outside/secret.txt"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": "sub/../../outside/secret.txt"}));
+        # a directory whose name starts with the name of the root directory is not under it
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": sibling + "/secret.txt"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": "../rootx/secret.txt"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "create", {"path": sibling + "/new.txt", "data": "x"}));
+        assertFalse(is_file(sibling + "/new.txt"));
+        # nor one whose name is the name of the root directory followed by "?"
+        string qsibling = root + "?x";
+        mkdir(qsibling);
+        on_exit remove_tree(qsibling);
+        writeFile(qsibling + "/secret.txt", "secret");
+        assertEq("SANDBOX-ERROR", req(fdp, "get", {"path": qsibling + "/secret.txt"}));
+        assertEq("SANDBOX-ERROR", req(fdp, "create", {"path": qsibling + "/new.txt", "data": "x"}));
+        assertFalse(is_file(qsibling + "/new.txt"));
+
+        # a root whose name is not ASCII
+        string uroot = root + "/r\u00fct";
+        mkdir(uroot);
+        writeFile(uroot + "/a.txt", "a");
+        FileDataProvider ufdp({"root": uroot});
+        assertEq("a", req(ufdp, "get", {"path": "a.txt"}));
+        assertEq("ok", req(ufdp, "create", {"path": "b.txt", "data": "b"}));
+        assertEq("SANDBOX-ERROR", req(ufdp, "get", {"path": "../in.txt"}));
+
+        # a root that does not exist yet: paths are checked by the real path of its existing parent
+        FileDataProvider missing({"root": root + "/missing-root"});
+        assertEq("ok", req(missing, "mkdir", {"path": root + "/missing-root/a"}));
+        assertTrue(is_dir(root + "/missing-root/a"));
+        # a root that is a link that leaves its parent directory is the directory that the link leads to
+        FileDataProvider out({"root": root + "/dir-out"});
+        assertEq("secret", req(out, "get", {"path": "secret.txt"}));
+        assertEq("SANDBOX-ERROR", req(out, "get", {"path": root + "/in.txt"}));
+    }
+
+    #! an unlocked provider and a provider without a root follow links as before
+    unlockedTest() {
+        FileDataProvider unlocked({"root": root, "lock": False});
+        assertEq("secret", req(unlocked, "get", {"path": root + "/file-out"}));
+        assertEq("secret", req(unlocked, "get", {"path": root + "/dir-out/secret.txt"}));
+        assertEq("secret", req(unlocked, "stat", {"path": "file-out"}) == "ok" ? "secret" : "stat refused");
+        assertEq("ok", req(unlocked, "create", {"path": root + "/dir-out/unlocked.txt", "data": "x"}));
+        assertTrue(is_file(outside + "/unlocked.txt"));
+        FileDataProvider noroot();
+        assertEq("secret", req(noroot, "get", {"path": root + "/file-out"}));
+    }
+
+    #! the provider of a file connection lent to restricted code is refused through a link
+    lentTest() {
+        FilesystemConnection conn("fs", "fs", "file://" + root);
+        AbstractDataProvider get = (new FileDataProvider({"root": root})).getChildProviderEx("get");
+        AbstractDataProvider create = (new FileDataProvider({"root": root})).getChildProviderEx("create");
+        foreach hash<auto> i in (Modes.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.setExecMode(i.value);
+            p.parse(Source, "lent-" + i.key);
+            assertEq("inside", p.callFunction("lent_conn", conn, "get", {"path": "file-in"}), i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent_conn", conn, "get", {"path": "file-out"}), i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent_conn", conn, "get", {"path": "dir-out/secret.txt"}),
+                i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent_conn", conn, "list", {"path": "dir-out"}), i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent_conn", conn, "create", {"path": "dir-out/lent.txt",
+                "data": "x"}), i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent", get, {"path": "rel-out"}), i.key);
+            assertEq("SANDBOX-ERROR", p.callFunction("lent", create, {"path": "chain1/lent.txt", "data": "x"}),
+                i.key);
+            assertFalse(is_file(outside + "/lent.txt"), i.key);
+        }
+    }
+
+    #! a path that a link to a file outside of the root directory replaces after it was checked is refused
+    /** The replacement is made at the n-th check of the path by the file-system policy (the checks of checkPath()
+        come first, then the one of the operation itself): for every n, nothing outside of the root directory is
+        read or written, and for one of them the replacement comes after checkPath() and is refused by the
+        confinement of the operation (FILESYSTEM-ACCESS-DENIED)
+    */
+    raceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the path needs dbg_fs_swap_on_open()");
+        }
+        writeFile(outside + "/victim.txt", "victim");
+        # code without a sandbox: the confinement is the only policy that checks the path
+        {
+            FileDataProvider fdp({"root": root});
+            hash<string, bool> seen;
+            for (int n = 0; n < 8; ++n) {
+                writeFile(root + "/race.txt", "inside");
+                call_function("dbg_fs_swap_on_open", root + "/race.txt", outside + "/secret.txt", n);
+                string rv = req(fdp, "get", {"path": "race.txt"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertNeq("secret", rv, sprintf("host get %d", n));
+                seen{rv} = True;
+                unlink(root + "/race.txt");
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "host get");
+            seen = {};
+            for (int n = 0; n < 8; ++n) {
+                writeFile(root + "/race.txt", "inside");
+                call_function("dbg_fs_swap_on_open", root + "/race.txt", outside + "/victim.txt", n);
+                string rv = req(fdp, "create", {"path": "race.txt", "data": "changed"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertEq("victim", ReadOnlyFile::readTextFile(outside + "/victim.txt"), sprintf("host create %d", n));
+                seen{rv} = True;
+                unlink(root + "/race.txt");
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "host create");
+            # a directory of the path that a link to a directory outside replaces
+            seen = {};
+            for (int n = 0; n < 8; ++n) {
+                mkdir(root + "/rdir");
+                writeFile(root + "/rdir/secret.txt", "inside");
+                call_function("dbg_fs_swap_on_open", root + "/rdir/*", outside, n);
+                string rv = req(fdp, "get", {"path": "rdir/secret.txt"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertNeq("secret", rv, sprintf("host get in dir %d", n));
+                seen{rv} = True;
+                if (is_link(root + "/rdir")) {
+                    unlink(root + "/rdir");
+                }
+                foreach string dir in ((root + "/rdir.dbg-moved", root + "/rdir")) {
+                    if (is_dir(dir)) {
+                        remove_tree(dir);
+                    }
+                }
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "host get in dir");
+        }
+        # the lent provider is used by code that a sandbox governs whose policy allows every path, so that the path is
+        # checked by the policy, and replaced at one of its checks
+        foreach hash<auto> i in (Modes.pairIterator()) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(True);
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(sm);
+            p.setExecMode(i.value);
+            p.parse(Source, "race-" + i.key);
+            FilesystemConnection conn("fs", "fs", "file://" + root);
+
+            # a read of a file that a link to a file outside replaces
+            hash<string, bool> seen;
+            for (int n = 0; n < 8; ++n) {
+                writeFile(root + "/race.txt", "inside");
+                call_function("dbg_fs_swap_on_open", root + "/race.txt", outside + "/secret.txt", n);
+                string rv = p.callFunction("lent_conn", conn, "get", {"path": "race.txt"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertNeq("secret", rv, sprintf("get %s %d", i.key, n));
+                seen{rv} = True;
+                unlink(root + "/race.txt");
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "get " + i.key);
+
+            # a write of a file that a link to a file outside replaces
+            seen = {};
+            for (int n = 0; n < 8; ++n) {
+                writeFile(root + "/race.txt", "inside");
+                call_function("dbg_fs_swap_on_open", root + "/race.txt", outside + "/victim.txt", n);
+                string rv = p.callFunction("lent_conn", conn, "create", {"path": "race.txt", "data": "changed"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertEq("victim", ReadOnlyFile::readTextFile(outside + "/victim.txt"), sprintf("create %s %d", i.key,
+                    n));
+                seen{rv} = True;
+                unlink(root + "/race.txt");
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "create " + i.key);
+
+            # a listing of a directory that a link to a directory outside replaces
+            seen = {};
+            for (int n = 0; n < 8; ++n) {
+                mkdir(root + "/listed");
+                call_function("dbg_fs_swap_on_open", root + "/listed", outside, n);
+                string rv = p.callFunction("lent_conn", conn, "list", {"path": "listed"});
+                call_function("dbg_fs_swap_on_open", "", "");
+                assertFalse(rv =~ /secret/, sprintf("list %s %d", i.key, n));
+                seen{rv} = True;
+                if (is_link(root + "/listed")) {
+                    unlink(root + "/listed");
+                }
+                foreach string dir in ((root + "/listed.dbg-moved", root + "/listed")) {
+                    if (is_dir(dir)) {
+                        rmdir(dir);
+                    }
+                }
+            }
+            assertTrue(seen."FILESYSTEM-ACCESS-DENIED", "list " + i.key);
+        }
+    }
+
+    #! SandboxManager::callWithFilesystemRoot() confines the call, and only the call
+    confinedCallTest() {
+        assertEq("inside", SandboxManager::callWithFilesystemRoot(root, QSEC_READ,
+            \ReadOnlyFile::readTextFile(), (root + "/file-in",)));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \SandboxManager::callWithFilesystemRoot(),
+            (root, QSEC_READ, \ReadOnlyFile::readTextFile(), (root + "/file-out",)));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \SandboxManager::callWithFilesystemRoot(),
+            (root, QSEC_READ, \ReadOnlyFile::readTextFile(), (sibling + "/secret.txt",)));
+        # read access only
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \SandboxManager::callWithFilesystemRoot(),
+            (root, QSEC_READ, \FileDataProviderSymlinkLockTest::writeFile(), (root + "/ro.txt", "x")));
+        assertFalse(is_file(root + "/ro.txt"));
+        # nested confinements: both apply
+        code nested = auto sub () {
+            return SandboxManager::callWithFilesystemRoot(root + "/sub", QSEC_ALL, \ReadOnlyFile::readTextFile(),
+                (root + "/in.txt",));
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \SandboxManager::callWithFilesystemRoot(), (root, QSEC_ALL, nested));
+        # the confinement ends with the call, also when it raises an exception
+        assertEq("secret", ReadOnlyFile::readTextFile(root + "/file-out"));
+        # the root must be an absolute path
+        assertThrows("SANDBOX-PATH-ERROR", \SandboxManager::callWithFilesystemRoot(), ("relative", QSEC_READ,
+            sub () {}));
+        assertThrows("SANDBOX-PATH-ERROR", \SandboxManager::callWithFilesystemRoot(), (root + "\0x", QSEC_READ,
+            sub () {}));
+        # the confinement does not decide the policy of a policy barrier established in the call
+        code barrier = auto sub () {
+            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(), (root + "/file-out",));
+        };
+        assertEq("secret", SandboxManager::callWithFilesystemRoot(root, QSEC_ALL, barrier));
+        # but applies again after it
+        code after = auto sub () {
+            SandboxManager::callWithSystemPolicy(sub () {});
+            return ReadOnlyFile::readTextFile(root + "/file-out");
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \SandboxManager::callWithFilesystemRoot(), (root, QSEC_ALL, after));
+    }
+
+    #! makes a request with the given child of the provider and returns the data read, "ok" or the error
+    private static string req(AbstractDataProvider dp, string child, hash<auto> req) {
+        try {
+            auto rv = dp.getChildProviderEx(child).doRequest(req);
+            return child == "get" ? binary_to_string(rv.data) : "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns True if the path exists, also as a dangling link
+    private static bool exists_or_link(string path) {
+        return exists hlstat(path);
+    }
+
+    static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}
