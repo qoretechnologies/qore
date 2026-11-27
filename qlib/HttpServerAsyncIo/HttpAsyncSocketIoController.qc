@@ -3497,6 +3497,12 @@ public class HttpAsyncSocketIoController {
             && request.headers.":protocol".val();
         bool is_websocket_connect = is_extended_connect
             && request.headers.":protocol" == "websocket";
+        # the session's record of a stream dispatched with its headers, and of an extended CONNECT stream (a tunnel,
+        # which is dispatched whole), is released once the request has been handled: the session keeps the record of
+        # a tunnel while its stream is open, so that the tunnel works after the dispatch has returned, and releases it
+        # when the stream closes; without this, a long-lived session kept the record of every tunnel that it served,
+        # and a drain or a GOAWAY never ended it (qore#7786)
+        bool cleanup_stream = request.hdr.toBool() || is_extended_connect;
         if (is_extended_connect) {
             log(LoggerLevel::DEBUG, "HTTP/3 extended CONNECT (%s): session=%d stream=%d %s",
                 request.headers.":protocol", session_id, stream_id,
@@ -3683,7 +3689,7 @@ public class HttpAsyncSocketIoController {
         try {
             *hash<HttpRequestResultInfo> prepared_result = target.prepareHttpRequest(conn_info);
             if (prepared_result) {
-                on_exit if (request.hdr) {
+                on_exit if (cleanup_stream) {
                     try {
                         listener.cleanupQuicStream(session_id, stream_id);
                     } catch () {}
@@ -3700,7 +3706,7 @@ public class HttpAsyncSocketIoController {
                     {"content-type": "text/plain"}, "Internal Server Error");
             } catch () {}
             wakeSocketIfPresent(listener, uh, "HTTP/3 preparation error response");
-            if (request.hdr) {
+            if (cleanup_stream) {
                 try {
                     listener.cleanupQuicStream(session_id, stream_id);
                 } catch () {}
@@ -3734,7 +3740,7 @@ public class HttpAsyncSocketIoController {
                 on_exit {
                     # the connection is cleared last, also when the release of the hold raises an error
                     on_exit Priv::running_stream_conn = NOTHING;
-                    if (request.hdr) {
+                    if (cleanup_stream) {
                         try {
                             listener.cleanupQuicStream(session_id, stream_id);
                         } catch () {}
@@ -3788,7 +3794,7 @@ public class HttpAsyncSocketIoController {
             }
             wakeSocketIfPresent(listener, uh, "HTTP/3 submit failure response");
             # Clean up dispatched stream state for headers-only dispatch
-            if (request.hdr) {
+            if (cleanup_stream) {
                 try {
                     listener.cleanupQuicStream(session_id, stream_id);
                 } catch () {}
