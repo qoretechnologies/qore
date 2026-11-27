@@ -465,6 +465,59 @@ switch (c) {
         break;
     }
 
+    # the end of the run stops queue 0 while its thread has released the lock after its flush (the debug-only test
+    # hooks of the pipeline hold it there): a thread that waited for data without checking the queue's state again
+    # missed the stop, and the run never ended
+    case "flush-window": {
+        Counter in_window(1);
+        Counter stopped(1);
+        Queue gate();
+        bool armed = True;
+        code after_flush = sub (int id, code unlocked) {
+            if (id || !armed) {
+                return;
+            }
+            armed = False;
+            in_window.dec();
+            # the lock is released until the end of the run has stopped the queues
+            unlocked(sub () { gate.get(); });
+        };
+        code after_stop = sub () {
+            if (!armed && stopped.getCount()) {
+                stopped.dec();
+            }
+        };
+        try {
+            call_static_method("DataProvider::DataProviderPipeline", "setTestHooks", after_flush, after_stop);
+        } catch (hash<ExceptionInfo> ex) {
+            # a module that was not built with QoreDebug has no test hooks
+            printf("skipped: %s\n", ex.err);
+            break;
+        }
+        on_exit call_static_method("DataProvider::DataProviderPipeline", "setTestHooks");
+
+        FanOutPipeline fp(True, False);
+        DataProviderPipeline p = fp.p;
+        p.submit(1);
+        Counter ended(1);
+        background sub () {
+            on_exit ended.dec();
+            p.waitDone();
+        }();
+        # queue 0's thread has flushed and released the lock
+        in_window.waitForZero();
+        # the end of the run has stopped the queues
+        stopped.waitForZero();
+        gate.push(True);
+        # a deadline: the run ends at once, or never
+        if (ended.waitForZero(30s)) {
+            printf("the run did not end\n");
+            exit(1);
+        }
+        printf("run ended: processed %d and %d\n", fp.c1.seen.getCount(), fp.c2.seen.getCount());
+        break;
+    }
+
     # a submission while other threads end the run with waitDone(): a record accepted while the run ended was left in
     # a queue that no thread processed; it is now processed in the next run, which the submission starts
     case "late-submit":

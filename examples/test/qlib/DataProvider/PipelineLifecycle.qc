@@ -22,7 +22,7 @@ class PipelineLifecycleBase inherits QUnit::Test {
 
         #! the iterations of a race case in each execution mode
         /** With the code that had the bugs, a waiter that never returned (race-abort, race-waitdone), a run that
-            never ended (race-flush; in every run with JIT and tiered execution at 2000 iterations), and an accepted
+            never ended (race-flush, a stress check now: flush-window forces its window), and an accepted
             record that was never processed (late-submit, late-submit-buf; within 60 iterations in most runs, and in
             the first ones with the buffering processor) happened within these iterations in most runs of each case;
             the native execution modes run the most iterations, as they run them fastest
@@ -30,7 +30,7 @@ class PipelineLifecycleBase inherits QUnit::Test {
         const RaceIterations = {
             "race-abort": {"ast": 300, "ir": 300, "jit": 300, "tiered": 300},
             "race-waitdone": {"ast": 300, "ir": 300, "jit": 300, "tiered": 300},
-            "race-flush": {"ast": 100, "ir": 100, "jit": 1500, "tiered": 1500},
+            "race-flush": {"ast": 100, "ir": 100, "jit": 300, "tiered": 300},
             "late-submit": {"ast": 100, "ir": 100, "jit": 300, "tiered": 300},
             "late-submit-buf": {"ast": 100, "ir": 100, "jit": 300, "tiered": 300},
         };
@@ -70,6 +70,7 @@ class PipelineLifecycleBase inherits QUnit::Test {
             "callback-throws-global": "submit error: CB-ERROR: callback 1 failed\n"
                 "processing: False\n"
                 "errors logged: 1 (callback error: True)\n",
+            "flush-window": "run ended: processed 1 and 1\n",
             "sync-count": "submit(2): PIPELINE-SUBMISSION-ABORTED\n"
                 "record_count: 1\n"
                 "waitDone: PIPELINE-FAILED\n",
@@ -96,6 +97,8 @@ class PipelineLifecycleBase inherits QUnit::Test {
         addPartCase(3, "waiters return when another thread ends the run", \testRace(), "race-waitdone");
         addPartCase(4, "runs of a fan-out pipeline that flushes end when several threads end them", \testRace(),
             "race-flush");
+        addPartCase(4, "a run ends when it stops a queue whose thread has released the lock after its flush",
+            \testFlushWindow());
         addPartCase(5, "records submitted while the run ends are processed", \testRace(), "late-submit");
         addPartCase(6, "records submitted while the run of a buffering pipeline ends are processed", \testRace(),
             "late-submit-buf");
@@ -115,6 +118,11 @@ class PipelineLifecycleBase inherits QUnit::Test {
 
     testCallbackErrors() {
         map runCase($1), ("callback-throws", "callback-throws-fanout", "callback-throws-global");
+    }
+
+    #! the end of the run stops queue 0 while its thread has released the lock after its flush (debug-only hooks)
+    testFlushWindow() {
+        runCase("flush-window");
     }
 
     testSyncCount() {
@@ -138,6 +146,10 @@ class PipelineLifecycleBase inherits QUnit::Test {
             ExecModeHarness::check_loader_warnings(r);
             string label = sprintf("%s (%s)", c, mode);
             assertEq(0, r.rc, label + ": exit status (124: the program did not end): " + r.out);
+            # a case that needs the debug-only test hooks of the module skips without them
+            if (*string reason = (r.out =~ x/^skipped: ([^\n]*)/)[0]) {
+                testSkip("%s (%s): the module has no test hooks: %s", c, mode, reason);
+            }
             string expected = exists n ? sprintf(RaceExpected{c}, n) : Expected{c};
             assertEq(expected + "end of script\n", r.out, label);
             ExecModeHarness::check_native(r, NativeCheck::Jit);
